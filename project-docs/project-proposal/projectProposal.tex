@@ -1,0 +1,71 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{titlesec}
+\usepackage[table]{xcolor}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+% Page margins
+\geometry{top=2cm, right=2cm, bottom=2cm, left=3cm}
+
+% Table Line spacings
+\renewcommand{\arraystretch}{1.7} 
+
+% Font settings
+\renewcommand{\rmdefault}{ptm} % Times New Roman font
+
+% Heading font sizes
+\titleformat{\section}{\fontsize{18}{22}\bfseries}{\thesection.}{1em}{}
+\titleformat{\subsection}{\fontsize{16}{20}\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\fontsize{14}{18}\bfseries}{\thesubsubsection}{1em}{}
+
+\begin{document}
+
+% Title Page
+\begin{titlepage}
+
+    % Set the page geometry for the title page for the centering to properly work
+    \newgeometry{top=2cm, right=2cm, bottom=2cm, left=2cm}
+
+    \centering
+    \vspace*{2cm}
+    {\Huge \textbf{Project Proposal}}\\[1cm]
+    {\Large Tea Collection Management System}\\[0.5cm]
+    {\Large Industry Project Module}\\[2cm]
+    {\small Codtrek}\\[2cm]
+    \vfill
+
+    % Set page margins back to normal
+    \restoregeometry
+\end{titlepage}
+
+\input{sections/supervisor_declaration.tex}
+\pagebreak
+
+
+% Table of content
+\tableofcontents
+\pagebreak          
+
+% Included modularized sections
+\input{sections/introduction.tex}
+\input{sections/project_goal.tex}
+\input{sections/scope.tex}
+\input{sections/objectives.tex}
+\input{sections/feasibility.tex}
+\input{sections/deliverables.tex}
+\input{sections/constraints_assumptions.tex}
+\input{sections/requirements.tex}
+
+\pagebreak
+\input{sections/technologies.tex}
+
+\pagebreak
+\input{sections/timeline.tex}
+
+\pagebreak
+\input{sections/declaration.tex}
+
+\end{document}
