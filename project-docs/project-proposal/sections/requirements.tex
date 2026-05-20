@@ -2,21 +2,90 @@
 \label{sec:requirements}
 
 \subsection{Functional Requirements}
-\textbf{Farmer Requirements}
+
+\subsubsection{Farmer Functional Requirements}
 \begin{itemize}
-    \item User registration
-    \item Login authentication
-    \item Create pickup requests
-    \item View pickup history
-    \item Track request status
+    \item The system shall allow farmers to register accounts.
+    \item The system shall authenticate farmer login credentials.
+    \item The system shall allow farmers to create pickup requests.
+    \item The system shall allow farmers to view pickup history.
+    \item The system shall allow farmers to track request status.
+    \item The system shall allow farmers to view monthly payment summaries.
+    \item The system shall allow farmers to view deduction details.
+    \item The system shall allow farmers to receive factory grading reports.
 \end{itemize}
-\textbf{Collector Requirements}
+
+\subsubsection{Collector Functional Requirements}
 \begin{itemize}
-    \item Login authentication
-    \item View pickup requests
-    \item Accept requests
-    \item Record actual quantity
-    \item Complete requests
+    \item The system shall authenticate collector login credentials.
+    \item The system shall allow collectors to view assigned pickup requests.
+    \item The system shall allow collectors to accept pickup requests.
+    \item The system shall allow collectors to record collected tea quantity.
+    \item The system shall allow collectors to update pickup status.
+    \item The system shall allow collectors to record transportation details.
+    \item The system shall allow collectors to mark requests as completed.
+\end{itemize}
+
+\subsubsection{Truck Management Functional Requirements}
+\begin{itemize}
+    \item The system shall allow administrators to register trucks.
+    \item The system shall allow administrators to classify trucks as registered or temporary.
+    \item The system shall store truck capacity details.
+    \item The system shall allow users to assign trucks to pickups and deliveries.
+    \item The system shall track truck trip history.
+    \item The system shall record transportation charges.
+\end{itemize}
+
+\subsubsection{Factory Management Functional Requirements}
+\begin{itemize}
+    \item The system shall allow factories to submit tea requests.
+    \item The system shall allow factory staff to record received tea quantities.
+    \item The system shall allow factory staff to classify tea into quality grades.
+    \item The system shall store grade-wise tea records.
+    \item The system shall generate grading reports for farmers.
+\end{itemize}
+
+\subsubsection{Payment Management Functional Requirements}
+\begin{itemize}
+    \item The system shall calculate monthly farmer payments automatically.
+    \item The system shall calculate worker wages based on plucked tea weight.
+    \item The system shall record deductions such as transport and fertilizer charges.
+    \item The system shall generate payment receipts.
+    \item The system shall allow administrators to mark payments as completed.
+\end{itemize}
+
+\subsubsection{Employee Management Functional Requirements}
+\begin{itemize}
+    \item The system shall allow administrators to register employees.
+    \item The system shall assign roles and permissions to employees.
+    \item The system shall record employee attendance.
+    \item The system shall track employee work activities.
+    \item The system shall manage employee salary records.
+\end{itemize}
+
+\subsubsection{Reporting Functional Requirements}
+\begin{itemize}
+    \item The system shall generate daily collection reports.
+    \item The system shall generate monthly payment reports.
+    \item The system shall generate truck usage reports.
+    \item The system shall generate factory supply reports.
+    \item The system shall allow reports to be exported.
+\end{itemize}
+
+\subsubsection{Notification Functional Requirements}
+\begin{itemize}
+    \item The system shall notify collectors about new pickup requests.
+    \item The system shall notify farmers when pickups are completed.
+    \item The system shall notify farmers about payment availability.
+    \item The system shall notify administrators about pending requests.
+\end{itemize}
+
+\subsubsection{Authentication \& Security Functional Requirements}
+\begin{itemize}
+    \item The system shall provide secure login authentication.
+    \item The system shall support role-based access control.
+    \item The system shall allow users to reset passwords.
+    \item The system shall record user activity logs.
 \end{itemize}
 
 \subsubsection{Component Diagram}
