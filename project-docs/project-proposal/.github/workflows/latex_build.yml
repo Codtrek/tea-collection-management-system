@@ -2,8 +2,7 @@ name: Compile LaTeX
 
 on:
   push:
-    paths:
-      - 'project-docs/project-proposal/**'
+
   workflow_dispatch:
 
 jobs:
