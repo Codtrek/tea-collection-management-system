@@ -3,14 +3,39 @@
 
 \subsection{Constraints}
 \begin{itemize}
-    \item Internet connectivity issues in rural areas
-    \item Limited technical knowledge of some users
-    \item Limited project timeline
+	\item \textbf{Internet connectivity limitations:} The system may experience reduced functionality in rural plantation areas with poor internet connectivity. Some features may require stable mobile data access.
+	\item \textbf{Registration required for access:} Only registered users can create pickup requests or manage collections. Unregistered users cannot access platform functionalities.
+	\item \textbf{Pending requests only:} Collectors are only allowed to accept requests that are currently marked as pending. Completed or cancelled requests cannot be modified.
+	\item \textbf{Collector-entered actual quantity:} The final measured quantity during collection can only be recorded by the collector to maintain consistency in records.
+	\item \textbf{Completed requests locked:} Once a pickup request is marked as completed, farmers cannot edit or delete the record.
+	\item \textbf{Mandatory pickup location:} Farmers are required to provide a valid pickup location when creating a collection request.
+	\item \textbf{Single collector assignment:} Each pickup request can only be accepted and managed by a single collector at a time.
+	\item \textbf{Limited offline functionality:} Some features such as real-time synchronization and notifications may not work properly without internet connectivity.
+	\item \textbf{Android-first support:} The first version of the system will primarily support Android devices. iOS support may be added in future versions.
+	\item \textbf{No duplicate active requests:} Farmers cannot create multiple active pickup requests for the same product at the same time until the previous request is completed or cancelled.
+	\item \textbf{Fixed request workflow:} Pickup requests must follow the sequence: Pending $\rightarrow$ Accepted $\rightarrow$ Completed. Requests cannot skip stages or move backward once updated.
+	\item \textbf{Role-based access:} Farmers can only access farmer-related functions, while collectors can only access collector-related operations.
+	\item \textbf{Valid quantity ranges:} The system restricts invalid quantities such as negative values or zero quantities during request creation.
+	\item \textbf{Permanent historical records:} Completed transaction records are stored permanently for transparency and tracking purposes.
+	\item \textbf{Network-dependent notifications:} Push notifications and real-time updates may be delayed if users have unstable internet connections.
+	\item \textbf{Unique mobile number per account:} Each registered account must use a unique mobile number to prevent duplicate accounts.
 \end{itemize}
 
 \subsection{Assumptions}
 \begin{itemize}
-    \item Users have Android smartphones
-    \item Users can access mobile internet
-    \item Collectors are willing to adopt digital systems
+	\item \textbf{Smartphone ownership:} The system assumes that users have access to Android smartphones capable of running the mobile application.
+	\item \textbf{Basic mobile literacy:} It is assumed that farmers and collectors can perform basic mobile operations such as login, form submission, and viewing records.
+	\item \textbf{Approximate farmer quantities:} The quantity entered by farmers during request creation is assumed to be an estimated value. Final measurements are verified by collectors.
+	\item \textbf{Accurate collector measurements:} The system assumes collectors use proper measuring equipment and record accurate quantities during pickup.
+	\item \textbf{Mostly available network:} The system assumes users have occasional access to mobile internet for synchronization and request updates.
+	\item \textbf{Accurate user details:} The system assumes that all users enter valid names, phone numbers, and location details during registration.
+	\item \textbf{Trust in digital records:} The system assumes that farmers and collectors will use the shared digital records as the primary source of transaction history.
+	\item \textbf{Industry-standard workflows:} The system assumes that current collection workflows (request, measurement, recording, pickup) remain generally consistent across tea and related agricultural sectors.
+	\item \textbf{Similar future workflows:} It is assumed that sectors such as rubber, milk, and cinnamon collection use workflows similar to tea collection and can be integrated into the system later.
+	\item \textbf{Small-scale initial rollout:} The first version assumes a limited number of users during the initial deployment and testing phase.
+	\item \textbf{Devices available in the field:} The system assumes farmers and collectors will have access to their mobile devices while performing collection activities.
+	\item \textbf{Timely collector visits:} The system assumes collectors respond to accepted pickup requests within operational timeframes.
+	\item \textbf{Requests created after harvesting:} The application assumes pickup requests are created only after products are harvested and ready for collection.
+	\item \textbf{Functional measuring tools:} The system assumes collectors use properly calibrated measuring tools during quantity verification.
+	\item \textbf{Preference for digital records:} It is assumed users are willing to gradually transition from paper-based record keeping to digital systems.
 \end{itemize}

@@ -3,68 +3,43 @@
 
 \subsection{Main Users}
 \begin{itemize}
-    \item Farmers
-    \item Collectors
-    \item Collection Centers
+    \item Tea Estate Owners
+    \item Tea Estate Managers
+    \item Tea Collection Agents
+    \item Tea Receiving Officers
+    \item Factory Administrators
 \end{itemize}
 
-\subsection{In-Scope Functionalities}
-\textbf{Farmer Functionalities}
+\subsection{Project Scope}
+
+\subsubsection{In Scope}
 \begin{itemize}
-    \item Register/Login
-    \item Create pickup requests
-    \item Enter product quantity
-    \item Track request status
-    \item View collection history
-\end{itemize}
-\textbf{Collector Functionalities}
-\begin{itemize}
-    \item Login
-    \item View pending pickup requests
-    \item Accept pickup requests
-    \item Enter actual measured quantity
-    \item Mark requests as completed
-    \item View collection history
-\end{itemize}
-\textbf{Shared Functionalities}
-\begin{itemize}
-    \item Digital record keeping
-    \item Timestamp tracking
-    \item Transparent transaction history
+    \item Employee registration and management.
+    \item Tea estate manager assignment and management.
+    \item Recording and tracking daily tea plucking details.
+    \item Tea leaf delivery request management.
+    \item Tea leaf weight verification using One-Time Password (OTP) confirmation.
+    \item Delivery confirmation and complaint management related to tea weight mismatches.
+    \item Tea collection tracking and monitoring.
+    \item Monthly payment management between tea factories and tea estate owners.
+    \item Fertilizer request, approval, and borrowing management.
+    \item Transportation tracking of fertilizers through Tea Collection Agents.
+    \item Automatic fertilizer cost calculation and deduction from tea revenue.
+    \item Notification management for deliveries, OTP confirmations, complaints, payments, and fertilizer requests.
+    \item Generation of analytical reports and graphical dashboards related to tea collection, employee performance, and income.
+    \item Exporting reports in digital formats.
+    \item Administrative management functionalities for Factory Administrators.
 \end{itemize}
 
-\subsection{Out of Scope}
+\subsubsection{Out of Scope}
 \begin{itemize}
-    \item Online payment system
-    \item AI-based predictions
-    \item Advanced analytics
-    \item Export management systems
-    \item Multi-country support
+    \item Direct management of third-party fertilizer suppliers.
+    \item Online payment gateway integration and digital payment processing.
+    \item GPS-based vehicle tracking and real-time logistics monitoring.
+    \item Integration with external government or banking systems.
+    \item Advanced financial accounting and auditing functionalities.
+    \item Inventory management beyond fertilizer-related operations.
+    \item Predictive analytics and AI-based forecasting functionalities.
+    \item Multi-language support and internationalization features.
+    \item Offline functionality without internet connectivity.
 \end{itemize}
-
-\subsection{Flow of Events in Current Context}
-\begin{enumerate}
-    \item Farmer collects agricultural products.
-    \item Farmer contacts collector manually.
-    \item Farmer informs quantity and location.
-    \item Collector visits location.
-    \item Collector measures products.
-    \item Both parties record information manually in books.
-\end{enumerate}
-Problems:
-\begin{itemize}
-    \item Duplicate manual records
-    \item Human errors
-    \item Time consumption
-    \item No centralized system
-\end{itemize}
-
-\subsection{Flow of Events with Proposed System}
-\begin{enumerate}
-    \item Farmer creates pickup request through mobile app.
-    \item Collector receives notification/request.
-    \item Collector accepts request.
-    \item Collector visits location and measures products.
-    \item Collector records actual quantity digitally.
-    \item Both parties can view shared records instantly.
-\end{enumerate}
