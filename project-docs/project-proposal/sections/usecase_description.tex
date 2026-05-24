@@ -1,0 +1,56 @@
+\newcounter{usecaseCounter}
+\setcounter{usecaseCounter}{1}
+
+\newcommand{\usecaseId}{%
+	UC-%
+	\ifnum\value{usecaseCounter}<10
+		00\else
+		0\fi
+	\theusecaseCounter
+}
+
+\newcommand{\usecase}[7]{%
+	% Stop inserting an indent after each use case
+	\noindent
+	\begin{tabularx}{\textwidth}{|l|X|}
+	\hline
+	\rowcolor{lightgray}
+	\textbf{Use Case ID}       & \textbf{\usecaseId} \\
+	\hline
+	Title             & #1 \\
+	\hline
+	Description       & #2 \\
+	\hline
+	Primary Actor     & #3 \\
+	\hline
+	Preconditions     & #4 \\
+	\hline
+	Course of Events  & #5 \\
+	\hline
+	Postconditions    & #6 \\
+	\hline
+	Exceptional Flows & #7 \\
+	\hline
+	\end{tabularx}
+	\vspace{3em}
+	% Increment the Use Case ID counter
+	\stepcounter{usecaseCounter}
+}
+
+\usecase
+{Register Employees}
+{Create a new employee profile in the system.}
+{Tea Estate Owner}
+{Owner is authenticated; employee details are available.}
+{
+    1. Open Employees. 
+
+    2. Click Add.
+
+    3. Enter details. 
+
+    4. Save.
+}
+{Employee record stored and visible to owner.}
+{Missing required fields; duplicate employee ID.}
+
