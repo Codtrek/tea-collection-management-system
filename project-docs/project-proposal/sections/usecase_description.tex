@@ -37,20 +37,669 @@
 	\stepcounter{usecaseCounter}
 }
 
-\usecase
-{Register Employees}
-{Create a new employee profile in the system.}
+% Use Case Descriptions
+
+\usecase{Register Employees}
+{Register new tea estate employees in the system.}
 {Tea Estate Owner}
-{Owner is authenticated; employee details are available.}
-{
-    1. Open Employees. 
+{Owner account is authenticated.}
+{1. The owner selects employee registration.\newline
+2. The system displays the employee form.\newline
+3. The owner enters employee details.\newline
+4. The system validates the input.\newline
+5. The system creates the employee record.\newline
+6. The system confirms registration.}
+{Employee record is stored and visible to authorized users.}
+{E1: Validation fails; the system shows errors and no record is saved.}
 
-    2. Click Add.
+\usecase{Assign Managers}
+{Assign managers to tea estate teams or employee groups.}
+{Tea Estate Owner}
+{Owner account is authenticated; employees exist.}
+{1. The owner opens manager assignment.\newline
+2. The system lists eligible employees.\newline
+3. The owner selects a manager and assigns a team.\newline
+4. The system validates the assignment.\newline
+5. The system saves the manager assignment.\newline
+6. The system confirms the assignment.}
+{Manager assignment is updated in the system.}
+{E1: Selected employee is ineligible; the system rejects the assignment.}
 
-    3. Enter details. 
+\usecase{View Employee Status and Performance}
+{View employee status and performance metrics.}
+{Tea Estate Owner}
+{Owner account is authenticated; employee data exists.}
+{1. The owner opens employee performance view.\newline
+2. The system displays employee list and filters.\newline
+3. The owner selects an employee or group.\newline
+4. The system retrieves performance data.\newline
+5. The system presents status and metrics.\newline
+6. The owner optionally refines filters.}
+{Performance data is displayed to the owner.}
+{E1: No data for selection; the system shows an empty result message.}
 
-    4. Save.
-}
-{Employee record stored and visible to owner.}
-{Missing required fields; duplicate employee ID.}
+\usecase{View Total Weight Delivered}
+{View total tea leaf weight delivered to factories.}
+{Tea Estate Owner}
+{Owner account is authenticated; delivery data exists.}
+{1. The owner opens delivery totals view.\newline
+2. The system shows date range filters.\newline
+3. The owner selects a range.\newline
+4. The system aggregates delivery weights.\newline
+5. The system displays total weight.\newline
+6. The owner saves or notes the results.}
+{Total delivery weight is shown for the selected range.}
+{E1: No deliveries found; the system shows zero total.}
+
+\usecase{View Estimated Income}
+{View estimated income from tea leaf collections.}
+{Tea Estate Owner}
+{Owner account is authenticated; pricing rules exist.}
+{1. The owner opens income estimates.\newline
+2. The system requests period selection.\newline
+3. The owner selects a time period.\newline
+4. The system calculates estimated income.\newline
+5. The system displays the estimate.\newline
+6. The owner optionally compares periods.}
+{Estimated income is displayed for the selected period.}
+{E1: Pricing data missing; the system prompts for configuration.}
+
+\usecase{View Collection and Income Analytics}
+{View graphical reports and analytical insights on collections and income.}
+{Tea Estate Owner}
+{Owner account is authenticated; analytics data exists.}
+{1. The owner opens analytics dashboard.\newline
+2. The system loads default charts.\newline
+3. The owner selects metrics and date range.\newline
+4. The system refreshes charts and insights.\newline
+5. The system highlights key trends.\newline
+6. The owner saves or exports visuals.}
+{Analytics charts and insights are displayed.}
+{E1: Data unavailable; the system displays a warning message.}
+
+\usecase{View Individual Performance Analytics}
+{View graphical analytics for individual employee performance.}
+{Tea Estate Owner}
+{Owner account is authenticated; employee metrics exist.}
+{1. The owner opens individual analytics.\newline
+2. The system lists employees.\newline
+3. The owner selects an employee.\newline
+4. The system loads performance charts.\newline
+5. The system displays trends and summaries.\newline
+6. The owner adjusts the date range.}
+{Employee performance analytics are displayed.}
+{E1: Employee has no data; the system shows an empty chart.}
+
+\usecase{Review and Approve Fertilizer Requests}
+{Review and approve fertilizer requests submitted by managers.}
+{Tea Estate Owner}
+{Owner account is authenticated; requests exist.}
+{1. The owner opens fertilizer requests.\newline
+2. The system lists pending requests.\newline
+3. The owner reviews request details.\newline
+4. The owner approves or rejects the request.\newline
+5. The system records the decision.\newline
+6. The system notifies the manager.}
+{Fertilizer request status is updated.}
+{E1: Request already processed; the system prevents duplicate actions.}
+
+\usecase{Submit Tea Leaf Selling Request}
+{Submit tea leaf selling requests to factory administrators after reviewing plucking reports.}
+{Tea Estate Owner}
+{Owner account is authenticated; completion reports exist.}
+{1. The owner opens plucking completion reports.\newline
+2. The system displays the latest reports.\newline
+3. The owner reviews report details.\newline
+4. The owner initiates a selling request.\newline
+5. The system captures request details.\newline
+6. The system submits the request to the factory administrator.}
+{Tea leaf selling request is recorded and sent.}
+{E1: Missing report data; the system blocks submission.}
+
+\usecase{Handle No Agent Availability}
+{Wait for Tea Collection Agent availability or submit a selling request to another factory.}
+{Tea Estate Owner}
+{Owner is notified of no available agents.}
+{1. The system shows the no-availability notice.\newline
+2. The owner chooses to wait or switch factory.\newline
+3. If waiting, the system records the preference.\newline
+4. If switching, the owner selects a factory.\newline
+5. The system submits a new selling request.\newline
+6. The system confirms the action.}
+{Owner preference or new request is recorded.}
+{E1: Selected factory is unavailable; the system requests another choice.}
+
+\usecase{Submit Fertilizer Borrowing Request}
+{Submit fertilizer borrowing requests to factory administrators.}
+{Tea Estate Owner}
+{Owner account is authenticated; fertilizer need is identified.}
+{1. The owner opens fertilizer borrowing.\newline
+2. The system displays the request form.\newline
+3. The owner enters quantity and details.\newline
+4. The system validates the request.\newline
+5. The system submits the request to the factory.\newline
+6. The system confirms submission.}
+{Borrowing request is sent to the factory administrator.}
+{E1: Invalid quantity; the system asks for corrections.}
+
+\usecase{Receive Fertilizer Approval Notifications}
+{Receive notifications about fertilizer request approvals or rejections.}
+{Tea Estate Owner}
+{A factory decision exists for a request.}
+{1. The system detects a decision update.\newline
+2. The system prepares a notification message.\newline
+3. The system sends the notification to the owner.\newline
+4. The owner opens the notification.\newline
+5. The system displays decision details.\newline
+6. The owner acknowledges the update.}
+{Owner is informed of approval or rejection.}
+{E1: Notification delivery fails; the system retries and logs the issue.}
+
+\usecase{Track and Monitor Deliveries}
+{Track all tea leaf deliveries and monitor specific deliveries.}
+{Tea Estate Owner}
+{Owner account is authenticated; delivery records exist.}
+{1. The owner opens delivery tracking.\newline
+2. The system displays delivery list and filters.\newline
+3. The owner selects a specific delivery.\newline
+4. The system shows delivery status and timeline.\newline
+5. The owner monitors updates.\newline
+6. The system refreshes status as events occur.}
+{Delivery status is visible to the owner.}
+{E1: Delivery not found; the system shows an error message.}
+
+\usecase{Receive Weight Mismatch Complaints}
+{Receive complaint reports about tea leaf weight mismatches.}
+{Tea Estate Owner}
+{A mismatch report is submitted.}
+{1. The system receives a complaint report.\newline
+2. The system links the report to a delivery.\newline
+3. The system notifies the owner.\newline
+4. The owner opens the report.\newline
+5. The system displays complaint details.\newline
+6. The owner acknowledges the report.}
+{Complaint report is recorded and visible to the owner.}
+{E1: Report is incomplete; the system flags it for follow-up.}
+
+\usecase{Record Daily Plucking Details}
+{Record daily tea plucking details of employees.}
+{Tea Estate Manager}
+{Manager account is authenticated; employees exist.}
+{1. The manager opens daily plucking entry.\newline
+2. The system lists employees for selection.\newline
+3. The manager enters plucking details.\newline
+4. The system validates the entries.\newline
+5. The system saves the daily record.\newline
+6. The system confirms submission.}
+{Daily plucking details are recorded.}
+{E1: Missing employee data; the system prevents submission.}
+
+\usecase{Submit Plucking Completion Reports}
+{Submit tea plucking completion reports to tea estate owners.}
+{Tea Estate Manager}
+{Manager account is authenticated; daily records exist.}
+{1. The manager opens completion reports.\newline
+2. The system compiles daily plucking data.\newline
+3. The manager reviews the report.\newline
+4. The manager submits the report.\newline
+5. The system records the submission.\newline
+6. The system notifies the owner.}
+{Completion report is sent to the owner.}
+{E1: Report data incomplete; the system requests corrections.}
+
+\usecase{Verify Collected Tea Leaves via OTP}
+{Verify tea leaves collected by the Tea Collection Agent using OTP.}
+{Tea Estate Manager}
+{Manager account is authenticated; OTP is received.}
+{1. The manager opens the verification screen.\newline
+2. The system prompts for the OTP.\newline
+3. The manager enters the OTP.\newline
+4. The system validates the OTP.\newline
+5. The system marks collection as verified.\newline
+6. The system confirms verification.}
+{Collection verification is recorded.}
+{E1: OTP is invalid or expired; the system rejects the entry.}
+
+\usecase{Submit Fertilizer Request}
+{Submit fertilizer requests when stock levels are low.}
+{Tea Estate Manager}
+{Manager account is authenticated; low stock is identified.}
+{1. The manager opens fertilizer requests.\newline
+2. The system displays the request form.\newline
+3. The manager enters quantity and justification.\newline
+4. The system validates the request.\newline
+5. The system submits the request to the owner.\newline
+6. The system confirms submission.}
+{Fertilizer request is sent to the owner.}
+{E1: Quantity exceeds limits; the system asks for adjustments.}
+
+\usecase{Search Delivery Requests}
+{Search delivery requests submitted by managers.}
+{Tea Collection Agent}
+{Agent account is authenticated.}
+{1. The agent opens delivery requests.\newline
+2. The system displays search filters.\newline
+3. The agent enters search criteria.\newline
+4. The system retrieves matching requests.\newline
+5. The system displays search results.\newline
+6. The agent selects a request to view details.}
+{Matching delivery requests are listed.}
+{E1: No results found; the system shows an empty list message.}
+
+\usecase{Record Collected Tea Weight}
+{Record the weight of collected tea leaves.}
+{Tea Collection Agent}
+{Agent account is authenticated; delivery request is assigned.}
+{1. The agent opens the assigned delivery.\newline
+2. The system displays the collection form.\newline
+3. The agent enters the collected weight.\newline
+4. The system validates the weight entry.\newline
+5. The system saves the recorded weight.\newline
+6. The system confirms the entry.}
+{Collected weight is stored for the delivery.}
+{E1: Weight value is invalid; the system requests correction.}
+
+\usecase{Generate OTP for Collection Verification}
+{Generate an OTP to verify that tea leaves were collected from the manager.}
+{Tea Collection Agent}
+{Agent account is authenticated; collection recorded.}
+{1. The agent opens the verification step.\newline
+2. The system generates an OTP.\newline
+3. The system sends the OTP to the manager.\newline
+4. The agent confirms OTP dispatch.\newline
+5. The system logs the OTP issuance.\newline
+6. The system waits for manager verification.}
+{OTP is issued and recorded for the delivery.}
+{E1: Notification delivery fails; the system retries or provides a fallback.}
+
+\usecase{Close Delivery with OTP}
+{Complete and close deliveries by confirming the receiving officer OTP.}
+{Tea Collection Agent}
+{Receiving officer OTP is provided.}
+{1. The agent opens delivery closure.\newline
+2. The system prompts for receiving officer OTP.\newline
+3. The agent enters the OTP.\newline
+4. The system validates the OTP.\newline
+5. The system marks the delivery as closed.\newline
+6. The system confirms delivery completion.}
+{Delivery is closed and finalized.}
+{E1: OTP is invalid; the system prevents closure.}
+
+\usecase{Transport Fertilizers}
+{Transport fertilizers from factories to tea estates.}
+{Tea Collection Agent}
+{Agent account is authenticated; dispatch assignment exists.}
+{1. The agent views fertilizer transport assignments.\newline
+2. The system shows pickup and delivery details.\newline
+3. The agent confirms pickup from the factory.\newline
+4. The system records pickup status.\newline
+5. The agent delivers fertilizer to the estate.\newline
+6. The system records delivery completion.}
+{Fertilizer transport is completed and logged.}
+{E1: Delivery cannot be completed; the system records an exception.}
+
+\usecase{Request OTP for Delivery Finalization}
+{Generate OTP requests to confirm and finalize deliveries with the agent.}
+{Tea Receiving Officer}
+{Receiving officer account is authenticated; delivery is pending.}
+{1. The officer opens pending deliveries.\newline
+2. The system displays delivery details.\newline
+3. The officer initiates OTP request.\newline
+4. The system generates and sends OTP to the agent.\newline
+5. The system logs the OTP request.\newline
+6. The officer waits for agent confirmation.}
+{OTP is issued for delivery finalization.}
+{E1: Delivery already finalized; the system blocks the request.}
+
+\usecase{Submit Weight Mismatch Complaint}
+{Submit complaint reports for tea leaf weight mismatches.}
+{Tea Receiving Officer}
+{Receiving officer account is authenticated; mismatch detected.}
+{1. The officer opens the complaint form.\newline
+2. The system shows delivery information.\newline
+3. The officer enters mismatch details.\newline
+4. The system validates the report.\newline
+5. The system submits the complaint to owners and administrators.\newline
+6. The system confirms submission.}
+{Complaint report is recorded and distributed.}
+{E1: Missing evidence details; the system requests updates.}
+
+\usecase{Register Tea Collection Agents}
+{Register Tea Collection Agents in the system.}
+{Factory Administrator}
+{Administrator account is authenticated.}
+{1. The administrator opens agent registration.\newline
+2. The system displays the agent form.\newline
+3. The administrator enters agent details.\newline
+4. The system validates the input.\newline
+5. The system creates the agent account.\newline
+6. The system confirms registration.}
+{Agent account is created and active.}
+{E1: Duplicate agent record; the system prevents creation.}
+
+\usecase{Manage Monthly Payments}
+{Manage monthly payments made to tea estate owners.}
+{Factory Administrator}
+{Administrator account is authenticated; payment data exists.}
+{1. The administrator opens monthly payments.\newline
+2. The system lists owners and payment summaries.\newline
+3. The administrator reviews totals and deductions.\newline
+4. The administrator confirms or adjusts payment items.\newline
+5. The system records payment actions.\newline
+6. The system confirms updates.}
+{Monthly payments are managed and recorded.}
+{E1: Data inconsistency detected; the system flags for review.}
+
+\usecase{Handle Administrative and Financial Operations}
+{Handle administrative and financial operations related to tea collection and payments.}
+{Factory Administrator}
+{Administrator account is authenticated.}
+{1. The administrator opens operations dashboard.\newline
+2. The system displays operational tasks.\newline
+3. The administrator selects a task.\newline
+4. The system presents task-specific inputs.\newline
+5. The administrator submits changes.\newline
+6. The system records the operation.}
+{Administrative and financial operation is completed.}
+{E1: Required approvals missing; the system blocks the operation.}
+
+\usecase{Receive Complaint Reports}
+{Receive complaint reports submitted by Tea Receiving Officers.}
+{Factory Administrator}
+{A complaint report is submitted.}
+{1. The system records a complaint report.\newline
+2. The system notifies the administrator.\newline
+3. The administrator opens the report.\newline
+4. The system displays complaint details.\newline
+5. The administrator acknowledges the report.\newline
+6. The system logs acknowledgment.}
+{Complaint report is recorded and reviewed.}
+{E1: Report missing details; the system flags it for follow-up.}
+
+\usecase{Review Fertilizer Borrowing Requests}
+{Review fertilizer borrowing requests from tea estate owners.}
+{Factory Administrator}
+{Administrator account is authenticated; requests exist.}
+{1. The administrator opens borrowing requests.\newline
+2. The system lists pending requests.\newline
+3. The administrator reviews details.\newline
+4. The administrator records a decision.\newline
+5. The system updates request status.\newline
+6. The system notifies the owner.}
+{Borrowing request status is updated.}
+{E1: Request is already processed; the system blocks changes.}
+
+\usecase{Approve or Reject Fertilizer Requests}
+{Approve or reject fertilizer requests based on availability.}
+{Factory Administrator}
+{Administrator account is authenticated; availability data exists.}
+{1. The administrator opens fertilizer requests.\newline
+2. The system shows stock availability.\newline
+3. The administrator compares request to stock.\newline
+4. The administrator approves or rejects the request.\newline
+5. The system records the decision.\newline
+6. The system notifies the owner.}
+{Fertilizer request decision is recorded.}
+{E1: Stock data unavailable; the system blocks approval.}
+
+\usecase{Calculate Fertilizer Charges}
+{Calculate charges for borrowed fertilizers.}
+{Factory Administrator}
+{Approved fertilizer requests exist.}
+{1. The administrator opens fertilizer charges.\newline
+2. The system lists approved borrowings.\newline
+3. The administrator selects a borrowing record.\newline
+4. The system calculates charges based on rates.\newline
+5. The system displays the calculated charges.\newline
+6. The administrator confirms the charges.}
+{Fertilizer charges are calculated and stored.}
+{E1: Rate data missing; the system requests configuration.}
+
+\usecase{Deduct Fertilizer Charges}
+{Deduct fertilizer charges from monthly tea revenue payable to owners.}
+{Factory Administrator}
+{Monthly payment cycle is active; charges exist.}
+{1. The administrator opens payment deductions.\newline
+2. The system lists charges by owner.\newline
+3. The administrator confirms deductions.\newline
+4. The system applies deductions to payments.\newline
+5. The system updates payment totals.\newline
+6. The system confirms the deduction results.}
+{Monthly payments reflect fertilizer deductions.}
+{E1: Payment cycle closed; the system blocks deductions.}
+
+\usecase{Maintain Fertilizer Records}
+{Maintain records of fertilizer requests, approvals, dispatch details, and deductions.}
+{Factory Administrator}
+{Administrator account is authenticated.}
+{1. The administrator opens fertilizer records.\newline
+2. The system displays request and dispatch logs.\newline
+3. The administrator reviews or updates entries.\newline
+4. The system validates record updates.\newline
+5. The system saves the changes.\newline
+6. The system confirms updates.}
+{Fertilizer records are updated and stored.}
+{E1: Record is locked; the system prevents editing.}
+
+\usecase{Review Tea Leaf Selling Requests}
+{Review tea leaf selling requests submitted by tea estate owners.}
+{Factory Administrator}
+{Administrator account is authenticated; requests exist.}
+{1. The administrator opens selling requests.\newline
+2. The system lists pending requests.\newline
+3. The administrator reviews request details.\newline
+4. The administrator records a preliminary decision.\newline
+5. The system updates request status.\newline
+6. The system notifies the owner.}
+{Selling request status is updated.}
+{E1: Request data incomplete; the system requests clarification.}
+
+\usecase{Check Agent Availability}
+{Check availability of Tea Collection Agents before approving collection requests.}
+{Factory Administrator}
+{Administrator account is authenticated; agent data exists.}
+{1. The administrator opens agent availability.\newline
+2. The system displays agent schedules.\newline
+3. The administrator selects a collection request.\newline
+4. The system matches agents to the request.\newline
+5. The system displays availability results.\newline
+6. The administrator proceeds with approval or deferral.}
+{Agent availability is evaluated for the request.}
+{E1: No agents available; the system prompts a notification action.}
+
+\usecase{Notify Owner of No Agents}
+{Notify tea estate owners when no collection agents are available.}
+{Factory Administrator}
+{No agents are available for a request.}
+{1. The system detects no available agents.\newline
+2. The administrator confirms notification.\newline
+3. The system prepares the notification message.\newline
+4. The system sends the notification to the owner.\newline
+5. The system logs the notification event.\newline
+6. The administrator reviews the notification status.}
+{Owner is informed about agent unavailability.}
+{E1: Notification delivery fails; the system retries and logs.}
+
+\usecase{Dispatch Fertilizers with Collection}
+{Dispatch fertilizers together with tea collection assignments.}
+{Factory Administrator}
+{Fertilizer request is approved; collection is scheduled.}
+{1. The administrator opens dispatch planning.\newline
+2. The system shows approved fertilizer requests.\newline
+3. The administrator links fertilizer dispatch to a collection task.\newline
+4. The system assigns dispatch details.\newline
+5. The system notifies the assigned agent.\newline
+6. The system records the dispatch plan.}
+{Fertilizer dispatch is scheduled with collection.}
+{E1: No compatible collection task; the system requests rescheduling.}
+
+\usecase{Assign Collection Agents}
+{Assign available Tea Collection Agents to approved tea collection requests.}
+{Factory Administrator}
+{Collection request is approved; agent availability exists.}
+{1. The administrator opens assignment screen.\newline
+2. The system lists approved requests and agents.\newline
+3. The administrator assigns an agent to a request.\newline
+4. The system validates the assignment.\newline
+5. The system updates request status.\newline
+6. The system notifies the assigned agent and owner.}
+{Agent is assigned to the collection request.}
+{E1: Agent becomes unavailable; the system prompts reassignment.}
+
+\usecase{Generate Daily Collection Reports}
+{Generate daily tea collection reports.}
+{Tea Estate Owner}
+{Report data exists for the selected day.}
+{1. The user opens daily collection reports.\newline
+2. The system requests date selection.\newline
+3. The user selects a date.\newline
+4. The system compiles daily data.\newline
+5. The system generates the report.\newline
+6. The system displays the report.}
+{Daily collection report is generated and visible.}
+{E1: No data for the date; the system shows an empty report.}
+
+\usecase{Generate Monthly Payment Reports}
+{Generate monthly payment reports.}
+{Factory Administrator}
+{Monthly payment data exists.}
+{1. The user opens monthly payment reports.\newline
+2. The system requests a month selection.\newline
+3. The user selects a month.\newline
+4. The system compiles payment data.\newline
+5. The system generates the report.\newline
+6. The system displays the report.}
+{Monthly payment report is generated.}
+{E1: Payment data missing; the system shows a warning.}
+
+\usecase{Generate Fertilizer Supply Reports}
+{Generate fertilizer supply and distribution reports.}
+{Factory Administrator}
+{Fertilizer distribution data exists.}
+{1. The user opens fertilizer reports.\newline
+2. The system requests a time period.\newline
+3. The user selects the period.\newline
+4. The system compiles distribution data.\newline
+5. The system generates the report.\newline
+6. The system displays the report.}
+{Fertilizer report is generated and available.}
+{E1: No distribution data; the system displays an empty report.}
+
+\usecase{Generate Employee Performance Reports}
+{Generate employee performance reports.}
+{Tea Estate Owner}
+{Employee performance data exists.}
+{1. The user opens performance reports.\newline
+2. The system requests filters and date range.\newline
+3. The user selects filters.\newline
+4. The system compiles performance data.\newline
+5. The system generates the report.\newline
+6. The system displays the report.}
+{Performance report is generated and available.}
+{E1: Selected filters yield no data; the system shows an empty report.}
+
+\usecase{Export Reports}
+{Export reports in digital formats.}
+{Authorized User}
+{A report is generated and visible.}
+{1. The user opens a report.\newline
+2. The system shows export options.\newline
+3. The user selects a format.\newline
+4. The system generates the export file.\newline
+5. The system provides the download link.\newline
+6. The user saves the file.}
+{Report is exported in the selected format.}
+{E1: Export fails; the system displays an error and allows retry.}
+
+\usecase{Send Delivery Confirmation Notifications}
+{Send delivery confirmation notifications to tea estate owners.}
+{System}
+{A delivery is confirmed.}
+{1. The system detects delivery confirmation.\newline
+2. The system retrieves owner contact details.\newline
+3. The system composes a confirmation message.\newline
+4. The system sends the notification.\newline
+5. The system logs the delivery notification.\newline
+6. The system updates notification status.}
+{Owner is notified of delivery confirmation.}
+{E1: Notification fails; the system retries and logs the error.}
+
+\usecase{Send OTP Notifications}
+{Send OTP notifications for collection verification and delivery closure.}
+{System}
+{An OTP is generated for verification.}
+{1. The system generates an OTP.\newline
+2. The system identifies the recipient.\newline
+3. The system composes the OTP message.\newline
+4. The system sends the notification.\newline
+5. The system logs the OTP delivery.\newline
+6. The system updates OTP status.}
+{OTP notification is delivered to the recipient.}
+{E1: OTP delivery fails; the system retries or issues a new OTP.}
+
+\usecase{Send Complaint and Delivery Issue Notifications}
+{Send notifications regarding complaint reports and delivery issues.}
+{System}
+{A complaint report or delivery issue is recorded.}
+{1. The system detects the issue event.\newline
+2. The system identifies relevant recipients.\newline
+3. The system composes the notification.\newline
+4. The system sends the notification.\newline
+5. The system logs the notification event.\newline
+6. The system updates notification status.}
+{Stakeholders are notified of the issue.}
+{E1: Recipient details missing; the system logs and flags the issue.}
+
+\usecase{Send Fertilizer Approval Notifications}
+{Send notifications about fertilizer request approvals or rejections.}
+{System}
+{A fertilizer request decision is recorded.}
+{1. The system detects the decision update.\newline
+2. The system identifies the owner or manager.\newline
+3. The system composes the notification.\newline
+4. The system sends the notification.\newline
+5. The system logs notification delivery.\newline
+6. The system updates the request status.}
+{Recipients are notified of the decision.}
+{E1: Notification fails; the system retries and logs the error.}
+
+\usecase{Notify Monthly Payment Updates}
+{Notify relevant users about monthly payment updates and deductions.}
+{System}
+{Monthly payment updates are finalized.}
+{1. The system detects payment updates.\newline
+2. The system identifies relevant users.\newline
+3. The system composes the update message.\newline
+4. The system sends the notification.\newline
+5. The system logs notification delivery.\newline
+6. The system updates notification status.}
+{Users are informed of payment updates.}
+{E1: Notification fails; the system retries and logs the error.}
+
+\usecase{Confirm Collection Completion Notifications}
+{Send notifications confirming that tea leaves were successfully collected.}
+{System}
+{Collection verification is completed.}
+{1. The system detects collection completion.\newline
+2. The system identifies owners and administrators.\newline
+3. The system composes the confirmation message.\newline
+4. The system sends the notification.\newline
+5. The system logs the notification event.\newline
+6. The system updates notification status.}
+{Owners and administrators are notified of successful collection.}
+{E1: Notification fails; the system retries and logs the error.}
+
+\usecase{Notify Delivery Finalization}
+{Notify owners and administrators after deliveries are finalized by the receiving officer.}
+{System}
+{Receiving officer finalizes the delivery.}
+{1. The system detects delivery finalization.\newline
+2. The system identifies owners and administrators.\newline
+3. The system composes the finalization message.\newline
+4. The system sends the notification.\newline
+5. The system logs the notification event.\newline
+6. The system updates notification status.}
+{Owners and administrators are notified of delivery finalization.}
+{E1: Notification fails; the system retries and logs the error.}
+
 
