@@ -1,0 +1,41 @@
+% Field Visit Report Template (Standalone)
+% Fill in the placeholders and remove any unused sections.
+
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{multicol}
+
+\hypersetup{colorlinks=true, linkcolor=black, urlcolor=blue}
+
+\setlist{noitemsep, topsep=4pt}
+
+
+\title{Field Visit Report -- Falcon Tea Factory}
+\author{Report Author: Sandaru Ruwaneka}
+\date{Visit Date: 2026/06/02}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\newpage
+
+\input{sections/01-report-summary}
+\input{sections/02-purpose-scope}
+\input{sections/04-observations}
+\input{sections/05-data-collected}
+\input{sections/06-key-findings}
+\input{sections/07-recommendations}
+\input{sections/08-follow-ups}
+\input{sections/10-conclusion}
+\clearpage
+\input{sections/09-attachments}
+
+\end{document}
