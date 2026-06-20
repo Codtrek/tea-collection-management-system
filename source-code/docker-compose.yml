@@ -68,6 +68,17 @@ services:
       - tea-network
     restart: unless-stopped
 
+  adminer:
+    image: adminer
+    container_name: tea-cms-adminer
+    restart: unless-stopped
+    ports:
+      - "5050:8080"
+    depends_on:
+      - postgres
+    networks:
+      - tea-network
+
 volumes:
   postgres_data:
   redis_data:
