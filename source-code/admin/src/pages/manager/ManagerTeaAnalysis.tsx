@@ -1,4 +1,4 @@
-import { C } from '../../styles/tokens'
+import { type CSSProperties } from "react";
 import { Card } from '../../components/ui/Card'
 import { Grid } from '../../components/ui/Grid'
 import { Badge } from '../../components/ui/Badge'
@@ -8,45 +8,46 @@ import { MetricCard } from '../../components/ui/MetricCard'
 import { SearchBar } from '../../components/ui/SearchBar'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { Table } from '../../components/ui/Table'
+import styles from "../../styles/modules/pages/AppCommon.module.css";
 
 export const ManagerTeaAnalysis = () => (
   <div>
-    <Grid cols={3} gap={12}><div style={{ marginBottom:16, gridColumn:"1/-1", display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+    <Grid cols={3} gap={12}><div className={styles.metricsSpan3}>
       <MetricCard accent="green" icon="scale"  label="Total This Month"    value="44,100 kg" sub="Across all routes" />
       <MetricCard accent="blue"  icon="route"  label="Active Routes"       value="5"         sub="All operational" />
       <MetricCard accent="amber" icon="truck"  label="Active Suppliers"    value="38"        sub="6 deliveries today" />
     </div></Grid>
     <Grid cols={2} gap={16}>
       <Card>
-        <div style={{ fontSize:13, fontWeight:500, color:C.text, marginBottom:14 }}>Collection by Route</div>
+        <div className={styles.cardTitle}>Collection by Route</div>
         {[
-          { route:"Route A — Ella",    kg:14200, pct:32, color:C.green },
-          { route:"Route B — Dimbula", kg:10800, pct:24, color:C.blue },
-          { route:"Route C — Uva",     kg:11500, pct:26, color:C.amber },
+          { route:"Route A — Ella",    kg:14200, pct:32, color:"var(--color-green)" },
+          { route:"Route B — Dimbula", kg:10800, pct:24, color:"var(--color-blue)" },
+          { route:"Route C — Uva",     kg:11500, pct:26, color:"var(--color-amber)" },
           { route:"Route D — Matale",  kg:7600,  pct:18, color:"#7c3aed" },
         ].map(r => (
-          <div key={r.route} style={{ marginBottom:12 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-              <span style={{ fontSize:12 }}>{r.route}</span>
-              <span style={{ fontSize:12, fontWeight:500 }}>{r.kg.toLocaleString()} kg ({r.pct}%)</span>
+          <div key={r.route} className={styles.progressItem}>
+            <div className={styles.progressHeader}>
+              <span className={styles.progressHeaderLabel}>{r.route}</span>
+              <span className={styles.progressHeaderValue}>{r.kg.toLocaleString()} kg ({r.pct}%)</span>
             </div>
-            <div style={{ height:8, background:"#f3f4f6", borderRadius:4, overflow:"hidden" }}><div style={{ height:"100%", borderRadius:4, background:r.color, width:`${r.pct*3}%` }} /></div>
+            <div className={styles.progressTrack}><div className={styles.progressFill} style={{ "--fill-width": `${r.pct*3}%`, "--fill-color": r.color } as CSSProperties} /></div>
           </div>
         ))}
       </Card>
       <Card>
-        <div style={{ fontSize:13, fontWeight:500, color:C.text, marginBottom:14 }}>Quality Grade Distribution</div>
+        <div className={styles.cardTitle}>Quality Grade Distribution</div>
         {[
-          { grade:"Grade A — Premium",  kg:29988, pct:68, color:C.green },
-          { grade:"Grade B — Standard", kg:10584, pct:24, color:C.amber },
-          { grade:"Grade C — Reject",   kg:3528,  pct:8,  color:C.red },
+          { grade:"Grade A — Premium",  kg:29988, pct:68, color:"var(--color-green)" },
+          { grade:"Grade B — Standard", kg:10584, pct:24, color:"var(--color-amber)" },
+          { grade:"Grade C — Reject",   kg:3528,  pct:8,  color:"var(--color-red)" },
         ].map(r => (
-          <div key={r.grade} style={{ marginBottom:14 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-              <span style={{ fontSize:12 }}>{r.grade}</span>
-              <span style={{ fontSize:12, fontWeight:500 }}>{r.kg.toLocaleString()} kg ({r.pct}%)</span>
+          <div key={r.grade} className={styles.progressItemLoose}>
+            <div className={styles.progressHeader}>
+              <span className={styles.progressHeaderLabel}>{r.grade}</span>
+              <span className={styles.progressHeaderValue}>{r.kg.toLocaleString()} kg ({r.pct}%)</span>
             </div>
-            <div style={{ height:8, background:"#f3f4f6", borderRadius:4, overflow:"hidden" }}><div style={{ height:"100%", borderRadius:4, background:r.color, width:`${r.pct}%` }} /></div>
+            <div className={styles.progressTrack}><div className={styles.progressFill} style={{ "--fill-width": `${r.pct}%`, "--fill-color": r.color } as CSSProperties} /></div>
           </div>
         ))}
       </Card>

@@ -1,0 +1,343 @@
+.metricsSpan3 {
+  margin-bottom: var(--space-4);
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.metricsSpan4 {
+  margin-bottom: var(--space-4);
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+
+.metricsSpan4Wide {
+  margin-bottom: var(--space-5);
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+
+.cardTitle {
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--color-text);
+  margin-bottom: 14px;
+}
+
+.cardTitleMb12 {
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--color-text);
+  margin-bottom: var(--space-3);
+}
+
+.cardTitleMb16 {
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  color: var(--color-text);
+  margin-bottom: var(--space-4);
+}
+
+.dateLabel {
+  font-size: var(--font-size-base);
+  color: var(--color-text-sub);
+}
+
+.avatarRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.actionRow {
+  display: flex;
+  gap: 6px;
+}
+
+.chartBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 100px;
+  padding-top: var(--space-2);
+}
+
+.chartBarsPaired {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  height: 100px;
+  padding-top: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.chartBar {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  height: var(--bar-height);
+  opacity: 0.85;
+}
+
+.chartBarGreen {
+  background: var(--color-green);
+}
+
+.chartBarAmber {
+  background: var(--color-amber);
+}
+
+.chartBarPair {
+  flex: 1;
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+
+.chartBarIncome {
+  flex: 1;
+  background: var(--color-green);
+  border-radius: 2px 2px 0 0;
+  height: var(--bar-height);
+  opacity: 0.8;
+}
+
+.chartBarExpense {
+  flex: 1;
+  background: var(--color-red);
+  border-radius: 2px 2px 0 0;
+  height: var(--bar-height);
+  opacity: 0.7;
+}
+
+.chartLabels {
+  display: flex;
+  gap: 6px;
+  margin-top: var(--space-1);
+}
+
+.chartLabelsWide {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.chartLabel {
+  flex: 1;
+  text-align: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-sub);
+}
+
+.legend {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.legendDotGreen,
+.legendDotRed {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legendDotGreen {
+  background: var(--color-green);
+}
+
+.legendDotRed {
+  background: var(--color-red);
+}
+
+.summaryBox {
+  background: var(--color-gray-light);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  font-size: var(--font-size-base);
+}
+
+.summaryBoxSm {
+  background: var(--color-gray-light);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  font-size: var(--font-size-base);
+  margin: 0 0 var(--space-3);
+}
+
+.summaryBoxMb14 {
+  margin-bottom: 14px;
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: var(--border);
+}
+
+.summaryRowPlain {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--space-1);
+}
+
+.summaryLabel {
+  color: var(--color-text-sub);
+}
+
+.summaryValue {
+  font-weight: 500;
+}
+
+.summaryValueBold {
+  font-weight: 600;
+}
+
+.summaryValueGreen {
+  font-weight: 500;
+  color: var(--color-green);
+}
+
+.progressItem {
+  margin-bottom: var(--space-3);
+}
+
+.progressItemLoose {
+  margin-bottom: 14px;
+}
+
+.progressItemTight {
+  margin-bottom: 10px;
+}
+
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--space-1);
+}
+
+.progressHeaderLabel {
+  font-size: var(--font-size-base);
+}
+
+.progressHeaderValue {
+  font-size: var(--font-size-base);
+  font-weight: 500;
+}
+
+.progressTrack {
+  height: 8px;
+  background: #f3f4f6;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.progressTrackSm {
+  height: 6px;
+  background: #f3f4f6;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--fill-color);
+  width: var(--fill-width);
+}
+
+.progressFillSm {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--fill-color);
+  width: var(--fill-width);
+}
+
+.fillGreen {
+  --fill-color: var(--color-green);
+}
+
+.fillBlue {
+  --fill-color: var(--color-blue);
+}
+
+.fillAmber {
+  --fill-color: var(--color-amber);
+}
+
+.fillRed {
+  --fill-color: var(--color-red);
+}
+
+.totalStrip {
+  margin-top: var(--space-3);
+  padding: 10px;
+  background: var(--color-gray-light);
+  border-radius: var(--radius-lg);
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-base);
+}
+
+.infoBox {
+  background: var(--color-gray-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  font-size: var(--font-size-base);
+  margin-bottom: 14px;
+}
+
+.uploadZoneSm {
+  border: 1.5px dashed var(--color-gray-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--color-text-sub);
+}
+
+.uploadHintSm {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-sub);
+  margin-top: 6px;
+}
+
+.compactSelect {
+  width: 100px;
+  padding: 3px 8px;
+  font-size: var(--font-size-sm);
+}
+
+.btnFullCenter {
+  width: 100%;
+  justify-content: center;
+}
+
+.btnFullCenterMt4 {
+  width: 100%;
+  justify-content: center;
+  margin-top: var(--space-1);
+}
+
+.btnFullCenterMt8 {
+  width: 100%;
+  justify-content: center;
+  margin-top: var(--space-2);
+}
+
+.comingSoon {
+  color: var(--color-text-sub);
+  font-size: var(--font-size-md);
+}

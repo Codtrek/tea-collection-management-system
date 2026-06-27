@@ -1,4 +1,3 @@
-import { C } from '../../styles/tokens'
 import { useState } from 'react'
 import { Card } from '../../components/ui/Card'
 import { Grid } from '../../components/ui/Grid'
@@ -10,6 +9,7 @@ import { SearchBar } from '../../components/ui/SearchBar'
 import { SectionHeader } from '../../components/ui/SectionHeader'
 import { Table } from '../../components/ui/Table'
 import { Tabs } from '../../components/ui/Tabs'
+import styles from "../../styles/modules/pages/AppCommon.module.css";
 
 export const OfficerRegistration = () => {
   const [tab, setTab] = useState(0);
@@ -18,7 +18,7 @@ export const OfficerRegistration = () => {
       <Tabs tabs={["Register Employee","Register Supplier","View All"]} active={tab} onChange={setTab} />
       {tab === 0 && (
         <Card>
-          <div style={{ fontSize:13, fontWeight:500, color:C.text, marginBottom:16 }}>Register New Employee</div>
+          <div className={styles.cardTitleMb16}>Register New Employee</div>
           <Grid cols={2} gap={12}>
             <FormRow label="Full Name"><Input placeholder="Full name" /></FormRow>
             <FormRow label="NIC Number"><Input placeholder="XXXXXXXXXV / XXXXXXXXXXXX" /></FormRow>
@@ -29,12 +29,12 @@ export const OfficerRegistration = () => {
             <FormRow label="Base Salary (LKR)"><Input placeholder="0.00" /></FormRow>
             <FormRow label="Join Date"><Input type="date" /></FormRow>
           </Grid>
-          <Btn primary style={{ width:"100%", justifyContent:"center", marginTop:4 }}><Icon name="plus" size={13} /> Register Employee</Btn>
+          <Btn primary className={styles.btnFullCenterMt4}><Icon name="plus" size={13} /> Register Employee</Btn>
         </Card>
       )}
       {tab === 1 && (
         <Card>
-          <div style={{ fontSize:13, fontWeight:500, color:C.text, marginBottom:16 }}>Register Tea Leaves Supplier</div>
+          <div className={styles.cardTitleMb16}>Register Tea Leaves Supplier</div>
           <Grid cols={2} gap={12}>
             <FormRow label="Supplier Name"><Input placeholder="Full name" /></FormRow>
             <FormRow label="NIC Number"><Input placeholder="XXXXXXXXXV / XXXXXXXXXXXX" /></FormRow>
@@ -43,7 +43,7 @@ export const OfficerRegistration = () => {
             <FormRow label="Estate Location"><Input placeholder="Address / GPS" /></FormRow>
             <FormRow label="Assigned Route"><Select><option>Route A — Ella</option><option>Route B — Dimbula</option><option>Route C — Uva</option></Select></FormRow>
           </Grid>
-          <Btn primary style={{ width:"100%", justifyContent:"center", marginTop:4 }}><Icon name="plus" size={13} /> Register Supplier</Btn>
+          <Btn primary className={styles.btnFullCenterMt4}><Icon name="plus" size={13} /> Register Supplier</Btn>
         </Card>
       )}
       {tab === 2 && (

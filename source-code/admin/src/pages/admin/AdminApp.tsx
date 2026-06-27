@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { C } from '../../styles/tokens'
 import { Card } from '../../components/ui/Card'
 import { SidebarLayout} from '../../layouts/SidebarLayout'
 import { AdminDashboard } from './AdminDashboard';
 import { type AdminScreen, type LogoutProps } from '../../types'
+import styles from "../../styles/modules/pages/AppCommon.module.css";
 
 export const AdminApp = ({ onLogout: _onLogout } :LogoutProps) => {
   const [screen, setScreen] = useState<AdminScreen>("dashboard");
@@ -15,7 +15,7 @@ export const AdminApp = ({ onLogout: _onLogout } :LogoutProps) => {
   return (
     <SidebarLayout nav={nav} active={screen} onNav={(key) => setScreen(key as AdminScreen)} title={titles[screen]||"Admin"} badge="Dev Admin Panel" user={{ initials:"DA", name:"Dev Admin", role:"System Administrator" }} role="System Admin">
       {screen === "dashboard" && <AdminDashboard />}
-      {screen !== "dashboard" && <Card><div style={{ color:C.textSub, fontSize:13 }}>{titles[screen]} — coming soon</div></Card>}
+      {screen !== "dashboard" && <Card><div className={styles.comingSoon}>{titles[screen]} — coming soon</div></Card>}
     </SidebarLayout>
   );
 };
