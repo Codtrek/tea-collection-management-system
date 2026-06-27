@@ -3,7 +3,7 @@
   border: var(--border);
   border-radius: var(--radius-xl);
   padding: 14px var(--space-4);
-  border-left: 3px solid var(--accent, var(--color-green));
+  border-left: 3px solid var(--accent-color, var(--color-green));
 }
 
 .label {
@@ -16,7 +16,7 @@
 }
 
 .value {
-  font-size: 22px;
+  font-size: var(--font-size-2xl);
   font-weight: 500;
   color: var(--color-text);
   line-height: 1;
@@ -28,7 +28,7 @@
   margin-top: var(--space-1);
 }
 
-.accentGreen { --accent: var(--color-green); }
-.accentAmber { --accent: var(--color-amber); }
-.accentBlue  { --accent: var(--color-blue); }
-.accentRed   { --accent: var(--color-red); }
+.accentGreen { --accent-color: var(--color-green); }
+.accentAmber { --accent-color: var(--color-amber); }
+.accentBlue  { --accent-color: var(--color-blue); }
+.accentRed   { --accent-color: var(--color-red); }

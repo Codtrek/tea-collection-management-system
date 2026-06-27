@@ -1,3 +1,4 @@
+/* ── Root layout ── */
 .layout {
   display: flex;
   height: 100vh;
@@ -19,6 +20,9 @@
 .sidebarBrand {
   padding: var(--space-4) var(--space-4) var(--space-3);
   border-bottom: 0.5px solid rgba(255,255,255,0.1);
+}
+
+.brandInner {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -33,6 +37,7 @@
   align-items: center;
   justify-content: center;
   color: var(--color-white);
+  flex-shrink: 0;
 }
 
 .brandName {
@@ -137,6 +142,11 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+}
+
+.topbarActions {
+  display: flex;
+  gap: var(--space-2);
 }
 
 .content {

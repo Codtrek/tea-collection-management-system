@@ -5,7 +5,7 @@ import { Btn } from '../components/ui/Button'
 import { FormRow,Input } from '../components/ui/Form'
 import { Icon } from '../components/ui/Icon'
 import { type NavigateProps } from '../types'
-import styles from "./SignupPage.module.css";
+import styles from "../styles/modules/pages/SignupPage.module.css";
 
 
 export const SignupPage = ({ onNavigate }: NavigateProps) => (
@@ -16,7 +16,7 @@ export const SignupPage = ({ onNavigate }: NavigateProps) => (
         <h1 className={styles.title}>Register Your Factory</h1>
         <p className={styles.sub}>Your registration will be reviewed and approved by our team</p>
       </div>
-      <Card className={styles.formCard}>
+      <Card>
         <div className={styles.sectionTitle}>Factory Information</div>
         <Grid cols={2} gap={12}>
           <FormRow label="Factory Name"><Input placeholder="e.g. Nuwara Eliya Tea Factory" /></FormRow>
@@ -26,13 +26,13 @@ export const SignupPage = ({ onNavigate }: NavigateProps) => (
           <FormRow label="Official Phone"><Input placeholder="+94 XX XXX XXXX" /></FormRow>
         </Grid>
 
-        <div className={styles.sectionTitleSpaced}>Contact Person</div>
+        <div className={styles.sectionTitle}>Contact Person</div>
         <Grid cols={2} gap={12}>
           <FormRow label="Contact Person Name"><Input placeholder="Full name" /></FormRow>
           <FormRow label="Position / Designation"><Input placeholder="e.g. General Manager" /></FormRow>
         </Grid>
 
-        <div className={styles.sectionTitleSpaced}>Documents</div>
+        <div className={styles.sectionTitle}>Documents</div>
         <FormRow label="BR Certificate Upload">
           <div className={styles.uploadZone}>
             <Icon name="upload" size={20} />

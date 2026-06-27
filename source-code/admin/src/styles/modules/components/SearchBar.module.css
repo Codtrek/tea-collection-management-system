@@ -17,8 +17,5 @@
   color: var(--color-text);
   font-size: var(--font-size-base);
   flex: 1;
-}
-
-.iconWrap {
-  color: var(--color-text-sub);
+  font-family: var(--font-family);
 }

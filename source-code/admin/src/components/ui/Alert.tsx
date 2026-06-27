@@ -1,6 +1,6 @@
 import { Icon } from './Icon'
 import { type AlertProps } from '../../types'
-import styles from "./Alert.module.css";
+import styles from "../../styles/modules/components/Alert.module.css";
 
 export const Alert = ({ type = "info" , children } : AlertProps) => {
   const iconMap = { warning: "warning", info: "info" } as const;

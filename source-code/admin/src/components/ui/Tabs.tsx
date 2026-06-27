@@ -1,5 +1,5 @@
 import { type TabsProps } from '../../types'
-import styles from "./Tabs.module.css";
+import styles from "../../styles/modules/components/Tabs.module.css";
 
 export const Tabs = ({ tabs, active, onChange } : TabsProps) => (
   <div className={styles.tabs}>

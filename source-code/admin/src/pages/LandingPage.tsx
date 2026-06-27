@@ -2,7 +2,7 @@
 import { Icon } from '../components/ui/Icon'
 import { Btn } from '../components//ui/Button'
 import { type NavigateProps } from '../types'
-import styles from "./LandingPage.module.css";
+import styles from "../styles/modules/pages/LandingPage.module.css";
 
 export const LandingPage = ({ onNavigate }: NavigateProps) => (
   <div className={styles.page}>
@@ -26,8 +26,8 @@ export const LandingPage = ({ onNavigate }: NavigateProps) => (
       <h1 className={styles.heroTitle}>Manage Your Tea Factory<br />From Field to Factory</h1>
       <p className={styles.heroSub}>A complete digital platform for Sri Lankan tea estates and factories — track collections, manage employees, handle payments, and analyze production in one place.</p>
       <div className={styles.heroActions}>
-        <Btn primary className={styles.heroBtnPrimary} onClick={() => onNavigate("signup")}>Get Started Free</Btn>
-        <Btn className={styles.heroBtnSecondary} onClick={() =>  onNavigate("/login")}>Sign In</Btn>
+        <Btn primary onClick={() => onNavigate("signup")}>Get Started Free</Btn>
+        <Btn onClick={() =>  onNavigate("/login")}>Sign In</Btn>
       </div>
     </div>
 
@@ -98,13 +98,13 @@ export const LandingPage = ({ onNavigate }: NavigateProps) => (
     <div className={styles.cta}>
       <h2 className={styles.ctaTitle}>Ready to digitize your factory?</h2>
       <p className={styles.ctaSub}>Register your factory today and start managing operations digitally.</p>
-      <Btn primary className={styles.ctaBtn} onClick={() => onNavigate("signup")}>Register Your Factory</Btn>
+      <Btn primary onClick={() => onNavigate("signup")}>Register Your Factory</Btn>
     </div>
 
     {/* Footer */}
     <div className={styles.footer}>
       <div className={styles.footerLogo}>
-        <div className={styles.footerIcon}><Icon name="leaf" size={12} color="#ffffff" /></div>
+        <div className={styles.footerLogoIcon}><Icon name="leaf" size={12} color="#ffffff" /></div>
         <span className={styles.footerText}>Tea CMS © 2025</span>
       </div>
       <span className={styles.footerCredit}>University of Colombo School of Computing — Industry Project</span>

@@ -19,3 +19,7 @@
   color: var(--color-text);
   vertical-align: middle;
 }
+
+.tr:hover .td {
+  background: var(--color-gray-light);
+}

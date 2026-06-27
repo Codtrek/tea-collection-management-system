@@ -2,16 +2,18 @@ import { Icon } from '../components/ui/Icon'
 import { Btn } from '../components//ui/Button'
 import { Avatar } from '../components/ui/Avatar';
 import { type SidebarProps } from '../types'
-import styles from "./SidebarLayout.module.css";
+import styles from "../styles/modules/layouts/SidebarLayout.module.css";
 
 export const SidebarLayout = ({ nav, active, onNav, title, badge, user, role, children } : SidebarProps) => (
   <div className={styles.layout}>
     <div className={styles.sidebar}>
       <div className={styles.sidebarBrand}>
-        <div className={styles.brandIcon}><Icon name="leaf" size={16} /></div>
-        <div>
-          <div className={styles.brandName}>Tea CMS</div>
-          <div className={styles.brandRole}>{role}</div>
+        <div className={styles.brandInner}>
+          <div className={styles.brandIcon}><Icon name="leaf" size={16} /></div>
+          <div>
+            <div className={styles.brandName}>Tea CMS</div>
+            <div className={styles.brandRole}>{role}</div>
+          </div>
         </div>
       </div>
       {nav.map(section => (
@@ -37,8 +39,10 @@ export const SidebarLayout = ({ nav, active, onNav, title, badge, user, role, ch
       <div className={styles.topbar}>
         <span className={styles.topbarTitle}>{title}</span>
         {badge && <span className={styles.topbarBadge}><Icon name="leaf" size={11} /> {badge}</span>}
-        <Btn><Icon name="bell" size={14} /></Btn>
-        <Btn><Icon name="settings" size={14} /></Btn>
+        <div className={styles.topbarActions}>
+          <Btn><Icon name="bell" size={14} /></Btn>
+          <Btn><Icon name="settings" size={14} /></Btn>
+        </div>
       </div>
       <div className={styles.content}>{children}</div>
     </div>

@@ -1,5 +1,5 @@
 import { type FormRowProps, type InputProps, type SelectProps, type TextareaProps } from '../../types'
-import styles from "./Form.module.css";
+import styles from "../../styles/modules/components/Form.module.css";
 
 export const FormRow = ({ label, children , half = false} : FormRowProps) => (
   <div className={`${styles.formRow} ${half ? styles.half : ""}`}>

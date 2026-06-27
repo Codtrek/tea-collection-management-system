@@ -1,5 +1,5 @@
 import { type SectionHeaderProps } from '../../types'
-import styles from "./SectionHeader.module.css";
+import styles from "../../styles/modules/components/SectionHeader.module.css";
 
 export const SectionHeader = ({ title, children } : SectionHeaderProps) => (
   <div className={styles.header}>

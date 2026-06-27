@@ -30,6 +30,13 @@
   font-family: var(--font-family);
 }
 
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--color-green);
+  box-shadow: 0 0 0 2px var(--color-green-light);
+}
+
 .textarea {
   resize: none;
 }

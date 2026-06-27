@@ -5,9 +5,9 @@
   justify-content: center;
   font-weight: 500;
   flex-shrink: 0;
-  width: var(--size, 28px);
-  height: var(--size, 28px);
-  font-size: calc(var(--size, 28px) * 0.38);
+  width: var(--avatar-size, 28px);
+  height: var(--avatar-size, 28px);
+  font-size: calc(var(--avatar-size, 28px) * 0.38);
 }
 
 .green { background: var(--color-green-light); color: var(--color-green-text); }

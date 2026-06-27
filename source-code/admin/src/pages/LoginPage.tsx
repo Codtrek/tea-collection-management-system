@@ -3,7 +3,7 @@ import { Btn } from '../components/ui/Button'
 import { FormRow, Input} from '../components/ui/Form'
 import { Icon } from '../components/ui/Icon'
 import { type LoginProps } from '../types'
-import styles from "./LoginPage.module.css";
+import styles from "../styles/modules/pages/LoginPage.module.css";
 
 export const LoginPage = ({ onNavigate, onLogin }: LoginProps) => (
   <div className={styles.page}>
@@ -13,7 +13,7 @@ export const LoginPage = ({ onNavigate, onLogin }: LoginProps) => (
         <h1 className={styles.title}>Welcome back</h1>
         <p className={styles.sub}>Sign in to Tea CMS</p>
       </div>
-      <Card className={styles.formCard}>
+      <Card>
         <FormRow label="NIC Number"><Input placeholder="Enter your NIC number" /></FormRow>
         <FormRow label="Password"><Input type="password" placeholder="Enter your password" /></FormRow>
         <Btn primary className={styles.btnFull} onClick={() => onLogin("officer")}>Sign In as Officer</Btn>

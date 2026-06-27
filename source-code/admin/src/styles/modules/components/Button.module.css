@@ -11,6 +11,7 @@
   gap: var(--space-1);
   font-weight: 400;
   font-family: var(--font-family);
+  transition: opacity 0.15s;
 }
 
 .btn:hover {

@@ -9,7 +9,7 @@
   font-size: var(--font-size-base);
 }
 
-.value {
+.headerValue {
   font-weight: 500;
 }
 
@@ -25,4 +25,5 @@
   border-radius: 3px;
   background: var(--bar-color, var(--color-green));
   width: var(--bar-width, 0%);
+  transition: width 0.3s ease;
 }

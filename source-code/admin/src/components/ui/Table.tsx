@@ -1,5 +1,5 @@
 import { type TableProps } from '../../types'
-import styles from "./Table.module.css";
+import styles from "../../styles/modules/components/Table.module.css";
 
 export const Table = ({ headers, rows } : TableProps) => (
   <table className={styles.table}>

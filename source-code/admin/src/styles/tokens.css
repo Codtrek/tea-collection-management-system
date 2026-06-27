@@ -59,7 +59,7 @@
   /* Borders */
   --border: 0.5px solid var(--color-gray-border);
 
-  /* Sidebar */
-  --sidebar-width: 200px;
-  --topbar-height: 48px;
+  /* Layout */
+  --sidebar-width:  200px;
+  --topbar-height:  48px;
 }
