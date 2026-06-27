@@ -3,14 +3,9 @@ import { C } from '../../styles/tokens'
 import { Card } from '../../components/ui/Card'
 import { SidebarLayout} from '../../layouts/SidebarLayout'
 import { AdminDashboard } from './AdminDashboard';
+import { type AdminScreen, type LogoutProps } from '../../types'
 
-interface AdminProps {
-  onLogout?: (role:string )=> void 
-}
-
-type AdminScreen = "dashboard" | "factories" | "users";
-
-export const AdminApp = ({ onLogout } :AdminProps) => {
+export const AdminApp = ({ onLogout: _onLogout } :LogoutProps) => {
   const [screen, setScreen] = useState<AdminScreen>("dashboard");
   const nav = [
     { label:"Overview", items:[{ key:"dashboard", icon:"dashboard", label:"Dashboard" }] },

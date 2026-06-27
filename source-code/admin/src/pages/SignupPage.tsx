@@ -5,15 +5,10 @@ import { Alert } from '../components/ui/Alert'
 import { Btn } from '../components/ui/Button'
 import { FormRow,Input } from '../components/ui/Form'
 import { Icon } from '../components/ui/Icon'
-import { type NavigateFunction } from "react-router-dom";
-
-interface SignupProp {
-  onNavigate: NavigateFunction;
-  onLogin: NavigateFunction
-}
+import { type NavigateProps } from '../types'
 
 
-export const SignupPage = ({ onNavigate }: SignupProp) => (
+export const SignupPage = ({ onNavigate }: NavigateProps) => (
   <div style={{ minHeight:"100vh", background:C.grayLight, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"system-ui,-apple-system,sans-serif", padding:"40px 20px" }}>
     <div style={{ width:560 }}>
       <div style={{ textAlign:"center", marginBottom:24 }}>

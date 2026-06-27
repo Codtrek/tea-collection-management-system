@@ -1,10 +1,5 @@
 import { C } from '../../styles/tokens'
-
-interface TabsProps {
-  tabs?: string[]
-  active?: number
-  onChange?: (i: number) => void 
-}
+import { type TabsProps } from '../../types'
 
 export const Tabs = ({ tabs, active, onChange } : TabsProps) => (
   <div style={{ display:"flex", gap:2, borderBottom:`0.5px solid ${C.grayBorder}`, marginBottom:16 }}>

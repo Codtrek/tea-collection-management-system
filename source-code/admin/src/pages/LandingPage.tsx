@@ -2,13 +2,9 @@
 import { C } from '../styles/tokens'
 import { Icon } from '../components/ui/Icon'
 import { Btn } from '../components//ui/Button'
-import { type NavigateFunction } from "react-router-dom";
+import { type NavigateProps } from '../types'
 
-type LandingPageProps = {
-  onNavigate: NavigateFunction
-}
-
-export const LandingPage = ({ onNavigate }: LandingPageProps) => (
+export const LandingPage = ({ onNavigate }: NavigateProps) => (
   <div style={{ fontFamily:"system-ui,-apple-system,sans-serif", background:C.white, minHeight:"100vh" }}>
     {/* Nav */}
     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 48px", borderBottom:`0.5px solid ${C.grayBorder}`, position:"sticky", top:0, background:C.white, zIndex:10 }}>

@@ -1,9 +1,5 @@
 import { C } from '../../styles/tokens'
-
-interface TableProps {
-  headers?: string[]
-  rows?: React.ReactNode[][]
-}
+import { type TableProps } from '../../types'
 
 export const Table = ({ headers, rows } : TableProps) => (
   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>

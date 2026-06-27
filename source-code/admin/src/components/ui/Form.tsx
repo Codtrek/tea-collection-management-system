@@ -1,16 +1,8 @@
 import { C } from '../../styles/tokens'
 import { type CSSProperties } from "react";
+import { type FormRowProps, type InputProps, type SelectProps, type TextareaProps } from '../../types'
 
-interface FormProps {
-  label?: string
-  children?: React.ReactNode
-  half?: boolean
-  placeholder?: string
-  type?: string
-  style?: CSSProperties
-  rows?: number
-}
-export const FormRow = ({ label, children , half = false} : FormProps) => (
+export const FormRow = ({ label, children , half = false} : FormRowProps) => (
   <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:12, gridColumn: half ? "span 1" : undefined }}>
     <label style={{ fontSize:11, color:C.textSub, fontWeight:500 }}>{label}</label>
     {children}
@@ -32,7 +24,7 @@ export const Input = ({
   placeholder , 
   type="text", 
   style  
-  } : FormProps) =>  <input type={type} placeholder={placeholder} style={{ ...inp, ...style }} />;
+  } : InputProps) =>  <input type={type} placeholder={placeholder} style={{ ...inp, ...style }} />;
 
-export const Select = ({ children, style } : FormProps) => <select style={{ ...inp, ...style }}>{children}</select>;
-export const Textarea = ({ placeholder, rows=2 } : FormProps) => <textarea placeholder={placeholder} rows={rows} style={{ ...inp, resize:"none" }} />;
+export const Select = ({ children, style } : SelectProps) => <select style={{ ...inp, ...style }}>{children}</select>;
+export const Textarea = ({ placeholder, rows=2 } : TextareaProps) => <textarea placeholder={placeholder} rows={rows} style={{ ...inp, resize:"none" }} />;

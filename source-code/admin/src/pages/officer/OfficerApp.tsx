@@ -8,18 +8,9 @@ import { OfficerProduction } from './OfficerProduction';
 import { OfficerRegistration } from './OfficerRegistration';
 import { OfficerSalary } from './OfficerSalary';
 import { OfficerSupplierPayments } from './OfficerSupplierPayments';
+import { type LogoutProps, type OfficerScreen } from '../../types'
 
-type OfficerScreen =
-  | "tea-weight"
-  | "fertilizer"
-  | "attendance"
-  | "production"
-  | "registration"
-  | "salary"
-  | "supplier-pay"
-  | "expenses";
-
-export const OfficerApp = ({ onLogout } : { onLogout: () => void }) => {
+export const OfficerApp = ({ onLogout: _onLogout } : LogoutProps) => {
   const [screen, setScreen] = useState<OfficerScreen>("tea-weight");
   const nav = [
     { label:"Operations",    items:[{ key:"tea-weight",  icon:"scale",     label:"Tea Weight Entry" }, { key:"fertilizer",  icon:"seeding",   label:"Fertilizer" }, { key:"attendance",  icon:"calendar",  label:"Attendance" }, { key:"production",  icon:"leaf",     label:"Tea Production" }] },

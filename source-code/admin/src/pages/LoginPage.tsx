@@ -3,13 +3,7 @@ import { Card } from '../components/ui/Card'
 import { Btn } from '../components/ui/Button'
 import { FormRow, Input} from '../components/ui/Form'
 import { Icon } from '../components/ui/Icon'
-import { type NavigateFunction } from "react-router-dom";
-
-
-interface LoginProps {
-  onNavigate: NavigateFunction;
-  onLogin: NavigateFunction
-}
+import { type LoginProps } from '../types'
 
 export const LoginPage = ({ onNavigate, onLogin }: LoginProps) => (
   <div style={{ minHeight:"100vh", background:C.grayLight, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"system-ui,-apple-system,sans-serif" }}>

@@ -1,12 +1,7 @@
 import { C } from '../../styles/tokens'
 import { Icon } from './Icon'
+import { type AlertProps } from '../../types'
 
-type AlertType = "info" | "warning";
-
-interface AlertProps {
-  type?: AlertType 
-  children: React.ReactNode
-}
 export const Alert = ({ type = "info" , children } : AlertProps) => {
   const map = { warning:[C.amberLight,C.amberText,"#fcd34d","warning"], info:[C.blueLight,C.blueText,"#93c5fd","info"] };
   const [bg,txt,border,icon] = map[type]||map.info;

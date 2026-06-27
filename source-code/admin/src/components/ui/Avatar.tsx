@@ -1,12 +1,5 @@
 import { C } from '../../styles/tokens'
-
-type AvatarColor = "green" | "blue" | "amber";
-
-interface AvatarProps {
-  initials: string;
-  color?: AvatarColor;
-  size?: number;
-}
+import { type AvatarProps } from '../../types'
 
 export const Avatar = ({ initials, color = "green", size = 28 } : AvatarProps) => {
   const map = { green:[C.greenLight,C.greenText], blue:[C.blueLight,C.blueText], amber:[C.amberLight,C.amberText] };

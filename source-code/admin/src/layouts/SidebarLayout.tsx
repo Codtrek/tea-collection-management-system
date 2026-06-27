@@ -2,34 +2,7 @@ import { C } from '../styles/tokens'
 import { Icon } from '../components/ui/Icon'
 import { Btn } from '../components//ui/Button'
 import { Avatar } from '../components/ui/Avatar';
-
-interface NavItem {
-  key: string;
-  icon: string;
-  label: string;
-}
-
-interface NavSection {
-  label: string;
-  items: NavItem[];
-}
-
-interface SidebarUser {
-  initials: string;
-  name: string;
-  role: string;
-}
-
-interface SidebarProps {
-  nav: NavSection[];
-  active: string;
-  onNav: (key: string) => void;
-  title: string;
-  badge?: string;
-  user: SidebarUser;    
-  role: string;
-  children: React.ReactNode;
-}
+import { type SidebarProps } from '../types'
 
 export const SidebarLayout = ({ nav, active, onNav, title, badge, user, role, children } : SidebarProps) => (
   <div style={{ display:"flex", height:"100vh", background:C.grayLight, fontFamily:"system-ui,-apple-system,sans-serif", fontSize:13 }}>

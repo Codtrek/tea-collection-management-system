@@ -6,16 +6,9 @@ import { ManagerFertilizer } from './ManagerFertilizer'
 import { ManagerProduction } from './ManagerProduction'
 import { ManagerFinance } from './ManagerFinance'
 import { ManagerPerformance } from './ManagerPerformance'
+import { type LogoutProps, type ManagerScreen } from '../../types'
 
-type ManagerScreen =
-  | "dashboard"
-  | "tea"
-  | "fertilizer"
-  | "production"
-  | "finance"
-  | "performance";
-
-export const ManagerApp = ({ onLogout }: { onLogout: () => void }) => {
+export const ManagerApp = ({ onLogout: _onLogout }: LogoutProps) => {
   const [screen, setScreen] = useState<ManagerScreen>("dashboard");
   const nav = [
     { label:"Overview",   items:[{ key:"dashboard",   icon:"dashboard", label:"Dashboard" }] },
