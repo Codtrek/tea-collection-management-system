@@ -1,0 +1,65 @@
+/* src/styles/tokens.css */
+:root {
+  /* Colors */
+  --color-green:        #2D6A4F;
+  --color-green-dark:   #1a3d2b;
+  --color-green-light:  #d1fae5;
+  --color-green-text:   #065f46;
+
+  --color-amber:        #B45309;
+  --color-amber-light:  #fef3c7;
+  --color-amber-text:   #92400e;
+
+  --color-blue:         #1D4ED8;
+  --color-blue-light:   #dbeafe;
+  --color-blue-text:    #1e40af;
+
+  --color-red:          #B91C1C;
+  --color-red-light:    #fee2e2;
+  --color-red-text:     #991b1b;
+
+  --color-gray:         #6b7280;
+  --color-gray-light:   #f9fafb;
+  --color-gray-border:  #e5e7eb;
+  --color-text:         #111827;
+  --color-text-sub:     #6b7280;
+  --color-white:        #ffffff;
+
+  /* Typography */
+  --font-family:        system-ui, -apple-system, sans-serif;
+  --font-size-xs:       10px;
+  --font-size-sm:       11px;
+  --font-size-base:     12px;
+  --font-size-md:       13px;
+  --font-size-lg:       14px;
+  --font-size-xl:       16px;
+  --font-size-2xl:      22px;
+  --font-size-3xl:      28px;
+
+  /* Spacing */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Border radius */
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   8px;
+  --radius-xl:   10px;
+  --radius-2xl:  12px;
+  --radius-full: 9999px;
+
+  /* Borders */
+  --border: 0.5px solid var(--color-gray-border);
+
+  /* Sidebar */
+  --sidebar-width: 200px;
+  --topbar-height: 48px;
+}

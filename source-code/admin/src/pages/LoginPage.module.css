@@ -1,0 +1,85 @@
+.page {
+  min-height: 100vh;
+  background: var(--color-gray-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-family);
+}
+
+.container {
+  width: 400px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.iconWrap {
+  width: 48px;
+  height: 48px;
+  background: var(--color-green);
+  border-radius: var(--radius-2xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+}
+
+.title {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 6px;
+}
+
+.sub {
+  font-size: var(--font-size-md);
+  color: var(--color-text-sub);
+}
+
+.formCard {
+  margin-bottom: 0;
+  padding: 28px;
+}
+
+.btnFull {
+  width: 100%;
+  justify-content: center;
+  padding: 9px;
+  font-size: var(--font-size-md);
+  margin-top: var(--space-1);
+}
+
+.btnManager {
+  margin-top: var(--space-2);
+}
+
+.btnAdmin {
+  margin-top: var(--space-2);
+  background: var(--color-blue-light);
+  color: var(--color-blue);
+  border-color: var(--color-blue);
+}
+
+.footer {
+  text-align: center;
+  margin-top: var(--space-4);
+  font-size: var(--font-size-base);
+  color: var(--color-text-sub);
+}
+
+.link {
+  color: var(--color-green);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.back {
+  text-align: center;
+  margin-top: var(--space-4);
+  font-size: var(--font-size-base);
+  color: var(--color-text-sub);
+  cursor: pointer;
+}

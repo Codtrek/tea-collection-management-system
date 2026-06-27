@@ -1,9 +1,9 @@
-import { C } from '../../styles/tokens'
 import { type SectionHeaderProps } from '../../types'
+import styles from "./SectionHeader.module.css";
 
 export const SectionHeader = ({ title, children } : SectionHeaderProps) => (
-  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-    <span style={{ fontSize:13, fontWeight:500, color:C.text }}>{title}</span>
-    <div style={{ display:"flex", gap:8 }}>{children}</div>
+  <div className={styles.header}>
+    <span className={styles.title}>{title}</span>
+    <div className={styles.actions}>{children}</div>
   </div>
 );

@@ -1,0 +1,35 @@
+.formRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.half {
+  grid-column: span 1;
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-sub);
+  font-weight: 500;
+}
+
+.input,
+.select,
+.textarea {
+  padding: 7px 10px;
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-family);
+}
+
+.textarea {
+  resize: none;
+}

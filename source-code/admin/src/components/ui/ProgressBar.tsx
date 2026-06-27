@@ -1,9 +1,21 @@
-import { C } from '../../styles/tokens'
+import { type CSSProperties } from "react";
 import { type ProgressBarProps } from '../../types'
+import styles from "./ProgressBar.module.css";
 
-export const ProgressBar = ({ label, value, color=C.green } : ProgressBarProps) => (
-  <div style={{ marginBottom:10 }}>
-    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}><span style={{ fontSize:12 }}>{label}</span><span style={{ fontSize:12, fontWeight:500 }}>{value}%</span></div>
-    <div style={{ height:6, background:"#f3f4f6", borderRadius:3, overflow:"hidden" }}><div style={{ height:"100%", borderRadius:3, background:color, width:`${value}%` }} /></div>
+export const ProgressBar = ({ label, value, color="#2D6A4F" } : ProgressBarProps) => (
+  <div className={styles.wrapper}>
+    <div className={styles.header}>
+      <span>{label}</span>
+      <span className={styles.value}>{value}%</span>
+    </div>
+    <div className={styles.track}>
+      <div
+        className={styles.fill}
+        style={{
+          "--bar-width": `${value}%`,
+          "--bar-color": color,
+        } as CSSProperties}
+      />
+    </div>
   </div>
 );

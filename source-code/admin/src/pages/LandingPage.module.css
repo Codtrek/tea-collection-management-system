@@ -1,0 +1,329 @@
+.page {
+  font-family: var(--font-family);
+  background: var(--color-white);
+  min-height: 100vh;
+}
+
+/* Nav */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) 48px;
+  border-bottom: var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--color-white);
+  z-index: 10;
+}
+
+.navLogo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logoIcon {
+  width: 32px;
+  height: 32px;
+  background: var(--color-green);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logoText {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.navActions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, var(--color-green-dark) 0%, #2D6A4F 60%, #52b788 100%);
+  padding: 80px 48px;
+  text-align: center;
+  color: var(--color-white);
+}
+
+.heroBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: rgba(255,255,255,0.12);
+  padding: 6px var(--space-4);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-base);
+  margin-bottom: var(--space-6);
+  border: 0.5px solid rgba(255,255,255,0.2);
+}
+
+.heroTitle {
+  font-size: 42px;
+  font-weight: 700;
+  margin: 0 0 var(--space-4);
+  line-height: 1.2;
+}
+
+.heroSub {
+  font-size: var(--font-size-xl);
+  color: rgba(255,255,255,0.8);
+  max-width: 520px;
+  margin: 0 auto var(--space-8);
+  line-height: 1.6;
+}
+
+.heroActions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+.heroBtnPrimary {
+  background: var(--color-white);
+  color: var(--color-green);
+  border-color: var(--color-white);
+  padding: 10px 24px;
+  font-size: var(--font-size-lg);
+}
+
+.heroBtnSecondary {
+  background: rgba(255,255,255,0.1);
+  color: var(--color-white);
+  border-color: rgba(255,255,255,0.3);
+  padding: 10px 24px;
+  font-size: var(--font-size-lg);
+}
+
+/* Stats */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: var(--border);
+}
+
+.statItem {
+  padding: 28px var(--space-8);
+  text-align: center;
+  border-right: var(--border);
+}
+
+.statItem:last-child {
+  border-right: none;
+}
+
+.statVal {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-green);
+}
+
+.statLabel {
+  font-size: var(--font-size-base);
+  color: var(--color-text-sub);
+  margin-top: var(--space-1);
+}
+
+/* Features */
+.features {
+  padding: var(--space-16) 48px;
+}
+
+.featuresHeader {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.featuresTitle {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 var(--space-3);
+}
+
+.featuresSub {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-sub);
+}
+
+.featuresGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+}
+
+.featureCard {
+  background: var(--color-gray-light);
+  border-radius: var(--radius-2xl);
+  padding: var(--space-6);
+  border: var(--border);
+}
+
+.featureIcon {
+  width: 40px;
+  height: 40px;
+  background: var(--color-green-light);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-green);
+  margin-bottom: 14px;
+}
+
+.featureTitle {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+
+.featureDesc {
+  font-size: var(--font-size-base);
+  color: var(--color-text-sub);
+  line-height: 1.6;
+}
+
+/* Workflow */
+.workflow {
+  padding: 48px 48px var(--space-16);
+  background: var(--color-gray-light);
+  border-top: var(--border);
+}
+
+.workflowHeader {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.workflowTitle {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 10px;
+}
+
+.workflowSub {
+  font-size: var(--font-size-md);
+  color: var(--color-text-sub);
+}
+
+.workflowSteps {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.workflowStep {
+  flex: 1;
+  text-align: center;
+  padding: 0 var(--space-3);
+  position: relative;
+}
+
+.stepNum {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-green);
+  color: var(--color-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  margin: 0 auto var(--space-3);
+}
+
+.stepConnector {
+  position: absolute;
+  top: 20px;
+  left: 60%;
+  right: -10%;
+  height: 0.5px;
+  background: var(--color-gray-border);
+}
+
+.stepTitle {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+
+.stepDesc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-sub);
+  line-height: 1.5;
+}
+
+/* CTA */
+.cta {
+  padding: 48px;
+  text-align: center;
+  background: var(--color-green-dark);
+  color: var(--color-white);
+}
+
+.ctaTitle {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  margin: 0 0 var(--space-3);
+}
+
+.ctaSub {
+  font-size: var(--font-size-md);
+  color: rgba(255,255,255,0.7);
+  margin-bottom: var(--space-6);
+}
+
+.ctaBtn {
+  background: var(--color-white);
+  color: var(--color-green);
+  border-color: var(--color-white);
+  padding: 10px 28px;
+  font-size: var(--font-size-lg);
+}
+
+/* Footer */
+.footer {
+  padding: var(--space-5) 48px;
+  border-top: var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footerLogo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.footerIcon {
+  width: 20px;
+  height: 20px;
+  background: var(--color-green);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.footerText {
+  font-size: var(--font-size-base);
+  color: var(--color-text-sub);
+}
+
+.footerCredit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-sub);
+}

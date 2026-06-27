@@ -1,0 +1,36 @@
+.btn {
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  border: var(--border);
+  background: var(--color-white);
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 400;
+  font-family: var(--font-family);
+}
+
+.btn:hover {
+  opacity: 0.85;
+}
+
+.primary {
+  background: var(--color-green);
+  color: var(--color-white);
+  border-color: var(--color-green);
+  font-weight: 500;
+}
+
+.danger {
+  background: var(--color-red-light);
+  color: var(--color-red);
+  border-color: var(--color-red);
+}
+
+.small {
+  padding: var(--space-1) 10px;
+  font-size: var(--font-size-sm);
+}

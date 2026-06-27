@@ -85,12 +85,14 @@ export interface ButtonProps {
   danger?: boolean;
   small?: boolean;
   style?: React.CSSProperties;
+  className?: string;
   onClick?: () => void;
 }
 
 export interface CardProps {
   children: React.ReactNode;
   style?: React.CSSProperties;
+  className?: string;
 }
 
 export interface IconProps {

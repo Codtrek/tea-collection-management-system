@@ -1,0 +1,22 @@
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: var(--border);
+  margin-bottom: var(--space-4);
+}
+
+.tab {
+  padding: 7px 14px;
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  color: var(--color-text-sub);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-weight: 400;
+}
+
+.active {
+  color: var(--color-green);
+  border-bottom-color: var(--color-green);
+  font-weight: 500;
+}

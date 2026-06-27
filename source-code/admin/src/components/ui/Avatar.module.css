@@ -1,0 +1,15 @@
+.avatar {
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  flex-shrink: 0;
+  width: var(--size, 28px);
+  height: var(--size, 28px);
+  font-size: calc(var(--size, 28px) * 0.38);
+}
+
+.green { background: var(--color-green-light); color: var(--color-green-text); }
+.blue  { background: var(--color-blue-light);  color: var(--color-blue-text); }
+.amber { background: var(--color-amber-light); color: var(--color-amber-text); }

@@ -1,0 +1,14 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.green { background: var(--color-green-light); color: var(--color-green-text); }
+.amber { background: var(--color-amber-light); color: var(--color-amber-text); }
+.red   { background: var(--color-red-light);   color: var(--color-red-text); }
+.blue  { background: var(--color-blue-light);  color: var(--color-blue-text); }
+.gray  { background: #f3f4f6;                  color: #6b7280; }

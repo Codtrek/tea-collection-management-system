@@ -1,0 +1,24 @@
+.searchBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-gray-light);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  flex: 1;
+  max-width: 240px;
+}
+
+.input {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  flex: 1;
+}
+
+.iconWrap {
+  color: var(--color-text-sub);
+}

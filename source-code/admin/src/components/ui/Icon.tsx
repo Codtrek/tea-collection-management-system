@@ -1,4 +1,5 @@
 import { type IconProps } from '../../types'
+import styles from "./Icon.module.css";
 
 export const paths = {
   dashboard:   "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
@@ -32,7 +33,7 @@ export const paths = {
 };
 
 export const Icon = ({ name, size = 15, color  } : IconProps) => (
-  <svg width={size} height={size} fill="none" stroke={color || "currentColor"} strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+  <svg className={styles.icon} width={size} height={size} fill="none" stroke={color || "currentColor"} strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
     <path strokeLinecap="round" strokeLinejoin="round" d={paths[name as keyof typeof paths] || paths.leaf} />
   </svg>
 );
