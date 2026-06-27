@@ -15,7 +15,7 @@ export const ManagerFinance = () => (
       <Card>
         <div style={{ fontSize:13, fontWeight:500, color:C.text, marginBottom:14 }}>Monthly Income vs Expenses Log</div>
         <div style={{ display:"flex", alignItems:"flex-end", gap:8, height:100, paddingTop:8, marginBottom:8 }}>
-          {[["Jan",65,40],["Feb",70,38],["Mar",58,45],["Apr",80,42],["May",72,44],["Jun",88,48]].map(([m,inc,exp],i) => (
+          {[["Jan",65,40],["Feb",70,38],["Mar",58,45],["Apr",80,42],["May",72,44],["Jun",88,48]].map(([m,inc,exp]) => (
             <div key={m} style={{ flex:1, display:"flex", gap:2, alignItems:"flex-end" }}>
               <div style={{ flex:1, background:C.green, borderRadius:"2px 2px 0 0", height:`${inc}%`, opacity:0.8 }} />
               <div style={{ flex:1, background:C.red, borderRadius:"2px 2px 0 0", height:`${exp}%`, opacity:0.7 }} />
