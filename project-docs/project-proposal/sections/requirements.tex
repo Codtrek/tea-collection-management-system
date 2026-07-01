@@ -6,28 +6,28 @@
 
 \subsubsection{Tea Estate Owner Requirements}
 \begin{itemize}
-    \item The system shall allow tea estate owners to register employees.
-    \item The system shall allow tea estate owners to assign managers.
-    \item The system shall allow tea estate owners to view the status and performance of employees.
-    \item The system shall allow tea estate owners to view the total weight of tea leaves delivered to factories.
-    \item The system shall allow tea estate owners to view the estimated income generated from tea leaf collections.
+\item The system shall allow Tea Estate Owners to register employees.
+    \item The system shall allow Tea Estate Owners to assign managers.
+    \item The system shall allow Tea Estate Owners to view the status and performance of employees.
+    \item The system shall allow Tea Estate Owners to view the total weight of tea leaves delivered to factories.
+    \item The system shall allow Tea Estate Owners to view the estimated income generated from tea leaf collections.
     \item The system shall provide graphical reports and analytical insights related to tea leaf collections and income generation.
     \item The system shall provide graphical analytics related to individual employee performance.
-    \item The system shall allow tea estate owners to review and approve fertilizer requests by managers.
-    \item The system shall allow Tea Estate Owners to submit tea leaf selling requests to Factory Administrators after reviewing tea plucking completion reports submitted by Tea Estate Managers.
-    \item The system shall allow tea estate owners to either wait for Tea Collection Agent availability or submit tea selling requests to another factory when notified that no Tea Collection Agents are available.
-    \item The system shall allow tea estate owners to submit fertilizer borrowing requests to factory administrators.
-    \item The system shall allow tea estate owners to receive notifications regarding fertilizer request approvals or rejections from factories.
-    \item The system shall allow tea estate owners to track all tea leaf deliveries and monitor specific deliveries individually.
-    \item The system shall allow tea estate owners to receive complaint reports regarding tea leaf weight mismatches.
-    \item The system shall allow Tea Estate Owners to submit complaints regarding fertilizer quality to Factory Administrators.
+    \item The system shall allow Tea Estate Owners to review and approve fertilizer requests submitted by managers.
+    \item The system shall allow Tea Estate Owners to view the tea collecting agents assigned to routes near their tea estates.
+    \item The system shall allow Tea Estate Owners to submit tea leaf selling requests to the Factory after reviewing tea plucking completion reports submitted by Tea Estate Managers.
+    \item The system shall allow Tea Estate Owners to submit fertilizer borrowing requests to Factory Officers.
+    \item The system shall allow Tea Estate Owners to receive notifications regarding fertilizer request approvals or rejections from factories.
+    \item The system shall allow Tea Estate Owners to track all tea leaf deliveries and monitor specific deliveries individually.
+    \item The system shall allow Tea Estate Owners to receive complaint reports regarding tea leaf weight mismatches.
+    \item The system shall allow Tea Estate Owners to submit complaints regarding fertilizer quality to Factory Managers.
 \end{itemize}
 
 \subsubsection{Tea Estate Manager Requirements}
 \begin{itemize}
     \item The system shall allow managers to record daily tea plucking details of employees.
     \item The system shall allow managers to submit tea plucking completion reports to tea estate owners.
-    \item The system shall enable managers to verify tea leaves collected by the Tea collecting agent by confirming the One-Time Password (OTP) received from the Tea Collection Agent.
+    \item The system shall enable managers to keep photographic evidence of the tea leaves collected by the Tea Collecting Agent.
     \item The system shall allow managers to submit fertilizer requests to tea estate owners when fertilizer stock levels are low.
 \end{itemize}
 
@@ -35,34 +35,44 @@
 \begin{itemize}
     \item The system shall allow Tea Collection Agents to search delivery requests
     \item The system shall allow Tea Collection Agents to record the weight of collected tea leaves.
-    \item The system shall generate a One-Time Password (OTP) by the Tea Collection Agent to verify that the tea leaves have been successfully collected from the Tea Estate Manager.
-    \item The system shall allow Tea Collection Agents to complete and close deliveries by confirming the One-Time Password (OTP) received by the Tea Receiving Officer.
-    \item The system shall allow Tea Collection Agents to transport fertilizers from factories to tea estates.
+    \item The system shall enable Tea Collecting Agents to keep photographic evidence verifying that tea leaves have been successfully collected from the Tea Estate Manager.
 \end{itemize}
 
 \subsubsection{Tea Receiving Officer Requirements}
 \begin{itemize}
-    \item The system shall allow Tea Receiving Officers to generate One-Time Password (OTP) requests to confirm and finalize deliveries with the Tea Collection Agent.
+    \item The system shall allow Tea Receiving Officers to send a tea leaves received confirmation notification to the Factory Officer.
     \item The system shall allow Tea Receiving Officers to submit complaint reports to tea estate owners and factory administrators in the event of tea leaf weight mismatches.
 \end{itemize}
 
 \subsubsection{Factory Administrator Requirements}
 \begin{itemize}
-    \item The system shall allow Factory Administrators to register Tea Collection Agents.
-    \item The system shall allow Factory Administrators to manage monthly payments made to tea estate owners.
-    \item The system shall enable Factory Administrators to handle administrative and financial operations related to tea collection and payment management.
-    \item The system shall allow Factory Administrators to receive complaint reports submitted by Tea Receiving Officers.
-    \item The system shall allow Factory Administrators to review fertilizer borrowing requests submitted by tea estate owners.
-    \item The system shall allow Factory Administrators to approve or reject fertilizer requests based on fertilizer availability.
-    \item The system shall calculate fertilizer charges for borrowed fertilizers.
-    \item The system shall deduct fertilizer charges from the monthly tea revenue payable to tea estate owners.
-    \item The system shall maintain records of fertilizer requests, approvals, dispatch details, and payment deductions.
-    \item The system shall allow Factory Administrators to review tea leaf selling requests submitted by Tea Estate Owners.
-    \item The system shall allow Factory Administrators to check the availability of Tea Collection Agents before approving tea collection requests.
-    \item The system shall notify Tea Estate Owners when no Tea Collection Agents are available for tea collection.
-    \item The system shall allow Factory Administrators to dispatch fertilizers together with tea collection assignments when fertilizer requests are approved
-    \item The system shall assign available Tea Collection Agents to approved tea collection requests.
-    \item The system shall allow Factory Administrators to receive complaints regarding fertilizer quality from Tea Estate Owners.
+    \item The system shall allow Factory Administrators to register the factory in the system.
+    \item The system shall allow Factory Administrators to customize role-based privileges or use the default role-based privileges.
+    \item The system shall allow Factory Administrators to manage employees in the system.
+    \item The system shall allow Factory Administrators to add other beneficiary items (e.g., Food, Rice, etc.).
+\end{itemize}
+
+\subsubsection{Factory Officer Requirements}
+\begin{itemize}
+    \item The system shall allow Factory Officers to create monthly payments made to Tea Estate Owners.
+    \item The system shall allow Factory Officers to manage fertilizer requests, approvals, dispatch details, and payment deductions.
+    \item The system shall allow Factory Officers to manage beneficiary items (e.g., Fertilizer, Rice, etc.) requests, approvals, dispatch details, and payment deductions.
+    \item The system shall allow Factory Officers to enter daily tea plucking details.
+    \item The system shall allow Factory Officers to enter daily attendance into the system.
+    \item The system shall allow Factory Officers to enter daily expenses into the system.
+    \item The system shall allow Factory Officers to pay advances to Tea Estate Owners.
+    \item The system shall allow Factory Officers to pay salary advances to employees.
+    \item The system shall allow Factory Officers to generate the monthly Tea Estate Owners payroll.
+    \item The system shall allow Factory Officers to generate the monthly employee salary payroll.
+\end{itemize}
+
+\subsubsection{Factory Manager Requirements}
+\begin{itemize}
+    \item The system shall allow Factory Managers to view daily and monthly reports.
+    \item The system shall allow Factory Managers to analyze charts and graphs.
+    \item The system shall allow factory Managers to view the stock and status of Fertlizers.
+    \item The system shall allow Factory Managers to view the stock and status of beneficiary items.
+    \item The system shall allow Factory Managers to receive complaint reports submitted by Tea Receiving Officers.
 \end{itemize}
 
 \subsubsection{Reporting Requirements}
@@ -70,19 +80,21 @@
     \item The system shall generate daily tea collection reports.
     \item The system shall generate monthly payment reports.
     \item The system shall generate fertilizer supply and distribution reports.
+    \item The system shall generate beneficiary items supply and distribution reports.
     \item The system shall generate employee performance reports.
     \item The system shall allow reports to be exported in digital formats.
 \end{itemize}
 
 \subsubsection{Notification Requirements}
 \begin{itemize}
-    \item The system shall send delivery confirmation notifications to tea estate owners.
-    \item The system shall send One-Time Password (OTP) notifications for tea leaf collection verification and delivery closure confirmation processes.
+    \item The system shall send delivery confirmation notifications to Tea Estate Owners.
     \item The system shall send notifications regarding complaint reports and delivery issues.
     \item The system shall send notifications regarding fertilizer request approvals or rejections.
     \item The system shall notify relevant users regarding monthly payment updates and deductions.
     \item The system shall send notifications to Tea Estate Owners and Factory Administrators confirming that tea leaves have been successfully collected.
-    \item The system shall notify Tea Estate Owners and Factory Administrators after deliveries are successfully confirmed and finalized by the Tea Receiving Officer.
+    \item The system shall notify Tea Estate Owners and Factory Officers after deliveries are successfully confirmed and finalized by the Tea Receiving Officer.
+    \item The system shall notify Factory Managers when a fertilizer item's expiration date is approaching.
+    \item The system shall notify Factory Managers when the expiration date of a beneficiary item is approaching.
 \end{itemize}
 
 \subsection{Quality Attributes}
