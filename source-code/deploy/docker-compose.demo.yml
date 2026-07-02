@@ -1,0 +1,26 @@
+services:
+  backend-demo:
+    build: ../backend
+    container_name: tea-cms-backend-demo
+    env_file:
+      - .env.demo
+    environment:
+      - NODE_ENV=demo
+    networks:
+      - tea-cms-net
+    restart: unless-stopped
+
+  frontend-demo:
+    build: ../frontend
+    container_name: tea-cms-frontend-demo
+    ports:
+      - "8010:80"
+    depends_on:
+      - backend-demo
+    networks:
+      - tea-cms-net
+    restart: unless-stopped
+
+networks:
+  tea-cms-net:
+    external: true
