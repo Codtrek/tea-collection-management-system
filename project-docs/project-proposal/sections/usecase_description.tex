@@ -247,18 +247,20 @@
 {Completion report is sent to the owner.}
 {E1: Report data incomplete; the system requests corrections.}
 
-\usecase{Verify Collected Tea Leaves via OTP}
-{Verify tea leaves collected by the Tea Collection Agent using OTP.}
+\usecase{Verify Collected Tea Leaves via Photographic Evidence}
+{Verify tea leaves collected by the Tea Collection Agent by capturing and reviewing photographic evidence at the point of handover.}
 {Tea Estate Manager}
-{Manager account is authenticated; OTP is received.}
-{1. The manager opens the verification screen.\newline
-2. The system prompts for the OTP.\newline
-3. The manager enters the OTP.\newline
-4. The system validates the OTP.\newline
-5. The system marks collection as verified.\newline
-6. The system confirms verification.}
-{Collection verification is recorded.}
-{E1: OTP is invalid or expired; the system rejects the entry.}
+{Manager account is authenticated; tea leaves have been handed over to the Tea Collection Agent.}
+{1. The manager opens the collection verification screen.\newline
+2. The system prompts the manager to capture a photo of the collected tea leaves.\newline
+3. The manager captures the photo using the device camera.\newline
+4. The system attaches the photo, timestamp, and delivery reference to the collection record.\newline
+5. If online, the system uploads the photo to Cloudinary and stores the returned URL; if offline, the photo is stored locally and queued for upload.\newline
+6. The system marks the collection as verified.}
+{Collection verification is recorded and linked to photographic evidence.}
+{E1: Camera access denied; the system prompts the manager to enable permissions.\newline
+E2: Photo capture fails; the system allows a retry.\newline
+E3: Device is offline; the photo and verification status are stored locally and synced once connectivity is restored.}
 
 \usecase{Submit Fertilizer Request}
 {Submit fertilizer requests when stock levels are low.}
@@ -299,31 +301,47 @@
 {Collected weight is stored for the delivery.}
 {E1: Weight value is invalid; the system requests correction.}
 
-\usecase{Generate OTP for Collection Verification}
-{Generate an OTP to verify that tea leaves were collected from the manager.}
+\usecase{Capture Photographic Evidence of Collection}
+{Capture photographic evidence verifying that tea leaves have been successfully collected from the Tea Estate Manager.}
 {Tea Collection Agent}
-{Agent account is authenticated; collection recorded.}
+{Agent account is authenticated; collection weight has been recorded.}
 {1. The agent opens the verification step.\newline
-2. The system generates an OTP.\newline
-3. The system sends the OTP to the manager.\newline
-4. The agent confirms OTP dispatch.\newline
-5. The system logs the OTP issuance.\newline
-6. The system waits for manager verification.}
-{OTP is issued and recorded for the delivery.}
-{E1: Notification delivery fails; the system retries or provides a fallback.}
+2. The system prompts the agent to capture a photo confirming collection.\newline
+3. The agent captures the photo.\newline
+4. The system attaches the photo, timestamp, and delivery reference to the collection record.\newline
+5. The system uploads the photo to Cloudinary if online, or queues it locally if offline.\newline
+6. The system marks the collection step as verified.}
+{Photographic evidence is recorded and linked to the collection.}
+{E1: Photo capture fails; the system allows a retry.\newline
+E2: Device is offline; the photo is stored locally and synced once connectivity is restored.}
 
-\usecase{Close Delivery with OTP}
-{Complete and close deliveries by confirming the receiving officer OTP.}
+\usecase{Close Delivery with Photographic Confirmation}
+{Complete and close deliveries by capturing photographic evidence confirming handover to the Tea Receiving Officer.}
 {Tea Collection Agent}
-{Receiving officer OTP is provided.}
+{Delivery has been physically handed over to the Tea Receiving Officer.}
 {1. The agent opens delivery closure.\newline
-2. The system prompts for receiving officer OTP.\newline
-3. The agent enters the OTP.\newline
-4. The system validates the OTP.\newline
+2. The system prompts the agent to capture a photo confirming handover.\newline
+3. The agent captures the photo.\newline
+4. The system attaches the photo and timestamp to the delivery record.\newline
 5. The system marks the delivery as closed.\newline
-6. The system confirms delivery completion.}
-{Delivery is closed and finalized.}
-{E1: OTP is invalid; the system prevents closure.}
+6. The system notifies the Tea Receiving Officer and Tea Estate Owner.}
+{Delivery is closed and finalized with photographic confirmation.}
+{E1: Photo capture fails; the system allows a retry and blocks closure until a photo is attached.\newline
+E2: Device is offline; the photo and closure status are stored locally and synced once connectivity is restored.}
+
+\usecase{Record Offline Collection Data and Synchronize}
+{Record collection details and photographic evidence offline when no internet connection is available, with automatic synchronization once connectivity is restored.}
+{Tea Collection Agent / Tea Estate Manager}
+{Mobile application is installed; user is authenticated with a valid cached session.}
+{1. The user records collection details and/or captures photographic evidence while offline.\newline
+2. The system stores the data and photo files locally using SQLite and the device file system.\newline
+3. The system marks each record with a pending sync status.\newline
+4. Once connectivity is restored, the system detects the active connection.\newline
+5. The system uploads pending records and photos to the backend and Cloudinary.\newline
+6. The system updates each record's sync status upon successful upload.}
+{Offline records are synchronized with the central database without data loss.}
+{E1: Sync fails midway; the system retries automatically and preserves unsynced records locally.\newline
+E2: Conflicting record detected during sync; the system flags the record for manual review rather than overwriting.}
 
 \usecase{Transport Fertilizers}
 {Transport fertilizers from factories to tea estates.}
@@ -338,18 +356,19 @@
 {Fertilizer transport is completed and logged.}
 {E1: Delivery cannot be completed; the system records an exception.}
 
-\usecase{Request OTP for Delivery Finalization}
-{Generate OTP requests to confirm and finalize deliveries with the agent.}
+\usecase{Confirm Delivery Receipt}
+{Confirm and finalize deliveries received from the Tea Collection Agent.}
 {Tea Receiving Officer}
 {Receiving officer account is authenticated; delivery is pending.}
 {1. The officer opens pending deliveries.\newline
-2. The system displays delivery details.\newline
-3. The officer initiates OTP request.\newline
-4. The system generates and sends OTP to the agent.\newline
-5. The system logs the OTP request.\newline
-6. The officer waits for agent confirmation.}
-{OTP is issued for delivery finalization.}
-{E1: Delivery already finalized; the system blocks the request.}
+2. The system displays delivery details and the agent's photographic evidence.\newline
+3. The officer reviews the delivered tea leaves against the recorded details.\newline
+4. The officer confirms receipt.\newline
+5. The system marks the delivery as finalized.\newline
+6. The system notifies the Tea Estate Owner and Factory Officer.}
+{Delivery is confirmed and finalized.}
+{E1: Delivery already finalized; the system blocks the request.\newline
+E2: Discrepancy noticed during review; the officer proceeds to submit a complaint instead of confirming.}
 
 \usecase{Submit Weight Mismatch Complaint}
 {Submit complaint reports for tea leaf weight mismatches.}
@@ -538,7 +557,7 @@
 {Factory Administrator}
 {Collection request is approved; agent availability exists.}
 {1. The administrator opens assignment screen.\newline
-2. The system lists approved requests and agents.\newline
+2. The system lists approved requests and agents, matching nearby available agents using route data.\newline
 3. The administrator assigns an agent to a request.\newline
 4. The system validates the assignment.\newline
 5. The system updates request status.\newline
@@ -624,18 +643,18 @@
 {Owner is notified of delivery confirmation.}
 {E1: Notification fails; the system retries and logs the error.}
 
-\usecase{Send OTP Notifications}
-{Send OTP notifications for collection verification and delivery closure.}
+\usecase{Send Photographic Evidence Upload Notifications}
+{Notify relevant users when photographic evidence has been successfully uploaded and linked to a collection or delivery record.}
 {System}
-{An OTP is generated for verification.}
-{1. The system generates an OTP.\newline
-2. The system identifies the recipient.\newline
-3. The system composes the OTP message.\newline
+{A photo has been captured for a collection or delivery.}
+{1. The system detects a successful photo upload.\newline
+2. The system identifies the relevant recipient(s).\newline
+3. The system composes the notification.\newline
 4. The system sends the notification.\newline
-5. The system logs the OTP delivery.\newline
-6. The system updates OTP status.}
-{OTP notification is delivered to the recipient.}
-{E1: OTP delivery fails; the system retries or issues a new OTP.}
+5. The system logs the notification event.\newline
+6. The system updates notification status.}
+{Recipients are notified that photographic evidence has been recorded.}
+{E1: Notification fails; the system retries and logs the error.}
 
 \usecase{Send Complaint and Delivery Issue Notifications}
 {Send notifications regarding complaint reports and delivery issues.}
@@ -701,5 +720,3 @@
 6. The system updates notification status.}
 {Owners and administrators are notified of delivery finalization.}
 {E1: Notification fails; the system retries and logs the error.}
-
-
