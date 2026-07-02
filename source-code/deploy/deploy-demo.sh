@@ -8,7 +8,7 @@ if [ -z "$BRANCH" ]; then
   exit 1
 fi
 
-cd /opt/tea-cms
+cd /tea-collection-management-system
 git fetch origin
 git checkout "$BRANCH"
 git pull origin "$BRANCH"
