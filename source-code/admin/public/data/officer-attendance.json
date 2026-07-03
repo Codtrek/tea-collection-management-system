@@ -1,0 +1,4 @@
+[
+  { "id": "a1", "staffName": "S. Fernando", "status": "present", "date": "2026-07-14" },
+  { "id": "a2", "staffName": "N. Silva", "status": "leave", "date": "2026-07-14" }
+]
