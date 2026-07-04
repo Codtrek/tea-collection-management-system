@@ -1,55 +1,72 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Design tokens for the Tea Collection Management System mobile app.
+ * Palette: earth-green + harvest-gold, WCAG-checked for outdoor/field-worker legibility.
+ * Typography: Plus Jakarta Sans (single family, strong Dynamic Type / Android scaling support).
  */
-
-import '@/global.css';
-
-import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    primary: '#15803D',
+    onPrimary: '#FFFFFF',
+    secondary: '#22C55E',
+    onSecondary: '#0F172A',
+    accent: '#A16207',
+    onAccent: '#FFFFFF',
+    background: '#F0FDF4',
+    foreground: '#14532D',
+    card: '#FFFFFF',
+    cardForeground: '#14532D',
+    muted: '#E8F0F1',
+    mutedForeground: '#64748B',
+    border: '#BBF7D0',
+    destructive: '#DC2626',
+    onDestructive: '#FFFFFF',
+    ring: '#15803D',
+    text: '#14532D',
+    textSecondary: '#64748B',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    primary: '#4ADE80',
+    onPrimary: '#052E16',
+    secondary: '#22C55E',
+    onSecondary: '#052E16',
+    accent: '#EAB308',
+    onAccent: '#1C1917',
+    background: '#0B1512',
+    foreground: '#ECFDF5',
+    card: '#132018',
+    cardForeground: '#ECFDF5',
+    muted: '#1C2B22',
+    mutedForeground: '#94A3B8',
+    border: '#22392C',
+    destructive: '#F87171',
+    onDestructive: '#450A0A',
+    ring: '#4ADE80',
+    text: '#ECFDF5',
+    textSecondary: '#94A3B8',
   },
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
+export const Fonts = {
+  heading: 'PlusJakartaSans_700Bold',
+  headingExtraBold: 'PlusJakartaSans_800ExtraBold',
+  subheading: 'PlusJakartaSans_600SemiBold',
+  body: 'PlusJakartaSans_400Regular',
+  bodyMedium: 'PlusJakartaSans_500Medium',
+} as const;
+
+export const FontSizes = {
+  xs: 12,
+  sm: 14,
+  base: 16,
+  md: 18,
+  lg: 20,
+  xl: 24,
+  xxl: 28,
+  display: 32,
+} as const;
 
 export const Spacing = {
   half: 2,
@@ -61,5 +78,16 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+export const Radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  full: 999,
+} as const;
+
+export const TouchTarget = {
+  min: 44,
+} as const;
+
+export const BottomTabInset = 0;
 export const MaxContentWidth = 800;
