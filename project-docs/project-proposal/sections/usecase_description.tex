@@ -720,3 +720,39 @@ E2: Discrepancy noticed during review; the officer proceeds to submit a complain
 6. The system updates notification status.}
 {Owners and administrators are notified of delivery finalization.}
 {E1: Notification fails; the system retries and logs the error.}
+
+\usecase{Record On-Device Weight Confirmation}
+{Capture the estate owner's confirmation of collected tea weight directly on the collection agent's device at the point of collection. }
+{Tea Collection Agent}
+{Agent has recorded the collected weight for the current stop. }
+{1. The agent presents the recorded weight to the estate owner on the device.\newline
+2. The owner reviews the displayed weight.\newline
+3. The owner taps Confirm on the agent's device.\newline
+4. The system stores the confirmation flag against the collection record, alongside the photographic evidence already captured.\newline
+}
+{The collection record reflects mutual confirmation without requiring a network round-trip. }
+{E1: Owner disputes the weight; the agent records the dispute and the collection proceeds to the complaint workflow instead of confirmation. }
+
+\usecase{Assign Tea Grade}
+{Receiving Officer assigns a grade to received tea at the point of factory weighing. }
+{Tea Receiving Officer }
+{Tea has been weighed at the factory. }
+{1. The officer opens the receiving record.\newline
+2. The officer selects the applicable grade (Super or Normal). \newline
+3. The system stores the grade against the collection record. \newline
+}
+{The collection record carries a grade used in gross revenue calculation. }
+{E1: Grade is not selected; the system blocks completion of the receiving step until one is set. }
+
+\usecase{Generate Bank Payment File}
+{Generate a bank-ready payment file for estate owner or employee payments}
+{Factory Officer}
+{Net Payable amounts or salary statements have been calculated for the period}
+{1. The officer opens payment file generation.\newline
+2. The officer selects the payee tyoe (estate owners or employees) and period.\newline
+3. The system compiles name, bank account, and transfer amount for each payee.\newline
+4. The officer selects an export format (Excel, CSV or PDF).\newline  
+5. The system generates the file.\newline
+6. The officer downloads the file for submission to the bank.\newline}
+{A bank-ready payment file is available for the selected period and payee type. }
+{E1: A payee is missing bank account details; the system excludes them and flags the omission in the file. }
