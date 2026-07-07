@@ -1,7 +1,7 @@
 export type Role =
   | 'estate_owner'
   | 'estate_manager'
-  | 'collection_agent'
+  | 'collector'
   | 'receiving_officer'
   | 'factory_admin'
   | 'factory_officer'
@@ -11,7 +11,7 @@ export type Role =
 export const ROLE_LABELS: Record<Role, string> = {
   estate_owner: 'Tea Estate Owner',
   estate_manager: 'Tea Estate Manager',
-  collection_agent: 'Tea Collection Agent',
+  collector: 'Tea Collection Agent',
   receiving_officer: 'Tea Receiving Officer',
   factory_admin: 'Factory Administrator',
   factory_officer: 'Factory Officer',

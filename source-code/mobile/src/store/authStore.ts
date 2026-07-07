@@ -40,6 +40,14 @@ export const useAuthStore = create<AuthState>()(
       name: 'tea-collection-auth',
       storage: createJSONStorage(() => secureStorage),
       partialize: (state) => ({ user: state.user }) as unknown as AuthState,
+      version: 1,
+      migrate: (persistedState) => {
+        const state = persistedState as { user?: { role?: string } | null };
+        if (state?.user?.role === 'collection_agent') {
+          state.user.role = 'collector';
+        }
+        return state as AuthState;
+      },
       onRehydrateStorage: () => () => {
         useAuthStore.setState({ hasHydrated: true });
       },

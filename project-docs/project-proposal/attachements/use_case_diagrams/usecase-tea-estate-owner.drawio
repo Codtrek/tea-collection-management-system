@@ -1,0 +1,86 @@
+<mxfile host="app.diagrams.net" agent="claude-code" version="24.0.0">
+  <diagram name="Tea Estate Owner Use Case" id="estate-owner-usecase">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1850" pageHeight="1500" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="boundary" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EEEEEE;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="200" y="40" width="1600" height="1370" as="geometry" />
+        </mxCell>
+
+        <mxCell id="actor" value="Tea Estate Owner" style="shape=umlActor;whiteSpace=wrap;html=1;perimeter=ellipsePerimeter;fillColor=#ffffff;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="670" width="40" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc1" value="Register Employees" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="80" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc2" value="Assign Managers" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="190" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc3" value="View Estimated Income" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="300" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc4" value="View Route Availability" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="410" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc5" value="Create Pickup Request" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="520" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc6" value="Confirm Weight on Collector's Device" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="630" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc7" value="View Total Tea Leaf Delivery Weight" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="740" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc8" value="Track Tea Leaf Deliveries" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="850" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc9" value="View Collection Reports and Analytics" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="820" y="890" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc10" value="Receive Complaint Reports" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="960" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc11" value="View Employee Performance Analytics" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="1070" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc12" value="View Employee Status and Performance" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="1180" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc13" value="Review and Approve Fertilizer Requests" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="480" y="1290" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc14" value="Choose Fertilizer Source" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="820" y="1290" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc15" value="Submit Fertilizer Borrowing Requests" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="1290" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc16" value="Receive Fertilizer Request Notifications" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="1290" width="260" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e1" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc5"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc6"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc7"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc8"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e10" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc10"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e11" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc11"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e13" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc13"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="inc1" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;dashed=1;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="uc5" target="uc4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="inc2" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;dashed=1;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="uc8" target="uc9"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="inc3" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;dashed=1;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="uc12" target="uc11"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="inc4" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;dashed=1;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="uc14" target="uc13"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="inc5" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;dashed=1;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="uc15" target="uc14"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="inc6" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;dashed=1;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="uc16" target="uc15"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

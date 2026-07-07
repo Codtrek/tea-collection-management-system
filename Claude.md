@@ -158,9 +158,9 @@ Employee payroll follows a parallel but separate calculation: shift-based pay (D
 Night/Night OT, different rates), with employee-requested salary advances deducted at month end,
 also exportable as a bank payment file.
 
-**Open question, unresolved**: the ~Rs 3 per-transaction bank charge — is it a transfer fee or a
-file-processing fee? This determines whether it needs its own line item in the payment schema.
-Do not hardcode an assumption here; check before finalizing the payment API.
+**Resolved (2026-07-06)**: the ~Rs 3 bank charge is a **per-transaction transfer fee**, deducted
+from each payee's net payable. `init.sql`'s `monthly_payments.bank_transfer_fee` and the
+`bank_fee` `payment_deduction_items.deduction_type` reflect this.
 
 ---
 
@@ -211,23 +211,117 @@ Notable fields worth preserving in any implementation:
 
 ## Implementation status
 
-- **Mobile app**: shared navigation shell is built (role-based login, tab shell, placeholder
-  dashboards for all 8 roles) against a local-first SQLite data layer, since the backend has no
-  real API yet. See `source-code/mobile/CLAUDE.md` for architecture and gotchas specific to that
-  app — keep that file updated whenever mobile work makes an architecturally significant change.
-- **Backend**: `source-code/backend/` is still default NestJS scaffolding (a single `GET /`
-  "Hello World" route) — no auth, no modules, no ORM wired in.
-- **Known conflict**: `source-code/database/init.sql` (the existing Postgres schema) predates the
-  design decisions in this file and conflicts with them — it has `collection_otp`/`delivery_otp`
-  columns despite the OTP ban above, and its `role` enum doesn't match the role list in this file
-  (missing `factory_officer`/`factory_manager`, uses `plucking_employee` instead of `employee`).
-  Don't treat `init.sql` as ground truth; this file remains authoritative. The schema needs
-  reconciling with these decisions before real backend work begins.
+- **Mobile app**: shared navigation shell (role-based login, tab shell) plus complete, tested
+  **Route Management**, **Pickup Management**, **Weight entry/verification**, and
+  **Payment calculation** flows (2026-07-07) — see `source-code/mobile/CLAUDE.md` for the full
+  architecture (domain state machines, `AsyncDb` test-injection pattern, screens) and hard-won
+  testing-setup gotchas. Payment calculation (`GeneratePaymentScreen` for factory admins,
+  `PaymentStatementsScreen` for estate owners) aggregates graded received weight per
+  owner/factory/month, excludes self-delivered estates from transport cost, and applies the
+  per-transaction bank transfer fee. Photo capture/Cloudinary upload for weight evidence is
+  stubbed as a nullable `evidence_url` — wire it together with the offline queue.
+  The mobile role-naming gap (`'collection_agent'` vs `'collector'`) was fixed 2026-07-07.
+- **Backend bootstrapped (2026-07-07)**: `source-code/backend/` has a real `ConfigModule` +
+  `TypeOrmModule` (`synchronize: false`, since `init.sql` owns the schema) connected to Postgres,
+  a `User` entity, and a full JWT auth flow (`POST /auth/login`, `GET /auth/me`, `RolesGuard` +
+  `@Roles(...)` ready for the 8 roles), plus complete **Route Management**
+  (`src/routes/`: entities, `RoutesService`, `RoutesController`) and **Pickup Management**
+  (`src/pickup-requests/`: `PickupRequestEntity`, `PickupRequestsService` with
+  one-active-request-per-day check + auto-assignment to the collector ACTIVE on the estate's
+  route today, role-guarded `PickupRequestsController`) modules, both verified end-to-end
+  against a live Postgres instance including role guards, DTO validation, and (for routes) the
+  notify-on-transition fan-out. Note: "decline" is stored as status `'cancelled'` +
+  `decline_reason` — the schema has no separate `declined` status.
+  A **Collection Records module** (`src/collection-records/`) is also complete and E2E-verified
+  (2026-07-07): collector creates a weight record (`POST /collection-records`, manual records
+  supported via optional `pickupRequestId`), owner confirms on the collector's device
+  (`POST /:id/confirm-owner`), receiving officer lists pending (`GET /pending`) and re-weighs +
+  grades (`POST /:id/receive`) — receiving auto-completes the linked pickup request and
+  auto-raises a `weight_mismatch` complaint when the difference exceeds
+  `DEFAULT_WEIGHT_MISMATCH_THRESHOLD_KG` (2 kg, in `collection-status.util.ts`).
+  `source-code/backend/.env.example` documents local-dev env vars;
+  `source-code/database/seed.sql` seeds demo users mirroring the mobile app's 8 demo accounts.
+  A **Payments module** (`src/payments/`) is also complete and E2E-verified (2026-07-07):
+  factory admins generate a monthly payment (`POST /payments`) which aggregates super/normal
+  received weight for an owner+factory+month from `tea_receiving_records`/`tea_collection_records`
+  (excluding self-delivered estates from transport cost), rejects duplicates and zero-weight
+  months, and applies the per-transaction `bank_transfer_fee`; `POST /:id/finalize` transitions
+  `pending` → `finalized` (once only); `GET /payments` lists all (factory admin) and
+  `GET /payments/mine` resolves the caller's `tea_estate_owners` id from the JWT and lists their
+  own statements. Pure calculation logic lives in `payment-calculation.util.ts`, mirroring the
+  mobile `src/domain/payment.ts`. Feature module for `employees` is **not built yet** —
+  deliberately deferred (needs the generic HR employee record noted below).
+- **Database schema reconciled (2026-07-06)**: `source-code/database/init.sql` previously
+  predated and conflicted with the design decisions in this file; it has been rewritten to match
+  (verified by applying it to a real Postgres 17 instance). Role enums now use the 8-role list
+  exactly, all OTP columns/notification type were removed in favor of `owner_confirmed` +
+  `evidence_url`, and the old `tea_selling_requests`/`tea_collection_assignments` model was
+  replaced with real `routes`/`route_stops`/`pickup_requests` tables matching the Route vs.
+  Pickup state machines above (including the one-active-pickup-per-estate-per-day constraint and
+  `tea_grade` on receiving records). Payment tables gained `transport_cost`, `advance_deductions`,
+  and `bank_transfer_fee` line items. `init.sql` can now be treated as ground truth for this
+  domain. **Not yet modeled, intentionally deferred**: employee payroll
+  (`Attendance`/`SalaryAdvance` for staff) needs a generic HR employee record spanning login and
+  non-login roles that doesn't exist yet — that's the next schema task, not a gap to patch around.
+  Backend modules (NestJS entities/auth/ORM) still need to be built against this schema.
 
-## Diagrams still needing manual redraw
+## Remaining work (priority order, as of 2026-07-07)
+
+1. ~~Reconcile `init.sql` with this file~~ — done 2026-07-06 (see above).
+2. ~~Bootstrap the NestJS backend~~ — done 2026-07-07 (see above).
+3. ~~Fix the mobile role-naming gap~~ — done 2026-07-07.
+4. ~~Route Management~~ (mobile + backend) — done 2026-07-07 (see above). Pattern to follow for
+   the next flows: domain state machine (pure functions) → DI-testable service → screens/backend
+   module → wire into router/module → verify end-to-end against real Postgres.
+5. ~~Pickup Management~~ (mobile + backend) — done 2026-07-07 (see above).
+6. ~~Weight entry/verification~~ (mobile + backend) — done 2026-07-07 (see above). Photo
+   capture/Cloudinary upload intentionally deferred to the offline-queue work (`evidence_url`
+   is nullable and plumbed through end to end).
+7. ~~Payment calculation~~ (mobile + backend) — done 2026-07-07 (see above). Bank payment file
+   export (an actual downloadable Excel/CSV/PDF, `payment_statements.file_url`) was not built —
+   only the underlying `monthly_payments` data; treat file export as a small follow-up if needed.
+8. ~~Offline queue~~ (mobile) — done 2026-07-07. Scoped to the one write path that genuinely
+   needs it today: weight-evidence photo upload (`tea_collection_records.evidence_status`:
+   `'none' | 'queued_offline' | 'uploaded'`, plus a generic `sync_queue` table). See mobile
+   `CLAUDE.md` for the architecture. Real Cloudinary upload is still a stub
+   (`https://stub-evidence.local/...` URLs) pending credentials; the queue/retry mechanism
+   itself is real and tested. Other write paths (routes, pickup, collection, payments) don't
+   need offline queuing since they're plain local SQLite writes that always succeed regardless
+   of connectivity — the app doesn't call the backend API from the device yet at all.
+9. ~~Diagram redraws~~ — done 2026-07-07 (see below). No editable source existed for the original
+   PNGs, so new `.drawio` files were hand-authored instead of edited in place.
+
+## Diagram redraws (2026-07-07)
 
 Figures 2, 5, and 6 in the original proposal (Tea Estate Owner, Tea Receiving Officer, Factory
-Administrator use case diagrams) still show the old OTP-based flow and pre-route responsibilities.
-These need to be redrawn in Draw.io to reflect: photo-evidence-only verification (no OTP ovals),
-route-based responsibilities moving from Factory Admin to Estate Owner (route availability check)
-and to Collector (Start Route).
+Administrator use case diagrams) showed the old OTP-based flow and pre-route responsibilities.
+New source files were authored at
+`project-docs/project-proposal/attachements/use_case_diagrams/usecase-tea-{estate-owner,receiving-officer,factory-administration}.drawio`
+(valid mxGraph XML, opens directly in diagrams.net/Draw.io) alongside the original PNGs, which
+were left in place for reference. Content changes:
+- **Tea Estate Owner**: replaced "Submit tea leaf selling request" with "Create Pickup Request";
+  removed "Approve or Reject Selling Requests" (no owner-approval step — pickup requests
+  auto-assign to whichever collector is active on the estate's route); added "View Route
+  Availability" (UC-037, moved here from Factory Admin) and "Confirm Weight on Collector's
+  Device" (replaces OTP confirmation). Everything else (employee/fertilizer/reporting use cases)
+  is unaffected by the route/OTP redesign and was kept as-is.
+- **Tea Receiving Officer**: fully reworked from the 3-ellipse OTP flow ("Generate OTP from Tea
+  Collection Agent" → "Confirm via OTP" → "Submit Complaint Reports") to "View Pending
+  Collections" → "Re-weigh Tea at Factory" (includes viewing the list and assigning grade) →
+  "Assign Tea Grade (Super/Normal)", plus "Auto-flag Weight Mismatch Complaint" as an
+  `<<extend>>` on re-weighing. "Submit Complaint Reports" kept for manual complaints.
+  This diagram had no OTP-unrelated content, so the rework is a near-total replacement.
+- **Factory Administrator**: removed "Approve or Reject tea leaf collection request" (deleted
+  UC-036 — requests no longer go through factory review) and both duplicate "Check the
+  availability of Tea collection agents" ellipses (that responsibility moved to the Estate
+  Owner's "View Route Availability" above); also deduplicated an accidentally-doubled "Calculate
+  Fertilizer Charges" ellipse. Added "Create Route", "Update Route Status (Delay/Cancel with
+  Reason)", and "View Route Dashboard" for the factory-only Route Management responsibilities.
+  Fertilizer/payment/complaint use cases were unaffected and kept as-is.
+
+**Caveat**: these were hand-authored XML, not visually verified by rendering (no Draw.io/image
+tooling available in this environment) — content and relationships were carefully checked (no
+dangling edge references, verified via script), but layout/spacing may need minor polish when
+opened in diagrams.net. The original PNGs remain in the same directory and are still what
+`sections/system_design.tex` embeds — re-export the `.drawio` files to PNG and update the
+`\includegraphics` paths there once the layout is confirmed acceptable.

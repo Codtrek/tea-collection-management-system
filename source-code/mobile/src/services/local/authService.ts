@@ -18,6 +18,6 @@ export const localAuthService: AuthService = {
   async getDemoAccounts() {
     const db = await getDb();
     const rows = await db.getAllAsync<UserRow>('SELECT * FROM users ORDER BY role');
-    return rows.map((row) => ({ name: row.name, phone: row.phone, role: row.role }));
+    return rows.map((row) => ({ id: row.id, name: row.name, phone: row.phone, role: row.role }));
   },
 };

@@ -1,0 +1,42 @@
+<mxfile host="app.diagrams.net" agent="claude-code" version="24.0.0">
+  <diagram name="Tea Receiving Officer Use Case" id="receiving-officer-usecase">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="boundary" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EEEEEE;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="280" y="60" width="880" height="580" as="geometry" />
+        </mxCell>
+
+        <mxCell id="actor" value="Tea Receiving Officer" style="shape=umlActor;whiteSpace=wrap;html=1;perimeter=ellipsePerimeter;fillColor=#ffffff;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="100" y="300" width="40" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc1" value="View Pending Collections" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="340" y="120" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc2" value="Re-weigh Tea at Factory" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="660" y="270" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc3" value="Assign Tea Grade (Super / Normal)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="980" y="120" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc4" value="Auto-flag Weight Mismatch Complaint" style="ellipse;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="980" y="420" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc5" value="Submit Complaint Reports" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="340" y="480" width="240" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e1" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="endArrow=open;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="actor" target="uc5"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="inc1" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;dashed=1;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="uc2" target="uc1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="inc2" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;dashed=1;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="uc2" target="uc3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ext1" value="&lt;&lt;extend&gt;&gt;" style="endArrow=open;dashed=1;html=1;fontSize=10;strokeColor=#000000;" edge="1" parent="1" source="uc4" target="uc2"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

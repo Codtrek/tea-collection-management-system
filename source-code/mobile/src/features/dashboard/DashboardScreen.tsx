@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/Card';
@@ -29,14 +30,18 @@ export function DashboardScreen() {
 
       <View style={styles.list}>
         {dashboard.items.map((item) => (
-          <Card key={item.label} style={styles.row}>
+          <Card
+            key={item.label}
+            style={styles.row}
+            onPress={item.route ? () => router.push(item.route as never) : undefined}
+          >
             <View style={[styles.iconWrap, { backgroundColor: colors.muted }]}>
               <Ionicons name={item.icon} size={20} color={colors.primary} />
             </View>
             <View style={styles.rowText}>
               <ThemedText variant="bodyMedium">{item.label}</ThemedText>
               <ThemedText variant="small" color="textSecondary">
-                Coming soon
+                {item.route ? '' : 'Coming soon'}
               </ThemedText>
             </View>
           </Card>
