@@ -11,7 +11,6 @@
 
 \newcommand{\usecase}[7]{%
 	% Stop inserting an indent after each use case
-	\noindent
 	\begin{tabularx}{\textwidth}{|l|X|}
 	\hline
 	\rowcolor{lightgray}
@@ -503,7 +502,7 @@ E2: Discrepancy noticed during review; the officer proceeds to submit a complain
 
 \usecase{Check Agent Availability}
 {Check availability of Tea Collection Agents before approving collection requests.}
-{Factory Administrator}
+{System}
 {Administrator account is authenticated; agent data exists.}
 {1. The administrator opens agent availability.\newline
 2. The system displays agent schedules.\newline
