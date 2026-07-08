@@ -18,6 +18,7 @@ export const LoginPage = ({ onNavigate, onLogin }: LoginProps) => (
         <FormRow label="Password"><Input type="password" placeholder="Enter your password" /></FormRow>
         <Btn primary className={styles.btnFull} onClick={() => onLogin("officer")}>Sign In as Officer</Btn>
         <Btn className={`${styles.btnFull} ${styles.btnManager}`} onClick={() => onLogin("manager")}>Sign In as Manager</Btn>
+        <Btn className={`${styles.btnFull} ${styles.btnManager}`} onClick={() => onLogin("factory-admin")}>Sign In as Factory Admin</Btn>
         <Btn className={`${styles.btnFull} ${styles.btnAdmin}`} onClick={() => onLogin("admin")}>Sign In as Dev Admin</Btn>
         <div className={styles.footer}>
           Don't have an account? <span className={styles.link} onClick={() => onNavigate("/signup")}>Register factory</span>

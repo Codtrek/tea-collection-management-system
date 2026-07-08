@@ -17,3 +17,9 @@ export type ManagerScreen =
   | "performance";
 
 export type AdminScreen = "dashboard" | "factories" | "users";
+
+export type FactoryAdminScreen =
+  | "dashboard"
+  | "registration"
+  | "tea-collection"
+  | "fertilizer";

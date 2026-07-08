@@ -4,6 +4,7 @@ import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { AdminApp} from './pages/admin/AdminApp'
+import { FactoryAdminApp } from './pages/factory-admin/FactoryAdminApp'
 import { ManagerApp} from './pages/manager/ManagerApp'
 import { OfficerApp } from './pages/officer/OfficerApp';
 import { type Role } from './types'
@@ -35,6 +36,8 @@ export default function App() {
             <Navigate to="/login" replace />
           ) : role === "admin" ? (
             <AdminApp onLogout={handleLogout} />
+          ) : role === "factory-admin" ? (
+            <FactoryAdminApp onLogout={handleLogout} />
           ) : role === "manager" ? (
             <ManagerApp onLogout={handleLogout} />
           ) : (
