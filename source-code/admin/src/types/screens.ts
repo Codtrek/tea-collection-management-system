@@ -22,4 +22,9 @@ export type FactoryAdminScreen =
   | "dashboard"
   | "registration"
   | "tea-collection"
-  | "fertilizer";
+  | "fertilizer"
+  | "estate-payments"
+  | "payroll"
+  | "salary-advances"
+  | "attendance"
+  | "performance";
