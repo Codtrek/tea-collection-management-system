@@ -28,4 +28,5 @@ export type FactoryAdminScreen =
   | "salary-advances"
   | "attendance"
   | "performance"
-  | "collection-report";
+  | "collection-report"
+  | "revenue-report";
