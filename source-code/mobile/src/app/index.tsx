@@ -1,22 +1,32 @@
-import{ View, Text, StyleSheet } from "react-native";
-import { colors, spacing, typography } from "@/theme";
+import { router } from "expo-router";
+import { StyleSheet, View } from "react-native";
 
-export default function HomeScreen() {
-  return(
-    <View style={styles.container}>
-      <Text style={typography.heading as any}>Hello world!</Text>
-      <Text>Welcome! </Text>
-    </View>
-  );
+import { AppText, AppButton, Screen } from "@/components/ui";
+import { colors } from "@/theme/colors";
+import { typography } from "@/theme/typography";
 
+export default function OnboardingScreen() {
+  return (
+    <>
+      <Screen style={styles.content}>
+        <AppText variant="heading" style={styles.brandTitle}>Harboost</AppText>
+      </Screen>
+    </>
+  )
 }
 
-const styles = StyleSheet.create({
-  container: {
+const styles =StyleSheet.create({
+  brandTitle: {
+    ...typography.heading,
+    color: colors.text.primaryGreen,
+    justifyContent: "center",
+    alignItems: "center",
+    textAlign: "center",
+  },
+
+  content: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.primary,
-    padding: spacing.lg,
   }
-});
+})
