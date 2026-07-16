@@ -3,3 +3,4 @@ report.*
 projectProposal.*
 .env
 .env.demo
+node_modules
