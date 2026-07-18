@@ -1,111 +1,204 @@
+@import 'tailwindcss';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+/*
+  Harboost Web Portal — design tokens.
+  Hybrid palette: Harboost green (#53cf81) as brand identity, layered on the
+  token architecture + accessible status pairs from web-portal-visual-foundations.md.
+  All component colors MUST consume these tokens — never raw hex, never bg-white.
+  Dark-mode-ready: semantic tokens live here so a second theme is a single add later
+  (v1 ships light only).
+*/
+
+@theme {
+  /* ---- Brand & primary ---------------------------------------------------
+     --brand  #53cf81  : logo, active-nav, accents, chart series, focus ring
+     --primary          : darkened Harboost green for buttons/links/text —
+                          #1B8B4E gives ~4.5:1 white-on-green (passes AA). */
+  --color-brand: #53cf81;
+  --color-brand-strong: #3bb96b;
+  --color-brand-soft: #eafaf0;
+
+  --color-primary: #1b8b4e;
+  --color-primary-hover: #157a43;
+  --color-primary-active: #106138;
+  --color-primary-disabled: #b7d8c4;
+
+  /* ---- Neutrals (Harboost + warm-tinted borders) ------------------------- */
+  --color-background: #f8fbf9;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #fbfcfa;
+  --color-surface-hover: #f2f7f4;
+  --color-border: #e3e9e4;
+  --color-border-strong: #cbd6ce;
+  --color-text: #1a1a1a;
+  --color-text-heading: #08120b;
+  --color-text-muted: #566a5d;
+  --color-text-disabled: #94a3b8;
+
+  /* ---- Status pairs (from visual-foundations §conflict — AA verified) ----- */
+  --color-success-bg: #ecfdf5;
+  --color-success-fg: #047857;
+  --color-warning-bg: #fffbeb;
+  --color-warning-fg: #92400e;
+  --color-danger-bg: #fff1f2;
+  --color-danger-fg: #9f1239;
+  --color-danger: #e11d48;
+  --color-danger-hover: #be123c;
+  --color-danger-active: #9f1239;
+  --color-submitted-bg: #f1f5f9;
+  --color-submitted-fg: #334155;
+  --color-approved-bg: #eff6ff;
+  --color-approved-fg: #1d4ed8;
+  --color-assigned-bg: #eef2ff;
+  --color-assigned-fg: #4338ca;
+  --color-grade-super-bg: #faf3e4;
+  --color-grade-super-fg: #8a6420;
+  --color-grade-normal-bg: #ecf3ee;
+  --color-grade-normal-fg: #1f4d36;
+
+  /* ---- Chart categorical palette (Harboost-led, §6) ---------------------- */
+  --color-chart-1: #1b8b4e;
+  --color-chart-2: #53cf81;
+  --color-chart-3: #0f5c33;
+  --color-chart-4: #c89a3d;
+  --color-chart-5: #8fbba1;
+  --color-chart-6: #e0bc72;
+  --color-chart-7: #5b7b8a;
+
+  /* ---- Radius (foundations §3) ------------------------------------------- */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* ---- Elevation — green-tinted shadows (foundations §3) ------------------ */
+  --shadow-1: 0 1px 2px rgba(27, 139, 78, 0.04), 0 1px 3px rgba(27, 139, 78, 0.06);
+  --shadow-2: 0 4px 8px -2px rgba(27, 139, 78, 0.06), 0 2px 4px -2px rgba(27, 139, 78, 0.04);
+  --shadow-3: 0 12px 24px -6px rgba(27, 139, 78, 0.1), 0 4px 8px -4px rgba(27, 139, 78, 0.06);
+  --shadow-4: 0 24px 48px -12px rgba(27, 139, 78, 0.18);
+
+  /* ---- Type (foundations §1) --------------------------------------------- */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  /* ---- Motion (foundations §8) ------------------------------------------- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Layout vars + motion durations (plain CSS custom props). */
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  --sidebar-w: 248px;
+  --sidebar-w-collapsed: 72px;
+  --content-max: 1440px;
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+* {
+  border-color: var(--color-border);
 }
 
+html,
+body,
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+  height: 100%;
 }
 
 body {
   margin: 0;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 22px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv05', 'cv11';
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+/* Every currency/weight/percentage/date figure aligns (foundations §1). */
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+.id {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus ring — :focus-visible only, brand-green with halo (foundations §7). */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px rgba(83, 207, 129, 0.25);
+}
+
+/* On dark surfaces (login photo) invert the ring to warm gold. */
+.focus-ring-invert :focus-visible {
+  outline-color: #f0e3c2;
+  box-shadow: 0 0 0 6px rgba(240, 227, 194, 0.3);
+}
+
+::selection {
+  background: var(--color-brand-soft);
+  color: var(--color-primary-active);
+}
+
+/* Skeleton shimmer (foundations §8). */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
   }
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #eef2ef 25%,
+    var(--color-background) 37%,
+    #eef2ef 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
-p {
-  margin: 0;
+.animate-fade-up {
+  animation: fade-up var(--duration-slow) var(--ease-entrance) both;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton {
+    animation: none;
+    background: #eef2ef;
+  }
 }
