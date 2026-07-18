@@ -38,25 +38,25 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Operations',
     items: [
-      { label: 'Tea Leaf Collection', to: '/collections', icon: Leaf, module: 'collection' },
-      { label: 'Fertilizer Inventory', to: '/fertilizer', icon: Sprout, module: 'fertilizer' },
-      { label: 'Fertilizer Requests', to: '/fertilizer/requests', icon: ClipboardList, module: 'fertilizer' },
+      { label: 'Tea Leaf Collection', to: '/operations/collections', icon: Leaf, module: 'collection' },
+      { label: 'Fertilizer Inventory', to: '/operations/fertilizer-inventory', icon: Sprout, module: 'fertilizer' },
+      { label: 'Fertilizer Requests', to: '/operations/fertilizer-requests', icon: ClipboardList, module: 'fertilizer' },
     ],
   },
   {
     label: 'Finance',
     items: [
-      { label: 'Estate Owner Payments', to: '/estates', icon: Wallet, module: 'estateOwners' },
-      { label: 'Payroll', to: '/employees/payroll', icon: Banknote, module: 'payroll' },
-      { label: 'Salary Advances', to: '/employees/advances', icon: HandCoins, module: 'advances' },
+      { label: 'Estate Owner Payments', to: '/finance/estate-payments', icon: Wallet, module: 'estateOwners' },
+      { label: 'Payroll', to: '/finance/payroll', icon: Banknote, module: 'payroll' },
+      { label: 'Salary Advances', to: '/finance/salary-advances', icon: HandCoins, module: 'advances' },
     ],
   },
   {
     label: 'People',
     items: [
-      { label: 'Employees', to: '/employees', icon: Users, module: 'employees' },
-      { label: 'Attendance', to: '/employees/attendance', icon: CalendarCheck, module: 'attendance' },
-      { label: 'Performance', to: '/employees/performance', icon: TrendingUp, module: 'performance' },
+      { label: 'Employees', to: '/people/employees', icon: Users, module: 'employees' },
+      { label: 'Attendance', to: '/people/attendance', icon: CalendarCheck, module: 'attendance' },
+      { label: 'Performance', to: '/people/employees/performance', icon: TrendingUp, module: 'performance' },
     ],
   },
   {

@@ -6,39 +6,39 @@ import { DashboardPage } from './features/dashboard/DashboardPage'
 import { NotificationCenterPage } from './features/notifications/NotificationCenterPage'
 import { SearchResultsPage } from './features/search/SearchResultsPage'
 import { ProfilePage } from './features/profile/ProfilePage'
-import { EmployeeListPage } from './features/employees/EmployeeListPage'
-import { EmployeeRegistrationPage } from './features/employees/EmployeeRegistrationPage'
-import { EmployeeDetailPage } from './features/employees/EmployeeDetailPage'
-import { EmployeeEditPage } from './features/employees/EmployeeEditPage'
-import { AttendanceOverviewPage } from './features/employees/AttendanceOverviewPage'
-import { AttendanceEntryPage } from './features/employees/AttendanceEntryPage'
-import { AdvanceListPage } from './features/employees/AdvanceListPage'
-import { AdvanceDetailPage } from './features/employees/AdvanceDetailPage'
-import { AdvanceRequestPage } from './features/employees/AdvanceRequestPage'
-import { PayrollListPage } from './features/employees/PayrollListPage'
-import { PayrollProcessingPage } from './features/employees/PayrollProcessingPage'
-import { PayslipPage } from './features/employees/PayslipPage'
-import { PerformancePage } from './features/employees/PerformancePage'
-import { CollectionListPage } from './features/collections/CollectionListPage'
-import { CollectionExceptionEntryPage } from './features/collections/CollectionExceptionEntryPage'
-import { CollectionDetailPage } from './features/collections/CollectionDetailPage'
-import { CollectionEditPage } from './features/collections/CollectionEditPage'
-import { FertilizerStockListPage } from './features/fertilizer/FertilizerStockListPage'
-import { StockMovementEntryPage } from './features/fertilizer/StockMovementEntryPage'
-import { BatchDetailPage } from './features/fertilizer/BatchDetailPage'
-import { FertilizerAlertsPage } from './features/fertilizer/FertilizerAlertsPage'
-import { RequestQueuePage } from './features/fertilizer/RequestQueuePage'
-import { RequestDetailPage } from './features/fertilizer/RequestDetailPage'
-import { LogRequestPage } from './features/fertilizer/LogRequestPage'
-import { EstateListPage } from './features/estates/EstateListPage'
-import { EstateRegistrationPage } from './features/estates/EstateRegistrationPage'
-import { EstateDetailPage } from './features/estates/EstateDetailPage'
-import { EstateEditPage } from './features/estates/EstateEditPage'
-import { EstateAdvanceListPage } from './features/estates/EstateAdvanceListPage'
-import { IssueAdvancePage } from './features/estates/IssueAdvancePage'
-import { SettlementListPage } from './features/estates/SettlementListPage'
-import { SettlementProcessPage } from './features/estates/SettlementProcessPage'
-import { EstateAnalyticsPage } from './features/estates/EstateAnalyticsPage'
+import { EmployeeListPage } from '@/features/people/employees/EmployeeListPage'
+import { EmployeeRegistrationPage } from '@/features/people/employees/EmployeeRegistrationPage'
+import { EmployeeDetailPage } from '@/features/people/employees/EmployeeDetailPage'
+import { EmployeeEditPage } from '@/features/people/employees/EmployeeEditPage'
+import { AttendanceOverviewPage } from '@/features/people/attendance/AttendanceOverviewPage'
+import { AttendanceEntryPage } from '@/features/people/attendance/AttendanceEntryPage'
+import { AdvanceListPage } from '@/features/finance/salary-advances/AdvanceListPage'
+import { AdvanceDetailPage } from '@/features/finance/salary-advances/AdvanceDetailPage'
+import { AdvanceRequestPage } from '@/features/finance/salary-advances/AdvanceRequestPage'
+import { PayrollListPage } from '@/features/finance/payroll/PayrollListPage'
+import { PayrollProcessingPage } from '@/features/finance/payroll/PayrollProcessingPage'
+import { PayslipPage } from '@/features/finance/payroll/PayslipPage'
+import { PerformancePage } from '@/features/people/employees/PerformancePage'
+import { CollectionListPage } from '@/features/operations/collections/CollectionListPage'
+import { CollectionExceptionEntryPage } from '@/features/operations/collections/CollectionExceptionEntryPage'
+import { CollectionDetailPage } from '@/features/operations/collections/CollectionDetailPage'
+import { CollectionEditPage } from '@/features/operations/collections/CollectionEditPage'
+import { FertilizerStockListPage } from '@/features/operations/fertilizer-inventory/FertilizerStockListPage'
+import { StockMovementEntryPage } from '@/features/operations/fertilizer-inventory/StockMovementEntryPage'
+import { BatchDetailPage } from '@/features/operations/fertilizer-inventory/BatchDetailPage'
+import { FertilizerAlertsPage } from '@/features/operations/fertilizer-inventory/FertilizerAlertsPage'
+import { RequestQueuePage } from '@/features/operations/fertilizer-requests/RequestQueuePage'
+import { RequestDetailPage } from '@/features/operations/fertilizer-requests/RequestDetailPage'
+import { LogRequestPage } from '@/features/operations/fertilizer-requests/LogRequestPage'
+import { EstateListPage } from '@/features/people/estates/EstateListPage'
+import { EstateRegistrationPage } from '@/features/people/estates/EstateRegistrationPage'
+import { EstateDetailPage } from '@/features/people/estates/EstateDetailPage'
+import { EstateEditPage } from '@/features/people/estates/EstateEditPage'
+import { EstateAdvanceListPage } from '@/features/finance/estate-payments/EstateAdvanceListPage'
+import { IssueAdvancePage } from '@/features/finance/estate-payments/IssueAdvancePage'
+import { SettlementListPage } from '@/features/finance/estate-payments/SettlementListPage'
+import { SettlementProcessPage } from '@/features/finance/estate-payments/SettlementProcessPage'
+import { EstateAnalyticsPage } from '@/features/finance/estate-payments/EstateAnalyticsPage'
 import { CollectionReportPage } from './features/reports/CollectionReportPage'
 import { RevenueReportPage } from './features/reports/RevenueReportPage'
 import { ExpenseReportPage } from './features/reports/ExpenseReportPage'
@@ -60,46 +60,46 @@ export const router = createBrowserRouter([
       { path: 'dashboard', element: <DashboardPage /> },
 
       // Operations — Tea Leaf Collection (COL-01..04)
-      { path: 'collections', element: <CollectionListPage /> },
-      { path: 'collections/new', element: <CollectionExceptionEntryPage /> },
-      { path: 'collections/:id', element: <CollectionDetailPage /> },
-      { path: 'collections/:id/edit', element: <CollectionEditPage /> },
+      { path: 'operations/collections', element: <CollectionListPage /> },
+      { path: 'operations/collections/new', element: <CollectionExceptionEntryPage /> },
+      { path: 'operations/collections/:id', element: <CollectionDetailPage /> },
+      { path: 'operations/collections/:id/edit', element: <CollectionEditPage /> },
 
       // Operations — Fertilizer Inventory (FERT-01..07)
-      { path: 'fertilizer', element: <FertilizerStockListPage /> },
-      { path: 'fertilizer/movement/new', element: <StockMovementEntryPage /> },
-      { path: 'fertilizer/alerts', element: <FertilizerAlertsPage /> },
+      { path: 'operations/fertilizer-inventory', element: <FertilizerStockListPage /> },
+      { path: 'operations/fertilizer-inventory/movement/new', element: <StockMovementEntryPage /> },
+      { path: 'operations/fertilizer-inventory/alerts', element: <FertilizerAlertsPage /> },
       // Request workflow — static paths must precede fertilizer/:batchId
-      { path: 'fertilizer/requests', element: <RequestQueuePage /> },
-      { path: 'fertilizer/requests/new', element: <LogRequestPage /> },
-      { path: 'fertilizer/requests/:id', element: <RequestDetailPage /> },
-      { path: 'fertilizer/:batchId', element: <BatchDetailPage /> },
+      { path: 'operations/fertilizer-requests', element: <RequestQueuePage /> },
+      { path: 'operations/fertilizer-requests/new', element: <LogRequestPage /> },
+      { path: 'operations/fertilizer-requests/:id', element: <RequestDetailPage /> },
+      { path: 'operations/fertilizer-inventory/:batchId', element: <BatchDetailPage /> },
 
       // Finance — Tea Estate Owner (EST-01..09)
-      { path: 'estates', element: <EstateListPage /> },
-      { path: 'estates/new', element: <EstateRegistrationPage /> },
-      { path: 'estates/advances', element: <EstateAdvanceListPage /> },
-      { path: 'estates/advances/new', element: <IssueAdvancePage /> },
-      { path: 'estates/settlements', element: <SettlementListPage /> },
-      { path: 'estates/settlements/process', element: <SettlementProcessPage /> },
-      { path: 'estates/analytics', element: <EstateAnalyticsPage /> },
-      { path: 'estates/:id', element: <EstateDetailPage /> },
-      { path: 'estates/:id/edit', element: <EstateEditPage /> },
+      { path: 'finance/estate-payments', element: <EstateListPage /> },
+      { path: 'people/estates/new', element: <EstateRegistrationPage /> },
+      { path: 'finance/estate-payments/advances', element: <EstateAdvanceListPage /> },
+      { path: 'finance/estate-payments/advances/new', element: <IssueAdvancePage /> },
+      { path: 'finance/estate-payments/settlements', element: <SettlementListPage /> },
+      { path: 'finance/estate-payments/settlements/process', element: <SettlementProcessPage /> },
+      { path: 'people/estates/analytics', element: <EstateAnalyticsPage /> },
+      { path: 'people/estates/:id', element: <EstateDetailPage /> },
+      { path: 'people/estates/:id/edit', element: <EstateEditPage /> },
 
       // People / Finance — Employee module (EMP-01..14)
-      { path: 'employees', element: <EmployeeListPage /> },
-      { path: 'employees/new', element: <EmployeeRegistrationPage /> },
-      { path: 'employees/attendance', element: <AttendanceOverviewPage /> },
-      { path: 'employees/attendance/entry', element: <AttendanceEntryPage /> },
-      { path: 'employees/advances', element: <AdvanceListPage /> },
-      { path: 'employees/advances/new', element: <AdvanceRequestPage /> },
-      { path: 'employees/advances/:id', element: <AdvanceDetailPage /> },
-      { path: 'employees/payroll', element: <PayrollListPage /> },
-      { path: 'employees/payroll/process', element: <PayrollProcessingPage /> },
-      { path: 'employees/payroll/:id/payslip', element: <PayslipPage /> },
-      { path: 'employees/performance', element: <PerformancePage /> },
-      { path: 'employees/:id', element: <EmployeeDetailPage /> },
-      { path: 'employees/:id/edit', element: <EmployeeEditPage /> },
+      { path: 'people/employees', element: <EmployeeListPage /> },
+      { path: 'people/employees/new', element: <EmployeeRegistrationPage /> },
+      { path: 'people/attendance', element: <AttendanceOverviewPage /> },
+      { path: 'people/attendance/entry', element: <AttendanceEntryPage /> },
+      { path: 'finance/salary-advances', element: <AdvanceListPage /> },
+      { path: 'finance/salary-advances/new', element: <AdvanceRequestPage /> },
+      { path: 'finance/salary-advances/:id', element: <AdvanceDetailPage /> },
+      { path: 'finance/payroll', element: <PayrollListPage /> },
+      { path: 'finance/payroll/process', element: <PayrollProcessingPage /> },
+      { path: 'finance/payroll/:id/payslip', element: <PayslipPage /> },
+      { path: 'people/employees/performance', element: <PerformancePage /> },
+      { path: 'people/employees/:id', element: <EmployeeDetailPage /> },
+      { path: 'people/employees/:id/edit', element: <EmployeeEditPage /> },
 
       // Reports (RPT-01..04)
       { path: 'reports/collection', element: <CollectionReportPage /> },

@@ -1,5 +1,5 @@
 import { Camera, ImageOff } from 'lucide-react'
-import type { EvidencePhoto } from '@/features/collections/types'
+import type { EvidencePhoto } from '@/features/operations/collections/types'
 import { formatDateTime } from '@/lib/format'
 
 /*
