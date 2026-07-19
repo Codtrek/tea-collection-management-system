@@ -25,7 +25,7 @@ export function Toggle({ checked, onChange, label, disabled, id }: ToggleProps) 
       >
         <span
           className={cn(
-            'absolute top-0.5 size-4 rounded-full bg-white shadow-[var(--shadow-1)] transition-transform duration-[var(--duration-fast)]',
+            'absolute left-0 top-0.5 size-4 rounded-full bg-white shadow-[var(--shadow-1)] transition-transform duration-[var(--duration-fast)]',
             checked ? 'translate-x-[18px]' : 'translate-x-0.5',
           )}
         />
