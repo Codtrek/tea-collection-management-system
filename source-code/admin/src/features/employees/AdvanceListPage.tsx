@@ -5,6 +5,7 @@ import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
 import { StatusBadge, type BadgeTone } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
+import { useAuth } from '@/context/AuthContext'
 import { ADVANCES } from './data'
 import type { Advance, AdvanceStatus } from './types'
 import { formatCurrency, formatDate } from '@/lib/format'
@@ -13,6 +14,8 @@ const tone: Record<AdvanceStatus, BadgeTone> = { Pending: 'warning', Approved: '
 
 export function AdvanceListPage() {
   const navigate = useNavigate()
+  const { can } = useAuth()
+  const canRequest = can('advances', 'edit')
 
   const columns: Column<Advance>[] = [
     { key: 'employeeName', header: 'Employee', render: (a) => <span className="font-medium text-text">{a.employeeName}</span> },
@@ -27,7 +30,13 @@ export function AdvanceListPage() {
       <PageHeader
         title="Salary Advances"
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Salary Advances' }]}
-        actions={<Button><Plus className="size-4" /> New Advance Request</Button>}
+        actions={
+          canRequest ? (
+            <Button onClick={() => navigate('/employees/advances/new')}>
+              <Plus className="size-4" /> New Advance Request
+            </Button>
+          ) : undefined
+        }
       />
       <DataTable
         columns={columns}
