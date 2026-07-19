@@ -14,6 +14,7 @@ import { AttendanceOverviewPage } from './features/employees/AttendanceOverviewP
 import { AttendanceEntryPage } from './features/employees/AttendanceEntryPage'
 import { AdvanceListPage } from './features/employees/AdvanceListPage'
 import { AdvanceDetailPage } from './features/employees/AdvanceDetailPage'
+import { AdvanceRequestPage } from './features/employees/AdvanceRequestPage'
 import { PayrollListPage } from './features/employees/PayrollListPage'
 import { PayrollProcessingPage } from './features/employees/PayrollProcessingPage'
 import { PayslipPage } from './features/employees/PayslipPage'
@@ -84,6 +85,7 @@ export const router = createBrowserRouter([
       { path: 'employees/attendance', element: <AttendanceOverviewPage /> },
       { path: 'employees/attendance/entry', element: <AttendanceEntryPage /> },
       { path: 'employees/advances', element: <AdvanceListPage /> },
+      { path: 'employees/advances/new', element: <AdvanceRequestPage /> },
       { path: 'employees/advances/:id', element: <AdvanceDetailPage /> },
       { path: 'employees/payroll', element: <PayrollListPage /> },
       { path: 'employees/payroll/process', element: <PayrollProcessingPage /> },
