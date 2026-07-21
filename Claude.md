@@ -5,14 +5,12 @@ with the finalized design decisions for this project. It reflects design session
 the original project proposal was written — where this file conflicts with the proposal PDF,
 **this file is authoritative** for implementation purposes.
 
-**Maintenance note:** this file is maintained per-branch. A richer version of the sections below
-existed on the unmerged branch `hasindu/mobile/test01` (last touched 2026-07-07) with real
-mobile/backend implementation status that is **not** present on this branch
-(`feature/UI-web-portal-extended`) or on `dev` — that branch was never merged. This file was
-rebuilt from scratch here on 2026-07-17, keeping the durable design-decision content (still
-valid regardless of branch) and replacing the implementation-status section with what's actually
-true on this branch. Reconcile the two when the branches merge rather than assuming either is
-current in isolation.
+**Maintenance note:** this file was rebuilt from scratch on this branch
+(`feature/UI-web-portal-extended`) on 2026-07-17, keeping the durable design-decision content and
+replacing the implementation-status section with what's actually true here. As of 2026-07-20 the
+branch `hasindu/mobile/test01` is **abandoned as a failed branch** — nothing is taken from it, and
+all backend/database/mobile work is built fresh on this branch. Earlier versions of this file
+described reconciling with it; that is no longer the plan.
 
 ## What this system does
 
@@ -232,33 +230,46 @@ All data is mock (`features/*/data.ts`), shaped to match a future REST contract 
 real backend is the remaining web-portal work. `ComingSoon` stub was removed. Build + lint
 clean. See `source-code/admin/AGENTS.md` for conventions.
 
-**Backend (`source-code/backend/`) — bootstrap only on this branch.** `src/` contains only the
-default NestJS scaffold (`app.module.ts`, `app.controller.ts`, `app.service.ts`, `main.ts`). None
-of the auth/routes/pickup-requests/collection-records/payments modules exist here — that work
-was done on the unmerged `hasindu/mobile/test01` branch and needs to be ported over or rebuilt if
-this branch is what ships.
+**Backend (`source-code/backend/`) — bootstrap only.** `src/` contains only the default NestJS
+scaffold (`app.module.ts`, `app.controller.ts`, `app.service.ts`, `main.ts`), and `package.json`
+has no DB/auth dependencies at all (no typeorm, pg, jwt, passport, class-validator). The
+auth/routes/pickup-requests/collection-records/payments modules are all still to be written —
+see `PLAN.md` Phase 1 onward.
 
-**Database (`source-code/database/init.sql`) — pre-reconciliation schema on this branch.** Still
-has the old `tea_selling_requests`/`tea_collection_assignments` model, not the
-`routes`/`route_stops`/`pickup_requests` state machines described above. Role enums also don't
-yet match the 8-role list exactly. This needs the same reconciliation pass that was done (but not
-merged) on `hasindu/mobile/test01` before backend work resumes on this branch.
+**Database (`source-code/database/init.sql`) — pre-reconciliation schema.** Still has the old
+`tea_selling_requests`/`tea_collection_assignments`/`estate_route_mapping` model, not the
+`routes`/`route_stops`/`pickup_requests` state machines described above. Critically, the
+`users.role` CHECK constraint omits `factory_officer` and `factory_manager`, so the web portal's
+two non-admin roles cannot be authenticated at all until this is fixed (`PLAN.md` Phase 0).
+
+Infra is already in place and needs no work: `source-code/docker-compose.yml` defines postgres 16,
+redis, api, admin, and nginx.
 
 **Mobile (`source-code/mobile/`) — shared shell only on this branch.** Expo project with theme
 tokens (`src/theme/`: colors, spacing, typography — note `colors.primary` is the same
 `#53cf81` the web portal's hybrid palette is built from) and a minimal `_layout.tsx` +
 `index.tsx`. No role-based login, route/pickup/weight/payment flows exist here yet.
 
-## Remaining work (priority order, as of 2026-07-18)
+## Remaining work (as of 2026-07-20)
 
-1. Reconcile branches: decide whether to merge `hasindu/mobile/test01`'s backend/mobile/database
-   work into this branch, or rebuild it here — don't let both diverge further.
-2. If starting fresh on this branch: reconcile `init.sql` to the Route/Pickup domain model above,
-   then bootstrap backend auth + the Route/Pickup/Collection/Payment modules.
-3. Web portal (UI is done for all six modules): swap the mock `features/*/data.ts` fixtures for
-   the real NestJS REST endpoints once the backend modules exist; resolve the open business
-   items surfaced in the UI (bank-charge owner, ad-hoc vs request-linked fertilizer dispatch,
-   beneficiary-items scope) and the deferred a11y polish from the 2026-07-18 UI review
-   (modal focus trap, DataTable keyboard rows, tab ARIA wiring).
-4. Mobile: build the role-based login + per-role dashboards, then the same
-   Route/Pickup/Weight/Payment flows.
+**See `PLAN.md` at the repo root for the phased execution roadmap** (schema → auth slice →
+module-by-module vertical slices → mobile), with per-phase done-criteria and checkboxes.
+
+**Branch reconciliation is resolved:** `hasindu/mobile/test01` is a **failed branch and is
+abandoned** — take nothing from it. All backend, database, and mobile work is built fresh on
+this branch. Do not propose merging or cherry-picking from it.
+
+Two facts that shape the sequencing:
+
+1. **The portal has no data-fetching seam.** TanStack Query is installed and
+   `QueryClientProvider` is wired in `src/main.tsx`, but there are zero `useQuery` calls — every
+   page imports static fixtures (`import { EMPLOYEES } from './data'`) and renders them
+   synchronously. There is no `services/` layer. Connecting the UI means *building* that layer
+   (PLAN.md Phase 1), not swapping a data source.
+2. **The schema blocks auth.** `users.role` in `init.sql` has a CHECK constraint omitting
+   `factory_officer` and `factory_manager` — the two roles the portal's whole permission model
+   is built on. Schema reconciliation must precede any auth work.
+
+Open business items still unresolved and surfaced in the UI: bank-charge owner, ad-hoc vs
+request-linked fertilizer dispatch, beneficiary-items scope. Deferred a11y polish from the
+2026-07-18 review: modal focus trap, DataTable keyboard rows, tab ARIA wiring, Toggle hit area.
