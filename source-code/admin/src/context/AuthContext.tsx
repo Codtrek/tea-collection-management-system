@@ -6,6 +6,8 @@ interface AuthContextValue {
   user: User | null
   login: (role: Role) => void
   logout: () => void
+  /** Set or clear (null) the current user's profile picture. Mock: persists a data URL to localStorage. */
+  updateAvatar: (dataUrl: string | null) => void
   /** Permission check — reads the data-driven matrix, never hardcodes a role. */
   can: (module: ModuleKey, level?: PermissionLevel) => boolean
   level: (module: ModuleKey) => PermissionLevel
@@ -21,21 +23,38 @@ const MOCK_USERS: Record<Role, User> = {
 }
 
 const STORAGE_KEY = 'harboost.role'
+// Per-role for the mock; keyed by user id once the real backend lands.
+const avatarKey = (role: Role) => `harboost.avatar.${role}`
+
+/** Hydrate the mock user for a role, merging any saved avatar. */
+function userForRole(role: Role): User {
+  const avatarUrl = localStorage.getItem(avatarKey(role)) ?? undefined
+  return { ...MOCK_USERS[role], avatarUrl }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as Role | null
-    return stored ? MOCK_USERS[stored] : null
+    return stored ? userForRole(stored) : null
   })
 
   const login = useCallback((role: Role) => {
     localStorage.setItem(STORAGE_KEY, role)
-    setUser(MOCK_USERS[role])
+    setUser(userForRole(role))
   }, [])
 
   const logout = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY)
     setUser(null)
+  }, [])
+
+  const updateAvatar = useCallback((dataUrl: string | null) => {
+    setUser((prev) => {
+      if (!prev) return prev
+      if (dataUrl) localStorage.setItem(avatarKey(prev.role), dataUrl)
+      else localStorage.removeItem(avatarKey(prev.role))
+      return { ...prev, avatarUrl: dataUrl ?? undefined }
+    })
   }, [])
 
   const level = useCallback(
@@ -48,7 +67,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [level],
   )
 
-  const value = useMemo(() => ({ user, login, logout, can, level }), [user, login, logout, can, level])
+  const value = useMemo(
+    () => ({ user, login, logout, updateAvatar, can, level }),
+    [user, login, logout, updateAvatar, can, level],
+  )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

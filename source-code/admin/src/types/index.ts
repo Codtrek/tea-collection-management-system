@@ -25,6 +25,8 @@ export interface User {
   role: Role
   email: string
   factory: string
+  /** Data URL (mock) or Cloudinary URL (real backend); absent = initials fallback. */
+  avatarUrl?: string
 }
 
 export type NotificationTone = 'success' | 'warning' | 'danger' | 'info'

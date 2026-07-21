@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Bell, LogOut, User as UserIcon, ChevronDown } from 'lucide-react'
 import { Popover } from '@/components/ui/Popover'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Avatar } from '@/components/ui/Avatar'
 import { NotificationCard } from './NotificationCard'
 import { useAuth } from '@/context/AuthContext'
 import { NOTIFICATIONS } from '@/data/notifications'
-import { initials } from '@/lib/format'
 import type { Role } from '@/types'
 
 const roleTone: Record<Role, Parameters<typeof StatusBadge>[0]['tone']> = {
@@ -92,9 +92,7 @@ export function Header() {
           panelClassName="w-64"
           trigger={(open) => (
             <span className="flex items-center gap-2 rounded-[var(--radius-sm)] p-1.5 pr-2 hover:bg-surface-hover">
-              <span className="flex size-8 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-primary">
-                {initials(user.name)}
-              </span>
+              <Avatar src={user.avatarUrl} name={user.name} size="sm" />
               <span className="hidden text-left sm:block">
                 <span className="block text-[13px] font-medium leading-tight text-text">{user.name}</span>
                 <span className="block text-xs leading-tight text-text-muted">{user.role}</span>

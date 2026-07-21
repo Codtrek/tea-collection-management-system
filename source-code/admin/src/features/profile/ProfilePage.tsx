@@ -9,7 +9,7 @@ import { StatusBadge, type BadgeTone } from '@/components/ui/StatusBadge'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { DEFAULT_PERMISSIONS } from '@/context/permissions'
-import { initials } from '@/lib/format'
+import { AvatarUploader } from './AvatarUploader'
 import { NOTIFICATION_TYPES } from '@/data/notifications'
 import { useState } from 'react'
 import type { ModuleKey, Role } from '@/types'
@@ -53,9 +53,7 @@ export function ProfilePage() {
         <div className="flex flex-col gap-6 lg:col-span-2">
           <Card>
             <div className="flex items-center gap-4">
-              <span className="flex size-16 items-center justify-center rounded-full bg-brand-soft text-xl font-semibold text-primary">
-                {initials(user.name)}
-              </span>
+              <AvatarUploader />
               <div>
                 <h2 className="text-lg font-semibold text-text-heading">{user.name}</h2>
                 <p className="text-sm text-text-muted">{user.factory}</p>
