@@ -66,7 +66,7 @@ export function ProfilePage() {
             <CardHeader><CardTitle>Contact Details</CardTitle></CardHeader>
             <div className="grid gap-4 sm:grid-cols-2">
               <Input label="Full name" defaultValue={user.name} />
-              <Input label="Email" type="email" defaultValue={user.email} />
+              <Input label="Phone" type="tel" defaultValue={user.phone} />
               <Input label="Contact number" defaultValue="+94 77 123 4567" />
               <Input label="Factory" defaultValue={user.factory} disabled />
             </div>

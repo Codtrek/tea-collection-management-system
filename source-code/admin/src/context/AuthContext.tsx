@@ -1,10 +1,14 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
-import type { ModuleKey, PermissionLevel, Role, User } from '@/types'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { getToken, setToken, setUnauthorizedHandler } from '@/lib/api'
+import * as authService from '@/services/auth'
+import type { ModuleKey, PermissionLevel, User } from '@/types'
 import { DEFAULT_PERMISSIONS, meets } from './permissions'
 
 interface AuthContextValue {
   user: User | null
-  login: (role: Role) => void
+  /** True until the initial session hydration (token → /auth/me) settles. */
+  loading: boolean
+  login: (phone: string, password: string) => Promise<void>
   logout: () => void
   /** Set or clear (null) the current user's profile picture. Mock: persists a data URL to localStorage. */
   updateAvatar: (dataUrl: string | null) => void
@@ -15,44 +19,61 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-/* Mock users, one per role, so the Login screen can demo role-based redirects. */
-const MOCK_USERS: Record<Role, User> = {
-  Administrator: { id: 'u-admin', name: 'A. Bandara', role: 'Administrator', email: 'admin@harboost.lk', factory: 'Nuwara Eliya Tea Factory' },
-  Officer: { id: 'u-officer', name: 'S. Fernando', role: 'Officer', email: 'officer@harboost.lk', factory: 'Nuwara Eliya Tea Factory' },
-  Manager: { id: 'u-manager', name: 'R. Jayasuriya', role: 'Manager', email: 'manager@harboost.lk', factory: 'Nuwara Eliya Tea Factory' },
-}
-
-const STORAGE_KEY = 'harboost.role'
-// Per-role for the mock; keyed by user id once the real backend lands.
-const avatarKey = (role: Role) => `harboost.avatar.${role}`
-
-/** Hydrate the mock user for a role, merging any saved avatar. */
-function userForRole(role: Role): User {
-  const avatarUrl = localStorage.getItem(avatarKey(role)) ?? undefined
-  return { ...MOCK_USERS[role], avatarUrl }
-}
+// Avatars aren't stored by the backend yet; bridge via localStorage keyed by user id
+// until the profile endpoint lands and this becomes a Cloudinary URL from the API.
+const avatarKey = (userId: string) => `harboost.avatar.${userId}`
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Role | null
-    return stored ? userForRole(stored) : null
-  })
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(() => !!getToken())
 
-  const login = useCallback((role: Role) => {
-    localStorage.setItem(STORAGE_KEY, role)
-    setUser(userForRole(role))
+  const withAvatar = useCallback((u: User): User => {
+    const avatarUrl = localStorage.getItem(avatarKey(u.id)) ?? undefined
+    return { ...u, avatarUrl }
   }, [])
+
+  useEffect(() => {
+    if (!getToken()) return
+    let cancelled = false
+    authService
+      .me()
+      .then((u) => {
+        if (!cancelled) setUser(withAvatar(u))
+      })
+      .catch(() => {
+        if (!cancelled) setToken(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [withAvatar])
 
   const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY)
+    setToken(null)
     setUser(null)
   }, [])
+
+  useEffect(() => {
+    setUnauthorizedHandler(logout)
+  }, [logout])
+
+  const login = useCallback(
+    async (phone: string, password: string) => {
+      const { accessToken, user: loggedInUser } = await authService.login(phone, password)
+      setToken(accessToken)
+      setUser(withAvatar(loggedInUser))
+    },
+    [withAvatar],
+  )
 
   const updateAvatar = useCallback((dataUrl: string | null) => {
     setUser((prev) => {
       if (!prev) return prev
-      if (dataUrl) localStorage.setItem(avatarKey(prev.role), dataUrl)
-      else localStorage.removeItem(avatarKey(prev.role))
+      if (dataUrl) localStorage.setItem(avatarKey(prev.id), dataUrl)
+      else localStorage.removeItem(avatarKey(prev.id))
       return { ...prev, avatarUrl: dataUrl ?? undefined }
     })
   }, [])
@@ -68,8 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const value = useMemo(
-    () => ({ user, login, logout, updateAvatar, can, level }),
-    [user, login, logout, updateAvatar, can, level],
+    () => ({ user, loading, login, logout, updateAvatar, can, level }),
+    [user, loading, login, logout, updateAvatar, can, level],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

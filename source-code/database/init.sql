@@ -8,7 +8,8 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     role          VARCHAR(30) NOT NULL
         CHECK (role IN ('estate_owner', 'estate_manager', 'plucking_employee',
-                         'collection_agent', 'receiving_officer', 'factory_admin')),
+                         'collection_agent', 'receiving_officer', 'factory_admin',
+                         'factory_officer', 'factory_manager')),
     created_at    TIMESTAMP DEFAULT NOW()
 );
 
@@ -90,7 +91,8 @@ CREATE TABLE factory_employees (
     date_of_birth DATE,
     nic           VARCHAR(20) UNIQUE NOT NULL,
     role          VARCHAR(30) NOT NULL
-        CHECK (role IN ('collection_agent', 'receiving_officer', 'factory_admin')),
+        CHECK (role IN ('collection_agent', 'receiving_officer', 'factory_admin',
+                         'factory_officer', 'factory_manager')),
     is_active     BOOLEAN DEFAULT TRUE
 );
 
