@@ -23,7 +23,8 @@ export interface User {
   id: string
   name: string
   role: Role
-  email: string
+  /** users.phone — the DB's login identifier (rural mobile users, not email). */
+  phone: string
   factory: string
   /** Data URL (mock) or Cloudinary URL (real backend); absent = initials fallback. */
   avatarUrl?: string
