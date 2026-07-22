@@ -7,12 +7,44 @@ import { Icon } from '../../components/ui/Icon'
 import { MetricCard } from '../../components/ui/MetricCard'
 import { ProgressBar } from '../../components/ui/ProgressBar'
 import { SectionHeader } from '../../components/ui/SectionHeader'
-import { Select } from '../../components/ui/Form'
+import { FormRow, Input, Select } from '../../components/ui/Form'
 import { Table } from '../../components/ui/Table'
 import styles from "../../styles/modules/pages/AppCommon.module.css";
 
 export const FactoryRevenueReport = () => (
   <div>
+    <Card>
+      <SectionHeader title="Generate Revenue Report">
+        <Badge color="blue">Step 1 of 2</Badge>
+      </SectionHeader>
+      <Grid cols={4} gap={12}>
+        <FormRow label="Report Type"><Select><option>Summary</option><option>Detailed</option><option>By Grade</option><option>By Estate Owner</option></Select></FormRow>
+        <FormRow label="Period"><Select><option>This Month</option><option>Last Month</option><option>Quarterly</option><option>Yearly</option><option>Custom Range</option></Select></FormRow>
+        <FormRow label="From"><Input type="date" /></FormRow>
+        <FormRow label="To"><Input type="date" /></FormRow>
+        <FormRow label="Group By"><Select><option>Month</option><option>Week</option><option>Day</option><option>Grade</option></Select></FormRow>
+        <FormRow label="Compare With"><Select><option>Previous period</option><option>Same period last year</option><option>No comparison</option></Select></FormRow>
+        <FormRow label="Include"><Select><option>Revenue &amp; expenses</option><option>Revenue only</option><option>Profit &amp; loss</option></Select></FormRow>
+        <FormRow label="Format"><Select><option>PDF</option><option>Excel</option><option>CSV</option></Select></FormRow>
+      </Grid>
+      <div className={styles.actionRow}>
+        <Btn primary><Icon name="chart" size={13} /> Generate Report</Btn>
+        <Btn>Reset</Btn>
+      </div>
+    </Card>
+
+    <Card>
+      <SectionHeader title="Recently Generated Reports" />
+      <Table
+        headers={["Report","Period","Format","Generated","Status","Action"]}
+        rows={[
+          ["Revenue Summary","June 2026","PDF","2026-07-16 16:20",<Badge color="green">Ready</Badge>,<Btn small><Icon name="download" size={11}/> Download</Btn>],
+          ["Revenue by Grade","Q2 2026","Excel","2026-07-10 11:05",<Badge color="green">Ready</Badge>,<Btn small><Icon name="download" size={11}/> Download</Btn>],
+          ["Detailed Revenue","May 2026","PDF","2026-06-30 09:40",<Badge color="amber">Processing</Badge>,<Btn small>View</Btn>],
+        ]}
+      />
+    </Card>
+
     <Grid cols={4} gap={12}>
       <div className={styles.metricsSpan4}>
         <MetricCard accent="green" icon="currency" label="Total Revenue"   value="LKR 8.82M" sub="↑ 8% vs May" />
