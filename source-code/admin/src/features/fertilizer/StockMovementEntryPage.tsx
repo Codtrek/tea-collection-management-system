@@ -9,12 +9,14 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
+import { Toggle } from '@/components/ui/Toggle'
 import { useToast } from '@/components/ui/Toast'
-import { BATCHES, batchStatus } from './data'
+import { BATCHES, REQUESTS, batchStatus } from './data'
+import { dispatchableRequests, remainderOf } from './position'
 import { formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
-/* FERT-02 validation rules (fertilizer doc table). Conditional on movement type. */
+/* FERT-02 validation rules (fertilizer doc + addendum §7). Conditional on movement type. */
 const movementSchema = z
   .object({
     type: z.enum(['Incoming', 'Outgoing']),
@@ -30,6 +32,8 @@ const movementSchema = z
     // Outgoing
     destination: z.string().optional(),
     linkedRequest: z.string().optional(),
+    adHoc: z.boolean().optional(),
+    adHocReason: z.string().optional(),
     notes: z.string().optional(),
   })
   .superRefine((v, ctx) => {
@@ -56,6 +60,22 @@ const movementSchema = z
             message: `Cannot exceed available stock (${formatWeight(batch.quantityKg)})`,
           })
       }
+      // §7 — dispatch must fulfil an approved request, unless explicitly ad-hoc.
+      if (!v.adHoc) {
+        if (!v.linkedRequest)
+          ctx.addIssue({ code: 'custom', path: ['linkedRequest'], message: 'Select an approved request, or mark this dispatch ad-hoc' })
+        else {
+          const req = REQUESTS.find((r) => r.id === v.linkedRequest)
+          if (req && v.quantity > remainderOf(req))
+            ctx.addIssue({
+              code: 'custom',
+              path: ['quantity'],
+              message: `Cannot exceed the approved remainder (${formatWeight(remainderOf(req))})`,
+            })
+        }
+      } else if (!v.adHocReason?.trim()) {
+        ctx.addIssue({ code: 'custom', path: ['adHocReason'], message: 'A reason is required for an ad-hoc dispatch' })
+      }
     }
   })
 
@@ -69,10 +89,6 @@ const DESTINATIONS = [
   'Collection Agent — Route 3',
   'Collection Agent — Route 5',
 ]
-
-// Dispatch normally follows an approved fertilizer request (UC-032/038);
-// ad-hoc dispatch stays possible pending the open scope question in the doc.
-const OPEN_REQUESTS = ['FR-2026-0041 — Green Valley Estate — 100 kg Urea', 'FR-2026-0043 — Hilltop Estate — 50 kg NPK']
 
 export function StockMovementEntryPage() {
   const navigate = useNavigate()
@@ -93,12 +109,15 @@ export function StockMovementEntryPage() {
       type: 'Incoming',
       batchId: params.get('batch') ?? '',
       unit: 'kg',
+      adHoc: false,
       date: new Date().toISOString().slice(0, 10),
     },
   })
   const values = useWatch({ control })
   const type = values.type ?? 'Incoming'
+  const adHoc = values.adHoc ?? false
   const selectedBatch = BATCHES.find((b) => b.id === values.batchId)
+  const openRequests = dispatchableRequests()
 
   const onSubmit = (data: MovementForm) => {
     setSaving(true)
@@ -176,7 +195,12 @@ export function StockMovementEntryPage() {
 
           <div className="grid gap-4 sm:grid-cols-[1fr_140px_1fr]">
             <Input label="Quantity" type="number" min="0" step="any" error={errors.quantity?.message} {...register('quantity', { valueAsNumber: true })} />
-            <Select label="Unit" options={[{ value: 'kg', label: 'kg' }, { value: 'bags', label: 'bags' }]} {...register('unit')} />
+            {type === 'Incoming' ? (
+              <Select label="Unit" options={[{ value: 'kg', label: 'kg' }, { value: 'bags', label: 'bags' }]} {...register('unit')} />
+            ) : (
+              // §9 unit canonicalisation — outgoing inherits the item's base unit, not user-selectable
+              <Input label="Unit" value="kg" readOnly disabled />
+            )}
             <Input label="Date" type="date" error={errors.date?.message} {...register('date')} />
           </div>
 
@@ -188,7 +212,7 @@ export function StockMovementEntryPage() {
               <Input label="Expiry date" type="date" error={errors.expiryDate?.message} {...register('expiryDate')} />
             </fieldset>
           ) : (
-            <fieldset className="grid gap-4 rounded-[var(--radius-md)] border border-border p-4 sm:grid-cols-2">
+            <fieldset className="flex flex-col gap-4 rounded-[var(--radius-md)] border border-border p-4">
               <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">Outgoing details</legend>
               <Select
                 label="Destination"
@@ -197,12 +221,35 @@ export function StockMovementEntryPage() {
                 options={DESTINATIONS.map((d) => ({ value: d, label: d }))}
                 {...register('destination')}
               />
-              <Select
-                label="Linked fertilizer request"
-                placeholder="None (ad-hoc dispatch)"
-                options={OPEN_REQUESTS.map((r) => ({ value: r.split(' — ')[0], label: r }))}
-                {...register('linkedRequest')}
-              />
+
+              {/* §7 — dispatch normally fulfils an approved request; ad-hoc is the audited exception. */}
+              <div className="flex items-center justify-between rounded-[var(--radius-sm)] bg-surface-sunken px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-text">Dispatch without a request (ad-hoc)</p>
+                  <p className="text-xs text-text-muted">Use only when no approved request exists — this is audited.</p>
+                </div>
+                <Toggle checked={adHoc} onChange={(v) => setValue('adHoc', v)} />
+              </div>
+
+              {adHoc ? (
+                <Input
+                  label="Ad-hoc reason"
+                  error={errors.adHocReason?.message}
+                  placeholder="e.g. Gate hand-over, request logged retrospectively"
+                  {...register('adHocReason')}
+                />
+              ) : (
+                <Select
+                  label="Linked fertilizer request"
+                  placeholder="Select an approved request"
+                  error={errors.linkedRequest?.message}
+                  options={openRequests.map((r) => ({
+                    value: r.id,
+                    label: `${r.id} — ${r.estateName} — ${formatWeight(remainderOf(r))} ${r.item} remaining`,
+                  }))}
+                  {...register('linkedRequest')}
+                />
+              )}
             </fieldset>
           )}
 

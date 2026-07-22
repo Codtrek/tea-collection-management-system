@@ -37,7 +37,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                 <li key={item.to}>
                   <NavLink
                     to={item.to}
-                    end={item.to === '/employees'}
+                    end={item.to === '/employees' || item.to === '/fertilizer'}
                     title={collapsed ? item.label : undefined}
                     className={({ isActive }) =>
                       cn(

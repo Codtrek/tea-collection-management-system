@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarClock, CheckCircle2, Eye, Trash2 } from 'lucide-react'
+import { CalendarClock, CheckCircle2, Eye, Trash2, Truck } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { AlertList, type AlertListItem } from '@/components/patterns/AlertList'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
@@ -9,12 +9,24 @@ import { StatCard } from '@/components/data/StatCard'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { BATCHES, batchStatus, daysToExpiry } from './data'
+import { BATCHES, REQUESTS, batchStatus, daysToExpiry } from './data'
+import { remainderOf } from './position'
 import type { FertilizerBatch } from './types'
 import { formatDate, formatNumber, formatWeight } from '@/lib/format'
 
 /* FERT-04 — home screen for the "Low/Expiring Fertilizer Stock" notification (§15).
-   Manager is the primary viewer; Admin/Officer can act (discard). */
+   Amended per addendum §8: each expiring batch shows whether it can cover open demand,
+   and batches with NO matching demand (genuine write-off risk) sort to the top. */
+
+/** Open demand (submitted + approved-undispatched) for an item — the batch can help fulfil this. */
+function openDemandFor(item: string): { count: number; kg: number } {
+  const open = REQUESTS.filter(
+    (r) => r.item === item && (r.status === 'Submitted' || r.status === 'Approved' || r.status === 'Partially Dispatched'),
+  )
+  const kg = open.reduce((sum, r) => sum + (r.status === 'Submitted' ? r.quantityKg : remainderOf(r)), 0)
+  return { count: open.length, kg }
+}
+
 export function FertilizerAlertsPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -22,25 +34,42 @@ export function FertilizerAlertsPage() {
   const canAct = can('fertilizer', 'edit')
   const [discarding, setDiscarding] = useState<FertilizerBatch | null>(null)
 
-  const expiring = BATCHES.filter((b) => !b.discarded && daysToExpiry(b) <= 30)
-    .sort((a, b) => daysToExpiry(a) - daysToExpiry(b))
+  const expiring = BATCHES.filter((b) => !b.discarded && daysToExpiry(b) <= 30).sort((a, b) => {
+    // Critical (≤7d) first; within a group, no-matching-demand (write-off risk) first; then soonest expiry.
+    const critRank = (x: FertilizerBatch) => (daysToExpiry(x) <= 7 ? 0 : 1)
+    if (critRank(a) !== critRank(b)) return critRank(a) - critRank(b)
+    const demandRank = (x: FertilizerBatch) => (openDemandFor(x.item).count === 0 ? 0 : 1)
+    if (demandRank(a) !== demandRank(b)) return demandRank(a) - demandRank(b)
+    return daysToExpiry(a) - daysToExpiry(b)
+  })
 
   const within7 = expiring.filter((b) => daysToExpiry(b) <= 7).length
   const within30 = expiring.length
 
   const items: AlertListItem[] = expiring.map((b) => {
     const days = daysToExpiry(b)
+    const demand = openDemandFor(b.item)
+    const expiryText =
+      days < 0
+        ? `Expired ${formatDate(b.expiryDate)} (${batchStatus(b)})`
+        : `Expires in ${days} ${days === 1 ? 'day' : 'days'} — ${formatDate(b.expiryDate)}`
+    const coverageText = demand.count
+      ? ` · can fulfil ${demand.count} request${demand.count > 1 ? 's' : ''} (${formatWeight(demand.kg)})`
+      : ' · no matching demand — likely write-off'
+
     return {
       key: b.id,
       urgency: days <= 7 ? 'critical' : 'warning',
       title: `${b.item} — ${b.id}`,
-      detail:
-        days < 0
-          ? `Expired ${formatDate(b.expiryDate)} (${batchStatus(b)})`
-          : `Expires in ${days} ${days === 1 ? 'day' : 'days'} — ${formatDate(b.expiryDate)}`,
+      detail: expiryText + coverageText,
       meta: formatWeight(b.quantityKg),
       actions: (
         <>
+          {canAct && demand.count > 0 && (
+            <Button size="sm" onClick={() => navigate('/fertilizer/movement/new')}>
+              <Truck className="size-4" /> Dispatch now
+            </Button>
+          )}
           <Button size="sm" variant="secondary" onClick={() => navigate(`/fertilizer/${b.id}`)}>
             <Eye className="size-4" /> View Batch
           </Button>

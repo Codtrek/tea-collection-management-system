@@ -10,7 +10,9 @@ the original project proposal was written — where this file conflicts with the
 replacing the implementation-status section with what's actually true here. As of 2026-07-20 the
 branch `hasindu/mobile/test01` is **abandoned as a failed branch** — nothing is taken from it, and
 all backend/database/mobile work is built fresh on this branch. Earlier versions of this file
-described reconciling with it; that is no longer the plan.
+described reconciling with it; that is no longer the plan. Updated 2026-07-22 to record the
+Authentication vertical slice (committed on `feature/auth-slice`) and the Fertilizer
+stock-position rework + dev-CORS fix (in progress on `feature/fertilizer-stock-position`).
 
 ## What this system does
 
@@ -226,21 +228,52 @@ was built for, System Settings, read-only Audit Logs). Design decisions honored 
 the ~Rs. 3 bank charge is displayed as an unresolved note in EST-08 (never deducted); grade
 rates are versioned by effective date so past settlements never recalculate; reports aggregate
 Confirmed collection records only. Permissions stay data-driven (`src/context/permissions.ts`).
-All data is mock (`features/*/data.ts`), shaped to match a future REST contract — wiring to the
-real backend is the remaining web-portal work. `ComingSoon` stub was removed. Build + lint
-clean. See `source-code/admin/AGENTS.md` for conventions.
+Most data is still mock (`features/*/data.ts`), shaped to match a future REST contract — wiring the
+remaining modules to the real backend is the remaining web-portal work. `ComingSoon` stub was
+removed. Build + lint clean. See `source-code/admin/AGENTS.md` for conventions.
 
-**Backend (`source-code/backend/`) — bootstrap only.** `src/` contains only the default NestJS
-scaffold (`app.module.ts`, `app.controller.ts`, `app.service.ts`, `main.ts`), and `package.json`
-has no DB/auth dependencies at all (no typeorm, pg, jwt, passport, class-validator). The
-auth/routes/pickup-requests/collection-records/payments modules are all still to be written —
-see `PLAN.md` Phase 1 onward.
+**Auth is now wired to the real backend (2026-07-21, `feature/auth-slice`).** The data-fetching
+seam the roadmap called for now exists: `src/lib/api.ts` (typed `ApiError`, attaches the JWT,
+maps 401 → logout, and turns a network failure into a diagnostic "backend unreachable" message)
+plus `src/services/auth.ts`. `AuthContext` performs real JWT login and hydrates the session via
+`GET /auth/me` on load. Login is **phone + password** (not email), with per-field validation and a
+password-reveal (eye) toggle in `LoginPage`.
 
-**Database (`source-code/database/init.sql`) — pre-reconciliation schema.** Still has the old
+**Fertilizer Inventory reworked (2026-07-22, `feature/fertilizer-stock-position`, in progress).**
+Per the fertilizer addendum, the module now distinguishes **On hand ≠ Available**
+(`Available = On hand − Committed − Expired`) to prevent over-commitment. The
+`onHand − committed` math lives in exactly one place — the single-source-of-truth
+`features/fertilizer/position.ts`. Added the request workflow: FERT-05 request queue, FERT-06
+request detail (approval with FEFO allocation + override), FERT-07 log-phoned-in request; plus
+FERT-02 (stock movement now request-linked unless ad-hoc + reason) and FERT-04 (alerts show
+demand coverage) amendments, with routing and a "Fertilizer Requests" nav item. Still mock data.
+
+**Backend (`source-code/backend/`) — real auth slice built (2026-07-21), rest still to come.**
+The default NestJS scaffold (`app.controller.ts`, `app.service.ts`, their spec, and the e2e test)
+was **deleted**; `package.json` now depends on TypeORM, pg, @nestjs/jwt, passport-jwt, bcrypt, and
+class-validator. Built:
+- **Auth** (`src/auth/`): `POST /auth/login` (phone + password → JWT) and `GET /auth/me`; JWT
+  payload is `{sub, role}`. Login errors are situational (phone-not-found vs. wrong-password).
+  DB-role → app-role mapping in `src/auth/role-map.ts` (`factory_admin→Administrator`,
+  `factory_officer→Officer`, `factory_manager→Manager`; non-factory roles are rejected).
+- **Users** (`src/users/`): User / Factory / FactoryEmployee entities + service; users are keyed
+  by **phone**, not email; the profile join reaches `factory_employees → factories`.
+- **Seed** (`src/seed.ts`, `npm run seed`): three factory users, DEV creds
+  `0771234567` / `Password123!` (admin / officer / manager on `…67/68/69`).
+- **Config**: `app.module.ts` wires ConfigModule + TypeORM (`synchronize: false`,
+  `autoLoadEntities`); `main.ts` has a global ValidationPipe and dev-tolerant CORS (see below).
+
+The routes / pickup-requests / collection-records / payments modules are still to be written — see
+`PLAN.md` Phase 1 onward.
+
+**Database (`source-code/database/init.sql`) — auth unblocked, broader reconciliation still
+pending.** The `users.role` **and** `factory_employees.role` CHECK constraints were extended
+(2026-07-21) to include `factory_officer` and `factory_manager`, so the web portal's two non-admin
+roles now authenticate (this was `PLAN.md` Phase 0). The schema still has the old
 `tea_selling_requests`/`tea_collection_assignments`/`estate_route_mapping` model, not the
-`routes`/`route_stops`/`pickup_requests` state machines described above. Critically, the
-`users.role` CHECK constraint omits `factory_officer` and `factory_manager`, so the web portal's
-two non-admin roles cannot be authenticated at all until this is fixed (`PLAN.md` Phase 0).
+`routes`/`route_stops`/`pickup_requests` state machines described above — that reconciliation is
+still to come. The local dev DB runs the auth slice in an isolated `tea_authslice` schema; the
+older, more-advanced `tea` schema left over from the abandoned test01 branch is untouched.
 
 Infra is already in place and needs no work: `source-code/docker-compose.yml` defines postgres 16,
 redis, api, admin, and nginx.
@@ -250,7 +283,7 @@ tokens (`src/theme/`: colors, spacing, typography — note `colors.primary` is t
 `#53cf81` the web portal's hybrid palette is built from) and a minimal `_layout.tsx` +
 `index.tsx`. No role-based login, route/pickup/weight/payment flows exist here yet.
 
-## Remaining work (as of 2026-07-20)
+## Remaining work (as of 2026-07-22)
 
 **See `PLAN.md` at the repo root for the phased execution roadmap** (schema → auth slice →
 module-by-module vertical slices → mobile), with per-phase done-criteria and checkboxes.
@@ -259,16 +292,21 @@ module-by-module vertical slices → mobile), with per-phase done-criteria and c
 abandoned** — take nothing from it. All backend, database, and mobile work is built fresh on
 this branch. Do not propose merging or cherry-picking from it.
 
-Two facts that shape the sequencing:
+Two facts that shaped the sequencing — **both now resolved by the auth slice**:
 
-1. **The portal has no data-fetching seam.** TanStack Query is installed and
-   `QueryClientProvider` is wired in `src/main.tsx`, but there are zero `useQuery` calls — every
-   page imports static fixtures (`import { EMPLOYEES } from './data'`) and renders them
-   synchronously. There is no `services/` layer. Connecting the UI means *building* that layer
-   (PLAN.md Phase 1), not swapping a data source.
-2. **The schema blocks auth.** `users.role` in `init.sql` has a CHECK constraint omitting
-   `factory_officer` and `factory_manager` — the two roles the portal's whole permission model
-   is built on. Schema reconciliation must precede any auth work.
+1. **The portal now has a data-fetching seam.** It was previously fixture-only (no `services/`
+   layer, zero `useQuery` calls). The auth slice built that seam — `src/lib/api.ts` +
+   `src/services/` — so wiring the remaining modules is now *using* it, not building it. TanStack
+   Query is still installed and `QueryClientProvider` wired in `src/main.tsx` for that follow-on
+   work; the rest of the pages still import static fixtures until each is migrated.
+2. **The schema no longer blocks auth.** The `users.role` (and `factory_employees.role`) CHECK
+   constraints were extended to include `factory_officer` and `factory_manager`, so all three
+   factory roles authenticate. The broader routes/pickup schema reconciliation is still pending.
+
+Dev-environment note: `main.ts` CORS tolerates Vite's port drift — in dev it accepts any
+`localhost`/`127.0.0.1` port (Vite bumps 5173 → 5174 → … whenever a port is taken), while
+production stays pinned to `CORS_ORIGIN`. Safe because the JWT rides the `Authorization` header,
+not cookies.
 
 Open business items still unresolved and surfaced in the UI: bank-charge owner, ad-hoc vs
 request-linked fertilizer dispatch, beneficiary-items scope. Deferred a11y polish from the
