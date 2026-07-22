@@ -27,6 +27,9 @@ import { FertilizerStockListPage } from './features/fertilizer/FertilizerStockLi
 import { StockMovementEntryPage } from './features/fertilizer/StockMovementEntryPage'
 import { BatchDetailPage } from './features/fertilizer/BatchDetailPage'
 import { FertilizerAlertsPage } from './features/fertilizer/FertilizerAlertsPage'
+import { RequestQueuePage } from './features/fertilizer/RequestQueuePage'
+import { RequestDetailPage } from './features/fertilizer/RequestDetailPage'
+import { LogRequestPage } from './features/fertilizer/LogRequestPage'
 import { EstateListPage } from './features/estates/EstateListPage'
 import { EstateRegistrationPage } from './features/estates/EstateRegistrationPage'
 import { EstateDetailPage } from './features/estates/EstateDetailPage'
@@ -62,10 +65,14 @@ export const router = createBrowserRouter([
       { path: 'collections/:id', element: <CollectionDetailPage /> },
       { path: 'collections/:id/edit', element: <CollectionEditPage /> },
 
-      // Operations — Fertilizer Inventory (FERT-01..04)
+      // Operations — Fertilizer Inventory (FERT-01..07)
       { path: 'fertilizer', element: <FertilizerStockListPage /> },
       { path: 'fertilizer/movement/new', element: <StockMovementEntryPage /> },
       { path: 'fertilizer/alerts', element: <FertilizerAlertsPage /> },
+      // Request workflow — static paths must precede fertilizer/:batchId
+      { path: 'fertilizer/requests', element: <RequestQueuePage /> },
+      { path: 'fertilizer/requests/new', element: <LogRequestPage /> },
+      { path: 'fertilizer/requests/:id', element: <RequestDetailPage /> },
       { path: 'fertilizer/:batchId', element: <BatchDetailPage /> },
 
       // Finance — Tea Estate Owner (EST-01..09)

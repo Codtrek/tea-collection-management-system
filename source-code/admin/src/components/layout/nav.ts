@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Leaf,
   Sprout,
+  ClipboardList,
   Wallet,
   Banknote,
   HandCoins,
@@ -39,6 +40,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Tea Leaf Collection', to: '/collections', icon: Leaf, module: 'collection' },
       { label: 'Fertilizer Inventory', to: '/fertilizer', icon: Sprout, module: 'fertilizer' },
+      { label: 'Fertilizer Requests', to: '/fertilizer/requests', icon: ClipboardList, module: 'fertilizer' },
     ],
   },
   {

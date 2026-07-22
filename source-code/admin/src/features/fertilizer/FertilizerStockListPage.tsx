@@ -1,66 +1,57 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Eye, ArrowLeftRight, Sprout, BellRing } from 'lucide-react'
+import { Plus, PhoneCall, BellRing, TrendingDown, ClipboardList, Truck, AlertTriangle, ShoppingCart } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
-import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
-import { BATCHES, batchStatus } from './data'
-import { BATCH_TONE } from './status'
-import type { FertilizerBatch } from './types'
-import { formatDate, formatWeight } from '@/lib/format'
+import { StockPositionTable } from './StockPositionTable'
+import { itemPositions, itemsBelowDemand, pendingRequests, committedSummary, shortfalls } from './position'
+import type { CoverageStatus, ItemCategory } from './types'
+import { formatCurrency, formatWeight } from '@/lib/format'
+import { cn } from '@/lib/cn'
 
-/* FERT-01 — central stock/batch view. Manager is view-only (§8.1.7). */
+/*
+  FERT-01 — Fertilizer Stock Position (addendum §5). Item-level, because staff ask
+  "do I have enough Urea?", not "how much of batch FB-2291". On hand ≠ Available;
+  the whole page hangs on that. Manager is view-only (§8.1.7).
+*/
 export function FertilizerStockListPage() {
   const navigate = useNavigate()
   const { can } = useAuth()
   const canLog = can('fertilizer', 'edit')
 
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
+  const [category, setCategory] = useState('')
+  const [coverage, setCoverage] = useState('')
 
+  const positions = useMemo(() => itemPositions(), [])
   const rows = useMemo(
     () =>
-      BATCHES.filter((b) => {
-        const q = search.toLowerCase()
+      positions.filter((p) => {
+        const q = search.trim().toLowerCase()
         return (
-          (b.item.toLowerCase().includes(q) || b.id.toLowerCase().includes(q)) &&
-          (!status || batchStatus(b) === status)
+          p.item.toLowerCase().includes(q) &&
+          (!category || p.category === (category as ItemCategory)) &&
+          (!coverage || p.status === (coverage as CoverageStatus))
         )
       }),
-    [search, status],
+    [positions, search, category, coverage],
   )
 
-  const columns: Column<FertilizerBatch>[] = [
-    {
-      key: 'id',
-      header: 'Batch',
-      render: (b) => (
-        <div>
-          <p className="font-medium text-text">{b.item}</p>
-          <p className="id text-xs text-text-muted">{b.id}</p>
-        </div>
-      ),
-    },
-    { key: 'quantityKg', header: 'Quantity', align: 'right', render: (b) => formatWeight(b.quantityKg) },
-    { key: 'receivedDate', header: 'Received', render: (b) => formatDate(b.receivedDate) },
-    { key: 'expiryDate', header: 'Expires', render: (b) => formatDate(b.expiryDate) },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (b) => <StatusBadge tone={BATCH_TONE[batchStatus(b)]}>{batchStatus(b)}</StatusBadge>,
-    },
-    { key: 'location', header: 'Location' },
-  ]
+  const below = itemsBelowDemand()
+  const pending = pendingRequests()
+  const pendingKg = pending.reduce((s, r) => s + r.quantityKg, 0)
+  const committed = committedSummary()
+  const shortfallList = shortfalls()
+  const shortfallKg = shortfallList.reduce((s, r) => s + r.shortfallKg, 0)
 
   return (
     <div>
       <PageHeader
-        title="Fertilizer Inventory"
+        title="Fertilizer Stock Position"
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Fertilizer Inventory' }]}
         actions={
           <>
@@ -68,56 +59,149 @@ export function FertilizerStockListPage() {
               <BellRing className="size-4" /> Expiry Alerts
             </Button>
             {canLog && (
-              <Button onClick={() => navigate('/fertilizer/movement/new')}>
-                <Plus className="size-4" /> Log Stock Movement
-              </Button>
+              <>
+                <Button variant="secondary" onClick={() => navigate('/fertilizer/requests/new')}>
+                  <PhoneCall className="size-4" /> Log Phoned-in Request
+                </Button>
+                <Button onClick={() => navigate('/fertilizer/movement/new')}>
+                  <Plus className="size-4" /> Log Stock Movement
+                </Button>
+              </>
             )}
           </>
         }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_200px]">
-        <Input placeholder="Search item or batch ID…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <Select
-          placeholder="All statuses"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          options={['Fresh', 'Expiring soon', 'Expired', 'Discarded'].map((s) => ({ value: s, label: s }))}
+      {/* Position summary — each card is a decision, not a statistic (§5.1) */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          icon={<TrendingDown className="size-4" />}
+          label="Items below demand"
+          value={`${below.length} of ${positions.length}`}
+          note={below.length ? below.map((p) => p.item).join(', ') : 'All items covered'}
+          tone={below.length ? 'danger' : 'success'}
+        />
+        <SummaryCard
+          icon={<ClipboardList className="size-4" />}
+          label="Requests pending approval"
+          value={String(pending.length)}
+          note={`${formatWeight(pendingKg)} total`}
+          onClick={() => navigate('/fertilizer/requests')}
+        />
+        <SummaryCard
+          icon={<Truck className="size-4" />}
+          label="Committed, awaiting dispatch"
+          value={formatWeight(committed.kg)}
+          note={`${formatCurrency(committed.valueRs)} · ${committed.count} requests`}
+        />
+        <SummaryCard
+          icon={<AlertTriangle className="size-4" />}
+          label="Shortfall to fulfil approved"
+          value={shortfallKg ? formatWeight(shortfallKg) : 'Fully covered'}
+          note={
+            shortfallKg
+              ? shortfallList.map((s) => `${s.item} ${formatWeight(s.shortfallKg)}`).join(' · ')
+              : 'All approved requests can be met'
+          }
+          tone={shortfallKg ? 'danger' : 'success'}
         />
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(b) => b.id}
-        onRowClick={(b) => navigate(`/fertilizer/${b.id}`)}
-        emptyState={
-          <EmptyState
-            icon={<Sprout className="size-6" strokeWidth={1.5} />}
-            title="Add your first fertilizer stock entry"
-            description="No batches match your filters yet."
-            action={
-              canLog ? (
-                <Button size="sm" onClick={() => navigate('/fertilizer/movement/new')}>
-                  Log Stock Movement
-                </Button>
-              ) : undefined
-            }
-          />
-        }
-        actions={(b) => (
-          <>
-            <RowAction icon={<Eye className="size-4" />} label="View" onClick={() => navigate(`/fertilizer/${b.id}`)} />
-            {canLog && (
-              <RowAction
-                icon={<ArrowLeftRight className="size-4" />}
-                label="Log Movement"
-                onClick={() => navigate(`/fertilizer/movement/new?batch=${b.id}`)}
-              />
-            )}
-          </>
-        )}
-      />
+      {/* Shortfall panel — only when a shortfall exists (§5.3) */}
+      {shortfallList.length > 0 && (
+        <div className="mb-6 rounded-[var(--radius-lg)] border border-danger/30 bg-danger-bg/40 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <AlertTriangle className="size-4 text-danger-fg" />
+            <h2 className="text-sm font-semibold text-text-heading">Shortfall to fulfil approved requests</h2>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {shortfallList.map((s) => (
+              <li key={s.item} className="flex items-center justify-between text-sm">
+                <span className="text-text">
+                  <span className="font-medium">{s.item}</span> — short{' '}
+                  <span className="tabular font-semibold text-danger-fg">{formatWeight(s.shortfallKg)}</span> to cover
+                  approved commitments
+                </span>
+                {canLog && (
+                  <Button size="sm" variant="secondary" onClick={() => navigate('/fertilizer/movement/new')}>
+                    <ShoppingCart className="size-4" /> Order more
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px_180px]">
+        <Input placeholder="Search item…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Select
+          placeholder="All categories"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          options={['Fertilizer', 'Beneficiary'].map((c) => ({ value: c, label: c }))}
+        />
+        <Select
+          placeholder="All coverage"
+          value={coverage}
+          onChange={(e) => setCoverage(e.target.value)}
+          options={['Healthy', 'Tight', 'Short'].map((c) => ({ value: c, label: c }))}
+        />
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={<ClipboardList className="size-6" strokeWidth={1.5} />}
+          title="No items match your filters"
+          description="Adjust the search or filters to see stock positions."
+        />
+      ) : (
+        <StockPositionTable positions={rows} canLog={canLog} />
+      )}
     </div>
+  )
+}
+
+type CardTone = 'default' | 'danger' | 'success'
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+  note,
+  tone = 'default',
+  onClick,
+}: {
+  icon: ReactNode
+  label: string
+  value: string
+  note: string
+  tone?: CardTone
+  onClick?: () => void
+}) {
+  const valueColor = tone === 'danger' ? 'text-danger-fg' : tone === 'success' ? 'text-success-fg' : 'text-text-heading'
+  const iconWrap =
+    tone === 'danger'
+      ? 'bg-danger-bg text-danger-fg'
+      : tone === 'success'
+        ? 'bg-success-bg text-success-fg'
+        : 'bg-brand-soft text-primary'
+
+  const Wrapper = onClick ? 'button' : 'div'
+  return (
+    <Wrapper
+      onClick={onClick}
+      className={cn(
+        'rounded-[var(--radius-lg)] bg-surface p-5 text-left shadow-[var(--shadow-1)] transition-shadow',
+        onClick && 'hover:shadow-[var(--shadow-2)]',
+      )}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-[13px] font-medium text-text-muted">{label}</span>
+        <span className={cn('flex size-8 items-center justify-center rounded-[var(--radius-sm)]', iconWrap)}>{icon}</span>
+      </div>
+      <p className={cn('tabular text-[28px] font-semibold leading-none tracking-tight', valueColor)}>{value}</p>
+      <p className="mt-2 text-xs text-text-muted">{note}</p>
+    </Wrapper>
   )
 }
