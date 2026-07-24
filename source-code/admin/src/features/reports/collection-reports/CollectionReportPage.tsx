@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Scale, Trophy, Warehouse } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { ReportViewer } from './ReportViewer'
+import { ReportViewer } from '../components/ReportViewer'
 import { AreaChartCard, BarChartCard, DonutChartCard } from '@/components/charts/ChartCard'
 import { GRADE_NORMAL, GRADE_SUPER } from '@/components/charts/palette'
 import { StatCard } from '@/components/data/StatCard'
 import { DataTable, type Column } from '@/components/data/DataTable'
 import { Select } from '@/components/ui/Select'
-import { COLLECTION_BY_ESTATE, COLLECTION_ROWS, COLLECTION_TREND, GRADE_SPLIT } from './data'
+import { COLLECTION_BY_ESTATE, COLLECTION_ROWS, COLLECTION_TREND, GRADE_SPLIT } from '../components/data'
 import { formatNumber, formatWeight } from '@/lib/format'
 
 /* RPT-01 — aggregated collection volumes; confirmed records only. */

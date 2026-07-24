@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Banknote, Building2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { ReportViewer } from './ReportViewer'
+import { ReportViewer } from '../components/ReportViewer'
 import { AreaChartCard, BarChartCard, DonutChartCard } from '@/components/charts/ChartCard'
 import { GRADE_NORMAL, GRADE_SUPER } from '@/components/charts/palette'
 import { StatCard } from '@/components/data/StatCard'
 import { DataTable, type Column } from '@/components/data/DataTable'
 import { Select } from '@/components/ui/Select'
-import { REVENUE_BY_ESTATE, REVENUE_ROWS, REVENUE_TREND } from './data'
+import { REVENUE_BY_ESTATE, REVENUE_ROWS, REVENUE_TREND } from '../components/data'
 import { formatCurrency, formatPercent } from '@/lib/format'
 
 /* RPT-02 — tea selling income from processed settlements (EST-08) at ADM-01 grade rates. */
