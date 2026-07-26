@@ -317,6 +317,432 @@ const SETTLEMENT_SEEDS: SeedSettlement[] = [
   },
 ];
 
+interface SeedEmployee {
+  name: string;
+  nic: string;
+  dob: string;
+  contact: string;
+  address: string;
+  role: string;
+  department: string;
+  hireDate: string;
+  employmentType: 'Permanent' | 'Contract' | 'Casual';
+  status: 'Active' | 'Suspended' | 'Inactive';
+  bank: { bank: string; branch: string; account: string };
+  dayRate: number;
+  dayOtRate: number;
+  nightRate: number;
+  nightOtRate: number;
+  hasLogin: boolean;
+  lastUpdatedBy?: string;
+  lastUpdatedOn?: string;
+}
+
+// Mirrors the portal's former `features/employees/data.ts` EMPLOYEES fixture
+// 1:1 (Employees + Payroll vertical slice, 2026-07-26), extended with the new
+// rate columns. `hasLogin` is stored as a flag only — this slice never
+// provisions a `users` row for an employee (Employee self-service login is
+// out of scope for the admin portal; see Claude.md).
+const EMPLOYEE_SEEDS: SeedEmployee[] = [
+  {
+    name: 'K. Perera',
+    nic: '199012345678',
+    dob: '1990-05-12',
+    contact: '0771234567',
+    address: 'No. 21, Temple Rd, Nuwara Eliya',
+    role: 'Factory Officer',
+    department: 'Operations',
+    hireDate: '2024-03-12',
+    employmentType: 'Permanent',
+    status: 'Active',
+    bank: {
+      bank: 'Bank of Ceylon',
+      branch: 'Nuwara Eliya',
+      account: '8945201233',
+    },
+    dayRate: 500,
+    dayOtRate: 750,
+    nightRate: 600,
+    nightOtRate: 900,
+    hasLogin: true,
+    lastUpdatedBy: 'A. Bandara',
+    lastUpdatedOn: '2026-07-10',
+  },
+  {
+    name: 'N. Silva',
+    nic: '199523456789',
+    dob: '1995-08-03',
+    contact: '0719876543',
+    address: 'No. 5, Lake View, Nuwara Eliya',
+    role: 'Machine Operator',
+    department: 'Factory Floor',
+    hireDate: '2023-11-01',
+    employmentType: 'Permanent',
+    status: 'Active',
+    bank: { bank: "People's Bank", branch: 'Kandy', account: '1002458800' },
+    dayRate: 400,
+    dayOtRate: 600,
+    nightRate: 480,
+    nightOtRate: 720,
+    hasLogin: false,
+  },
+  {
+    name: 'S. Fernando',
+    nic: '198834567890',
+    dob: '1988-01-22',
+    contact: '0761112223',
+    address: 'No. 88, Hill St, Nuwara Eliya',
+    role: 'Factory Officer',
+    department: 'Operations',
+    hireDate: '2022-06-15',
+    employmentType: 'Permanent',
+    status: 'Active',
+    bank: {
+      bank: 'Commercial Bank',
+      branch: 'Nuwara Eliya',
+      account: '7781234509',
+    },
+    dayRate: 500,
+    dayOtRate: 750,
+    nightRate: 600,
+    nightOtRate: 900,
+    hasLogin: true,
+  },
+  {
+    name: 'T. Rajapaksa',
+    nic: '199245678901',
+    dob: '1992-11-30',
+    contact: '0784445556',
+    address: 'No. 12, Station Rd, Hatton',
+    role: 'Driver',
+    department: 'Logistics',
+    hireDate: '2025-01-20',
+    employmentType: 'Contract',
+    status: 'Active',
+    // Missing bank details — excluded from payroll processing until added (mirrors UC-054).
+    bank: { bank: '', branch: '', account: '' },
+    dayRate: 350,
+    dayOtRate: 525,
+    nightRate: 420,
+    nightOtRate: 630,
+    hasLogin: false,
+  },
+  {
+    name: 'M. Gunawardena',
+    nic: '199678901234',
+    dob: '1996-03-18',
+    contact: '0723334445',
+    address: 'No. 44, Garden Rd, Kandy',
+    role: 'Factory Manager',
+    department: 'Management',
+    hireDate: '2021-09-05',
+    employmentType: 'Permanent',
+    status: 'Active',
+    bank: { bank: 'Sampath Bank', branch: 'Kandy', account: '1122334455' },
+    dayRate: 700,
+    dayOtRate: 1050,
+    nightRate: 840,
+    nightOtRate: 1260,
+    hasLogin: true,
+  },
+  {
+    name: 'D. Wijesinghe',
+    nic: '199156789012',
+    dob: '1991-07-09',
+    contact: '0705556667',
+    address: 'No. 9, Mill Lane, Nuwara Eliya',
+    role: 'Machine Operator',
+    department: 'Factory Floor',
+    hireDate: '2020-02-14',
+    employmentType: 'Permanent',
+    // Suspended — generatePayroll skips non-Active employees, so no attendance is seeded for him.
+    status: 'Suspended',
+    bank: {
+      bank: 'Hatton National Bank',
+      branch: 'Hatton',
+      account: '5566778899',
+    },
+    dayRate: 400,
+    dayOtRate: 600,
+    nightRate: 480,
+    nightOtRate: 720,
+    hasLogin: false,
+  },
+];
+
+interface SeedSalaryAdvance {
+  id: string;
+  employeeName: string;
+  amount: number;
+  reason: string;
+  dateRequested: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  deducted: boolean;
+  decidedBy?: string;
+  decidedOn?: string;
+}
+
+// Mirrors the portal's former ADVANCES fixture 1:1, plus `deducted` (new —
+// tracks whether an Approved advance has already reduced a processed payroll
+// run, kept separate from the approval-workflow `status`).
+const SALARY_ADVANCE_SEEDS: SeedSalaryAdvance[] = [
+  {
+    id: 'EMP-ADV-0231',
+    employeeName: 'S. Fernando',
+    amount: 15000,
+    reason: 'Medical expenses',
+    dateRequested: '2026-07-10',
+    status: 'Pending',
+    deducted: false,
+  },
+  {
+    id: 'EMP-ADV-0230',
+    employeeName: 'K. Perera',
+    amount: 20000,
+    reason: 'School fees',
+    dateRequested: '2026-07-08',
+    status: 'Approved',
+    deducted: false,
+    decidedBy: 'A. Bandara',
+    decidedOn: '2026-07-09',
+  },
+  {
+    id: 'EMP-ADV-0229',
+    employeeName: 'N. Silva',
+    amount: 8000,
+    reason: 'Family event',
+    dateRequested: '2026-07-05',
+    status: 'Rejected',
+    deducted: false,
+    decidedBy: 'A. Bandara',
+    decidedOn: '2026-07-06',
+  },
+];
+
+interface SeedAttendance {
+  employeeName: string;
+  date: string;
+  status: 'Present' | 'Absent' | 'Leave' | 'Half-day';
+  dayHours: number;
+  dayOtHours: number;
+  nightHours: number;
+  nightOtHours: number;
+}
+
+function presentDays(employeeName: string, dates: string[]): SeedAttendance[] {
+  return dates.map((date) => ({
+    employeeName,
+    date,
+    status: 'Present' as const,
+    dayHours: 8,
+    dayOtHours: 0,
+    nightHours: 0,
+    nightOtHours: 0,
+  }));
+}
+
+const PAYROLL_PERIOD = 'July 2026';
+
+// Enough July 2026 rows per Active employee to make payroll generation
+// non-trivial: a run of Present days, one day exercising the OT bucket, one
+// exercising night/night-OT, and one each Absent/Leave/Half-day for variety.
+const ATTENDANCE_SEEDS: SeedAttendance[] = [
+  ...presentDays('K. Perera', [
+    '2026-07-01',
+    '2026-07-02',
+    '2026-07-03',
+    '2026-07-06',
+    '2026-07-07',
+    '2026-07-08',
+    '2026-07-09',
+  ]),
+  {
+    employeeName: 'K. Perera',
+    date: '2026-07-10',
+    status: 'Present',
+    dayHours: 8,
+    dayOtHours: 3,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+  {
+    employeeName: 'K. Perera',
+    date: '2026-07-13',
+    status: 'Present',
+    dayHours: 0,
+    dayOtHours: 0,
+    nightHours: 8,
+    nightOtHours: 2,
+  },
+  {
+    employeeName: 'K. Perera',
+    date: '2026-07-14',
+    status: 'Absent',
+    dayHours: 0,
+    dayOtHours: 0,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+  {
+    employeeName: 'K. Perera',
+    date: '2026-07-15',
+    status: 'Leave',
+    dayHours: 0,
+    dayOtHours: 0,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+  {
+    employeeName: 'K. Perera',
+    date: '2026-07-16',
+    status: 'Half-day',
+    dayHours: 4,
+    dayOtHours: 0,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+
+  ...presentDays('N. Silva', [
+    '2026-07-01',
+    '2026-07-02',
+    '2026-07-03',
+    '2026-07-06',
+    '2026-07-07',
+    '2026-07-08',
+    '2026-07-09',
+    '2026-07-10',
+  ]),
+  {
+    employeeName: 'N. Silva',
+    date: '2026-07-13',
+    status: 'Present',
+    dayHours: 8,
+    dayOtHours: 2,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+  {
+    employeeName: 'N. Silva',
+    date: '2026-07-14',
+    status: 'Absent',
+    dayHours: 0,
+    dayOtHours: 0,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+  {
+    employeeName: 'N. Silva',
+    date: '2026-07-15',
+    status: 'Half-day',
+    dayHours: 4,
+    dayOtHours: 0,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+
+  ...presentDays('S. Fernando', [
+    '2026-07-01',
+    '2026-07-02',
+    '2026-07-03',
+    '2026-07-06',
+    '2026-07-07',
+    '2026-07-08',
+    '2026-07-09',
+  ]),
+  {
+    employeeName: 'S. Fernando',
+    date: '2026-07-10',
+    status: 'Present',
+    dayHours: 8,
+    dayOtHours: 1,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+  {
+    employeeName: 'S. Fernando',
+    date: '2026-07-13',
+    status: 'Present',
+    dayHours: 0,
+    dayOtHours: 0,
+    nightHours: 8,
+    nightOtHours: 0,
+  },
+  {
+    employeeName: 'S. Fernando',
+    date: '2026-07-14',
+    status: 'Leave',
+    dayHours: 0,
+    dayOtHours: 0,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+
+  ...presentDays('T. Rajapaksa', [
+    '2026-07-01',
+    '2026-07-02',
+    '2026-07-03',
+    '2026-07-06',
+    '2026-07-07',
+    '2026-07-08',
+  ]),
+  {
+    employeeName: 'T. Rajapaksa',
+    date: '2026-07-09',
+    status: 'Present',
+    dayHours: 8,
+    dayOtHours: 2,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+  {
+    employeeName: 'T. Rajapaksa',
+    date: '2026-07-10',
+    status: 'Absent',
+    dayHours: 0,
+    dayOtHours: 0,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+  {
+    employeeName: 'T. Rajapaksa',
+    date: '2026-07-13',
+    status: 'Half-day',
+    dayHours: 4,
+    dayOtHours: 0,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+
+  ...presentDays('M. Gunawardena', [
+    '2026-07-01',
+    '2026-07-02',
+    '2026-07-03',
+    '2026-07-06',
+    '2026-07-07',
+    '2026-07-08',
+    '2026-07-09',
+    '2026-07-10',
+  ]),
+  {
+    employeeName: 'M. Gunawardena',
+    date: '2026-07-13',
+    status: 'Present',
+    dayHours: 8,
+    dayOtHours: 2,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+  {
+    employeeName: 'M. Gunawardena',
+    date: '2026-07-14',
+    status: 'Leave',
+    dayHours: 0,
+    dayOtHours: 0,
+    nightHours: 0,
+    nightOtHours: 0,
+  },
+];
+
 const AGENT_SEEDS = [
   { phone: '0777000011', name: 'R. Senanayake', nic: '198712345701' },
   { phone: '0777000012', name: 'W. Gunaratne', nic: '198912345702' },
@@ -879,6 +1305,174 @@ async function seed() {
       );
     }
     console.log(`Seeded ${SETTLEMENT_SEEDS.length} settlements`);
+
+    // ── Employees + Payroll (EMP-01..14) ──
+
+    const employeeIds: Record<string, number> = {};
+    for (const e of EMPLOYEE_SEEDS) {
+      const employeeId = await findOrCreate(
+        client,
+        `SELECT id FROM employees WHERE nic = $1`,
+        [e.nic],
+        `INSERT INTO employees (nic, name, role) VALUES ($1, $2, $3) RETURNING id`,
+        [e.nic, e.name, e.role],
+      );
+      employeeIds[e.name] = employeeId;
+
+      await client.query(
+        `UPDATE employees SET
+           name = $2, dob = $3, contact = $4, address = $5, role = $6, department = $7,
+           hire_date = $8, employment_type = $9, status = $10,
+           bank_name = $11, bank_branch = $12, bank_account = $13,
+           day_rate = $14, day_ot_rate = $15, night_rate = $16, night_ot_rate = $17,
+           has_login = $18, last_updated_by = $19, last_updated_on = $20
+         WHERE id = $1`,
+        [
+          employeeId,
+          e.name,
+          e.dob,
+          e.contact,
+          e.address,
+          e.role,
+          e.department,
+          e.hireDate,
+          e.employmentType,
+          e.status,
+          e.bank.bank || null,
+          e.bank.branch || null,
+          e.bank.account || null,
+          e.dayRate,
+          e.dayOtRate,
+          e.nightRate,
+          e.nightOtRate,
+          e.hasLogin,
+          e.lastUpdatedBy ?? null,
+          e.lastUpdatedOn ?? null,
+        ],
+      );
+    }
+    console.log(`Seeded ${EMPLOYEE_SEEDS.length} employees`);
+
+    for (const a of ATTENDANCE_SEEDS) {
+      await client.query(
+        `INSERT INTO employee_attendance
+           (employee_id, date, status, day_hours, day_ot_hours, night_hours, night_ot_hours, marked_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (employee_id, date) DO UPDATE SET
+           status = EXCLUDED.status, day_hours = EXCLUDED.day_hours,
+           day_ot_hours = EXCLUDED.day_ot_hours, night_hours = EXCLUDED.night_hours,
+           night_ot_hours = EXCLUDED.night_ot_hours, marked_by = EXCLUDED.marked_by`,
+        [
+          employeeIds[a.employeeName],
+          a.date,
+          a.status,
+          a.dayHours,
+          a.dayOtHours,
+          a.nightHours,
+          a.nightOtHours,
+          'S. Fernando',
+        ],
+      );
+    }
+    console.log(`Seeded ${ATTENDANCE_SEEDS.length} attendance records`);
+
+    for (const a of SALARY_ADVANCE_SEEDS) {
+      await client.query(
+        `INSERT INTO salary_advances
+           (id, employee_id, employee_name, amount, reason, date_requested, status, deducted, decided_by, decided_on)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (id) DO UPDATE SET
+           employee_id = EXCLUDED.employee_id, employee_name = EXCLUDED.employee_name,
+           amount = EXCLUDED.amount, reason = EXCLUDED.reason,
+           date_requested = EXCLUDED.date_requested, status = EXCLUDED.status,
+           deducted = EXCLUDED.deducted, decided_by = EXCLUDED.decided_by,
+           decided_on = EXCLUDED.decided_on`,
+        [
+          a.id,
+          employeeIds[a.employeeName],
+          a.employeeName,
+          a.amount,
+          a.reason,
+          a.dateRequested,
+          a.status,
+          a.deducted,
+          a.decidedBy ?? null,
+          a.decidedOn ?? null,
+        ],
+      );
+    }
+    console.log(`Seeded ${SALARY_ADVANCE_SEEDS.length} salary advances`);
+
+    // Payroll rows are computed here (aggregate attendance × rates — the same
+    // formula EmployeesService.generatePayroll uses) since this script has no
+    // NestJS DI context to call the real service from. Already-Processed rows
+    // are left untouched by the WHERE clause on the upsert, same as the
+    // service's own regeneration guard.
+    let payrollCount = 0;
+    for (const e of EMPLOYEE_SEEDS) {
+      if (e.status !== 'Active') continue;
+      const employeeId = employeeIds[e.name];
+
+      const totals = ATTENDANCE_SEEDS.filter(
+        (a) => a.employeeName === e.name,
+      ).reduce(
+        (sum, a) => ({
+          dayHours: sum.dayHours + a.dayHours,
+          dayOtHours: sum.dayOtHours + a.dayOtHours,
+          nightHours: sum.nightHours + a.nightHours,
+          nightOtHours: sum.nightOtHours + a.nightOtHours,
+        }),
+        { dayHours: 0, dayOtHours: 0, nightHours: 0, nightOtHours: 0 },
+      );
+
+      const gross =
+        totals.dayHours * e.dayRate +
+        totals.dayOtHours * e.dayOtRate +
+        totals.nightHours * e.nightRate +
+        totals.nightOtHours * e.nightOtRate;
+
+      const deductionsAdvances = SALARY_ADVANCE_SEEDS.filter(
+        (a) =>
+          a.employeeName === e.name && a.status === 'Approved' && !a.deducted,
+      ).reduce((sum, a) => sum + a.amount, 0);
+
+      const missingBank = !e.bank.bank || !e.bank.branch || !e.bank.account;
+      const payrollId = `PR-${String(++payrollCount).padStart(4, '0')}`;
+
+      await client.query(
+        `INSERT INTO payroll_runs
+           (id, employee_id, employee_name, period, day_hours, day_ot_hours, night_hours, night_ot_hours,
+            day_rate, day_ot_rate, night_rate, night_ot_rate, gross, deductions_advances,
+            deductions_other, status, missing_bank)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 0, 'Pending', $15)
+         ON CONFLICT (employee_id, period) DO UPDATE SET
+           day_hours = EXCLUDED.day_hours, day_ot_hours = EXCLUDED.day_ot_hours,
+           night_hours = EXCLUDED.night_hours, night_ot_hours = EXCLUDED.night_ot_hours,
+           day_rate = EXCLUDED.day_rate, day_ot_rate = EXCLUDED.day_ot_rate,
+           night_rate = EXCLUDED.night_rate, night_ot_rate = EXCLUDED.night_ot_rate,
+           gross = EXCLUDED.gross, deductions_advances = EXCLUDED.deductions_advances,
+           missing_bank = EXCLUDED.missing_bank
+         WHERE payroll_runs.status = 'Pending'`,
+        [
+          payrollId,
+          employeeId,
+          e.name,
+          PAYROLL_PERIOD,
+          totals.dayHours,
+          totals.dayOtHours,
+          totals.nightHours,
+          totals.nightOtHours,
+          e.dayRate,
+          e.dayOtRate,
+          e.nightRate,
+          e.nightOtRate,
+          gross,
+          deductionsAdvances,
+          missingBank,
+        ],
+      );
+    }
+    console.log(`Seeded payroll for ${PAYROLL_PERIOD}`);
 
     const agentIds: Record<string, number> = {};
     for (const a of AGENT_SEEDS) {

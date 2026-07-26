@@ -1,20 +1,45 @@
 import { useNavigate, useParams } from 'react-router-dom'
-import { Download, Printer } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Download, Printer, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
-import { PAYROLL, netPay } from './data'
+import * as employeesService from '@/services/employees'
+import { netPay } from './calc'
 import { formatCurrency, maskAccount } from '@/lib/format'
-import { EMPLOYEES } from './data'
 
 export function PayslipPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { toast } = useToast()
-  const row = PAYROLL.find((r) => r.id === id) ?? PAYROLL[0]
-  const emp = EMPLOYEES.find((e) => e.id === row.employeeId)
+
+  // No "get one payroll row" endpoint yet — fetch the (dev-scale) full list and find by id.
+  const { data: payroll, isPending: payrollPending, isError: payrollError, refetch: refetchPayroll } = useQuery({
+    queryKey: ['employees', 'payroll'],
+    queryFn: () => employeesService.listPayroll(),
+  })
+  const row = (payroll ?? []).find((r) => r.id === id)
+
+  const { data: employee, isPending: employeePending } = useQuery({
+    queryKey: ['employee', row?.employeeId],
+    queryFn: () => employeesService.getById(row!.employeeId),
+    enabled: !!row,
+  })
+
+  if (payrollPending || (row && employeePending)) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (payrollError || !row) {
+    return <ErrorState title="Payslip not found" description={`No payroll record with ID “${id}”.`} onRetry={() => void refetchPayroll()} />
+  }
 
   return (
     <div>
@@ -42,6 +67,14 @@ export function PayslipPage() {
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Earnings</p>
             <Line label="Gross salary" value={formatCurrency(row.gross)} />
+            {row.shiftHours && row.rates && (
+              <>
+                <Line label={`Day (${row.shiftHours.day}h @ ${formatCurrency(row.rates.day)})`} value={formatCurrency(row.shiftHours.day * row.rates.day)} />
+                <Line label={`Day OT (${row.shiftHours.dayOt}h @ ${formatCurrency(row.rates.dayOt)})`} value={formatCurrency(row.shiftHours.dayOt * row.rates.dayOt)} />
+                <Line label={`Night (${row.shiftHours.night}h @ ${formatCurrency(row.rates.night)})`} value={formatCurrency(row.shiftHours.night * row.rates.night)} />
+                <Line label={`Night OT (${row.shiftHours.nightOt}h @ ${formatCurrency(row.rates.nightOt)})`} value={formatCurrency(row.shiftHours.nightOt * row.rates.nightOt)} />
+              </>
+            )}
           </div>
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Deductions</p>
@@ -55,9 +88,9 @@ export function PayslipPage() {
           <span className="tabular text-xl font-semibold text-text-heading">{formatCurrency(netPay(row))}</span>
         </div>
 
-        {emp?.bank.account && (
+        {employee?.bank.account && (
           <p className="mt-3 text-xs text-text-muted">
-            Bank transfer to {emp.bank.bank} · <span className="id">{maskAccount(emp.bank.account)}</span>
+            Bank transfer to {employee.bank.bank} · <span className="id">{maskAccount(employee.bank.account)}</span>
           </p>
         )}
       </Card>

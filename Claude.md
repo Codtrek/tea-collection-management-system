@@ -16,7 +16,11 @@ stock-position rework + dev-CORS fix (committed on `feature/fertilizer-stock-pos
 2026-07-26 to record the Tea Leaf Collection vertical slice (`feature/collections-slice`) — the
 first full DB→backend→portal slice built after auth, per `PLAN.md` Phase 2.1. Updated again
 2026-07-26 to record the Estates + Payments vertical slice (`feature/estates-payments-backend`,
-`PLAN.md` Phase 2.2) and resolve the ~Rs. 3 bank-charge open item.
+`PLAN.md` Phase 2.2) and resolve the ~Rs. 3 bank-charge open item. Updated again 2026-07-26 to
+record the Employees + Payroll vertical slice (`feature/employees-payroll-backend`, `PLAN.md`
+Phase 2.3) — the first slice with a genuinely new table (`employees`, independent of the
+auth-side `factory_employees`) and the first to implement live payroll computation rather than
+a snapshot/seeded value.
 
 ## What this system does
 
@@ -173,7 +177,14 @@ Net Payable   = Gross Revenue − Transport Cost − Fertilizer Deductions − A
 
 Employee payroll follows a parallel but separate calculation: shift-based pay (Day/Day OT/
 Night/Night OT, different rates), with employee-requested salary advances deducted at month end,
-also exportable as a bank payment file.
+also exportable as a bank payment file. **Implemented 2026-07-26** (Employees + Payroll vertical
+slice) — each employee carries four hourly rates; a payroll "generate" step aggregates that
+period's `employee_attendance` rows into hour buckets and multiplies by the employee's rates
+*at generation time* (snapshotted onto the row, so a later rate change never alters a past run);
+"process" then finalizes Pending rows the same way settlements do (missing-bank exclusion,
+advance-deduction flip). This is more live computation than Estates' settlements, which stayed
+snapshot-only because their inputs (`grade_rates`, fertilizer) don't exist yet — here the inputs
+(rates, attendance) were built in the same slice.
 
 The ~Rs. 3 per-transaction bank charge is **not deducted from any payee** (resolved 2026-07-26,
 Estates + Payments slice): estate owners and employees are never charged a per-transaction fee.
@@ -289,8 +300,29 @@ contained charts, no backend dependency). `features/estates/data.ts` is **intent
 Fertilizer's `LogRequestPage` still resolve estate/route/agent from it until those flows wire to
 the real API; `grossRevenue`/`netPayable` moved to the new `features/estates/calc.ts`.
 
-**Backend (`source-code/backend/`) — auth, collections, and estates slices built, rest still to
-come.**
+**Employees + Payroll wired to the real backend (2026-07-26, `feature/employees-payroll-backend`)
+— `PLAN.md` Phase 2.3, third module, "largest surface, fully greenfield."** All thirteen
+non-mock screens (EMP-01 list, EMP-02 registration, EMP-03 detail, EMP-04 edit, EMP-05/06/07/08
+attendance overview + entry, EMP-09/10 advance list/request/decision, EMP-11/12/13 payroll
+list/process/payslip) read/write through `src/services/employees.ts` instead of
+`features/employees/data.ts`. Two things this slice does differently from Estates: **roster
+writes are Administrator-only end to end** (`employees` permission key is Officer=`view`, not
+`edit` — a real difference from Estates where Officer could edit), and **payroll is live-computed,
+not seeded snapshot** — a "Generate from Attendance" action aggregates that period's
+`employee_attendance` rows × the employee's rates into Pending payroll rows (rates snapshotted at
+generation time), then "Process Payroll" finalizes them (missing-bank exclusion, approved-advance
+deduction flip), same UC-054-style exception handling as settlements. The registration/edit forms
+gained a "Pay rates (Rs./hour)" section (Day/Day-OT/Night/Night-OT) not in the original design doc
+mockup — necessary for the live computation to have real inputs. `AttendanceOverviewPage`'s grid
+now reads real `employee_attendance` rows instead of a pseudo-random fill function; unmarked days
+render as a neutral dot rather than defaulting to Present. `PerformancePage` (EMP-14) stays mock
+(self-contained charts, no backend dependency, same call as EST-09 Analytics).
+`features/employees/data.ts` is **intentionally kept** (trimmed to just the `EMPLOYEES` array) —
+`PerformancePage`'s employee picker still reads it; `netPay` moved to the new
+`features/employees/calc.ts`.
+
+**Backend (`source-code/backend/`) — auth, collections, estates, and employees slices built, rest
+still to come.**
 The default NestJS scaffold (`app.controller.ts`, `app.service.ts`, their spec, and the e2e test)
 was **deleted**; `package.json` now depends on TypeORM, pg, @nestjs/jwt, passport-jwt, bcrypt, and
 class-validator. Built:
@@ -316,20 +348,44 @@ class-validator. Built:
   `parseEstateId` for the `EST-0001`-style business id (formatted from the `estates.id` serial,
   not stored). New estate owners get a `users` row provisioned via `UsersService.createUser`
   (phone-keyed, random password — no distribution flow yet, deferred to mobile login, Phase 3).
+- **Employees** (`src/employees/`): `GET/POST/PUT /employees(/:id)`, `PATCH
+  /employees/:id/deactivate`, `GET/POST /employees/attendance`, `GET/POST /employees/advances`,
+  `PATCH /employees/advances/:id/decide`, `GET /employees/payroll`, `POST
+  /employees/payroll/generate`, `POST /employees/payroll/process`, all JWT-guarded. Business rules
+  live in `employees.service.ts` with unit tests in `employees.service.spec.ts`:
+  Administrator-only roster writes (a stricter gate than Estates — Officer is view-only on the
+  roster there too); attendance-mark/advance-decide/payroll-generate/process all reject Manager;
+  advance decisions accept both Officer and Administrator; `generatePayroll` aggregates
+  `employee_attendance` hours × the employee's *current* rates, snapshotting both onto the
+  `payroll_runs` row (a later rate change never alters a past run); `processPayroll` excludes
+  missing-bank rows and flips contributing Approved advances to `deducted`. DB↔portal mapping in
+  `employee-map.ts` — unlike `estate-map.ts`/`collection-map.ts`, every enum here uses the *same*
+  string on both sides (the DB CHECK constraints were written to match the portal's types
+  directly), so it's just id-formatting (`formatEmployeeId`/`parseEmployeeId`, `EMP-0001`-style)
+  plus the `PublicEmployee`/`PublicAdvance`/`PublicAttendance`/`PublicPayrollRow` shapes — no
+  DB→App conversion tables needed. `employees` is a **new, separate table** from the pre-existing
+  `factory_employees` (the auth/permission subtype table for the 3 factory login roles) —
+  intentionally unrelated; `hasLogin` on an `employees` row is a stored flag only, since Employee
+  self-service login is out of scope for this admin-portal slice (this module never provisions a
+  `users` row, unlike Estates' owner-registration flow).
 - **Seed** (`src/seed.ts`, `npm run seed`, idempotent): three factory users, DEV creds
   `0771234567` / `Password123!` (admin / officer / manager on `…67/68/69`), plus reference
   routes/collection agents, 5 estates (1 inactive, 1 missing-bank) with owners/documents, 3 estate
-  advances, 6 settlements, and 8 collection records — spanning every status each module needs.
+  advances, 6 settlements, 8 collection records, 6 employees (1 suspended, 1 missing-bank) with
+  pay rates, ~52 July-2026 attendance records (covering all four shift-hour buckets), 3 salary
+  advances, and a payroll run for July 2026 computed inline in the script (same aggregation
+  formula `generatePayroll` uses, since the seed script has no NestJS DI context to call the real
+  service from) — spanning every status each module needs.
 - **Config**: `app.module.ts` wires ConfigModule + TypeORM (`synchronize: false`,
   `autoLoadEntities`); `main.ts` has a global ValidationPipe and dev-tolerant CORS (see below).
 
-The pickup-requests / employees / fertilizer / reports / administration modules are still to be
-written — see `PLAN.md` Phase 2.3 onward. (Route/Estate now have minimal real backing; the full
+The pickup-requests / fertilizer / reports / administration modules are still to be written — see
+`PLAN.md` Phase 2.4 onward. (Route/Estate/Employee now have minimal real backing; the full
 Route/Pickup request state machine is still mobile-driven, Phase 3.)
 
 **Database (`source-code/database/init.sql`) — auth unblocked, collections reconciled to the
-photo-evidence design, estates extended to the full EST-01..09 contract, broader Route/Pickup
-reconciliation still pending.** The `users.role`
+photo-evidence design, estates extended to the full EST-01..09 contract, employees/payroll tables
+added from scratch, broader Route/Pickup reconciliation still pending.** The `users.role`
 **and** `factory_employees.role` CHECK constraints were extended (2026-07-21) to include
 `factory_officer` and `factory_manager`, so the web portal's two non-admin roles now authenticate
 (this was `PLAN.md` Phase 0). On 2026-07-26 the old OTP-based collection lineage —
@@ -354,8 +410,17 @@ same deferred-storage pattern as Collections' photos), `estate_advances`, and `s
 `fertilizer_dispatches`, neither exists yet). The pre-existing `monthly_payments` /
 `payment_deduction_items` skeleton predates this slice and doesn't match the portal's per-estate
 settlement contract — left in place, unused, rather than dropped (see the Payments section
-comment in `init.sql`). The local dev DB runs everything in an isolated `tea_authslice` schema;
-the older, more-advanced `tea` schema left over from the abandoned test01 branch is untouched.
+comment in `init.sql`). On 2026-07-26 (same day, Employees + Payroll slice) four tables were added
+from scratch, since none of `employee_attendance`/`payroll_runs`/`salary_advances` existed even as
+stubs (unlike Estates, which extended an already-decent base): `employees` (the HR roster,
+independent of `factory_employees`), `employee_attendance` (one row per employee per day, `UNIQUE
+(employee_id, date)`), `salary_advances` (adds a `deducted` boolean alongside the
+Pending/Approved/Rejected approval-workflow `status`, so payroll can track which Approved advances
+a processed run has already applied), and `payroll_runs` (`UNIQUE (employee_id, period)`, with
+`day_rate`/`day_ot_rate`/`night_rate`/`night_ot_rate` and matching hour columns snapshotted at
+generation time — same effective-dated-rate principle as `grade_rates`). The local dev DB runs
+everything in an isolated `tea_authslice` schema; the older, more-advanced `tea` schema left over
+from the abandoned test01 branch is untouched.
 
 Infra is already in place and needs no work: `source-code/docker-compose.yml` defines postgres 16,
 redis, api, admin, and nginx.
@@ -375,16 +440,17 @@ abandoned** — take nothing from it. All backend, database, and mobile work is 
 this branch. Do not propose merging or cherry-picking from it.
 
 Two facts that shaped the sequencing — **both resolved by the auth slice, and the seam is now
-proven end-to-end by the Collections and Estates slices**:
+proven end-to-end by the Collections, Estates, and Employees slices**:
 
-1. **The portal has a data-fetching seam, and two modules besides auth now prove it holds.** It
+1. **The portal has a data-fetching seam, and three modules besides auth now prove it holds.** It
    was previously fixture-only (no `services/` layer, zero `useQuery` calls). The auth slice built
    the seam (`src/lib/api.ts` + `src/services/`); Collections (2026-07-26) was the first module to
-   actually use it, and Estates (2026-07-26, same day) is the second — including a money-moving
-   write path (advances, settlement processing), not just CRUD. Every module after Estates
-   (Employees, Fertilizer, Reports, Administration) repeats the same recipe — see
-   "Modules, in dependency order" in `PLAN.md` Phase 2. The remaining pages still import static
-   fixtures until each is migrated in turn.
+   actually use it, Estates (2026-07-26, same day) the second — including a money-moving write
+   path (advances, settlement processing) — and Employees (2026-07-26, same day) the third,
+   adding live server-side computation (payroll generation) on top of that pattern for the first
+   time. Every module after Employees (Fertilizer, Reports, Administration) repeats the same
+   recipe — see "Modules, in dependency order" in `PLAN.md` Phase 2. The remaining pages still
+   import static fixtures until each is migrated in turn.
 2. **The schema no longer blocks auth**, and the Collections table is now reconciled to the
    photo-evidence design too. The `users.role` (and `factory_employees.role`) CHECK constraints
    were extended to include `factory_officer` and `factory_manager`, so all three factory roles
@@ -417,3 +483,14 @@ a random password on registration, but there's no distribution/reset flow — la
 app, Phase 3); EST-09 Analytics stays on mock data; and the `ESTATES` fixture in
 `features/estates/data.ts` is still the estate/route/agent source for Collections' exception-entry
 flow and Fertilizer's request-logging flow, both out of scope for this slice.
+
+Deferred from the Employees + Payroll slice (2026-07-26), noted as seams rather than gaps:
+**employee self-service login** — `Employee.hasLogin` is stored as a flag only; no `users` row is
+provisioned and no self-service portal/role exists yet (Claude.md's User roles section scopes this
+out of the admin portal; lands whenever mobile/self-service is built, Phase 3 or later); document
+**upload** — `Employee` has no `documents` field at all (unlike `EstateOwner`), so
+`employee_documents` wasn't built and the registration wizard's Documents step stays decorative;
+**"other" payroll deductions** — `deductions.other` is always `0`, there's no source feeding it yet
+(no equivalent of Estates' fertilizer-deduction linkage for employees); **bank payment file
+export** — the "Bank File" button on `PayrollListPage` is still a toast stub, same deferred-export
+pattern as Collections/Estates; and EMP-14 Performance stays on mock data (same call as EST-09).

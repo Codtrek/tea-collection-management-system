@@ -1,12 +1,14 @@
 import { useNavigate } from 'react-router-dom'
-import { Plus, Eye, HandCoins } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Plus, Eye, HandCoins, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
+import { ErrorState } from '@/components/data/ErrorState'
 import { StatusBadge, type BadgeTone } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
-import { ADVANCES } from './data'
+import * as employeesService from '@/services/employees'
 import type { Advance, AdvanceStatus } from './types'
 import { formatCurrency, formatDate } from '@/lib/format'
 
@@ -17,6 +19,8 @@ export function AdvanceListPage() {
   const { can } = useAuth()
   const canRequest = can('advances', 'edit')
 
+  const { data: advances, isPending, isError, refetch } = useQuery({ queryKey: ['employees', 'advances'], queryFn: employeesService.listAdvances })
+
   const columns: Column<Advance>[] = [
     { key: 'employeeName', header: 'Employee', render: (a) => <span className="font-medium text-text">{a.employeeName}</span> },
     { key: 'id', header: 'Reference', render: (a) => <span className="id text-xs text-text-muted">{a.id}</span> },
@@ -24,6 +28,18 @@ export function AdvanceListPage() {
     { key: 'dateRequested', header: 'Requested', render: (a) => formatDate(a.dateRequested) },
     { key: 'status', header: 'Status', render: (a) => <StatusBadge tone={tone[a.status]}>{a.status}</StatusBadge> },
   ]
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return <ErrorState title="Couldn't load advances" description="Something went wrong fetching salary advance requests." onRetry={() => void refetch()} />
+  }
 
   return (
     <div>
@@ -40,7 +56,7 @@ export function AdvanceListPage() {
       />
       <DataTable
         columns={columns}
-        rows={ADVANCES}
+        rows={advances ?? []}
         rowKey={(a) => a.id}
         onRowClick={(a) => navigate(`/employees/advances/${a.id}`)}
         emptyState={<EmptyState icon={<HandCoins className="size-6" strokeWidth={1.5} />} title="No advance requests yet" description="Requests submitted by employees appear here." />}

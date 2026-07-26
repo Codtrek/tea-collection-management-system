@@ -38,6 +38,14 @@ export const employeeSchema = z.object({
 
   // Permissions
   hasLogin: z.boolean(),
+
+  // Pay rates (shift-based: Day / Day-OT / Night / Night-OT — feeds payroll generation).
+  // z.coerce.number() breaks zodResolver typing with useForm<T> — use register(field,
+  // { valueAsNumber: true }) instead (see Claude.md gotchas).
+  dayRate: z.number().min(0, 'Rate cannot be negative'),
+  dayOtRate: z.number().min(0, 'Rate cannot be negative'),
+  nightRate: z.number().min(0, 'Rate cannot be negative'),
+  nightOtRate: z.number().min(0, 'Rate cannot be negative'),
 })
 
 export type EmployeeForm = z.infer<typeof employeeSchema>

@@ -72,7 +72,8 @@ module instead of being baked into all six.
       - `tea_collection_records.self_delivered` — skips the transport deduction
       - `tea_collection_records.owner_confirmed` — separate from photo evidence
 - [ ] Add tables the web portal needs that the schema has never had:
-      - `employee_attendance`, `payroll_runs`, `salary_advances`
+      - [x] `employee_attendance`, `payroll_runs`, `salary_advances` — done 2026-07-26 with the
+        Employees + Payroll slice (2.3), plus a new `employees` table not listed here originally
       - `fertilizer_batches`, `stock_movements`
       - `grade_rates` — **effective-dated**; ADM-01 depends on past settlements never
         recalculating when a rate changes
@@ -139,8 +140,11 @@ Order is by dependency, not by sidebar order:
       deducted). Done 2026-07-26, `feature/estates-payments-backend` — resolved: never deducted
       from estate owners, factory billed a separate periodic fee instead. Settlement processing
       is done; auto-generation from live data is deferred to when 2.4/2.6 land (see Claude.md).
-- [ ] **2.3 Employees (EMP-01..14)** — largest surface, fully greenfield backend
-      (attendance, payroll, advances).
+- [x] **2.3 Employees (EMP-01..14)** — largest surface, fully greenfield backend
+      (attendance, payroll, advances). Done 2026-07-26, `feature/employees-payroll-backend` — new
+      `employees` table (separate from `factory_employees`); payroll is live-computed
+      (attendance × pay rates via a "Generate" step, snapshotted for immutability), not seeded;
+      roster writes are Administrator-only (stricter than Estates' Officer-can-edit).
 - [ ] **2.4 Fertilizer (FERT-01..04)** — feeds the estate settlement deduction breakdown.
 - [ ] **2.5 Reports (RPT-01..04)** — pure aggregation; needs the others populated to be
       meaningful. Must aggregate **Confirmed records only**.

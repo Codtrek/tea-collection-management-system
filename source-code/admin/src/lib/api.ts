@@ -62,6 +62,9 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     throw new ApiError(res.status, message)
   }
 
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
+  // A void endpoint (e.g. markAttendance) returns 201/200 with an empty body;
+  // calling res.json() on that throws "Unexpected end of JSON input". Read as
+  // text first and only parse when a body is actually present.
+  const text = await res.text()
+  return (text ? JSON.parse(text) : undefined) as T
 }
