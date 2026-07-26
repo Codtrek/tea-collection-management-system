@@ -16,7 +16,7 @@ export default function RootLayout() {
         }}
       />
       <Stack.Screen 
-        name="teacollectorMobile" 
+        name="teacollector/teacollectorMobile" 
         options={{
           title: 'Tea Collector',
         }}

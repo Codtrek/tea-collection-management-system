@@ -12,7 +12,7 @@ export default function OnboardingScreen() {
   const router = useRouter();
 
   const handleTeaCollectorPress = () => {
-    router.push("/teacollectorMobile");
+    router.push("/teacollector/teacollectorMobile" as any);
   };
 
   return (
