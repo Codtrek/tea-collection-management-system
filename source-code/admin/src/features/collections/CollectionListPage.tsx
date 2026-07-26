@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Eye, Pencil, Leaf, Upload } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Plus, Eye, Pencil, Leaf, Loader2, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
+import { ErrorState } from '@/components/data/ErrorState'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
-import { COLLECTIONS } from './data'
+import * as collectionsService from '@/services/collections'
 import { COLLECTION_TONE, isLocked } from './status'
 import type { CollectionRecord, CollectionStatus } from './types'
 import { formatDate, formatWeight } from '@/lib/format'
@@ -20,24 +22,28 @@ export function CollectionListPage() {
   const { can } = useAuth()
   const canLog = can('collection', 'edit') // Officer/Admin log exception entries
 
+  const {
+    data: collections,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({ queryKey: ['collections'], queryFn: collectionsService.list })
+
   const [search, setSearch] = useState('')
   const [route, setRoute] = useState('')
   const [grade, setGrade] = useState('')
   const [status, setStatus] = useState('')
 
-  const rows = useMemo(
-    () =>
-      COLLECTIONS.filter((c) => {
-        const q = search.toLowerCase()
-        return (
-          (c.estateName.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)) &&
-          (!route || c.route === route) &&
-          (!grade || c.grade === grade) &&
-          (!status || c.status === status)
-        )
-      }),
-    [search, route, grade, status],
-  )
+  const rows = useMemo(() => {
+    const q = search.toLowerCase()
+    return (collections ?? []).filter(
+      (c) =>
+        (c.estateName.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)) &&
+        (!route || c.route === route) &&
+        (!grade || c.grade === grade) &&
+        (!status || c.status === status),
+    )
+  }, [collections, search, route, grade, status])
 
   const columns: Column<CollectionRecord>[] = [
     {
@@ -98,7 +104,7 @@ export function CollectionListPage() {
           placeholder="All routes"
           value={route}
           onChange={(e) => setRoute(e.target.value)}
-          options={[...new Set(COLLECTIONS.map((c) => c.route))].sort().map((r) => ({ value: r, label: r }))}
+          options={[...new Set((collections ?? []).map((c) => c.route))].sort().map((r) => ({ value: r, label: r }))}
         />
         <Select
           placeholder="All grades"
@@ -114,27 +120,35 @@ export function CollectionListPage() {
         />
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(c) => c.id}
-        onRowClick={(c) => navigate(`/collections/${c.id}`)}
-        emptyState={
-          <EmptyState
-            icon={<Leaf className="size-6" strokeWidth={1.5} />}
-            title="No collection records yet"
-            description="This log fills from the mobile field flow — an empty list is normal early on, not an error."
-          />
-        }
-        actions={(c) => (
-          <>
-            <RowAction icon={<Eye className="size-4" />} label="View" onClick={() => navigate(`/collections/${c.id}`)} />
-            {canLog && !isLocked(c) && (
-              <RowAction icon={<Pencil className="size-4" />} label="Edit" onClick={() => navigate(`/collections/${c.id}/edit`)} />
-            )}
-          </>
-        )}
-      />
+      {isPending ? (
+        <div className="flex items-center justify-center rounded-[var(--radius-lg)] border border-border bg-surface py-16">
+          <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+        </div>
+      ) : isError ? (
+        <ErrorState onRetry={() => void refetch()} />
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowKey={(c) => c.id}
+          onRowClick={(c) => navigate(`/collections/${c.id}`)}
+          emptyState={
+            <EmptyState
+              icon={<Leaf className="size-6" strokeWidth={1.5} />}
+              title="No collection records yet"
+              description="This log fills from the mobile field flow — an empty list is normal early on, not an error."
+            />
+          }
+          actions={(c) => (
+            <>
+              <RowAction icon={<Eye className="size-4" />} label="View" onClick={() => navigate(`/collections/${c.id}`)} />
+              {canLog && !isLocked(c) && (
+                <RowAction icon={<Pencil className="size-4" />} label="Edit" onClick={() => navigate(`/collections/${c.id}/edit`)} />
+              )}
+            </>
+          )}
+        />
+      )}
     </div>
   )
 }

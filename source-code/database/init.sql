@@ -131,53 +131,44 @@ CREATE TABLE estate_route_mapping (
 );
 
 -- ─── TEA COLLECTION WORKFLOW ─────────────────────────────────────
-
-CREATE TABLE tea_selling_requests (
-    id           SERIAL PRIMARY KEY,
-    estate_id    INTEGER NOT NULL REFERENCES estates(id),
-    owner_id     INTEGER NOT NULL REFERENCES tea_estate_owners(id),
-    report_id    INTEGER REFERENCES plucking_completion_reports(id),
-    factory_id   INTEGER NOT NULL REFERENCES factories(id),
-    status       VARCHAR(20) DEFAULT 'pending'
-        CHECK (status IN ('pending', 'approved', 'rejected', 'no_agents')),
-    submitted_at TIMESTAMP DEFAULT NOW(),
-    reviewed_at  TIMESTAMP
-);
-
-CREATE TABLE tea_collection_assignments (
-    id             SERIAL PRIMARY KEY,
-    request_id     INTEGER NOT NULL UNIQUE REFERENCES tea_selling_requests(id),
-    agent_id       INTEGER NOT NULL REFERENCES collection_agents(id),
-    route_id       INTEGER REFERENCES routes(id),
-    scheduled_date DATE NOT NULL,
-    status         VARCHAR(20) DEFAULT 'assigned'
-        CHECK (status IN ('assigned', 'in_progress', 'completed', 'cancelled')),
-    assigned_at    TIMESTAMP DEFAULT NOW()
-);
+-- Reconciled 2026-07-26 (collections vertical slice) to match the design
+-- decisions in Claude.md: photo evidence only, never OTP (§ Weight
+-- verification), and the web portal's single-record status chain
+-- (Submitted → Approved → Agent Assigned → Collected → Confirmed, plus the
+-- web-originated "Pending Agent Confirmation" exception state, §7.1). The old
+-- tea_selling_requests / tea_collection_assignments / tea_collection_records
+-- (OTP-based) / tea_receiving_records lineage is superseded — collapsed into
+-- one collection_records table the web portal reads/writes directly. The
+-- full Route/Pickup request state machine (estate-initiated requests,
+-- auto-assignment) is mobile-driven and deferred to PLAN.md Phase 3; this
+-- table intentionally captures the flattened view the web portal needs now.
 
 CREATE TABLE tea_collection_records (
-    id                 SERIAL PRIMARY KEY,
-    assignment_id      INTEGER NOT NULL UNIQUE REFERENCES tea_collection_assignments(id),
-    agent_id           INTEGER NOT NULL REFERENCES collection_agents(id),
-    estate_id          INTEGER NOT NULL REFERENCES estates(id),
-    recorded_weight_kg DECIMAL(10,2) NOT NULL,
-    collection_otp     VARCHAR(10),
-    otp_verified       BOOLEAN DEFAULT FALSE,
-    collected_at       TIMESTAMP,
-    evidence_url       TEXT  -- Cloudinary photo URL
-);
-
-CREATE TABLE tea_receiving_records (
-    id                    SERIAL PRIMARY KEY,
-    collection_record_id INTEGER NOT NULL UNIQUE REFERENCES tea_collection_records(id),
-    receiving_officer_id  INTEGER NOT NULL REFERENCES receiving_officers(id),
-    factory_id            INTEGER NOT NULL REFERENCES factories(id),
-    received_weight_kg    DECIMAL(10,2) NOT NULL,
-    delivery_otp          VARCHAR(10),
-    otp_verified           BOOLEAN DEFAULT FALSE,
-    received_at            TIMESTAMP,
-    status                 VARCHAR(20) DEFAULT 'pending'
-        CHECK (status IN ('pending', 'confirmed', 'disputed'))
+    id               VARCHAR(20) PRIMARY KEY, -- business key, e.g. 'GV-2026-0714'
+    estate_id        INTEGER REFERENCES estates(id),
+    -- Opaque estate label from the portal's still-fixture-based Estates module (e.g.
+    -- 'EST-0001'), used only for exception entries logged before an estate has a real
+    -- estates.id to link to. Independent of estate_id; drop once Estates is wired.
+    estate_ref       VARCHAR(20),
+    estate_name      VARCHAR(100) NOT NULL, -- denormalized snapshot, as shown in the UI
+    route_id         INTEGER REFERENCES routes(id),
+    route_name       VARCHAR(100) NOT NULL,
+    weight_kg        DECIMAL(10,2) NOT NULL,
+    grade            VARCHAR(10) NOT NULL DEFAULT 'pending'
+        CHECK (grade IN ('super', 'normal', 'pending')),
+    status           VARCHAR(30) NOT NULL DEFAULT 'submitted'
+        CHECK (status IN ('submitted', 'approved', 'agent_assigned', 'collected',
+                           'confirmed', 'pending_agent_confirmation')),
+    collection_date  DATE NOT NULL,
+    agent_id         INTEGER REFERENCES collection_agents(id),
+    agent_name       VARCHAR(100) NOT NULL DEFAULT 'Self-delivered',
+    photos           JSONB NOT NULL DEFAULT '[]',   -- [{label, timestamp, takenBy}]
+    timeline         JSONB NOT NULL DEFAULT '[]',   -- [{status, timestamp, by}]
+    provisional      JSONB, -- {reportedBy, reason} — set on web-originated exception entries
+    mismatch         JSONB, -- {complaintId, note} — set when a weight-mismatch complaint exists
+    last_updated_by  VARCHAR(100),
+    last_updated_on  TIMESTAMP,
+    created_at       TIMESTAMP DEFAULT NOW()
 );
 
 -- ─── FERTILIZER WORKFLOW ──────────────────────────────────────────
@@ -202,7 +193,7 @@ CREATE TABLE fertilizer_dispatches (
     id                        SERIAL PRIMARY KEY,
     fertilizer_request_id     INTEGER NOT NULL UNIQUE REFERENCES fertilizer_requests(id),
     agent_id                  INTEGER NOT NULL REFERENCES collection_agents(id),
-    collection_assignment_id  INTEGER REFERENCES tea_collection_assignments(id), -- dispatched together with tea collection
+    collection_record_id      VARCHAR(20) REFERENCES tea_collection_records(id), -- dispatched together with tea collection
     dispatched_at             TIMESTAMP,
     delivered_at              TIMESTAMP,
     status                    VARCHAR(20) DEFAULT 'scheduled'
@@ -225,7 +216,7 @@ CREATE TABLE complaints (
     type                   VARCHAR(30) NOT NULL
         CHECK (type IN ('weight_mismatch', 'fertilizer_quality')),
     raised_by_user_id      INTEGER NOT NULL REFERENCES users(id),
-    collection_record_id   INTEGER REFERENCES tea_collection_records(id),
+    collection_record_id   VARCHAR(20) REFERENCES tea_collection_records(id),
     fertilizer_request_id  INTEGER REFERENCES fertilizer_requests(id),
     description            TEXT,
     status                 VARCHAR(20) DEFAULT 'open'
@@ -280,9 +271,8 @@ CREATE INDEX idx_estates_owner ON estates(owner_id);
 CREATE INDEX idx_estate_employees_estate ON estate_employees(estate_id);
 CREATE INDEX idx_daily_plucking_employee ON daily_plucking_records(employee_id);
 CREATE INDEX idx_daily_plucking_date ON daily_plucking_records(date);
-CREATE INDEX idx_tea_selling_requests_estate ON tea_selling_requests(estate_id);
-CREATE INDEX idx_tea_selling_requests_status ON tea_selling_requests(status);
 CREATE INDEX idx_collection_records_estate ON tea_collection_records(estate_id);
+CREATE INDEX idx_collection_records_status ON tea_collection_records(status);
 CREATE INDEX idx_fertilizer_requests_estate ON fertilizer_requests(estate_id);
 CREATE INDEX idx_notifications_user ON notifications(user_id);
 CREATE INDEX idx_notifications_is_read ON notifications(is_read);

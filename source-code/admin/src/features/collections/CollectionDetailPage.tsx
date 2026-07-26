@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Check, Flag, Lock, Pencil, Upload } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, Flag, Loader2, Lock, Pencil, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PhotoEvidenceGallery } from '@/components/patterns/PhotoEvidenceGallery'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
@@ -10,7 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { COLLECTIONS } from './data'
+import * as collectionsService from '@/services/collections'
 import { COLLECTION_TONE, isLocked } from './status'
 import type { CollectionStatus } from './types'
 import { formatDate, formatDateTime, formatWeight } from '@/lib/format'
@@ -22,14 +23,46 @@ const CHAIN: CollectionStatus[] = ['Submitted', 'Approved', 'Agent Assigned', 'C
 export function CollectionDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { toast } = useToast()
   const { can } = useAuth()
   const canEdit = can('collection', 'edit')
   const [flagging, setFlagging] = useState(false)
+  const [flagReason, setFlagReason] = useState('')
 
-  const record = COLLECTIONS.find((c) => c.id === id)
-  if (!record) {
-    return <ErrorState title="Record not found" description={`No collection record “${id}”.`} onRetry={() => navigate('/collections')} />
+  const {
+    data: record,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['collection', id],
+    queryFn: () => collectionsService.getById(id!),
+    enabled: !!id,
+  })
+
+  const flagMutation = useMutation({
+    mutationFn: (reason: string) => collectionsService.flag(id!, reason),
+    onSuccess: () => {
+      toast('Correction request submitted — audit entry recorded')
+      setFlagging(false)
+      setFlagReason('')
+      void queryClient.invalidateQueries({ queryKey: ['collection', id] })
+      void queryClient.invalidateQueries({ queryKey: ['collections'] })
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not submit correction request', 'danger'),
+  })
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError || !record) {
+    return <ErrorState title="Record not found" description={`No collection record “${id}”.`} onRetry={() => void refetch()} />
   }
 
   const locked = isLocked(record)
@@ -175,10 +208,8 @@ export function CollectionDetailPage() {
       <LightConfirmModal
         open={flagging}
         onClose={() => setFlagging(false)}
-        onConfirm={() => {
-          toast('Correction request submitted — audit entry recorded')
-          setFlagging(false)
-        }}
+        onConfirm={() => flagMutation.mutate(flagReason)}
+        loading={flagMutation.isPending}
         title="Flag for correction"
         confirmLabel="Submit Request"
         message={
@@ -188,7 +219,12 @@ export function CollectionDetailPage() {
           </>
         }
       >
-        <Input label="What needs correcting?" placeholder="Describe the issue with this record" />
+        <Input
+          label="What needs correcting?"
+          placeholder="Describe the issue with this record"
+          value={flagReason}
+          onChange={(e) => setFlagReason(e.target.value)}
+        />
       </LightConfirmModal>
     </div>
   )

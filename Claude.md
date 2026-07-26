@@ -12,7 +12,9 @@ branch `hasindu/mobile/test01` is **abandoned as a failed branch** — nothing i
 all backend/database/mobile work is built fresh on this branch. Earlier versions of this file
 described reconciling with it; that is no longer the plan. Updated 2026-07-22 to record the
 Authentication vertical slice (committed on `feature/auth-slice`) and the Fertilizer
-stock-position rework + dev-CORS fix (in progress on `feature/fertilizer-stock-position`).
+stock-position rework + dev-CORS fix (committed on `feature/fertilizer-stock-position`). Updated
+2026-07-26 to record the Tea Leaf Collection vertical slice (`feature/collections-slice`) — the
+first full DB→backend→portal slice built after auth, per `PLAN.md` Phase 2.1.
 
 ## What this system does
 
@@ -239,16 +241,28 @@ plus `src/services/auth.ts`. `AuthContext` performs real JWT login and hydrates 
 `GET /auth/me` on load. Login is **phone + password** (not email), with per-field validation and a
 password-reveal (eye) toggle in `LoginPage`.
 
-**Fertilizer Inventory reworked (2026-07-22, `feature/fertilizer-stock-position`, in progress).**
+**Fertilizer Inventory reworked (2026-07-22, `feature/fertilizer-stock-position`, committed).**
 Per the fertilizer addendum, the module now distinguishes **On hand ≠ Available**
 (`Available = On hand − Committed − Expired`) to prevent over-commitment. The
 `onHand − committed` math lives in exactly one place — the single-source-of-truth
 `features/fertilizer/position.ts`. Added the request workflow: FERT-05 request queue, FERT-06
 request detail (approval with FEFO allocation + override), FERT-07 log-phoned-in request; plus
 FERT-02 (stock movement now request-linked unless ad-hoc + reason) and FERT-04 (alerts show
-demand coverage) amendments, with routing and a "Fertilizer Requests" nav item. Still mock data.
+demand coverage) amendments, with routing and a "Fertilizer Requests" nav item. Still mock data —
+not yet backend-wired.
 
-**Backend (`source-code/backend/`) — real auth slice built (2026-07-21), rest still to come.**
+**Tea Leaf Collection wired to the real backend (2026-07-26, `feature/collections-slice`) — the
+first complete DB→backend→portal vertical slice built after auth, per `PLAN.md` Phase 2.1.** All
+four screens (COL-01 list, COL-02 exception entry, COL-03 detail, COL-04 edit) now read/write
+through TanStack Query + `src/services/collections.ts` instead of `features/collections/data.ts`.
+Server-side enforces exactly what the UI already implied: Confirmed records are locked (edit →
+409, must Flag for Correction instead); grade can only be set once status is Collected; Manager
+role is read-only (403 on any write); exception entries always land as **Pending Agent
+Confirmation** with no authoritative weight (§7.1). `features/collections/data.ts` is
+**intentionally kept** — `features/estates/EstateDetailPage.tsx`'s `collectionsForEstate` still
+depends on it until the Estates module (2.2) is wired.
+
+**Backend (`source-code/backend/`) — auth + collections slices built, rest still to come.**
 The default NestJS scaffold (`app.controller.ts`, `app.service.ts`, their spec, and the e2e test)
 was **deleted**; `package.json` now depends on TypeORM, pg, @nestjs/jwt, passport-jwt, bcrypt, and
 class-validator. Built:
@@ -258,22 +272,40 @@ class-validator. Built:
   `factory_officer→Officer`, `factory_manager→Manager`; non-factory roles are rejected).
 - **Users** (`src/users/`): User / Factory / FactoryEmployee entities + service; users are keyed
   by **phone**, not email; the profile join reaches `factory_employees → factories`.
-- **Seed** (`src/seed.ts`, `npm run seed`): three factory users, DEV creds
-  `0771234567` / `Password123!` (admin / officer / manager on `…67/68/69`).
+- **Collections** (`src/collections/`): `GET/PUT /collections(/:id)`, `POST /collections`
+  (exception entry), `POST /collections/:id/flag`, all JWT-guarded. Business rules (lock, grade
+  gate, Manager-read-only, provisional-record creation) live in `collections.service.ts` with unit
+  tests in `collections.service.spec.ts`. DB↔portal status/grade mapping in `collection-map.ts`
+  (mirrors `auth/role-map.ts`'s pattern) — the DB stores snake_case, the API returns the portal's
+  exact `CollectionRecord` shape (Title Case statuses, `photos`/`timeline` as JSONB passed through
+  near-verbatim).
+- **Seed** (`src/seed.ts`, `npm run seed`, idempotent): three factory users, DEV creds
+  `0771234567` / `Password123!` (admin / officer / manager on `…67/68/69`), plus reference
+  estates/routes/collection agents and 8 collection records spanning every status.
 - **Config**: `app.module.ts` wires ConfigModule + TypeORM (`synchronize: false`,
   `autoLoadEntities`); `main.ts` has a global ValidationPipe and dev-tolerant CORS (see below).
 
-The routes / pickup-requests / collection-records / payments modules are still to be written — see
-`PLAN.md` Phase 1 onward.
+The routes / pickup-requests / estates / employees / payments modules are still to be written —
+see `PLAN.md` Phase 2.2 onward.
 
-**Database (`source-code/database/init.sql`) — auth unblocked, broader reconciliation still
-pending.** The `users.role` **and** `factory_employees.role` CHECK constraints were extended
-(2026-07-21) to include `factory_officer` and `factory_manager`, so the web portal's two non-admin
-roles now authenticate (this was `PLAN.md` Phase 0). The schema still has the old
-`tea_selling_requests`/`tea_collection_assignments`/`estate_route_mapping` model, not the
-`routes`/`route_stops`/`pickup_requests` state machines described above — that reconciliation is
-still to come. The local dev DB runs the auth slice in an isolated `tea_authslice` schema; the
-older, more-advanced `tea` schema left over from the abandoned test01 branch is untouched.
+**Database (`source-code/database/init.sql`) — auth unblocked, collections reconciled to the
+photo-evidence design, broader Route/Pickup reconciliation still pending.** The `users.role`
+**and** `factory_employees.role` CHECK constraints were extended (2026-07-21) to include
+`factory_officer` and `factory_manager`, so the web portal's two non-admin roles now authenticate
+(this was `PLAN.md` Phase 0). On 2026-07-26 the old OTP-based collection lineage —
+`tea_selling_requests` → `tea_collection_assignments` → `tea_collection_records` (with
+`collection_otp`/`otp_verified`) → `tea_receiving_records` — was **dropped and superseded** by a
+single reconciled `tea_collection_records` table matching the finalized **photo evidence only,
+never OTP** design (§ Weight verification) and the web portal's status chain 1:1: business-key id
+(e.g. `GV-2026-0714`), nullable FKs to `estates`/`routes`/`collection_agents` plus denormalized
+display columns, `photos`/`timeline` as JSONB. `complaints.collection_record_id` and
+`fertilizer_dispatches.collection_record_id` were retyped to match. This collapsed table
+intentionally covers only what the web portal needs; the full Route/Pickup request state machine
+(estate-initiated requests, auto-assignment) is mobile-driven and still deferred to `PLAN.md`
+Phase 3 — `estate_route_mapping` and the broader `routes`/`route_stops`/`pickup_requests` model
+from the domain section above are not yet built. The local dev DB runs everything in an isolated
+`tea_authslice` schema; the older, more-advanced `tea` schema left over from the abandoned test01
+branch is untouched.
 
 Infra is already in place and needs no work: `source-code/docker-compose.yml` defines postgres 16,
 redis, api, admin, and nginx.
@@ -283,7 +315,7 @@ tokens (`src/theme/`: colors, spacing, typography — note `colors.primary` is t
 `#53cf81` the web portal's hybrid palette is built from) and a minimal `_layout.tsx` +
 `index.tsx`. No role-based login, route/pickup/weight/payment flows exist here yet.
 
-## Remaining work (as of 2026-07-22)
+## Remaining work (as of 2026-07-26)
 
 **See `PLAN.md` at the repo root for the phased execution roadmap** (schema → auth slice →
 module-by-module vertical slices → mobile), with per-phase done-criteria and checkboxes.
@@ -292,16 +324,23 @@ module-by-module vertical slices → mobile), with per-phase done-criteria and c
 abandoned** — take nothing from it. All backend, database, and mobile work is built fresh on
 this branch. Do not propose merging or cherry-picking from it.
 
-Two facts that shaped the sequencing — **both now resolved by the auth slice**:
+Two facts that shaped the sequencing — **both resolved by the auth slice, and the seam is now
+proven end-to-end by the Collections slice**:
 
-1. **The portal now has a data-fetching seam.** It was previously fixture-only (no `services/`
-   layer, zero `useQuery` calls). The auth slice built that seam — `src/lib/api.ts` +
-   `src/services/` — so wiring the remaining modules is now *using* it, not building it. TanStack
-   Query is still installed and `QueryClientProvider` wired in `src/main.tsx` for that follow-on
-   work; the rest of the pages still import static fixtures until each is migrated.
-2. **The schema no longer blocks auth.** The `users.role` (and `factory_employees.role`) CHECK
-   constraints were extended to include `factory_officer` and `factory_manager`, so all three
-   factory roles authenticate. The broader routes/pickup schema reconciliation is still pending.
+1. **The portal has a data-fetching seam, and it's no longer just auth-only.** It was previously
+   fixture-only (no `services/` layer, zero `useQuery` calls). The auth slice built the seam
+   (`src/lib/api.ts` + `src/services/`); Collections (2026-07-26) is the first module besides auth
+   to actually use it (`src/services/collections.ts` + `useQuery`/`useMutation`), confirming the
+   pattern holds for a full read/write module, not just login. Every module after Collections
+   (Estates, Employees, Fertilizer, Reports, Administration) repeats the same recipe — see
+   "Modules, in dependency order" in `PLAN.md` Phase 2. The remaining pages still import static
+   fixtures until each is migrated in turn.
+2. **The schema no longer blocks auth**, and the Collections table is now reconciled to the
+   photo-evidence design too. The `users.role` (and `factory_employees.role`) CHECK constraints
+   were extended to include `factory_officer` and `factory_manager`, so all three factory roles
+   authenticate. `tea_collection_records` was rebuilt 2026-07-26 to drop the old OTP-based lineage
+   and match the portal's contract 1:1 (see Database status above). The broader Route/Pickup
+   state-machine schema (mobile-driven) is still pending.
 
 Dev-environment note: `main.ts` CORS tolerates Vite's port drift — in dev it accepts any
 `localhost`/`127.0.0.1` port (Vite bumps 5173 → 5174 → … whenever a port is taken), while
@@ -311,3 +350,9 @@ not cookies.
 Open business items still unresolved and surfaced in the UI: bank-charge owner, ad-hoc vs
 request-linked fertilizer dispatch, beneficiary-items scope. Deferred a11y polish from the
 2026-07-18 review: modal focus trap, DataTable keyboard rows, tab ARIA wiring, Toggle hit area.
+
+Deferred from the Collections slice (2026-07-26), noted as seams rather than gaps: auto-generating
+a `complaint` on weight mismatch (currently display-only on the record); a real `audit_logs` table
+for Flag for Correction (currently appended to the record's own `timeline`, which the detail
+page's per-status lookup doesn't yet render as a distinct row — lands with Administration, Phase
+2.6); Cloudinary photo upload (the mobile capture path — `photos` is JSONB metadata for now).

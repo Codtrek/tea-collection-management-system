@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { useToast } from '@/components/ui/Toast'
+import * as collectionsService from '@/services/collections'
 import { ESTATES } from '@/features/estates/data'
 
 /*
@@ -37,8 +38,8 @@ const ROUTE_AGENTS: Record<string, string> = {
 
 export function CollectionExceptionEntryPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { toast } = useToast()
-  const [saving, setSaving] = useState(false)
 
   const {
     register,
@@ -54,13 +55,29 @@ export function CollectionExceptionEntryPage() {
   const estate = ESTATES.find((e) => e.id === values.estateId)
   const agent = estate ? ROUTE_AGENTS[estate.route] : undefined
 
-  const onSubmit = (data: ExceptionForm) => {
-    setSaving(true)
-    setTimeout(() => {
+  const createMutation = useMutation({
+    mutationFn: (data: ExceptionForm) => {
+      const selectedEstate = ESTATES.find((e) => e.id === data.estateId)!
+      return collectionsService.createException({
+        estateId: selectedEstate.id,
+        estateName: selectedEstate.estateName,
+        route: selectedEstate.route,
+        agent: ROUTE_AGENTS[selectedEstate.route],
+        reportedWeight: data.reportedWeight,
+        date: data.date,
+        reason: data.reason,
+      })
+    },
+    onSuccess: () => {
       toast('Logged — awaiting agent confirmation')
-      void data
+      void queryClient.invalidateQueries({ queryKey: ['collections'] })
       navigate('/collections')
-    }, 600)
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not log this entry', 'danger'),
+  })
+
+  const onSubmit = (data: ExceptionForm) => {
+    createMutation.mutate(data)
   }
 
   return (
@@ -140,10 +157,10 @@ export function CollectionExceptionEntryPage() {
           />
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button type="button" variant="secondary" onClick={() => navigate('/collections')} disabled={saving}>
+            <Button type="button" variant="secondary" onClick={() => navigate('/collections')} disabled={createMutation.isPending}>
               Cancel
             </Button>
-            <Button type="submit" loading={saving}>
+            <Button type="submit" loading={createMutation.isPending}>
               Save as Pending
             </Button>
           </div>
