@@ -18,14 +18,44 @@ CREATE TABLE users (
 CREATE TABLE tea_estate_owners (
     id      SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
-    name    VARCHAR(100) NOT NULL
+    name    VARCHAR(100) NOT NULL,
+    nic     VARCHAR(20),
+    contact VARCHAR(15),
+    email   VARCHAR(100)
 );
 
+-- Extended 2026-07-26 (Estates + Payments vertical slice) to carry the web
+-- portal's `EstateOwner` contract in full — route is system-assigned at
+-- registration (never manually picked, §Estates architecture decision) and
+-- denormalized alongside route_id the same way tea_collection_records does.
+-- Bank fields are nullable: an estate with no bank details on file is
+-- automatically excluded from settlement runs (UC-054 exception), never
+-- blocked from registering.
 CREATE TABLE estates (
-    id       SERIAL PRIMARY KEY,
-    owner_id INTEGER NOT NULL REFERENCES tea_estate_owners(id),
-    name     VARCHAR(100) NOT NULL,
-    location TEXT NOT NULL
+    id                 SERIAL PRIMARY KEY,
+    owner_id           INTEGER NOT NULL REFERENCES tea_estate_owners(id),
+    name               VARCHAR(100) NOT NULL,
+    location           TEXT NOT NULL,
+    address            TEXT,
+    route_id           INTEGER, -- FK to routes(id) added below (routes is defined later in this file)
+    route_name         VARCHAR(100),
+    self_delivery      BOOLEAN NOT NULL DEFAULT FALSE, -- exempt from transport cost deduction
+    status             VARCHAR(20) NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'inactive')),
+    ytd_deliveries_kg  DECIMAL(10,2) NOT NULL DEFAULT 0,
+    bank_name          VARCHAR(100),
+    bank_branch        VARCHAR(100),
+    bank_account       VARCHAR(30),
+    last_updated_by    VARCHAR(100),
+    last_updated_on    TIMESTAMP,
+    created_at         TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE estate_documents (
+    id          SERIAL PRIMARY KEY,
+    estate_id   INTEGER NOT NULL REFERENCES estates(id),
+    name        VARCHAR(255) NOT NULL,
+    uploaded_on DATE NOT NULL DEFAULT CURRENT_DATE
 );
 
 CREATE TABLE estate_employees (
@@ -130,6 +160,10 @@ CREATE TABLE estate_route_mapping (
     factory_id INTEGER NOT NULL REFERENCES factories(id)
 );
 
+-- estates.route_id forward-references routes, defined just above.
+ALTER TABLE estates ADD CONSTRAINT estates_route_id_fkey
+    FOREIGN KEY (route_id) REFERENCES routes(id);
+
 -- ─── TEA COLLECTION WORKFLOW ─────────────────────────────────────
 -- Reconciled 2026-07-26 (collections vertical slice) to match the design
 -- decisions in Claude.md: photo evidence only, never OTP (§ Weight
@@ -225,6 +259,12 @@ CREATE TABLE complaints (
 );
 
 -- ─── PAYMENTS ────────────────────────────────────────────────────
+-- `monthly_payments` / `payment_deduction_items` below predate the Estates +
+-- Payments vertical slice (2026-07-26) and don't match the web portal's
+-- settlement contract (per-estate, per-period, with a transport/advance
+-- breakdown). Superseded for the portal's purposes by `settlements` below;
+-- left in place, unused, to avoid disturbing `fertilizer_charges`' only
+-- other referencer. See Claude.md's Payment calculation section.
 
 CREATE TABLE monthly_payments (
     id                    SERIAL PRIMARY KEY,
@@ -244,6 +284,51 @@ CREATE TABLE payment_deduction_items (
     monthly_payment_id   INTEGER NOT NULL REFERENCES monthly_payments(id),
     fertilizer_charge_id INTEGER NOT NULL REFERENCES fertilizer_charges(id),
     deducted_amount      DECIMAL(10,2) NOT NULL
+);
+
+-- `estate_advances` (EST-05/06) — money issued to an estate owner ahead of
+-- settlement, deducted at the next processed run for that estate.
+CREATE TABLE estate_advances (
+    id          VARCHAR(20) PRIMARY KEY, -- business key, e.g. 'EADV-2026-0031'
+    estate_id   INTEGER NOT NULL REFERENCES estates(id),
+    estate_name VARCHAR(100) NOT NULL,
+    amount      DECIMAL(12,2) NOT NULL,
+    reason      TEXT NOT NULL,
+    date_issued DATE NOT NULL,
+    issued_by   VARCHAR(100) NOT NULL,
+    status      VARCHAR(20) NOT NULL DEFAULT 'pending_deduction'
+        CHECK (status IN ('pending_deduction', 'deducted')),
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+
+-- `settlements` (EST-07/08) — one row per estate per period. Denormalized
+-- with snapshot rate/deduction values (mirrors the portal's fixture shape)
+-- rather than joined from grade_rates/fertilizer_dispatches, since neither
+-- of those exist yet (ADM-01, FERT — PLAN.md Phase 2.6/2.4). Net payable =
+-- gross − transport − fertilizer − advance; NO per-transaction bank charge
+-- is deducted (resolved 2026-07-26: the factory is billed a separate
+-- periodic platform fee instead — see Claude.md's Payment calculation
+-- section). Missing-bank estates are excluded from processing, not blocked
+-- from having a settlement computed (UC-054 exception).
+CREATE TABLE settlements (
+    id                   VARCHAR(20) PRIMARY KEY, -- business key, e.g. 'SET-2026-07-001'
+    estate_id            INTEGER NOT NULL REFERENCES estates(id),
+    estate_name          VARCHAR(100) NOT NULL,
+    period               VARCHAR(20) NOT NULL, -- e.g. 'July 2026'
+    super_kg             DECIMAL(10,2) NOT NULL DEFAULT 0,
+    normal_kg            DECIMAL(10,2) NOT NULL DEFAULT 0,
+    super_rate           DECIMAL(8,2) NOT NULL,
+    normal_rate          DECIMAL(8,2) NOT NULL,
+    transport_cost       DECIMAL(10,2) NOT NULL DEFAULT 0,
+    fertilizer_deduction DECIMAL(10,2) NOT NULL DEFAULT 0,
+    advance_deduction    DECIMAL(10,2) NOT NULL DEFAULT 0,
+    status               VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'processed')),
+    self_delivery        BOOLEAN NOT NULL DEFAULT FALSE,
+    missing_bank         BOOLEAN NOT NULL DEFAULT FALSE,
+    processed_by         VARCHAR(100),
+    processed_on         TIMESTAMP,
+    created_at           TIMESTAMP DEFAULT NOW()
 );
 
 -- ─── NOTIFICATIONS ────────────────────────────────────────────────
@@ -278,3 +363,7 @@ CREATE INDEX idx_notifications_user ON notifications(user_id);
 CREATE INDEX idx_notifications_is_read ON notifications(is_read);
 CREATE INDEX idx_monthly_payments_owner ON monthly_payments(owner_id);
 CREATE INDEX idx_monthly_payments_month ON monthly_payments(payment_month);
+CREATE INDEX idx_estate_documents_estate ON estate_documents(estate_id);
+CREATE INDEX idx_estate_advances_estate ON estate_advances(estate_id);
+CREATE INDEX idx_settlements_estate ON settlements(estate_id);
+CREATE INDEX idx_settlements_status ON settlements(status);

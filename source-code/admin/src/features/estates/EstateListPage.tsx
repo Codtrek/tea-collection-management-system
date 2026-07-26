@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Eye, Pencil, CircleSlash, Mountain } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Plus, Eye, Pencil, CircleSlash, Loader2, Mountain } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
+import { ErrorState } from '@/components/data/ErrorState'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -11,7 +13,7 @@ import { Select } from '@/components/ui/Select'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { ESTATES } from './data'
+import * as estatesService from '@/services/estates'
 import type { EstateOwner } from './types'
 import { formatWeight, initials } from '@/lib/format'
 
@@ -20,6 +22,7 @@ export function EstateListPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { can } = useAuth()
+  const queryClient = useQueryClient()
   const canManage = can('estateOwners', 'approve') // register/deactivate — Administrator
   const canEdit = can('estateOwners', 'edit')
 
@@ -28,9 +31,26 @@ export function EstateListPage() {
   const [status, setStatus] = useState('')
   const [deactivating, setDeactivating] = useState<EstateOwner | null>(null)
 
+  const {
+    data: estates,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({ queryKey: ['estates'], queryFn: estatesService.list })
+
+  const deactivateMutation = useMutation({
+    mutationFn: (id: string) => estatesService.deactivate(id),
+    onSuccess: (updated) => {
+      toast(`${updated.estateName} deactivated`, 'warning')
+      setDeactivating(null)
+      void queryClient.invalidateQueries({ queryKey: ['estates'] })
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not deactivate this estate', 'danger'),
+  })
+
   const rows = useMemo(
     () =>
-      ESTATES.filter((e) => {
+      (estates ?? []).filter((e) => {
         const q = search.toLowerCase()
         return (
           (e.estateName.toLowerCase().includes(q) || e.ownerName.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)) &&
@@ -38,8 +58,20 @@ export function EstateListPage() {
           (!status || e.status === status)
         )
       }),
-    [search, route, status],
+    [estates, search, route, status],
   )
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return <ErrorState title="Couldn't load estates" description="Something went wrong fetching the estate roster." onRetry={() => void refetch()} />
+  }
 
   const columns: Column<EstateOwner>[] = [
     {
@@ -88,7 +120,7 @@ export function EstateListPage() {
           placeholder="All routes"
           value={route}
           onChange={(e) => setRoute(e.target.value)}
-          options={[...new Set(ESTATES.map((e) => e.route))].sort().map((r) => ({ value: r, label: r }))}
+          options={[...new Set((estates ?? []).map((e) => e.route))].sort().map((r) => ({ value: r, label: r }))}
         />
         <Select
           placeholder="All statuses"
@@ -125,10 +157,8 @@ export function EstateListPage() {
       <LightConfirmModal
         open={!!deactivating}
         onClose={() => setDeactivating(null)}
-        onConfirm={() => {
-          toast(`${deactivating?.estateName} deactivated`, 'warning')
-          setDeactivating(null)
-        }}
+        onConfirm={() => deactivating && deactivateMutation.mutate(deactivating.id)}
+        loading={deactivateMutation.isPending}
         tone="danger"
         title="Deactivate estate owner"
         confirmLabel="Deactivate"

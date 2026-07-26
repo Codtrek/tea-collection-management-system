@@ -130,13 +130,15 @@ sidebar (proving the permission matrix runs off the server-provided role).
 
 Order is by dependency, not by sidebar order:
 
-- [ ] **2.1 Collections (COL-01..04)** — the core domain; exercises the Route/Pickup/Collection
+- [x] **2.1 Collections (COL-01..04)** — the core domain; exercises the Route/Pickup/Collection
       state machines. Preserve: COL-02 is a *provisional exception entry*, never a weight
       override (only agents enter actual weight); Confirmed records stay locked behind the
-      Flag-for-Correction audit path.
-- [ ] **2.2 Estates + Payments (EST-01..09)** — settlement math needs collection data to exist
+      Flag-for-Correction audit path. Done 2026-07-26, `feature/collections-backend`.
+- [x] **2.2 Estates + Payments (EST-01..09)** — settlement math needs collection data to exist
       first. Resolve the ~Rs. 3 bank-charge open item here (currently shown as a note, never
-      deducted).
+      deducted). Done 2026-07-26, `feature/estates-payments-backend` — resolved: never deducted
+      from estate owners, factory billed a separate periodic fee instead. Settlement processing
+      is done; auto-generation from live data is deferred to when 2.4/2.6 land (see Claude.md).
 - [ ] **2.3 Employees (EMP-01..14)** — largest surface, fully greenfield backend
       (attendance, payroll, advances).
 - [ ] **2.4 Fertilizer (FERT-01..04)** — feeds the estate settlement deduction breakdown.
@@ -169,7 +171,8 @@ Fold these into whichever phase touches the relevant code.
 - [ ] `Toggle` hit area is 20×36px, under the 44px minimum
 
 **Open business questions** — decide before the module that needs them ships:
-- [ ] Who absorbs the ~Rs. 3 per-transaction bank charge (blocks 2.2)
+- [x] Who absorbs the ~Rs. 3 per-transaction bank charge — resolved 2026-07-26: nobody, it's
+      never deducted from estate owners/employees; the factory is billed a separate periodic fee.
 - [ ] Ad-hoc vs request-linked fertilizer dispatch (blocks 2.4)
 - [ ] Beneficiary-items scope
 

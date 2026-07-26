@@ -14,7 +14,9 @@ described reconciling with it; that is no longer the plan. Updated 2026-07-22 to
 Authentication vertical slice (committed on `feature/auth-slice`) and the Fertilizer
 stock-position rework + dev-CORS fix (committed on `feature/fertilizer-stock-position`). Updated
 2026-07-26 to record the Tea Leaf Collection vertical slice (`feature/collections-slice`) — the
-first full DB→backend→portal slice built after auth, per `PLAN.md` Phase 2.1.
+first full DB→backend→portal slice built after auth, per `PLAN.md` Phase 2.1. Updated again
+2026-07-26 to record the Estates + Payments vertical slice (`feature/estates-payments-backend`,
+`PLAN.md` Phase 2.2) and resolve the ~Rs. 3 bank-charge open item.
 
 ## What this system does
 
@@ -173,8 +175,12 @@ Employee payroll follows a parallel but separate calculation: shift-based pay (D
 Night/Night OT, different rates), with employee-requested salary advances deducted at month end,
 also exportable as a bank payment file.
 
-The ~Rs. 3 per-transaction bank charge is a **per-transaction transfer fee**, deducted from each
-payee's net payable (resolved design decision — don't model it as a flat file-processing fee).
+The ~Rs. 3 per-transaction bank charge is **not deducted from any payee** (resolved 2026-07-26,
+Estates + Payments slice): estate owners and employees are never charged a per-transaction fee.
+Instead the **factory** is billed a separate periodic platform fee (6-monthly or annually) —
+that's SaaS billing, unrelated to the tea settlement/payroll math above, and out of scope for the
+payment calculation itself. Earlier drafts of this file described this charge as a per-transaction
+deduction from net payable; that direction was superseded by this decision.
 
 ---
 
@@ -227,9 +233,10 @@ shared `ReportViewer` + `ReportActionsBar`; RPT-04 Daily Expense Entry fills the
 Administration (ADM-01..04 behind `AdminGuard`: Factory Setup with VERSIONED grade-rate history,
 Users & Roles with the editable permission matrix that the data-driven `permissions.ts` model
 was built for, System Settings, read-only Audit Logs). Design decisions honored in the build:
-the ~Rs. 3 bank charge is displayed as an unresolved note in EST-08 (never deducted); grade
-rates are versioned by effective date so past settlements never recalculate; reports aggregate
-Confirmed collection records only. Permissions stay data-driven (`src/context/permissions.ts`).
+the ~Rs. 3 bank charge is never deducted from estate owners or employees (resolved 2026-07-26 —
+see Payment calculation above); grade rates are versioned by effective date so past settlements
+never recalculate; reports aggregate Confirmed collection records only. Permissions stay
+data-driven (`src/context/permissions.ts`).
 Most data is still mock (`features/*/data.ts`), shaped to match a future REST contract — wiring the
 remaining modules to the real backend is the remaining web-portal work. `ComingSoon` stub was
 removed. Build + lint clean. See `source-code/admin/AGENTS.md` for conventions.
@@ -262,7 +269,28 @@ Confirmation** with no authoritative weight (§7.1). `features/collections/data.
 **intentionally kept** — `features/estates/EstateDetailPage.tsx`'s `collectionsForEstate` still
 depends on it until the Estates module (2.2) is wired.
 
-**Backend (`source-code/backend/`) — auth + collections slices built, rest still to come.**
+**Estate Owner wired to the real backend (2026-07-26, `feature/estates-payments-backend`) —
+`PLAN.md` Phase 2.2, second module after Collections.** All nine screens (EST-01 list, EST-02
+registration, EST-03 detail, EST-04 edit, EST-05 advance list, EST-06 issue advance, EST-07
+settlement list, EST-08 process settlement) read/write through `src/services/estates.ts` instead
+of `features/estates/data.ts`. Route assignment is server-side (least-loaded of the seeded routes
+— no geo data exists yet to route by estate location) and stays read-only after registration, per
+the architecture decision. Server-side enforces what the UI already implied: register/deactivate
+are Administrator-only (403 otherwise); Manager is read-only on every write; settlement
+processing excludes missing-bank estates rather than blocking the run (UC-054) and flips the
+processed estates' pending advances to Deducted; re-processing when nothing is eligible → 409.
+**The ~Rs. 3 bank charge is resolved**: no per-transaction deduction anywhere in the settlement
+math — see Payment calculation above. Settlements are **process-only this slice**: rows are
+denormalized with snapshot rate/deduction values (seeded, mirroring the old fixture) rather than
+auto-generated from live data, since that needs `grade_rates` (ADM-01, Phase 2.6) and Fertilizer
+dispatch linkage (Phase 2.4), neither built yet. EST-09 Analytics stays on mock data (self-
+contained charts, no backend dependency). `features/estates/data.ts` is **intentionally kept**
+(trimmed to just the `ESTATES` array) — `EstateAnalyticsPage`, `CollectionExceptionEntryPage`, and
+Fertilizer's `LogRequestPage` still resolve estate/route/agent from it until those flows wire to
+the real API; `grossRevenue`/`netPayable` moved to the new `features/estates/calc.ts`.
+
+**Backend (`source-code/backend/`) — auth, collections, and estates slices built, rest still to
+come.**
 The default NestJS scaffold (`app.controller.ts`, `app.service.ts`, their spec, and the e2e test)
 was **deleted**; `package.json` now depends on TypeORM, pg, @nestjs/jwt, passport-jwt, bcrypt, and
 class-validator. Built:
@@ -279,17 +307,29 @@ class-validator. Built:
   (mirrors `auth/role-map.ts`'s pattern) — the DB stores snake_case, the API returns the portal's
   exact `CollectionRecord` shape (Title Case statuses, `photos`/`timeline` as JSONB passed through
   near-verbatim).
+- **Estates** (`src/estates/`): `GET/POST/PUT /estates(/:id)`, `PATCH /estates/:id/deactivate`,
+  `GET/POST /estates/advances`, `GET /estates/settlements`, `POST /estates/settlements/process`,
+  all JWT-guarded. Business rules (Administrator-only register/deactivate, Manager-read-only,
+  missing-bank exclusion, advance-flip-to-Deducted, least-loaded route auto-assignment) live in
+  `estates.service.ts` with unit tests in `estates.service.spec.ts`. DB↔portal mapping in
+  `estate-map.ts` (same pattern as `collection-map.ts`), including `formatEstateId`/
+  `parseEstateId` for the `EST-0001`-style business id (formatted from the `estates.id` serial,
+  not stored). New estate owners get a `users` row provisioned via `UsersService.createUser`
+  (phone-keyed, random password — no distribution flow yet, deferred to mobile login, Phase 3).
 - **Seed** (`src/seed.ts`, `npm run seed`, idempotent): three factory users, DEV creds
   `0771234567` / `Password123!` (admin / officer / manager on `…67/68/69`), plus reference
-  estates/routes/collection agents and 8 collection records spanning every status.
+  routes/collection agents, 5 estates (1 inactive, 1 missing-bank) with owners/documents, 3 estate
+  advances, 6 settlements, and 8 collection records — spanning every status each module needs.
 - **Config**: `app.module.ts` wires ConfigModule + TypeORM (`synchronize: false`,
   `autoLoadEntities`); `main.ts` has a global ValidationPipe and dev-tolerant CORS (see below).
 
-The routes / pickup-requests / estates / employees / payments modules are still to be written —
-see `PLAN.md` Phase 2.2 onward.
+The pickup-requests / employees / fertilizer / reports / administration modules are still to be
+written — see `PLAN.md` Phase 2.3 onward. (Route/Estate now have minimal real backing; the full
+Route/Pickup request state machine is still mobile-driven, Phase 3.)
 
 **Database (`source-code/database/init.sql`) — auth unblocked, collections reconciled to the
-photo-evidence design, broader Route/Pickup reconciliation still pending.** The `users.role`
+photo-evidence design, estates extended to the full EST-01..09 contract, broader Route/Pickup
+reconciliation still pending.** The `users.role`
 **and** `factory_employees.role` CHECK constraints were extended (2026-07-21) to include
 `factory_officer` and `factory_manager`, so the web portal's two non-admin roles now authenticate
 (this was `PLAN.md` Phase 0). On 2026-07-26 the old OTP-based collection lineage —
@@ -303,9 +343,19 @@ display columns, `photos`/`timeline` as JSONB. `complaints.collection_record_id`
 intentionally covers only what the web portal needs; the full Route/Pickup request state machine
 (estate-initiated requests, auto-assignment) is mobile-driven and still deferred to `PLAN.md`
 Phase 3 — `estate_route_mapping` and the broader `routes`/`route_stops`/`pickup_requests` model
-from the domain section above are not yet built. The local dev DB runs everything in an isolated
-`tea_authslice` schema; the older, more-advanced `tea` schema left over from the abandoned test01
-branch is untouched.
+from the domain section above are not yet built. On 2026-07-26 (same day, Estates + Payments
+slice) `tea_estate_owners` gained `nic`/`contact`/`email`, and `estates` gained the full EST-01..09
+contract (`address`, `route_id`/`route_name`, `self_delivery`, `status`, `ytd_deliveries_kg`,
+`bank_name`/`bank_branch`/`bank_account`, audit columns) — `route_id` forward-references `routes`
+(defined later in `init.sql`), so its FK constraint is added via a separate `ALTER TABLE` right
+after `routes` is created rather than inline. Three new tables: `estate_documents` (metadata only,
+same deferred-storage pattern as Collections' photos), `estate_advances`, and `settlements`
+(denormalized with snapshot rate/deduction values — no join to `grade_rates` or
+`fertilizer_dispatches`, neither exists yet). The pre-existing `monthly_payments` /
+`payment_deduction_items` skeleton predates this slice and doesn't match the portal's per-estate
+settlement contract — left in place, unused, rather than dropped (see the Payments section
+comment in `init.sql`). The local dev DB runs everything in an isolated `tea_authslice` schema;
+the older, more-advanced `tea` schema left over from the abandoned test01 branch is untouched.
 
 Infra is already in place and needs no work: `source-code/docker-compose.yml` defines postgres 16,
 redis, api, admin, and nginx.
@@ -325,14 +375,14 @@ abandoned** — take nothing from it. All backend, database, and mobile work is 
 this branch. Do not propose merging or cherry-picking from it.
 
 Two facts that shaped the sequencing — **both resolved by the auth slice, and the seam is now
-proven end-to-end by the Collections slice**:
+proven end-to-end by the Collections and Estates slices**:
 
-1. **The portal has a data-fetching seam, and it's no longer just auth-only.** It was previously
-   fixture-only (no `services/` layer, zero `useQuery` calls). The auth slice built the seam
-   (`src/lib/api.ts` + `src/services/`); Collections (2026-07-26) is the first module besides auth
-   to actually use it (`src/services/collections.ts` + `useQuery`/`useMutation`), confirming the
-   pattern holds for a full read/write module, not just login. Every module after Collections
-   (Estates, Employees, Fertilizer, Reports, Administration) repeats the same recipe — see
+1. **The portal has a data-fetching seam, and two modules besides auth now prove it holds.** It
+   was previously fixture-only (no `services/` layer, zero `useQuery` calls). The auth slice built
+   the seam (`src/lib/api.ts` + `src/services/`); Collections (2026-07-26) was the first module to
+   actually use it, and Estates (2026-07-26, same day) is the second — including a money-moving
+   write path (advances, settlement processing), not just CRUD. Every module after Estates
+   (Employees, Fertilizer, Reports, Administration) repeats the same recipe — see
    "Modules, in dependency order" in `PLAN.md` Phase 2. The remaining pages still import static
    fixtures until each is migrated in turn.
 2. **The schema no longer blocks auth**, and the Collections table is now reconciled to the
@@ -347,12 +397,23 @@ Dev-environment note: `main.ts` CORS tolerates Vite's port drift — in dev it a
 production stays pinned to `CORS_ORIGIN`. Safe because the JWT rides the `Authorization` header,
 not cookies.
 
-Open business items still unresolved and surfaced in the UI: bank-charge owner, ad-hoc vs
-request-linked fertilizer dispatch, beneficiary-items scope. Deferred a11y polish from the
-2026-07-18 review: modal focus trap, DataTable keyboard rows, tab ARIA wiring, Toggle hit area.
+Open business items still unresolved and surfaced in the UI: ad-hoc vs request-linked fertilizer
+dispatch, beneficiary-items scope. (The ~Rs. 3 bank-charge owner was resolved 2026-07-26 — see
+Payment calculation above.) Deferred a11y polish from the 2026-07-18 review: modal focus trap,
+DataTable keyboard rows, tab ARIA wiring, Toggle hit area.
 
 Deferred from the Collections slice (2026-07-26), noted as seams rather than gaps: auto-generating
 a `complaint` on weight mismatch (currently display-only on the record); a real `audit_logs` table
 for Flag for Correction (currently appended to the record's own `timeline`, which the detail
 page's per-status lookup doesn't yet render as a distinct row — lands with Administration, Phase
 2.6); Cloudinary photo upload (the mobile capture path — `photos` is JSONB metadata for now).
+
+Deferred from the Estates slice (2026-07-26), noted as seams rather than gaps: settlement
+**generation** (currently seeded/process-only — auto-generating a run from live collections needs
+`grade_rates` from ADM-01 and Fertilizer dispatch linkage from Phase 2.4, neither built); document
+**upload** (`estate_documents` is metadata only, same deferred-storage pattern as Collections'
+photos — no Cloudinary yet); estate-owner **login credentials** (a `users` row is provisioned with
+a random password on registration, but there's no distribution/reset flow — lands with the mobile
+app, Phase 3); EST-09 Analytics stays on mock data; and the `ESTATES` fixture in
+`features/estates/data.ts` is still the estate/route/agent source for Collections' exception-entry
+flow and Fertilizer's request-logging flow, both out of scope for this slice.

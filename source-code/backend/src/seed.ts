@@ -38,36 +38,284 @@ const SEED_USERS = [
 
 const ROUTE_NAMES = ['Route 2', 'Route 3', 'Route 5'] as const;
 
-const ESTATE_SEEDS = [
+interface SeedDocument {
+  name: string;
+  uploadedOn: string;
+}
+
+interface SeedEstate {
+  ownerPhone: string;
+  ownerName: string;
+  nic: string;
+  contact: string;
+  email?: string;
+  estateName: string;
+  location: string;
+  address: string;
+  route: string;
+  selfDelivery: boolean;
+  status: 'active' | 'inactive';
+  ytdDeliveriesKg: number;
+  bank: { bank: string; branch: string; account: string };
+  documents: SeedDocument[];
+  lastUpdatedBy?: string;
+  lastUpdatedOn?: string;
+}
+
+// Mirrors the portal's former `features/estates/data.ts` ESTATES fixture 1:1
+// (Estates + Payments vertical slice, 2026-07-26).
+const ESTATE_SEEDS: SeedEstate[] = [
   {
     ownerPhone: '0777000001',
     ownerName: 'K. Perera',
+    nic: '197845678123',
+    contact: '0772345678',
+    email: 'kperera@gmail.com',
     estateName: 'Green Valley Estate',
     location: 'Nuwara Eliya',
+    address: 'Green Valley, Kandapola Rd, Nuwara Eliya',
     route: 'Route 3',
+    selfDelivery: false,
+    status: 'active',
+    ytdDeliveriesKg: 12480,
+    bank: {
+      bank: 'Bank of Ceylon',
+      branch: 'Nuwara Eliya',
+      account: '8802345671',
+    },
+    documents: [
+      { name: 'Estate ownership deed.pdf', uploadedOn: '2025-02-14' },
+      { name: 'NIC copy.pdf', uploadedOn: '2025-02-14' },
+    ],
+    lastUpdatedBy: 'A. Bandara',
+    lastUpdatedOn: '2026-06-30',
   },
   {
     ownerPhone: '0777000002',
     ownerName: 'M. Dissanayake',
+    nic: '198212345987',
+    contact: '0713456789',
     estateName: 'Hilltop Estate',
-    location: 'Nuwara Eliya',
+    location: 'Hatton',
+    address: 'Hilltop Division, Dickoya Rd, Hatton',
     route: 'Route 5',
+    selfDelivery: false,
+    status: 'active',
+    ytdDeliveriesKg: 9310,
+    bank: { bank: "People's Bank", branch: 'Hatton', account: '1104567892' },
+    documents: [
+      { name: 'Estate ownership deed.pdf', uploadedOn: '2025-03-02' },
+    ],
   },
   {
     ownerPhone: '0777000003',
     ownerName: 'P. Wickramasinghe',
+    nic: '196934567012',
+    contact: '0764567890',
+    email: 'mountrest@yahoo.com',
     estateName: 'Mount Rest Estate',
-    location: 'Nuwara Eliya',
+    location: 'Kandy',
+    address: 'Mount Rest, Pussellawa Rd, Kandy',
     route: 'Route 2',
+    selfDelivery: true,
+    status: 'active',
+    ytdDeliveriesKg: 11020,
+    bank: { bank: 'Commercial Bank', branch: 'Kandy', account: '7709876543' },
+    documents: [
+      { name: 'Estate ownership deed.pdf', uploadedOn: '2024-11-20' },
+      { name: 'Self-delivery agreement.pdf', uploadedOn: '2025-01-08' },
+    ],
   },
   {
     ownerPhone: '0777000004',
     ownerName: 'D. Herath',
+    nic: '199056789234',
+    contact: '0785678901',
     estateName: 'Silver Peak Estate',
-    location: 'Nuwara Eliya',
+    location: 'Talawakelle',
+    address: 'Silver Peak Division, Talawakelle',
     route: 'Route 3',
+    selfDelivery: false,
+    status: 'active',
+    ytdDeliveriesKg: 4890,
+    // Missing bank details — excluded from settlement runs until added (UC-054 exception).
+    bank: { bank: '', branch: '', account: '' },
+    documents: [{ name: 'NIC copy.pdf', uploadedOn: '2026-01-15' }],
   },
-] as const;
+  {
+    ownerPhone: '0777000005',
+    ownerName: 'J. Kumara',
+    nic: '197512398765',
+    contact: '0726789012',
+    estateName: 'Riverside Estate',
+    location: 'Gampola',
+    address: 'Riverside, Nawalapitiya Rd, Gampola',
+    route: 'Route 2',
+    selfDelivery: false,
+    status: 'inactive',
+    ytdDeliveriesKg: 1560,
+    bank: { bank: 'Sampath Bank', branch: 'Gampola', account: '3301239876' },
+    documents: [
+      { name: 'Estate ownership deed.pdf', uploadedOn: '2024-08-05' },
+    ],
+    lastUpdatedBy: 'A. Bandara',
+    lastUpdatedOn: '2026-04-12',
+  },
+];
+
+interface SeedAdvance {
+  id: string;
+  estateName: string;
+  amount: number;
+  reason: string;
+  dateIssued: string;
+  issuedBy: string;
+  status: 'pending_deduction' | 'deducted';
+}
+
+// Mirrors the portal's former ESTATE_ADVANCES fixture 1:1.
+const ADVANCE_SEEDS: SeedAdvance[] = [
+  {
+    id: 'EADV-2026-0031',
+    estateName: 'Green Valley Estate',
+    amount: 50000,
+    reason: 'Pre-season plucking labour costs',
+    dateIssued: '2026-07-05',
+    issuedBy: 'S. Fernando',
+    status: 'pending_deduction',
+  },
+  {
+    id: 'EADV-2026-0028',
+    estateName: 'Hilltop Estate',
+    amount: 30000,
+    reason: 'Fertilizer application labour',
+    dateIssued: '2026-06-21',
+    issuedBy: 'S. Fernando',
+    status: 'pending_deduction',
+  },
+  {
+    id: 'EADV-2026-0022',
+    estateName: 'Mount Rest Estate',
+    amount: 40000,
+    reason: 'Transport vehicle repair',
+    dateIssued: '2026-05-30',
+    issuedBy: 'A. Bandara',
+    status: 'deducted',
+  },
+];
+
+interface SeedSettlement {
+  id: string;
+  estateName: string;
+  period: string;
+  superKg: number;
+  normalKg: number;
+  superRate: number;
+  normalRate: number;
+  transportCost: number;
+  fertilizerDeduction: number;
+  advanceDeduction: number;
+  status: 'pending' | 'processed';
+  selfDelivery: boolean;
+  missingBank?: boolean;
+  processedBy?: string;
+  processedOn?: string;
+}
+
+// Mirrors the portal's former SETTLEMENTS fixture 1:1 (July 2026 run + 2
+// already-processed June 2026 rows). Rates from Factory Setup (ADM-01, not
+// built yet): Super Rs. 185/kg, Normal Rs. 95/kg effective 01/07/2026.
+const SETTLEMENT_SEEDS: SeedSettlement[] = [
+  {
+    id: 'SET-2026-07-001',
+    estateName: 'Green Valley Estate',
+    period: 'July 2026',
+    superKg: 408,
+    normalKg: 175,
+    superRate: 185,
+    normalRate: 95,
+    transportCost: 8400,
+    fertilizerDeduction: 22800,
+    advanceDeduction: 50000,
+    status: 'pending',
+    selfDelivery: false,
+  },
+  {
+    id: 'SET-2026-07-002',
+    estateName: 'Hilltop Estate',
+    period: 'July 2026',
+    superKg: 120,
+    normalKg: 277,
+    superRate: 185,
+    normalRate: 95,
+    transportCost: 6100,
+    fertilizerDeduction: 11400,
+    advanceDeduction: 30000,
+    status: 'pending',
+    selfDelivery: false,
+  },
+  {
+    id: 'SET-2026-07-003',
+    estateName: 'Mount Rest Estate',
+    period: 'July 2026',
+    superKg: 188,
+    normalKg: 164,
+    superRate: 185,
+    normalRate: 95,
+    transportCost: 0,
+    fertilizerDeduction: 15200,
+    advanceDeduction: 0,
+    status: 'pending',
+    selfDelivery: true,
+  },
+  {
+    id: 'SET-2026-07-004',
+    estateName: 'Silver Peak Estate',
+    period: 'July 2026',
+    superKg: 96,
+    normalKg: 0,
+    superRate: 185,
+    normalRate: 95,
+    transportCost: 3800,
+    fertilizerDeduction: 3800,
+    advanceDeduction: 0,
+    status: 'pending',
+    selfDelivery: false,
+    missingBank: true,
+  },
+  {
+    id: 'SET-2026-06-001',
+    estateName: 'Green Valley Estate',
+    period: 'June 2026',
+    superKg: 380,
+    normalKg: 214,
+    superRate: 180,
+    normalRate: 92,
+    transportCost: 7900,
+    fertilizerDeduction: 0,
+    advanceDeduction: 0,
+    status: 'processed',
+    selfDelivery: false,
+    processedBy: 'A. Bandara',
+    processedOn: '2026-07-01',
+  },
+  {
+    id: 'SET-2026-06-003',
+    estateName: 'Mount Rest Estate',
+    period: 'June 2026',
+    superKg: 240,
+    normalKg: 198,
+    superRate: 180,
+    normalRate: 92,
+    transportCost: 0,
+    fertilizerDeduction: 7600,
+    advanceDeduction: 40000,
+    status: 'processed',
+    selfDelivery: true,
+    processedBy: 'A. Bandara',
+    processedOn: '2026-07-01',
+  },
+];
 
 const AGENT_SEEDS = [
   { phone: '0777000011', name: 'R. Senanayake', nic: '198712345701' },
@@ -509,21 +757,128 @@ async function seed() {
       const ownerUserId = ownerUser.rows[0].id;
 
       const owner = await client.query<{ id: number }>(
-        `INSERT INTO tea_estate_owners (user_id, name) VALUES ($1, $2)
-         ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name
+        `INSERT INTO tea_estate_owners (user_id, name, nic, contact, email)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id) DO UPDATE SET
+           name = EXCLUDED.name, nic = EXCLUDED.nic, contact = EXCLUDED.contact, email = EXCLUDED.email
          RETURNING id`,
-        [ownerUserId, e.ownerName],
+        [ownerUserId, e.ownerName, e.nic, e.contact, e.email ?? null],
       );
       const ownerId = owner.rows[0].id;
 
-      estateIds[e.estateName] = await findOrCreate(
+      const estateId = await findOrCreate(
         client,
         `SELECT id FROM estates WHERE owner_id = $1 AND name = $2`,
         [ownerId, e.estateName],
         `INSERT INTO estates (owner_id, name, location) VALUES ($1, $2, $3) RETURNING id`,
         [ownerId, e.estateName, e.location],
       );
+      estateIds[e.estateName] = estateId;
+
+      const routeId = routeIds[e.route] ?? null;
+      await client.query(
+        `UPDATE estates SET
+           location = $2, address = $3, route_id = $4, route_name = $5,
+           self_delivery = $6, status = $7, ytd_deliveries_kg = $8,
+           bank_name = $9, bank_branch = $10, bank_account = $11,
+           last_updated_by = $12, last_updated_on = $13
+         WHERE id = $1`,
+        [
+          estateId,
+          e.location,
+          e.address,
+          routeId,
+          e.route,
+          e.selfDelivery,
+          e.status,
+          e.ytdDeliveriesKg,
+          e.bank.bank || null,
+          e.bank.branch || null,
+          e.bank.account || null,
+          e.lastUpdatedBy ?? null,
+          e.lastUpdatedOn ?? null,
+        ],
+      );
+
+      for (const doc of e.documents) {
+        const existing = await client.query(
+          `SELECT id FROM estate_documents WHERE estate_id = $1 AND name = $2`,
+          [estateId, doc.name],
+        );
+        if (!existing.rows[0]) {
+          await client.query(
+            `INSERT INTO estate_documents (estate_id, name, uploaded_on) VALUES ($1, $2, $3)`,
+            [estateId, doc.name, doc.uploadedOn],
+          );
+        }
+      }
     }
+
+    console.log(
+      `Seeded ${ESTATE_SEEDS.length} estates (with owners, documents)`,
+    );
+
+    for (const a of ADVANCE_SEEDS) {
+      await client.query(
+        `INSERT INTO estate_advances
+           (id, estate_id, estate_name, amount, reason, date_issued, issued_by, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET
+           estate_id = EXCLUDED.estate_id, estate_name = EXCLUDED.estate_name,
+           amount = EXCLUDED.amount, reason = EXCLUDED.reason,
+           date_issued = EXCLUDED.date_issued, issued_by = EXCLUDED.issued_by,
+           status = EXCLUDED.status`,
+        [
+          a.id,
+          estateIds[a.estateName],
+          a.estateName,
+          a.amount,
+          a.reason,
+          a.dateIssued,
+          a.issuedBy,
+          a.status,
+        ],
+      );
+    }
+    console.log(`Seeded ${ADVANCE_SEEDS.length} estate advances`);
+
+    for (const s of SETTLEMENT_SEEDS) {
+      await client.query(
+        `INSERT INTO settlements
+           (id, estate_id, estate_name, period, super_kg, normal_kg, super_rate, normal_rate,
+            transport_cost, fertilizer_deduction, advance_deduction, status, self_delivery,
+            missing_bank, processed_by, processed_on)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+         ON CONFLICT (id) DO UPDATE SET
+           estate_id = EXCLUDED.estate_id, estate_name = EXCLUDED.estate_name,
+           period = EXCLUDED.period, super_kg = EXCLUDED.super_kg, normal_kg = EXCLUDED.normal_kg,
+           super_rate = EXCLUDED.super_rate, normal_rate = EXCLUDED.normal_rate,
+           transport_cost = EXCLUDED.transport_cost,
+           fertilizer_deduction = EXCLUDED.fertilizer_deduction,
+           advance_deduction = EXCLUDED.advance_deduction, status = EXCLUDED.status,
+           self_delivery = EXCLUDED.self_delivery, missing_bank = EXCLUDED.missing_bank,
+           processed_by = EXCLUDED.processed_by, processed_on = EXCLUDED.processed_on`,
+        [
+          s.id,
+          estateIds[s.estateName],
+          s.estateName,
+          s.period,
+          s.superKg,
+          s.normalKg,
+          s.superRate,
+          s.normalRate,
+          s.transportCost,
+          s.fertilizerDeduction,
+          s.advanceDeduction,
+          s.status,
+          s.selfDelivery,
+          s.missingBank ?? false,
+          s.processedBy ?? null,
+          s.processedOn ?? null,
+        ],
+      );
+    }
+    console.log(`Seeded ${SETTLEMENT_SEEDS.length} settlements`);
 
     const agentIds: Record<string, number> = {};
     for (const a of AGENT_SEEDS) {

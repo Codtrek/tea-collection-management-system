@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Pencil, HandCoins, Banknote, CircleSlash, FileText, Eye, EyeOff, Truck } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Pencil, HandCoins, Banknote, CircleSlash, FileText, Eye, EyeOff, Loader2, Truck } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DetailPageWithTabs } from '@/components/patterns/DetailPageWithTabs'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
@@ -11,7 +12,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { ESTATES, advancesForEstate, settlementsForEstate, grossRevenue, netPayable } from './data'
+import * as estatesService from '@/services/estates'
+import { grossRevenue, netPayable } from './calc'
 import { collectionsForEstate } from '@/features/collections/data'
 import { COLLECTION_TONE } from '@/features/collections/status'
 import type { EstateAdvance, Settlement } from './types'
@@ -24,20 +26,55 @@ export function EstateDetailPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { can } = useAuth()
+  const queryClient = useQueryClient()
   const canEdit = can('estateOwners', 'edit')
   const canManage = can('estateOwners', 'approve')
 
   const [deactivating, setDeactivating] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
 
-  const estate = ESTATES.find((e) => e.id === id)
-  if (!estate) {
-    return <ErrorState title="Estate not found" description={`No estate owner with ID “${id}”.`} onRetry={() => navigate('/estates')} />
+  const {
+    data: estate,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['estate', id],
+    queryFn: () => estatesService.getById(id!),
+    enabled: !!id,
+  })
+  // Advances/settlements have no "for this estate" endpoint yet — fetch the
+  // (dev-scale) full lists and filter client-side, same shape the fixture gave.
+  const { data: allAdvances } = useQuery({ queryKey: ['estates', 'advances'], queryFn: estatesService.listAdvances })
+  const { data: allSettlements } = useQuery({ queryKey: ['estates', 'settlements'], queryFn: estatesService.listSettlements })
+
+  const deactivateMutation = useMutation({
+    mutationFn: (estateId: string) => estatesService.deactivate(estateId),
+    onSuccess: (updated) => {
+      toast(`${updated.estateName} deactivated`, 'warning')
+      setDeactivating(false)
+      void queryClient.invalidateQueries({ queryKey: ['estate', id] })
+      void queryClient.invalidateQueries({ queryKey: ['estates'] })
+      navigate('/estates')
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not deactivate this estate', 'danger'),
+  })
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError || !estate) {
+    return <ErrorState title="Estate not found" description={`No estate owner with ID “${id}”.`} onRetry={() => void refetch()} />
   }
 
   const deliveries = collectionsForEstate(estate.id)
-  const advances = advancesForEstate(estate.id)
-  const settlements = settlementsForEstate(estate.id)
+  const advances = (allAdvances ?? []).filter((a) => a.estateId === estate.id)
+  const settlements = (allSettlements ?? []).filter((s) => s.estateId === estate.id)
 
   const deliveryColumns: Column<CollectionRecord>[] = [
     { key: 'id', header: 'Delivery', render: (c) => <span className="id text-xs">{c.id}</span> },
@@ -269,11 +306,8 @@ export function EstateDetailPage() {
       <LightConfirmModal
         open={deactivating}
         onClose={() => setDeactivating(false)}
-        onConfirm={() => {
-          toast(`${estate.estateName} deactivated`, 'warning')
-          setDeactivating(false)
-          navigate('/estates')
-        }}
+        onConfirm={() => deactivateMutation.mutate(estate.id)}
+        loading={deactivateMutation.isPending}
         tone="danger"
         title="Deactivate estate owner"
         confirmLabel="Deactivate"

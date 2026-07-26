@@ -1,41 +1,71 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, ChevronDown, Info } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertTriangle, ChevronDown, Info, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { ErrorState } from '@/components/data/ErrorState'
 import { HighStakesConfirmFlow } from '@/components/patterns/HighStakesConfirmFlow'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { SETTLEMENTS, grossRevenue, netPayable } from './data'
+import * as estatesService from '@/services/estates'
+import { grossRevenue, netPayable } from './calc'
 import { formatCurrency, formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
 /*
   EST-08 — 2nd use of HighStakesConfirmFlow. Same expandable-breakdown pattern
   as Payroll Processing; missing-bank estates are excluded and flagged, not
-  blocked (UC-054). The ~Rs. 3 bank charge is an unresolved open item — shown
-  as an informational line, never deducted until decided.
+  blocked (UC-054). No per-transaction bank charge is deducted here — resolved
+  2026-07-26: the factory is billed a separate periodic platform fee instead
+  (see Claude.md's Payment calculation section).
 */
 export function SettlementProcessPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
-  const [processing, setProcessing] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  const pending = SETTLEMENTS.filter((s) => s.status === 'Pending')
+  const {
+    data: settlements,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({ queryKey: ['estates', 'settlements'], queryFn: estatesService.listSettlements })
+
+  const pending = (settlements ?? []).filter((s) => s.status === 'Pending')
   const included = pending.filter((s) => !s.missingBank)
   const excluded = pending.filter((s) => s.missingBank)
   const total = included.reduce((sum, s) => sum + netPayable(s), 0)
 
-  const process = () => {
-    setProcessing(true)
-    setTimeout(() => {
-      toast(`Settlement processed by ${user?.name} — ${formatCurrency(total)} across ${included.length} estates`)
+  const processMutation = useMutation({
+    mutationFn: () => estatesService.processSettlements(),
+    onSuccess: (processed) => {
+      const processedTotal = processed.reduce((sum, s) => sum + netPayable(s), 0)
+      toast(`Settlement processed by ${user?.name} — ${formatCurrency(processedTotal)} across ${processed.length} estates`)
+      void queryClient.invalidateQueries({ queryKey: ['estates', 'settlements'] })
+      void queryClient.invalidateQueries({ queryKey: ['estates', 'advances'] })
       navigate('/estates/settlements')
-    }, 700)
+    },
+    onError: (err) => {
+      setConfirming(false)
+      toast(err instanceof Error ? err.message : 'Could not process this settlement run', 'danger')
+    },
+  })
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return <ErrorState title="Couldn't load settlements" description="Something went wrong fetching payment settlements." onRetry={() => void refetch()} />
   }
 
   return (
@@ -123,12 +153,12 @@ export function SettlementProcessPage() {
         </div>
       </Card>
 
-      {/* Bank charge — open item #2: not deducted until its owner is decided. */}
+      {/* Bank charge — resolved 2026-07-26: never deducted from estate owners. */}
       <div className="mt-4 flex items-start gap-2.5 rounded-[var(--radius-md)] border border-border bg-surface p-4">
         <Info className="mt-0.5 size-4 shrink-0 text-text-muted" />
         <p className="text-sm text-text-muted">
-          The ~Rs. 3 per-transaction bank charge is <strong className="text-text">not deducted</strong> in this run —
-          whether it's charged to the factory or the estate owner is still an open business decision.
+          No per-transaction bank charge is deducted from estate owners in this run — the factory is billed a
+          separate periodic fee instead.
         </p>
       </div>
 
@@ -144,8 +174,8 @@ export function SettlementProcessPage() {
       <HighStakesConfirmFlow
         open={confirming}
         onClose={() => setConfirming(false)}
-        onConfirm={process}
-        loading={processing}
+        onConfirm={() => processMutation.mutate()}
+        loading={processMutation.isPending}
         title="Confirm settlement run"
         amount={total}
         confirmLabel="Process Settlement"

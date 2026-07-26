@@ -18,8 +18,8 @@ React 19 + Vite 8 + **Tailwind CSS v4** admin portal for factory staff (Administ
 ## Status
 
 All six modules UI-complete (2026-07-18): FND-01, Global (Login/Dashboard/Notifications/Search/Profile), Employee EMP-01..14, Fertilizer FERT-01..04, Estate Owner EST-01..09, Collection COL-01..04, Reports RPT-01..04, Administration ADM-01..04 (wrapped in `features/admin/AdminGuard`).
-Domain rules baked into the UI — don't regress them: COL-02 is a provisional exception entry (never a weight override; §7.1); Confirmed collection records are locked (Flag for Correction only); grade rates are versioned by effective date (ADM-01); the ~Rs. 3 bank charge is an open item shown as a note in EST-08, never deducted; reports aggregate Confirmed records only. Status-tone maps live in `features/{collections,fertilizer}/status.ts` (kept out of page files for fast-refresh lint).
-Data is mock; swap `features/*/data.ts` for real NestJS REST when the backend modules land.
+Domain rules baked into the UI — don't regress them: COL-02 is a provisional exception entry (never a weight override; §7.1); Confirmed collection records are locked (Flag for Correction only); grade rates are versioned by effective date (ADM-01); the ~Rs. 3 bank charge is never deducted from estate owners or employees (resolved 2026-07-26 — factory is billed a separate periodic fee); reports aggregate Confirmed records only. Status-tone maps live in `features/{collections,fertilizer}/status.ts` (kept out of page files for fast-refresh lint).
+Collections (2026-07-26) and Estates (2026-07-26) are wired to the real backend via `src/services/`; the rest still read `features/*/data.ts` mock fixtures until each module's backend slice lands.
 
 ## Commands
 
