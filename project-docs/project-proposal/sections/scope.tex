@@ -1,6 +1,7 @@
 \section{Scope of the Project}
 \label{sec:scope}
 
+The scope of the Tea Collection Management System covers operations from tea leaf plucking at the estate level through to processing and payment handling at the factory level. Activities beyond this point, such as export and distribution, are outside the boundary of this system.
 \subsection{Main Users}
 \begin{itemize}
     \item Tea Estate Owners
@@ -8,6 +9,8 @@
     \item Tea Collection Agents
     \item Tea Receiving Officers
     \item Factory Administrators
+    \item Factory Officers
+    \item Factory Managers
 \end{itemize}
 
 \subsection{Project Scope}
@@ -19,26 +22,33 @@
     \item Recording and tracking daily tea plucking details.
     \item Tea leaf delivery request management.
     \item Delivery confirmation and complaint management related to tea weight mismatches.
+    \item Photographic evidence capture and verification for tea leaf collection and delivery confirmation.
+    \item On-device owner confirmation of collected weight at the point of collection, captured alongside existing photographic evidence 
     \item Tea collection tracking and monitoring.
+    \item Tea grading (Super / Normal) recorded at the factory receiving step, used to calculate gross revenue per grade rate. 
+    \item Route-based visibility of tea collection agents assigned near tea estates.
     \item Monthly payment management between tea factories and tea estate owners.
-    \item Fertilizer request, approval, and borrowing management.
+    \item Transport charge exemption for estate owners who deliver tea directly to the factory. 
+    \item Fertilizer and beneficiary item request, approval, and borrowing management.
     \item Transportation tracking of fertilizers through Tea Collection Agents.
     \item Automatic fertilizer cost calculation and deduction from tea revenue.
-    \item Notification management for deliveries, OTP confirmations, complaints, payments, and fertilizer requests.
+    \item Offline data entry for tea collection details and photographic evidence, with synchronization once connectivity is restored.
+    \item Notification management for deliveries, complaints, payments, and fertilizer requests.
     \item Generation of analytical reports and graphical dashboards related to tea collection, employee performance, and income.
     \item Exporting reports in digital formats.
     \item Administrative management functionalities for Factory Administrators.
+    \item Multi-language support (English, Sinhala, Tamil) for improved accessibility to field users.
+    \item Payment statement generation and export (Excel, CSV, PDF) for bank transfer processing. 
 \end{itemize}
 
 \subsubsection{Out of Scope}
 \begin{itemize}
     \item Direct management of third-party fertilizer suppliers.
-    \item Online payment gateway integration and digital payment processing.
-    \item GPS-based vehicle tracking and real-time logistics monitoring.
-    \item Integration with external government or banking systems.
+    \item Real-time GPS-based vehicle tracking and live logistics monitoring (static route and agent-proximity visibility is supported, but not continuous live location tracking).
     \item Advanced financial accounting and auditing functionalities.
-    \item Inventory management beyond fertilizer-related operations.
+    \item Inventory management beyond fertilizer and beneficiary item operations.
     \item Predictive analytics and AI-based forecasting functionalities.
-    \item Multi-language support and internationalization features.
-    \item Offline functionality without internet connectivity.
+    \item Full offline functionality for reporting, analytics, and administrative operations, which require an active internet connection.
+    \item Tea broker operations, including export management, branding, and international sales handled independently by tea brokers.
+    \item System-managed logins for roles that do not directly create, approve, or consume workflow data (e.g. Machine Operators, Tea Processing Workers, Maintenance Technicians, Laboratory Staff, Drivers, Vehicle Assistants, Store Keeper, Inventory Officers, Clerical Staff). These remain as HR records for payroll and attendance purposes only. 
 \end{itemize}
