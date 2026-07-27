@@ -41,7 +41,10 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     employees: 'view',
     attendance: 'edit',
     performance: 'view',
-    reports: 'view',
+    // RPT-04 (log a daily expense) is a real write path once Reports is
+    // backend-wired — Officer edits like every other module's `edit` tier,
+    // Manager stays read-only (§4 three-role model).
+    reports: 'edit',
     administration: 'none',
   },
   Manager: {

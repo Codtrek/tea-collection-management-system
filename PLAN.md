@@ -75,6 +75,8 @@ module instead of being baked into all six.
       - [x] `employee_attendance`, `payroll_runs`, `salary_advances` — done 2026-07-26 with the
         Employees + Payroll slice (2.3), plus a new `employees` table not listed here originally
       - [x] `fertilizer_batches`, `stock_movements` — done 2026-07-27 with the Fertilizer slice (2.4)
+      - [x] `expense_entries` — done 2026-07-27 with the Reports slice (2.5), RPT-04's manual
+        daily-expense table
       - `grade_rates` — **effective-dated**; ADM-01 depends on past settlements never
         recalculating when a rate changes
       - `system_settings`, `audit_logs`
@@ -152,8 +154,13 @@ Order is by dependency, not by sidebar order:
       than splitting a new table, since it's the same entity the portal manages; `requested_by`
       made nullable — neither the Estates module nor the portal ever populates a manager row.
       Settlement auto-generation from live fertilizer data is still deferred (unchanged from 2.2).
-- [ ] **2.5 Reports (RPT-01..04)** — pure aggregation; needs the others populated to be
-      meaningful. Must aggregate **Confirmed records only**.
+- [x] **2.5 Reports (RPT-01..04)** — pure aggregation; needs the others populated to be
+      meaningful. Must aggregate **Confirmed records only**. Done 2026-07-27,
+      `feature/reports-backend` — collection/revenue reports are computed server-side from
+      Collections/Estates data (no new tables); RPT-04's manual daily-expense entries got a new
+      `expense_entries` table + write path, resolving the last "no backing table" gap. Seeded
+      Mar–Jul 2026 history (collection records, processed settlements, a few payroll rows) so
+      the trend charts show a real multi-point line instead of a single July point.
 - [ ] **2.6 Administration (ADM-01..04)** — last, because it makes previously-static things
       server-driven: versioned grade rates and the ADM-02 editable permission matrix (which is
       what the data-driven `permissions.ts` model was designed for).

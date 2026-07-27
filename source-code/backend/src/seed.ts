@@ -315,6 +315,106 @@ const SETTLEMENT_SEEDS: SeedSettlement[] = [
     processedBy: 'A. Bandara',
     processedOn: '2026-07-01',
   },
+  // Mar–May 2026 processed history (Reports vertical slice, 2.5) — gives
+  // RPT-02's revenue trend chart a real multi-point line instead of the
+  // single July point the module would otherwise have. Round, illustrative
+  // figures; not meant to reconcile against the July/June rows above.
+  {
+    id: 'SET-2026-03-001',
+    estateName: 'Green Valley Estate',
+    period: 'March 2026',
+    superKg: 320,
+    normalKg: 190,
+    superRate: 175,
+    normalRate: 88,
+    transportCost: 7200,
+    fertilizerDeduction: 9800,
+    advanceDeduction: 0,
+    status: 'processed',
+    selfDelivery: false,
+    processedBy: 'A. Bandara',
+    processedOn: '2026-04-01',
+  },
+  {
+    id: 'SET-2026-03-002',
+    estateName: 'Hilltop Estate',
+    period: 'March 2026',
+    superKg: 105,
+    normalKg: 240,
+    superRate: 175,
+    normalRate: 88,
+    transportCost: 5600,
+    fertilizerDeduction: 6100,
+    advanceDeduction: 0,
+    status: 'processed',
+    selfDelivery: false,
+    processedBy: 'A. Bandara',
+    processedOn: '2026-04-01',
+  },
+  {
+    id: 'SET-2026-04-001',
+    estateName: 'Green Valley Estate',
+    period: 'April 2026',
+    superKg: 350,
+    normalKg: 205,
+    superRate: 178,
+    normalRate: 90,
+    transportCost: 7500,
+    fertilizerDeduction: 12400,
+    advanceDeduction: 0,
+    status: 'processed',
+    selfDelivery: false,
+    processedBy: 'A. Bandara',
+    processedOn: '2026-05-01',
+  },
+  {
+    id: 'SET-2026-04-002',
+    estateName: 'Mount Rest Estate',
+    period: 'April 2026',
+    superKg: 210,
+    normalKg: 175,
+    superRate: 178,
+    normalRate: 90,
+    transportCost: 0,
+    fertilizerDeduction: 8300,
+    advanceDeduction: 25000,
+    status: 'processed',
+    selfDelivery: true,
+    processedBy: 'A. Bandara',
+    processedOn: '2026-05-01',
+  },
+  {
+    id: 'SET-2026-05-001',
+    estateName: 'Green Valley Estate',
+    period: 'May 2026',
+    superKg: 365,
+    normalKg: 190,
+    superRate: 180,
+    normalRate: 92,
+    transportCost: 7800,
+    fertilizerDeduction: 14200,
+    advanceDeduction: 45000,
+    status: 'processed',
+    selfDelivery: false,
+    processedBy: 'A. Bandara',
+    processedOn: '2026-06-01',
+  },
+  {
+    id: 'SET-2026-05-002',
+    estateName: 'Hilltop Estate',
+    period: 'May 2026',
+    superKg: 112,
+    normalKg: 260,
+    superRate: 180,
+    normalRate: 92,
+    transportCost: 5900,
+    fertilizerDeduction: 9700,
+    advanceDeduction: 0,
+    status: 'processed',
+    selfDelivery: false,
+    processedBy: 'A. Bandara',
+    processedOn: '2026-06-01',
+  },
 ];
 
 interface SeedEmployee {
@@ -542,6 +642,27 @@ function presentDays(employeeName: string, dates: string[]): SeedAttendance[] {
 }
 
 const PAYROLL_PERIOD = 'July 2026';
+
+interface SeedHistoricalPayroll {
+  id: string;
+  employeeName: string; // resolved to employeeIds[name] at insert time
+  period: string;
+  gross: number;
+  processedOn: string;
+}
+
+// Mar–Jun 2026 payroll history (Reports vertical slice, 2.5) — real
+// `generatePayroll` only ever runs for `PAYROLL_PERIOD` (July), so these are
+// inserted directly (same "static row, not computed" precedent as the
+// historical `SETTLEMENT_SEEDS` rows above) purely to give RPT-03's expense
+// trend a real multi-point line. One representative row per month rather
+// than one per employee — illustrative magnitude, not a full payroll run.
+const HISTORICAL_PAYROLL_SEEDS: SeedHistoricalPayroll[] = [
+  { id: 'PR-HIST-2026-03', employeeName: 'N. Silva', period: 'March 2026', gross: 68000, processedOn: '2026-04-01' },
+  { id: 'PR-HIST-2026-04', employeeName: 'N. Silva', period: 'April 2026', gross: 71500, processedOn: '2026-05-01' },
+  { id: 'PR-HIST-2026-05', employeeName: 'N. Silva', period: 'May 2026', gross: 74000, processedOn: '2026-06-01' },
+  { id: 'PR-HIST-2026-06', employeeName: 'N. Silva', period: 'June 2026', gross: 76500, processedOn: '2026-07-01' },
+];
 
 // Enough July 2026 rows per Active employee to make payroll generation
 // non-trivial: a run of Present days, one day exercising the OT bucket, one
@@ -1105,6 +1226,107 @@ const COLLECTION_RECORD_SEEDS: SeedCollectionRecord[] = [
       },
     ],
   },
+  // Mar–Jun 2026 confirmed history (Reports vertical slice, 2.5) — every
+  // other seeded collection record is July-dated, so RPT-01's trend chart
+  // would otherwise be a single point. Minimal photos/timeline (DB defaults
+  // to '[]') since these exist only to feed the aggregate, not to be opened
+  // individually from COL-03.
+  {
+    id: 'GV-2026-0312',
+    estateName: 'Green Valley Estate',
+    routeName: 'Route 3',
+    weightKg: 185,
+    grade: 'super',
+    status: 'confirmed',
+    date: '2026-03-12',
+    agentName: 'R. Senanayake',
+    photos: [],
+    timeline: [{ status: 'Confirmed', timestamp: '2026-03-12T11:00:00', by: 'R. Jayasuriya' }],
+  },
+  {
+    id: 'HT-2026-0318',
+    estateName: 'Hilltop Estate',
+    routeName: 'Route 5',
+    weightKg: 132,
+    grade: 'normal',
+    status: 'confirmed',
+    date: '2026-03-18',
+    agentName: 'W. Gunaratne',
+    photos: [],
+    timeline: [{ status: 'Confirmed', timestamp: '2026-03-18T10:40:00', by: 'R. Jayasuriya' }],
+  },
+  {
+    id: 'GV-2026-0409',
+    estateName: 'Green Valley Estate',
+    routeName: 'Route 3',
+    weightKg: 198,
+    grade: 'super',
+    status: 'confirmed',
+    date: '2026-04-09',
+    agentName: 'R. Senanayake',
+    photos: [],
+    timeline: [{ status: 'Confirmed', timestamp: '2026-04-09T11:15:00', by: 'R. Jayasuriya' }],
+  },
+  {
+    id: 'MR-2026-0421',
+    estateName: 'Mount Rest Estate',
+    routeName: 'Route 2',
+    weightKg: 210,
+    grade: 'normal',
+    status: 'confirmed',
+    date: '2026-04-21',
+    agentName: 'Self-delivered',
+    photos: [],
+    timeline: [{ status: 'Confirmed', timestamp: '2026-04-21T10:00:00', by: 'R. Jayasuriya' }],
+  },
+  {
+    id: 'GV-2026-0511',
+    estateName: 'Green Valley Estate',
+    routeName: 'Route 3',
+    weightKg: 205,
+    grade: 'super',
+    status: 'confirmed',
+    date: '2026-05-11',
+    agentName: 'R. Senanayake',
+    photos: [],
+    timeline: [{ status: 'Confirmed', timestamp: '2026-05-11T11:05:00', by: 'R. Jayasuriya' }],
+  },
+  {
+    id: 'HT-2026-0523',
+    estateName: 'Hilltop Estate',
+    routeName: 'Route 5',
+    weightKg: 148,
+    grade: 'normal',
+    status: 'confirmed',
+    date: '2026-05-23',
+    agentName: 'W. Gunaratne',
+    photos: [],
+    timeline: [{ status: 'Confirmed', timestamp: '2026-05-23T10:50:00', by: 'R. Jayasuriya' }],
+  },
+  {
+    id: 'GV-2026-0608',
+    estateName: 'Green Valley Estate',
+    routeName: 'Route 3',
+    weightKg: 220,
+    grade: 'super',
+    status: 'confirmed',
+    date: '2026-06-08',
+    agentName: 'R. Senanayake',
+    photos: [],
+    timeline: [{ status: 'Confirmed', timestamp: '2026-06-08T11:20:00', by: 'R. Jayasuriya' }],
+  },
+  {
+    id: 'MR-2026-0619',
+    estateName: 'Mount Rest Estate',
+    routeName: 'Route 2',
+    weightKg: 175,
+    grade: 'normal',
+    status: 'confirmed',
+    date: '2026-06-19',
+    agentName: 'Self-delivered',
+    photos: [],
+    timeline: [{ status: 'Confirmed', timestamp: '2026-06-19T10:10:00', by: 'R. Jayasuriya' }],
+  },
 ];
 
 // ── Fertilizer (FERT-01..08) ──
@@ -1410,6 +1632,65 @@ const MOVEMENT_SEEDS: SeedMovement[] = [
     date: '2026-07-01',
     supplier: 'Govt Beneficiary Supply',
     recordedBy: 'S. Fernando',
+  },
+];
+
+interface SeedExpenseEntry {
+  id: string;
+  category: 'Utilities' | 'Maintenance' | 'Miscellaneous' | 'Other';
+  description: string;
+  amount: number;
+  date: string;
+  enteredBy: string;
+}
+
+// ── Reports (RPT-01..04) ──
+// Manual daily-expense entries — mirrors the portal's former
+// `features/reports/data.ts` EXPENSE_ROWS fixture's manual rows 1:1. The
+// Payroll/Fertilizer/Transport lines the fixture also showed are DERIVED
+// from `payroll_runs`/`settlements` at query time (`ReportsService`), never
+// stored here.
+const EXPENSE_ENTRY_SEEDS: SeedExpenseEntry[] = [
+  {
+    id: 'EXP-2026-0136',
+    category: 'Utilities',
+    description: 'CEB electricity — factory floor',
+    amount: 214600,
+    date: '2026-07-10',
+    enteredBy: 'S. Fernando',
+  },
+  {
+    id: 'EXP-2026-0133',
+    category: 'Maintenance',
+    description: 'Withering trough fan replacement',
+    amount: 86500,
+    date: '2026-07-07',
+    enteredBy: 'S. Fernando',
+  },
+  {
+    id: 'EXP-2026-0130',
+    category: 'Miscellaneous',
+    description: 'Factory floor cleaning supplies',
+    amount: 12475,
+    date: '2026-07-03',
+    enteredBy: 'S. Fernando',
+  },
+  // A little history so RPT-03's trend line isn't flat before July.
+  {
+    id: 'EXP-2026-0089',
+    category: 'Utilities',
+    description: 'CEB electricity — factory floor',
+    amount: 198200,
+    date: '2026-06-09',
+    enteredBy: 'S. Fernando',
+  },
+  {
+    id: 'EXP-2026-0052',
+    category: 'Maintenance',
+    description: 'Dryer belt servicing',
+    amount: 64200,
+    date: '2026-05-14',
+    enteredBy: 'S. Fernando',
   },
 ];
 
@@ -1782,6 +2063,26 @@ async function seed() {
     }
     console.log(`Seeded payroll for ${PAYROLL_PERIOD}`);
 
+    for (const h of HISTORICAL_PAYROLL_SEEDS) {
+      await client.query(
+        `INSERT INTO payroll_runs
+           (id, employee_id, employee_name, period, gross, status, missing_bank,
+            processed_by, processed_on)
+         VALUES ($1, $2, $3, $4, $5, 'Processed', false, 'A. Bandara', $6)
+         ON CONFLICT (employee_id, period) DO UPDATE SET
+           gross = EXCLUDED.gross, status = EXCLUDED.status`,
+        [
+          h.id,
+          employeeIds[h.employeeName],
+          h.employeeName,
+          h.period,
+          h.gross,
+          h.processedOn,
+        ],
+      );
+    }
+    console.log(`Seeded ${HISTORICAL_PAYROLL_SEEDS.length} historical payroll rows`);
+
     const agentIds: Record<string, number> = {};
     for (const a of AGENT_SEEDS) {
       const agentUser = await client.query<{ id: number }>(
@@ -2020,6 +2321,21 @@ async function seed() {
       }
     }
     console.log(`Seeded ${MOVEMENT_SEEDS.length} stock movements`);
+
+    // ── Reports (RPT-01..04) ──
+
+    for (const e of EXPENSE_ENTRY_SEEDS) {
+      await client.query(
+        `INSERT INTO expense_entries (id, category, description, amount, entry_date, entered_by)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           category = EXCLUDED.category, description = EXCLUDED.description,
+           amount = EXCLUDED.amount, entry_date = EXCLUDED.entry_date,
+           entered_by = EXCLUDED.entered_by`,
+        [e.id, e.category, e.description, e.amount, e.date, e.enteredBy],
+      );
+    }
+    console.log(`Seeded ${EXPENSE_ENTRY_SEEDS.length} expense entries`);
   } finally {
     await client.end();
   }

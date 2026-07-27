@@ -495,6 +495,23 @@ CREATE TABLE payroll_runs (
     UNIQUE (employee_id, period)
 );
 
+-- ─── REPORTS ──────────────────────────────────────────────────────
+-- Added 2026-07-27 (Reports vertical slice, 2.5). Only holds the *manual*
+-- daily operational expenses (RPT-04: utilities/maintenance/misc) that no
+-- other workflow generates — the §8.1.6 gap the reports doc flagged. The
+-- Payroll/Fertilizer/Transport expense lines RPT-03 also shows are DERIVED
+-- at query time from `payroll_runs`/`settlements`, never duplicated here.
+CREATE TABLE expense_entries (
+    id           VARCHAR(20) PRIMARY KEY, -- business key, e.g. 'EXP-2026-0001'
+    category     VARCHAR(20) NOT NULL
+        CHECK (category IN ('Utilities', 'Maintenance', 'Miscellaneous', 'Other')),
+    description  VARCHAR(200) NOT NULL,
+    amount       DECIMAL(12,2) NOT NULL,
+    entry_date   DATE NOT NULL,
+    entered_by   VARCHAR(100) NOT NULL,
+    created_at   TIMESTAMP DEFAULT NOW()
+);
+
 -- ─── NOTIFICATIONS ────────────────────────────────────────────────
 
 CREATE TABLE notifications (
@@ -536,6 +553,7 @@ CREATE INDEX idx_employee_attendance_date ON employee_attendance(date);
 CREATE INDEX idx_salary_advances_employee ON salary_advances(employee_id);
 CREATE INDEX idx_payroll_runs_employee ON payroll_runs(employee_id);
 CREATE INDEX idx_payroll_runs_status ON payroll_runs(status);
+CREATE INDEX idx_expense_entries_date ON expense_entries(entry_date);
 CREATE INDEX idx_fertilizer_requests_status ON fertilizer_requests(status);
 CREATE INDEX idx_fertilizer_batches_item ON fertilizer_batches(item);
 CREATE INDEX idx_stock_movements_batch ON stock_movements(batch_id);

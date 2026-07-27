@@ -24,7 +24,10 @@ a snapshot/seeded value. Updated 2026-07-27 to record the Fertilizer vertical sl
 (`feature/fertilizer-backend`, `PLAN.md` Phase 2.4) — resolved the last open business question
 (ad-hoc vs request-linked dispatch: both allowed) and the fourth module to prove the recipe,
 this time extending a pre-existing table in place rather than building fresh or splitting a
-new one.
+new one. Updated again 2026-07-27 to record the Reports vertical slice
+(`feature/reports-backend`, `PLAN.md` Phase 2.5) — the fifth module, and the first that's mostly
+pure aggregation (no new tables for RPT-01/02) with one greenfield write path (RPT-04's
+`expense_entries`).
 
 ## What this system does
 
@@ -343,8 +346,32 @@ Decide (approve/reject/cancel a request) is **Administrator-only** — Officer's
 logging requests and recording movements, but not the approval decision itself (a three-way split
 that doesn't exist in any other module's permission column).
 
-**Backend (`source-code/backend/`) — auth, collections, estates, employees, and fertilizer slices
-built, rest still to come.**
+**Reports wired to the real backend (2026-07-27, `feature/reports-backend`) — `PLAN.md` Phase
+2.5, fifth module.** All four screens (RPT-01 Collection, RPT-02 Revenue, RPT-03 Expense, RPT-04
+Log Daily Expense) read/write through `src/services/reports.ts` instead of the deleted
+`features/reports/data.ts` fixture (`types.ts` kept, per the recipe, plus a small
+`REPORT_PERIODS` constant — the five seeded months, Mar–Jul 2026 — since there's no "list
+available periods" endpoint). Unlike every prior slice, RPT-01/02 needed **no new tables** —
+`ReportsService` aggregates read-only off `tea_collection_records`/`settlements`/`payroll_runs`
+(the same second-repository-binding pattern Fertilizer used for `EstateEntity`), so Reports is
+the first module that's pure aggregation over other modules' data rather than owning a workflow.
+RPT-01 filters to **Confirmed collection records only** (§ reports doc); RPT-02 counts only
+**processed** settlements as realized revenue — a period with nothing processed yet (e.g. July,
+whose settlements seed as `Pending`) correctly shows zero, not an error. RPT-03's expense split
+unions three sources: Payroll (`payroll_runs.gross`) and Fertilizer/Transport
+(`settlements.fertilizer_deduction`/`transport_cost`) are **derived** at query time, never
+duplicated as rows; only the manual Utilities/Maintenance/Miscellaneous/Other entries RPT-04
+logs live in the new `expense_entries` table. Each report endpoint accepts an optional
+`?period=YYYY-MM` and **defaults to the latest month with data** when omitted, so the page loads
+something real on first render rather than an empty/error state. Fixed a pre-existing permission
+gap while wiring RPT-04: `reports` was `'view'` for both Officer and Manager in
+`permissions.ts`, which would have shown Manager a "Log Daily Expense" button the backend then
+403s — bumped Officer to `'edit'` (matching every other module's Officer-edits/Manager-views
+split), so the button now hides for Manager via the existing data-driven `can()` check rather
+than a hardcoded role branch.
+
+**Backend (`source-code/backend/`) — auth, collections, estates, employees, fertilizer, and
+reports slices built, rest still to come.**
 The default NestJS scaffold (`app.controller.ts`, `app.service.ts`, their spec, and the e2e test)
 was **deleted**; `package.json` now depends on TypeORM, pg, @nestjs/jwt, passport-jwt, bcrypt, and
 class-validator. Built:
@@ -408,18 +435,36 @@ class-validator. Built:
   entities) purely to resolve estate name + owner id — Estates doesn't model `estate_employees`
   managers at the app layer, so `fertilizer_requests.requested_by` is nullable and always null
   from this module (see Database status below).
+- **Reports** (`src/reports/`): `GET /reports/collection`, `GET /reports/revenue`, `GET
+  /reports/expenses`, `POST /reports/expenses`, all JWT-guarded, each GET accepting an optional
+  `?period=YYYY-MM` (defaults to the latest month with data). Business rules live in
+  `reports.service.ts` with unit tests in `reports.service.spec.ts`: collection totals filter to
+  **Confirmed** records only; revenue counts only **processed** settlements (`super_kg×super_rate
+  + normal_kg×normal_rate`) as realized income; expenses union three sources — Payroll
+  (`payroll_runs.gross`) and Fertilizer/Transport (`settlements.fertilizer_deduction`/
+  `transport_cost`) computed on the fly, plus manual entries from the new `expense_entries` table
+  — and `createExpense` is Officer+ (Manager read-only, same tier as every other module).
+  `ReportsModule` registers no entities of its own for aggregation — it binds read-only onto
+  `CollectionRecordEntity`/`SettlementEntity`/`PayrollRunEntity` (same second-repository pattern
+  Fertilizer used for `EstateEntity`) alongside owning `ExpenseEntryEntity`. `reports-map.ts`
+  holds the period-key helpers (`'YYYY-MM'` ↔ `'Month YYYY'` label conversion, since
+  `settlements`/`payroll_runs` store the latter) and the `Public*` report shapes; no DB↔portal
+  enum mapping is needed since Reports doesn't own a status lifecycle.
 - **Seed** (`src/seed.ts`, `npm run seed`, idempotent): three factory users, DEV creds
   `0771234567` / `Password123!` (admin / officer / manager on `…67/68/69`), plus reference
   routes/collection agents, 5 estates (1 inactive, 1 missing-bank) with owners/documents, 3 estate
-  advances, 6 settlements, 8 collection records, 6 employees (1 suspended, 1 missing-bank) with
-  pay rates, ~52 July-2026 attendance records (covering all four shift-hour buckets), 3 salary
-  advances, and a payroll run for July 2026 computed inline in the script (same aggregation
-  formula `generatePayroll` uses, since the seed script has no NestJS DI context to call the real
-  service from), and 8 fertilizer batches (one intentionally past-expiry, reproducing the
-  addendum's TSP-available-−200 showcase), 11 fertilizer requests (5 Approved, 4 Submitted, 1
-  Dispatched, 1 Rejected — natural-keyed by `(estate, item, quantity)` for idempotent re-seeding,
-  since `fertilizer_requests` has no business-key column), and 6 stock movements — spanning every
-  status each module needs.
+  advances, 12 settlements (July pending + processed history back to March), 16 collection
+  records (July fixture-detail rows plus lightweight Mar–Jun confirmed history for RPT-01's trend
+  chart), 6 employees (1 suspended, 1 missing-bank) with pay rates, ~52 July-2026 attendance
+  records (covering all four shift-hour buckets), 3 salary advances, a payroll run for July 2026
+  computed inline in the script (same aggregation formula `generatePayroll` uses, since the seed
+  script has no NestJS DI context to call the real service from) plus 4 static historical payroll
+  rows (Mar–Jun) for RPT-03's trend, and 8 fertilizer batches (one intentionally past-expiry,
+  reproducing the addendum's TSP-available-−200 showcase), 11 fertilizer requests (5 Approved, 4
+  Submitted, 1 Dispatched, 1 Rejected — natural-keyed by `(estate, item, quantity)` for idempotent
+  re-seeding, since `fertilizer_requests` has no business-key column), 6 stock movements, and 5
+  expense entries (3 July + 2 earlier months, mirroring the old fixture's manual rows) — spanning
+  every status each module needs.
 - **Config**: `app.module.ts` wires ConfigModule + TypeORM (`synchronize: false`,
   `autoLoadEntities`); `main.ts` has a global ValidationPipe and dev-tolerant CORS (see below).
 
@@ -476,8 +521,11 @@ the app layer, and the portal's FERT-07 log-phoned-in-request flow records again
 a specific manager. Two new tables: `fertilizer_batches` (FEFO-tracked via `expiry_date`, folds
 beneficiary items like Rice into the same `category` column rather than a parallel table) and
 `stock_movements` (`linked_request_id` nullable by design — ad-hoc dispatch resolved 2026-07-27).
-The local dev DB runs everything in an isolated `tea_authslice` schema; the older, more-advanced
-`tea` schema left over from the abandoned test01 branch is untouched.
+On 2026-07-27 (same day, Reports slice) exactly **one** new table was added — `expense_entries`,
+for RPT-04's manual daily-expense entries — the smallest schema footprint of any slice so far,
+since RPT-01/02 read existing `tea_collection_records`/`settlements` columns as-is with no
+schema change at all. The local dev DB runs everything in an isolated `tea_authslice` schema; the
+older, more-advanced `tea` schema left over from the abandoned test01 branch is untouched.
 
 Infra is already in place and needs no work: `source-code/docker-compose.yml` defines postgres 16,
 redis, api, admin, and nginx.
@@ -506,9 +554,11 @@ proven end-to-end by the Collections, Estates, Employees, and Fertilizer slices*
    path (advances, settlement processing) — Employees (2026-07-26, same day) the third, adding
    live server-side computation (payroll generation) on top of that pattern for the first time —
    and Fertilizer (2026-07-27) the fourth, the first to extend a pre-existing table in place
-   instead of building fresh. Every module after Fertilizer (Reports, Administration) repeats the
-   same recipe — see "Modules, in dependency order" in `PLAN.md` Phase 2. The remaining pages still
-   import static fixtures until each is migrated in turn.
+   instead of building fresh. Reports (2026-07-27, same day) is the fifth — the first that's
+   mostly pure aggregation over other modules' tables rather than owning a workflow of its own.
+   Administration is the only module left — see "Modules, in dependency order" in `PLAN.md`
+   Phase 2. The remaining pages (EST-09, EMP-14) still import static fixtures by design (see
+   their slices' notes above), and Administration's screens are still mock until it lands.
 2. **The schema no longer blocks auth**, and the Collections table is now reconciled to the
    photo-evidence design too. The `users.role` (and `factory_employees.role`) CHECK constraints
    were extended to include `factory_officer` and `factory_manager`, so all three factory roles
@@ -569,3 +619,15 @@ request with "now" (there's no backdating field yet); and **dual owner/factory a
 DB's `owner_status`/`factory_status` columns on `fertilizer_requests` stay unused by this slice
 (portal approval runs off the single `status` lifecycle instead), reserved for a possible future
 mobile owner-approval step.
+
+Deferred from the Reports slice (2026-07-27), noted as seams rather than gaps: **live grade-rate
+revenue** — RPT-02 reads settlements' *snapshot* rates, same as Estates; a version that recomputes
+off live `grade_rates` lands with Administration (ADM-01, Phase 2.6); **available-periods
+endpoint** — the portal's period filter is a hardcoded `REPORT_PERIODS` list (the five seeded
+months) rather than a "what periods have data" call, since each report already defaults sensibly
+to its own latest month when no period is given; **export/print/schedule/share** — `ReportActionsBar`'s
+buttons stay demo toasts, same deferred-export pattern as Collections/Estates/Employees' bank-file
+buttons; **receipt upload** — RPT-04's receipt dropzone stays decorative, same deferred-storage
+pattern as Collections' photos / Estates' documents; and **quarter-range periods** — the old
+fixture's "Q2 2026" period option was dropped rather than wired, since aggregating a quarter needs
+a range parameter the backend doesn't accept yet (single `YYYY-MM` only).
