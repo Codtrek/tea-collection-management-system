@@ -226,7 +226,7 @@ export class EmployeesService {
     const employee = await this.findEntity(dto.employeeId);
 
     const advance = this.advanceRepo.create({
-      id: this.generateAdvanceId(),
+      id: this.businessId('EMP-ADV'),
       employeeId: employee.id,
       employeeName: employee.name,
       amount: String(dto.amount),
@@ -356,7 +356,7 @@ export class EmployeesService {
         results.push(await this.payrollRepo.save(existing));
       } else {
         const created = this.payrollRepo.create({
-          id: this.generatePayrollId(),
+          id: this.businessId('PR'),
           employeeId: employee.id,
           employeeName: employee.name,
           period: dto.period,
@@ -610,17 +610,10 @@ export class EmployeesService {
     };
   }
 
-  /** e.g. 'EMP-ADV-4821' — business key in the fixture's style, not a DB serial. */
-  private generateAdvanceId(): string {
+  /** Business key with a fixture-style prefix, e.g. 'EMP-ADV-4821' / 'PR-4821' — not a DB serial. */
+  private businessId(prefix: string): string {
     const suffix =
       `${Date.now()}`.slice(-4) + String(Math.floor(Math.random() * 10));
-    return `EMP-ADV-${suffix}`;
-  }
-
-  /** e.g. 'PR-4821' — business key in the fixture's style, not a DB serial. */
-  private generatePayrollId(): string {
-    const suffix =
-      `${Date.now()}`.slice(-4) + String(Math.floor(Math.random() * 10));
-    return `PR-${suffix}`;
+    return `${prefix}-${suffix}`;
   }
 }
