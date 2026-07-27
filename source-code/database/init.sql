@@ -208,19 +208,40 @@ CREATE TABLE tea_collection_records (
 -- ─── FERTILIZER WORKFLOW ──────────────────────────────────────────
 -- (created before complaints, since complaints references fertilizer_requests)
 
+-- Extended 2026-07-27 (Fertilizer vertical slice, 2.4) to carry the web
+-- portal's `FertilizerRequest` contract (owner/factory dual approval was
+-- never built in the portal — it drives approval off a single `status`
+-- lifecycle instead). `owner_status`/`factory_status` are kept, defaulted,
+-- for the future mobile owner-approval flow; the portal reads/writes `status`.
+-- `requested_by` is now nullable: the Estates module never modeled
+-- `estate_employees` managers at the app layer (settlements/advances key
+-- off estate_id/owner_id directly), and the portal's FERT-07 "log phoned-in
+-- request" flow records against an estate, not a specific manager — same
+-- "nullable because this slice doesn't populate it" reasoning as `estates`'
+-- bank fields.
 CREATE TABLE fertilizer_requests (
-    id             SERIAL PRIMARY KEY,
-    requested_by   INTEGER NOT NULL REFERENCES estate_employees(id), -- manager
-    estate_id      INTEGER NOT NULL REFERENCES estates(id),
-    owner_id       INTEGER NOT NULL REFERENCES tea_estate_owners(id),
-    quantity_kg    DECIMAL(10,2) NOT NULL,
-    justification  TEXT,
-    owner_status   VARCHAR(20) DEFAULT 'pending'
+    id                SERIAL PRIMARY KEY,
+    requested_by      INTEGER REFERENCES estate_employees(id), -- manager; null when logged by factory staff
+    estate_id         INTEGER NOT NULL REFERENCES estates(id),
+    owner_id          INTEGER NOT NULL REFERENCES tea_estate_owners(id),
+    item              VARCHAR(100) NOT NULL DEFAULT 'Urea Fertilizer',
+    quantity_kg       DECIMAL(10,2) NOT NULL,
+    justification     TEXT,
+    owner_status      VARCHAR(20) DEFAULT 'pending'
         CHECK (owner_status IN ('pending', 'approved', 'rejected')),
-    factory_id     INTEGER REFERENCES factories(id),
-    factory_status VARCHAR(20) DEFAULT 'pending'
+    factory_id        INTEGER REFERENCES factories(id),
+    factory_status    VARCHAR(20) DEFAULT 'pending'
         CHECK (factory_status IN ('pending', 'approved', 'rejected')),
-    created_at     TIMESTAMP DEFAULT NOW()
+    origin            VARCHAR(10) NOT NULL DEFAULT 'web'
+        CHECK (origin IN ('mobile', 'web')),
+    status            VARCHAR(20) NOT NULL DEFAULT 'Submitted'
+        CHECK (status IN ('Submitted', 'Approved', 'Partially Dispatched',
+                           'Dispatched', 'Deducted', 'Rejected', 'Cancelled')),
+    approved_qty_kg   DECIMAL(10,2), -- set once decided; may be < quantity_kg (partial fulfilment)
+    dispatched_qty_kg DECIMAL(10,2) NOT NULL DEFAULT 0, -- running total against approved_qty_kg
+    decided_by        VARCHAR(100),
+    decided_on        TIMESTAMP,
+    created_at        TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE fertilizer_dispatches (
@@ -241,6 +262,48 @@ CREATE TABLE fertilizer_charges (
     quantity_kg            DECIMAL(10,2) NOT NULL,
     total_charge           DECIMAL(10,2) NOT NULL,
     calculated_at          TIMESTAMP DEFAULT NOW()
+);
+
+-- Stock side (added 2.4, alongside the request workflow above). Batches are
+-- FEFO-tracked (`expiry_date` drives allocation, never entry order);
+-- `category` folds beneficiary items (rice) into the same batch/movement
+-- model as fertilizer proper (addendum §11.25) rather than a parallel table.
+CREATE TABLE fertilizer_batches (
+    id               SERIAL PRIMARY KEY,
+    item             VARCHAR(100) NOT NULL,
+    category         VARCHAR(20) NOT NULL DEFAULT 'Fertilizer'
+        CHECK (category IN ('Fertilizer', 'Beneficiary')),
+    quantity_kg      DECIMAL(10,2) NOT NULL,
+    unit             VARCHAR(10) NOT NULL DEFAULT 'kg'
+        CHECK (unit IN ('kg', 'bags')),
+    received_date    DATE NOT NULL,
+    expiry_date      DATE NOT NULL,
+    location         VARCHAR(100),
+    supplier         VARCHAR(100),
+    lot_number       VARCHAR(50),
+    quality_notes    TEXT,
+    discarded        BOOLEAN NOT NULL DEFAULT FALSE,
+    last_updated_by  VARCHAR(100),
+    last_updated_on  TIMESTAMP,
+    created_at       TIMESTAMP DEFAULT NOW()
+);
+
+-- `linked_request_id` is nullable by design — ad-hoc dispatch (no approved
+-- request behind it) is allowed alongside request-linked dispatch; both
+-- feed the same stock ledger (resolved 2026-07-27, see PLAN.md).
+CREATE TABLE stock_movements (
+    id                 SERIAL PRIMARY KEY,
+    batch_id           INTEGER NOT NULL REFERENCES fertilizer_batches(id),
+    type               VARCHAR(10) NOT NULL
+        CHECK (type IN ('Incoming', 'Outgoing')),
+    quantity_kg        DECIMAL(10,2) NOT NULL,
+    movement_date      DATE NOT NULL DEFAULT CURRENT_DATE,
+    destination        VARCHAR(100), -- Outgoing: estate owner or collection agent receiving the stock
+    linked_request_id  INTEGER REFERENCES fertilizer_requests(id),
+    supplier           VARCHAR(100), -- Incoming
+    notes              TEXT,
+    recorded_by        VARCHAR(100),
+    created_at         TIMESTAMP DEFAULT NOW()
 );
 
 -- ─── COMPLAINTS ───────────────────────────────────────────────────
@@ -473,3 +536,6 @@ CREATE INDEX idx_employee_attendance_date ON employee_attendance(date);
 CREATE INDEX idx_salary_advances_employee ON salary_advances(employee_id);
 CREATE INDEX idx_payroll_runs_employee ON payroll_runs(employee_id);
 CREATE INDEX idx_payroll_runs_status ON payroll_runs(status);
+CREATE INDEX idx_fertilizer_requests_status ON fertilizer_requests(status);
+CREATE INDEX idx_fertilizer_batches_item ON fertilizer_batches(item);
+CREATE INDEX idx_stock_movements_batch ON stock_movements(batch_id);

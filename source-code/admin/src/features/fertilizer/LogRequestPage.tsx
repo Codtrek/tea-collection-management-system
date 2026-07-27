@@ -1,15 +1,18 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Checkbox } from '@/components/ui/Checkbox'
+import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
-import { ESTATES } from '@/features/estates/data'
-import { BATCHES } from './data'
-import { availableForItem } from './position'
+import * as estatesService from '@/services/estates'
+import * as fertilizerService from '@/services/fertilizer'
+import { availableForItem } from './lib'
 import { formatWeight } from '@/lib/format'
 
 /*
@@ -21,7 +24,21 @@ export function LogRequestPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
 
-  const items = useMemo(() => [...new Set(BATCHES.map((b) => b.item))], [])
+  const {
+    data: estates,
+    isPending: estatesPending,
+    isError: estatesError,
+    refetch: refetchEstates,
+  } = useQuery({ queryKey: ['estates'], queryFn: estatesService.list })
+  const {
+    data: batches,
+    isPending: batchesPending,
+    isError: batchesError,
+    refetch: refetchBatches,
+  } = useQuery({ queryKey: ['fertilizer', 'batches'], queryFn: fertilizerService.listBatches })
+  const { data: positions } = useQuery({ queryKey: ['fertilizer', 'positions'], queryFn: fertilizerService.listPositions })
+
+  const items = useMemo(() => [...new Set((batches ?? []).map((b) => b.item))], [batches])
   const today = new Date().toISOString().slice(0, 10)
 
   const [estate, setEstate] = useState('')
@@ -31,10 +48,18 @@ export function LogRequestPage() {
   const [reason, setReason] = useState('')
   const [notify, setNotify] = useState(true)
   const [errors, setErrors] = useState<{ estate?: string; item?: string; quantity?: string; date?: string }>({})
-  const [saving, setSaving] = useState(false)
 
   const qty = Number(quantity)
-  const available = item ? availableForItem(item) : null
+  const available = item && positions ? availableForItem(item, positions) : null
+
+  const logMutation = useMutation({
+    mutationFn: () => fertilizerService.logRequest({ estateId: estate, item, quantityKg: qty, reason: reason || undefined }),
+    onSuccess: () => {
+      toast(`Request for ${formatWeight(qty)} of ${item} logged for approval${notify ? ' · owner notified' : ''}`)
+      navigate('/fertilizer/requests')
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not log this request', 'danger'),
+  })
 
   const validate = () => {
     const next: typeof errors = {}
@@ -49,11 +74,28 @@ export function LogRequestPage() {
 
   const submit = () => {
     if (!validate()) return
-    setSaving(true)
-    setTimeout(() => {
-      toast(`Request for ${formatWeight(qty)} of ${item} logged for approval${notify ? ' · owner notified' : ''}`)
-      navigate('/fertilizer/requests')
-    }, 600)
+    logMutation.mutate()
+  }
+
+  if (estatesPending || batchesPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (estatesError || batchesError || !estates || !batches) {
+    return (
+      <ErrorState
+        title="Couldn't load estates or stock data"
+        description="Something went wrong fetching the data this form needs."
+        onRetry={() => {
+          void refetchEstates()
+          void refetchBatches()
+        }}
+      />
+    )
   }
 
   return (
@@ -76,7 +118,7 @@ export function LogRequestPage() {
             value={estate}
             error={errors.estate}
             onChange={(e) => setEstate(e.target.value)}
-            options={ESTATES.map((o) => ({ value: o.estateName, label: `${o.ownerName} — ${o.estateName}` }))}
+            options={estates.map((o) => ({ value: o.id, label: `${o.ownerName} — ${o.estateName}` }))}
           />
 
           <div className="grid gap-4 sm:grid-cols-[1fr_140px_120px]">
@@ -112,6 +154,8 @@ export function LogRequestPage() {
             </p>
           )}
 
+          {/* Validated but not sent — the backend always stamps the request with "now"; there's
+              no field to backdate it to (the almost-always-true case is "logged today anyway"). */}
           <Input label="Requested date" type="date" max={today} value={date} error={errors.date} onChange={(e) => setDate(e.target.value)} />
 
           <Input
@@ -129,10 +173,10 @@ export function LogRequestPage() {
           </p>
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button variant="secondary" onClick={() => navigate('/fertilizer/requests')} disabled={saving}>
+            <Button variant="secondary" onClick={() => navigate('/fertilizer/requests')} disabled={logMutation.isPending}>
               Cancel
             </Button>
-            <Button size="lg" onClick={submit} loading={saving}>
+            <Button size="lg" onClick={submit} loading={logMutation.isPending}>
               Log Request
             </Button>
           </div>

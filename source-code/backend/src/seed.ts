@@ -1107,6 +1107,312 @@ const COLLECTION_RECORD_SEEDS: SeedCollectionRecord[] = [
   },
 ];
 
+// ── Fertilizer (FERT-01..08) ──
+// Mirrors the portal's former `features/fertilizer/data.ts` fixture 1:1 —
+// figures drawn from the addendum's §5.2 example, notably TSP available =
+// −200 kg (500 on hand − 700 committed). Per-item on-hand: Urea 1,200 ·
+// TSP 500 (FB-2260 excluded, expired) · MOP 300 · Dolomite 800 · Rice 1,500.
+
+interface SeedBatch {
+  item: string;
+  category: 'Fertilizer' | 'Beneficiary';
+  quantityKg: number;
+  unit: 'kg' | 'bags';
+  receivedDate: string;
+  expiryDate: string;
+  location: string;
+  supplier: string;
+  lotNumber: string;
+  qualityNotes?: string;
+  discarded?: boolean;
+}
+
+const BATCH_SEEDS: SeedBatch[] = [
+  {
+    item: 'Urea Fertilizer',
+    category: 'Fertilizer',
+    quantityKg: 700,
+    unit: 'kg',
+    receivedDate: '2026-06-01',
+    expiryDate: '2026-12-01',
+    location: 'Warehouse A',
+    supplier: 'CIC Agri Businesses',
+    lotNumber: 'LOT-U-4471',
+    qualityNotes: 'Sealed 50 kg bags, dry storage.',
+  },
+  {
+    item: 'Urea Fertilizer',
+    category: 'Fertilizer',
+    quantityKg: 500,
+    unit: 'kg',
+    receivedDate: '2026-06-20',
+    expiryDate: '2026-11-15',
+    location: 'Warehouse A',
+    supplier: 'CIC Agri Businesses',
+    lotNumber: 'LOT-U-4490',
+  },
+  {
+    item: 'TSP',
+    category: 'Fertilizer',
+    quantityKg: 500,
+    unit: 'kg',
+    receivedDate: '2026-05-30',
+    expiryDate: '2026-10-10',
+    location: 'Warehouse A',
+    supplier: 'Hayleys Agriculture',
+    lotNumber: 'LOT-T-2201',
+  },
+  {
+    // Past expiry — excluded from on-hand (the FEFO/expiry-alerts showcase row).
+    item: 'TSP',
+    category: 'Fertilizer',
+    quantityKg: 120,
+    unit: 'kg',
+    receivedDate: '2026-01-10',
+    expiryDate: '2026-07-04',
+    location: 'Warehouse B',
+    supplier: 'Hayleys Agriculture',
+    lotNumber: 'LOT-T-1180',
+    qualityNotes: 'Past expiry — pending disposal.',
+  },
+  {
+    item: 'Muriate of Potash',
+    category: 'Fertilizer',
+    quantityKg: 300,
+    unit: 'kg',
+    receivedDate: '2026-05-10',
+    expiryDate: '2026-08-10',
+    location: 'Warehouse B',
+    supplier: 'CIC Agri Businesses',
+    lotNumber: 'LOT-M-3350',
+  },
+  {
+    item: 'Dolomite',
+    category: 'Fertilizer',
+    quantityKg: 500,
+    unit: 'kg',
+    receivedDate: '2026-06-02',
+    expiryDate: '2026-08-16',
+    location: 'Warehouse B',
+    supplier: 'Lanka Minerals',
+    lotNumber: 'LOT-D-0921',
+    qualityNotes:
+      'Bags show minor moisture on outer layer — inspect before dispatch.',
+  },
+  {
+    item: 'Dolomite',
+    category: 'Fertilizer',
+    quantityKg: 300,
+    unit: 'kg',
+    receivedDate: '2026-06-25',
+    expiryDate: '2026-11-01',
+    location: 'Warehouse B',
+    supplier: 'Lanka Minerals',
+    lotNumber: 'LOT-D-0955',
+  },
+  {
+    // Beneficiary item, not fertilizer proper — same batch/movement model (addendum §11.25).
+    item: 'Rice',
+    category: 'Beneficiary',
+    quantityKg: 1500,
+    unit: 'kg',
+    receivedDate: '2026-07-01',
+    expiryDate: '2027-03-01',
+    location: 'Warehouse C',
+    supplier: 'Govt Beneficiary Supply',
+    lotNumber: 'LOT-R-7781',
+  },
+];
+
+interface SeedFertilizerRequest {
+  estateName: string;
+  item: string;
+  quantityKg: number;
+  origin: 'mobile' | 'web';
+  status:
+    | 'Submitted'
+    | 'Approved'
+    | 'Partially Dispatched'
+    | 'Dispatched'
+    | 'Deducted'
+    | 'Rejected'
+    | 'Cancelled';
+  reason?: string;
+  approvedQtyKg?: number;
+  dispatchedQtyKg?: number;
+  decidedBy?: string;
+}
+
+// `quantityKg` is unique per (estate, item) below, so that triple doubles as
+// this fixture's natural key for idempotent re-seeding (fertilizer_requests
+// has no business-key column — see init.sql).
+const FERTILIZER_REQUEST_SEEDS: SeedFertilizerRequest[] = [
+  {
+    estateName: 'Green Valley Estate',
+    item: 'Urea Fertilizer',
+    quantityKg: 400,
+    origin: 'mobile',
+    status: 'Approved',
+    approvedQtyKg: 400,
+    decidedBy: 'A. Bandara',
+  },
+  {
+    estateName: 'Hilltop Estate',
+    item: 'TSP',
+    quantityKg: 400,
+    origin: 'mobile',
+    status: 'Approved',
+    approvedQtyKg: 400,
+    decidedBy: 'A. Bandara',
+  },
+  {
+    estateName: 'Mount Rest Estate',
+    item: 'TSP',
+    quantityKg: 300,
+    origin: 'mobile',
+    status: 'Approved',
+    approvedQtyKg: 300,
+    decidedBy: 'A. Bandara',
+  },
+  {
+    estateName: 'Silver Peak Estate',
+    item: 'Muriate of Potash',
+    quantityKg: 100,
+    origin: 'web',
+    status: 'Approved',
+    approvedQtyKg: 100,
+    decidedBy: 'A. Bandara',
+  },
+  {
+    estateName: 'Green Valley Estate',
+    item: 'Rice',
+    quantityKg: 250,
+    origin: 'mobile',
+    status: 'Approved',
+    approvedQtyKg: 250,
+    decidedBy: 'A. Bandara',
+  },
+  {
+    estateName: 'Green Valley Estate',
+    item: 'Urea Fertilizer',
+    quantityKg: 300,
+    origin: 'mobile',
+    status: 'Submitted',
+    reason: 'Top dressing for the new flush.',
+  },
+  {
+    estateName: 'Hilltop Estate',
+    item: 'TSP',
+    quantityKg: 200,
+    origin: 'mobile',
+    status: 'Submitted',
+    reason: 'Base fertiliser, lower field.',
+  },
+  {
+    estateName: 'Mount Rest Estate',
+    item: 'Muriate of Potash',
+    quantityKg: 400,
+    origin: 'web',
+    status: 'Submitted',
+    reason: 'Phoned in — potassium deficiency flagged by manager.',
+  },
+  {
+    estateName: 'Silver Peak Estate',
+    item: 'Rice',
+    quantityKg: 100,
+    origin: 'mobile',
+    status: 'Submitted',
+    reason: 'Monthly beneficiary ration.',
+  },
+  {
+    estateName: 'Mount Rest Estate',
+    item: 'Urea Fertilizer',
+    quantityKg: 120,
+    origin: 'mobile',
+    status: 'Dispatched',
+    approvedQtyKg: 120,
+    dispatchedQtyKg: 120,
+    decidedBy: 'A. Bandara',
+  },
+  {
+    estateName: 'Silver Peak Estate',
+    item: 'TSP',
+    quantityKg: 300,
+    origin: 'web',
+    status: 'Rejected',
+    reason: 'Duplicate of an earlier request.',
+    decidedBy: 'A. Bandara',
+  },
+];
+
+interface SeedMovement {
+  lotNumber: string;
+  type: 'Incoming' | 'Outgoing';
+  quantityKg: number;
+  date: string;
+  destination?: string;
+  linkedRequest?: { estateName: string; item: string; quantityKg: number };
+  supplier?: string;
+  notes?: string;
+  recordedBy: string;
+}
+
+const MOVEMENT_SEEDS: SeedMovement[] = [
+  {
+    lotNumber: 'LOT-U-4471',
+    type: 'Incoming',
+    quantityKg: 700,
+    date: '2026-06-01',
+    supplier: 'CIC Agri Businesses',
+    recordedBy: 'S. Fernando',
+  },
+  {
+    lotNumber: 'LOT-U-4471',
+    type: 'Outgoing',
+    quantityKg: 120,
+    date: '2026-06-29',
+    destination: 'Mount Rest Estate',
+    linkedRequest: {
+      estateName: 'Mount Rest Estate',
+      item: 'Urea Fertilizer',
+      quantityKg: 120,
+    },
+    recordedBy: 'S. Fernando',
+  },
+  {
+    lotNumber: 'LOT-T-2201',
+    type: 'Incoming',
+    quantityKg: 500,
+    date: '2026-05-30',
+    supplier: 'Hayleys Agriculture',
+    recordedBy: 'A. Bandara',
+  },
+  {
+    lotNumber: 'LOT-D-0921',
+    type: 'Incoming',
+    quantityKg: 500,
+    date: '2026-06-02',
+    supplier: 'Lanka Minerals',
+    recordedBy: 'S. Fernando',
+  },
+  {
+    lotNumber: 'LOT-M-3350',
+    type: 'Incoming',
+    quantityKg: 300,
+    date: '2026-05-10',
+    supplier: 'CIC Agri Businesses',
+    recordedBy: 'A. Bandara',
+  },
+  {
+    lotNumber: 'LOT-R-7781',
+    type: 'Incoming',
+    quantityKg: 1500,
+    date: '2026-07-01',
+    supplier: 'Govt Beneficiary Supply',
+    recordedBy: 'S. Fernando',
+  },
+];
+
 /** Manual find-then-insert for tables without a usable unique constraint (routes, estates). */
 async function findOrCreate(
   client: Client,
@@ -1173,6 +1479,7 @@ async function seed() {
     }
 
     const estateIds: Record<string, number> = {};
+    const estateOwnerIds: Record<string, number> = {};
     for (const e of ESTATE_SEEDS) {
       const ownerUser = await client.query<{ id: number }>(
         `INSERT INTO users (phone, password_hash, role) VALUES ($1, $2, 'estate_owner')
@@ -1191,6 +1498,7 @@ async function seed() {
         [ownerUserId, e.ownerName, e.nic, e.contact, e.email ?? null],
       );
       const ownerId = owner.rows[0].id;
+      estateOwnerIds[e.estateName] = ownerId;
 
       const estateId = await findOrCreate(
         client,
@@ -1558,6 +1866,160 @@ async function seed() {
     }
 
     console.log(`Seeded ${COLLECTION_RECORD_SEEDS.length} collection records`);
+
+    // ── Fertilizer (FERT-01..08) ──
+
+    const batchIds: Record<string, number> = {}; // keyed by lot_number
+    for (const b of BATCH_SEEDS) {
+      const batchId = await findOrCreate(
+        client,
+        `SELECT id FROM fertilizer_batches WHERE lot_number = $1`,
+        [b.lotNumber],
+        `INSERT INTO fertilizer_batches
+           (item, category, quantity_kg, unit, received_date, expiry_date, location,
+            supplier, lot_number, quality_notes, discarded, last_updated_by, last_updated_on)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         RETURNING id`,
+        [
+          b.item,
+          b.category,
+          b.quantityKg,
+          b.unit,
+          b.receivedDate,
+          b.expiryDate,
+          b.location,
+          b.supplier,
+          b.lotNumber,
+          b.qualityNotes ?? null,
+          b.discarded ?? false,
+          'S. Fernando',
+          new Date(),
+        ],
+      );
+      batchIds[b.lotNumber] = batchId;
+
+      await client.query(
+        `UPDATE fertilizer_batches SET
+           item = $2, category = $3, quantity_kg = $4, unit = $5, received_date = $6,
+           expiry_date = $7, location = $8, supplier = $9, quality_notes = $10, discarded = $11
+         WHERE id = $1`,
+        [
+          batchId,
+          b.item,
+          b.category,
+          b.quantityKg,
+          b.unit,
+          b.receivedDate,
+          b.expiryDate,
+          b.location,
+          b.supplier,
+          b.qualityNotes ?? null,
+          b.discarded ?? false,
+        ],
+      );
+    }
+    console.log(`Seeded ${BATCH_SEEDS.length} fertilizer batches`);
+
+    // Keyed by (estate, item, original quantity) — unique across this fixture
+    // set, so it doubles as a natural key since fertilizer_requests has no
+    // business-key column (see init.sql).
+    const requestIds: Record<string, number> = {};
+    const requestKey = (estateName: string, item: string, quantityKg: number) =>
+      `${estateName}|${item}|${quantityKg}`;
+
+    for (const r of FERTILIZER_REQUEST_SEEDS) {
+      const estateId = estateIds[r.estateName];
+      const ownerId = estateOwnerIds[r.estateName];
+      const approvedQtyKg =
+        r.approvedQtyKg ??
+        (r.status === 'Approved' ||
+        r.status === 'Dispatched' ||
+        r.status === 'Partially Dispatched'
+          ? r.quantityKg
+          : null);
+
+      const requestId = await findOrCreate(
+        client,
+        `SELECT id FROM fertilizer_requests WHERE estate_id = $1 AND item = $2 AND quantity_kg = $3`,
+        [estateId, r.item, r.quantityKg],
+        `INSERT INTO fertilizer_requests
+           (estate_id, owner_id, item, quantity_kg, justification, origin, status,
+            approved_qty_kg, dispatched_qty_kg, decided_by, decided_on)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         RETURNING id`,
+        [
+          estateId,
+          ownerId,
+          r.item,
+          r.quantityKg,
+          r.reason ?? null,
+          r.origin,
+          r.status,
+          approvedQtyKg,
+          r.dispatchedQtyKg ?? 0,
+          r.decidedBy ?? null,
+          r.decidedBy ? new Date() : null,
+        ],
+      );
+      requestIds[requestKey(r.estateName, r.item, r.quantityKg)] = requestId;
+
+      await client.query(
+        `UPDATE fertilizer_requests SET
+           justification = $2, origin = $3, status = $4, approved_qty_kg = $5,
+           dispatched_qty_kg = $6, decided_by = $7
+         WHERE id = $1`,
+        [
+          requestId,
+          r.reason ?? null,
+          r.origin,
+          r.status,
+          approvedQtyKg,
+          r.dispatchedQtyKg ?? 0,
+          r.decidedBy ?? null,
+        ],
+      );
+    }
+    console.log(
+      `Seeded ${FERTILIZER_REQUEST_SEEDS.length} fertilizer requests`,
+    );
+
+    for (const m of MOVEMENT_SEEDS) {
+      const batchId = batchIds[m.lotNumber];
+      const linkedRequestId = m.linkedRequest
+        ? requestIds[
+            requestKey(
+              m.linkedRequest.estateName,
+              m.linkedRequest.item,
+              m.linkedRequest.quantityKg,
+            )
+          ]
+        : null;
+
+      const existing = await client.query(
+        `SELECT id FROM stock_movements WHERE batch_id = $1 AND type = $2 AND movement_date = $3 AND quantity_kg = $4`,
+        [batchId, m.type, m.date, m.quantityKg],
+      );
+      if (!existing.rows[0]) {
+        await client.query(
+          `INSERT INTO stock_movements
+             (batch_id, type, quantity_kg, movement_date, destination, linked_request_id,
+              supplier, notes, recorded_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [
+            batchId,
+            m.type,
+            m.quantityKg,
+            m.date,
+            m.destination ?? null,
+            linkedRequestId,
+            m.supplier ?? null,
+            m.notes ?? null,
+            m.recordedBy,
+          ],
+        );
+      }
+    }
+    console.log(`Seeded ${MOVEMENT_SEEDS.length} stock movements`);
   } finally {
     await client.end();
   }

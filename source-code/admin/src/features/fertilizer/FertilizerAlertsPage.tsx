@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarClock, CheckCircle2, Eye, Trash2, Truck } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CalendarClock, CheckCircle2, Eye, Loader2, Trash2, Truck } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { AlertList, type AlertListItem } from '@/components/patterns/AlertList'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { EmptyState } from '@/components/data/EmptyState'
+import { ErrorState } from '@/components/data/ErrorState'
 import { StatCard } from '@/components/data/StatCard'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { BATCHES, REQUESTS, batchStatus, daysToExpiry } from './data'
-import { remainderOf } from './position'
-import type { FertilizerBatch } from './types'
+import * as fertilizerService from '@/services/fertilizer'
+import { batchStatus, daysToExpiry, remainderOf } from './lib'
+import type { FertilizerBatch, FertilizerRequest } from './types'
 import { formatDate, formatNumber, formatWeight } from '@/lib/format'
 
 /* FERT-04 — home screen for the "Low/Expiring Fertilizer Stock" notification (§15).
@@ -19,8 +21,8 @@ import { formatDate, formatNumber, formatWeight } from '@/lib/format'
    and batches with NO matching demand (genuine write-off risk) sort to the top. */
 
 /** Open demand (submitted + approved-undispatched) for an item — the batch can help fulfil this. */
-function openDemandFor(item: string): { count: number; kg: number } {
-  const open = REQUESTS.filter(
+function openDemandFor(item: string, requests: FertilizerRequest[]): { count: number; kg: number } {
+  const open = requests.filter(
     (r) => r.item === item && (r.status === 'Submitted' || r.status === 'Approved' || r.status === 'Partially Dispatched'),
   )
   const kg = open.reduce((sum, r) => sum + (r.status === 'Submitted' ? r.quantityKg : remainderOf(r)), 0)
@@ -31,14 +33,59 @@ export function FertilizerAlertsPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { can } = useAuth()
+  const queryClient = useQueryClient()
   const canAct = can('fertilizer', 'edit')
   const [discarding, setDiscarding] = useState<FertilizerBatch | null>(null)
 
-  const expiring = BATCHES.filter((b) => !b.discarded && daysToExpiry(b) <= 30).sort((a, b) => {
+  const {
+    data: batches,
+    isPending: batchesPending,
+    isError: batchesError,
+    refetch: refetchBatches,
+  } = useQuery({ queryKey: ['fertilizer', 'batches'], queryFn: fertilizerService.listBatches })
+  const {
+    data: requests,
+    isPending: requestsPending,
+    isError: requestsError,
+    refetch: refetchRequests,
+  } = useQuery({ queryKey: ['fertilizer', 'requests'], queryFn: fertilizerService.listRequests })
+
+  const discardMutation = useMutation({
+    mutationFn: (id: string) => fertilizerService.discardBatch(id),
+    onSuccess: (updated) => {
+      toast(`${updated.id} marked as discarded`, 'warning')
+      setDiscarding(null)
+      void queryClient.invalidateQueries({ queryKey: ['fertilizer'] })
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not discard this batch', 'danger'),
+  })
+
+  if (batchesPending || requestsPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (batchesError || requestsError || !batches || !requests) {
+    return (
+      <ErrorState
+        title="Couldn't load fertilizer alerts"
+        description="Something went wrong fetching stock and request data."
+        onRetry={() => {
+          void refetchBatches()
+          void refetchRequests()
+        }}
+      />
+    )
+  }
+
+  const expiring = batches.filter((b) => !b.discarded && daysToExpiry(b) <= 30).sort((a, b) => {
     // Critical (≤7d) first; within a group, no-matching-demand (write-off risk) first; then soonest expiry.
     const critRank = (x: FertilizerBatch) => (daysToExpiry(x) <= 7 ? 0 : 1)
     if (critRank(a) !== critRank(b)) return critRank(a) - critRank(b)
-    const demandRank = (x: FertilizerBatch) => (openDemandFor(x.item).count === 0 ? 0 : 1)
+    const demandRank = (x: FertilizerBatch) => (openDemandFor(x.item, requests).count === 0 ? 0 : 1)
     if (demandRank(a) !== demandRank(b)) return demandRank(a) - demandRank(b)
     return daysToExpiry(a) - daysToExpiry(b)
   })
@@ -48,7 +95,7 @@ export function FertilizerAlertsPage() {
 
   const items: AlertListItem[] = expiring.map((b) => {
     const days = daysToExpiry(b)
-    const demand = openDemandFor(b.item)
+    const demand = openDemandFor(b.item, requests)
     const expiryText =
       days < 0
         ? `Expired ${formatDate(b.expiryDate)} (${batchStatus(b)})`
@@ -118,13 +165,11 @@ export function FertilizerAlertsPage() {
       <LightConfirmModal
         open={!!discarding}
         onClose={() => setDiscarding(null)}
-        onConfirm={() => {
-          toast(`${discarding?.id} marked as discarded`, 'warning')
-          setDiscarding(null)
-        }}
+        onConfirm={() => discarding && discardMutation.mutate(discarding.id)}
         tone="danger"
         title="Discard this batch"
         confirmLabel="Mark as Discarded"
+        loading={discardMutation.isPending}
         message={
           <>
             <strong>{discarding?.item}</strong> ({discarding?.id}) will be removed from available stock. Reversible

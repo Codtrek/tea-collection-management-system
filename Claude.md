@@ -20,7 +20,11 @@ first full DB→backend→portal slice built after auth, per `PLAN.md` Phase 2.1
 record the Employees + Payroll vertical slice (`feature/employees-payroll-backend`, `PLAN.md`
 Phase 2.3) — the first slice with a genuinely new table (`employees`, independent of the
 auth-side `factory_employees`) and the first to implement live payroll computation rather than
-a snapshot/seeded value.
+a snapshot/seeded value. Updated 2026-07-27 to record the Fertilizer vertical slice
+(`feature/fertilizer-backend`, `PLAN.md` Phase 2.4) — resolved the last open business question
+(ad-hoc vs request-linked dispatch: both allowed) and the fourth module to prove the recipe,
+this time extending a pre-existing table in place rather than building fresh or splitting a
+new one.
 
 ## What this system does
 
@@ -321,8 +325,26 @@ render as a neutral dot rather than defaulting to Present. `PerformancePage` (EM
 `PerformancePage`'s employee picker still reads it; `netPay` moved to the new
 `features/employees/calc.ts`.
 
-**Backend (`source-code/backend/`) — auth, collections, estates, and employees slices built, rest
-still to come.**
+**Fertilizer wired to the real backend (2026-07-27, `feature/fertilizer-backend`) — `PLAN.md`
+Phase 2.4, fourth module.** All eight screens (FERT-01 stock position + expandable batch rows,
+FERT-02 movement entry, FERT-03 batch detail, FERT-04 alerts, FERT-05 request queue, FERT-06
+request detail/decision, FERT-07 log-phoned-in request) read/write through
+`src/services/fertilizer.ts` instead of `features/fertilizer/data.ts`/`position.ts` — both fixture
+files are **deleted this slice** (unlike Estates/Employees, which kept a trimmed fixture for a
+still-mock sibling page; Fertilizer had no such holdout). Stock arithmetic (on-hand/committed/
+available/coverage) is computed **server-side only**, at `GET /fertilizer/positions` — the client
+never recomputes it; `features/fertilizer/lib.ts` keeps only pure *presentation* helpers (expiry
+status, FEFO allocation as a display suggestion, request-availability lookups) that read whatever
+was last fetched. The resolved business question shows up directly in the data model: an Outgoing
+stock movement's `linkedRequest` stays optional — ad-hoc dispatch (no request behind it) and
+request-linked dispatch both draw down the same batch ledger, and a linked dispatch advances the
+request's `dispatchedQtyKg` and flips its status (Approved → Partially Dispatched → Dispatched).
+Decide (approve/reject/cancel a request) is **Administrator-only** — Officer's `edit` level covers
+logging requests and recording movements, but not the approval decision itself (a three-way split
+that doesn't exist in any other module's permission column).
+
+**Backend (`source-code/backend/`) — auth, collections, estates, employees, and fertilizer slices
+built, rest still to come.**
 The default NestJS scaffold (`app.controller.ts`, `app.service.ts`, their spec, and the e2e test)
 was **deleted**; `package.json` now depends on TypeORM, pg, @nestjs/jwt, passport-jwt, bcrypt, and
 class-validator. Built:
@@ -368,6 +390,24 @@ class-validator. Built:
   intentionally unrelated; `hasLogin` on an `employees` row is a stored flag only, since Employee
   self-service login is out of scope for this admin-portal slice (this module never provisions a
   `users` row, unlike Estates' owner-registration flow).
+- **Fertilizer** (`src/fertilizer/`): `GET/POST /fertilizer/batches`, `GET /fertilizer/batches/:id`,
+  `PATCH /fertilizer/batches/:id/discard`, `GET /fertilizer/positions`, `GET/POST
+  /fertilizer/requests`, `GET /fertilizer/requests/:id`, `PATCH /fertilizer/requests/:id/decide`,
+  `GET/POST /fertilizer/movements`, all JWT-guarded. Business rules live in
+  `fertilizer.service.ts` with unit tests in `fertilizer.service.spec.ts`: the position/coverage
+  arithmetic (on-hand/committed/available, Healthy/Tight/Short) is computed here and only here;
+  decide is Administrator-only while logging/recording is Officer+ (Manager read-only, same
+  three-tier split as the other modules but with an extra approve-vs-edit distinction unique to
+  this one); an Outgoing movement's `linkedRequest` is optional (ad-hoc allowed) but when present
+  must reference a request with `Approved`/`Partially Dispatched` status and enough remainder, and
+  advances `dispatched_qty_kg` + flips status (→ `Partially Dispatched` or `Dispatched`). DB↔portal
+  mapping in `fertilizer-map.ts` — same shared-enum, id-formatting-only pattern as
+  `employee-map.ts` (`formatBatchId`/`formatMovementId` → `FB-0001`/`MV-0001`;
+  `formatRequestId` → `FR-2026-0001`, embedding the request's creation year cosmetically). Reads
+  a second `EstateEntity` repository (registered in `fertilizer.module.ts` alongside its own
+  entities) purely to resolve estate name + owner id — Estates doesn't model `estate_employees`
+  managers at the app layer, so `fertilizer_requests.requested_by` is nullable and always null
+  from this module (see Database status below).
 - **Seed** (`src/seed.ts`, `npm run seed`, idempotent): three factory users, DEV creds
   `0771234567` / `Password123!` (admin / officer / manager on `…67/68/69`), plus reference
   routes/collection agents, 5 estates (1 inactive, 1 missing-bank) with owners/documents, 3 estate
@@ -375,17 +415,22 @@ class-validator. Built:
   pay rates, ~52 July-2026 attendance records (covering all four shift-hour buckets), 3 salary
   advances, and a payroll run for July 2026 computed inline in the script (same aggregation
   formula `generatePayroll` uses, since the seed script has no NestJS DI context to call the real
-  service from) — spanning every status each module needs.
+  service from), and 8 fertilizer batches (one intentionally past-expiry, reproducing the
+  addendum's TSP-available-−200 showcase), 11 fertilizer requests (5 Approved, 4 Submitted, 1
+  Dispatched, 1 Rejected — natural-keyed by `(estate, item, quantity)` for idempotent re-seeding,
+  since `fertilizer_requests` has no business-key column), and 6 stock movements — spanning every
+  status each module needs.
 - **Config**: `app.module.ts` wires ConfigModule + TypeORM (`synchronize: false`,
   `autoLoadEntities`); `main.ts` has a global ValidationPipe and dev-tolerant CORS (see below).
 
-The pickup-requests / fertilizer / reports / administration modules are still to be written — see
-`PLAN.md` Phase 2.4 onward. (Route/Estate/Employee now have minimal real backing; the full
+The pickup-requests / reports / administration modules are still to be written — see `PLAN.md`
+Phase 2.5 onward. (Route/Estate/Employee/Fertilizer now have minimal real backing; the full
 Route/Pickup request state machine is still mobile-driven, Phase 3.)
 
 **Database (`source-code/database/init.sql`) — auth unblocked, collections reconciled to the
 photo-evidence design, estates extended to the full EST-01..09 contract, employees/payroll tables
-added from scratch, broader Route/Pickup reconciliation still pending.** The `users.role`
+added from scratch, fertilizer stock tables added and the pre-existing request table extended in
+place, broader Route/Pickup reconciliation still pending.** The `users.role`
 **and** `factory_employees.role` CHECK constraints were extended (2026-07-21) to include
 `factory_officer` and `factory_manager`, so the web portal's two non-admin roles now authenticate
 (this was `PLAN.md` Phase 0). On 2026-07-26 the old OTP-based collection lineage —
@@ -418,9 +463,21 @@ independent of `factory_employees`), `employee_attendance` (one row per employee
 Pending/Approved/Rejected approval-workflow `status`, so payroll can track which Approved advances
 a processed run has already applied), and `payroll_runs` (`UNIQUE (employee_id, period)`, with
 `day_rate`/`day_ot_rate`/`night_rate`/`night_ot_rate` and matching hour columns snapshotted at
-generation time — same effective-dated-rate principle as `grade_rates`). The local dev DB runs
-everything in an isolated `tea_authslice` schema; the older, more-advanced `tea` schema left over
-from the abandoned test01 branch is untouched.
+generation time — same effective-dated-rate principle as `grade_rates`). On 2026-07-27 (Fertilizer
+slice) the pre-existing `fertilizer_requests` table — created for a dual owner/factory approval
+flow the portal never built — was **extended in place** rather than replaced: added `item`,
+`origin`, a portal-matching `status` lifecycle (`Submitted → Approved → Partially Dispatched →
+Dispatched → Deducted`, `Rejected`/`Cancelled` terminal), `approved_qty_kg`/`dispatched_qty_kg`,
+and `decided_by`/`decided_on`; the legacy `owner_status`/`factory_status` columns stay, defaulted,
+for a possible future mobile dual-approval flow. `requested_by` (FK to `estate_employees`, a
+manager) was changed **NOT NULL → nullable**, same "nullable because this slice doesn't populate
+it" reasoning as `estates`' bank fields — the Estates module never modeled `estate_employees` at
+the app layer, and the portal's FERT-07 log-phoned-in-request flow records against an estate, not
+a specific manager. Two new tables: `fertilizer_batches` (FEFO-tracked via `expiry_date`, folds
+beneficiary items like Rice into the same `category` column rather than a parallel table) and
+`stock_movements` (`linked_request_id` nullable by design — ad-hoc dispatch resolved 2026-07-27).
+The local dev DB runs everything in an isolated `tea_authslice` schema; the older, more-advanced
+`tea` schema left over from the abandoned test01 branch is untouched.
 
 Infra is already in place and needs no work: `source-code/docker-compose.yml` defines postgres 16,
 redis, api, admin, and nginx.
@@ -430,7 +487,7 @@ tokens (`src/theme/`: colors, spacing, typography — note `colors.primary` is t
 `#53cf81` the web portal's hybrid palette is built from) and a minimal `_layout.tsx` +
 `index.tsx`. No role-based login, route/pickup/weight/payment flows exist here yet.
 
-## Remaining work (as of 2026-07-26)
+## Remaining work (as of 2026-07-27)
 
 **See `PLAN.md` at the repo root for the phased execution roadmap** (schema → auth slice →
 module-by-module vertical slices → mobile), with per-phase done-criteria and checkboxes.
@@ -440,16 +497,17 @@ abandoned** — take nothing from it. All backend, database, and mobile work is 
 this branch. Do not propose merging or cherry-picking from it.
 
 Two facts that shaped the sequencing — **both resolved by the auth slice, and the seam is now
-proven end-to-end by the Collections, Estates, and Employees slices**:
+proven end-to-end by the Collections, Estates, Employees, and Fertilizer slices**:
 
-1. **The portal has a data-fetching seam, and three modules besides auth now prove it holds.** It
+1. **The portal has a data-fetching seam, and four modules besides auth now prove it holds.** It
    was previously fixture-only (no `services/` layer, zero `useQuery` calls). The auth slice built
    the seam (`src/lib/api.ts` + `src/services/`); Collections (2026-07-26) was the first module to
    actually use it, Estates (2026-07-26, same day) the second — including a money-moving write
-   path (advances, settlement processing) — and Employees (2026-07-26, same day) the third,
-   adding live server-side computation (payroll generation) on top of that pattern for the first
-   time. Every module after Employees (Fertilizer, Reports, Administration) repeats the same
-   recipe — see "Modules, in dependency order" in `PLAN.md` Phase 2. The remaining pages still
+   path (advances, settlement processing) — Employees (2026-07-26, same day) the third, adding
+   live server-side computation (payroll generation) on top of that pattern for the first time —
+   and Fertilizer (2026-07-27) the fourth, the first to extend a pre-existing table in place
+   instead of building fresh. Every module after Fertilizer (Reports, Administration) repeats the
+   same recipe — see "Modules, in dependency order" in `PLAN.md` Phase 2. The remaining pages still
    import static fixtures until each is migrated in turn.
 2. **The schema no longer blocks auth**, and the Collections table is now reconciled to the
    photo-evidence design too. The `users.role` (and `factory_employees.role`) CHECK constraints
@@ -463,10 +521,12 @@ Dev-environment note: `main.ts` CORS tolerates Vite's port drift — in dev it a
 production stays pinned to `CORS_ORIGIN`. Safe because the JWT rides the `Authorization` header,
 not cookies.
 
-Open business items still unresolved and surfaced in the UI: ad-hoc vs request-linked fertilizer
-dispatch, beneficiary-items scope. (The ~Rs. 3 bank-charge owner was resolved 2026-07-26 — see
-Payment calculation above.) Deferred a11y polish from the 2026-07-18 review: modal focus trap,
-DataTable keyboard rows, tab ARIA wiring, Toggle hit area.
+Open business items still unresolved: beneficiary-items scope (Rice already flows through the same
+`category` column as fertilizer proper, but no policy exists yet for e.g. a different approval
+threshold or reporting split). (The ~Rs. 3 bank-charge owner was resolved 2026-07-26, and ad-hoc
+vs request-linked fertilizer dispatch was resolved 2026-07-27 — both allowed — see Payment
+calculation above and the Fertilizer slice note below.) Deferred a11y polish from the 2026-07-18
+review: modal focus trap, DataTable keyboard rows, tab ARIA wiring, Toggle hit area.
 
 Deferred from the Collections slice (2026-07-26), noted as seams rather than gaps: auto-generating
 a `complaint` on weight mismatch (currently display-only on the record); a real `audit_logs` table
@@ -494,3 +554,18 @@ out of the admin portal; lands whenever mobile/self-service is built, Phase 3 or
 (no equivalent of Estates' fertilizer-deduction linkage for employees); **bank payment file
 export** — the "Bank File" button on `PayrollListPage` is still a toast stub, same deferred-export
 pattern as Collections/Estates; and EMP-14 Performance stays on mock data (same call as EST-09).
+
+Deferred from the Fertilizer slice (2026-07-27), noted as seams rather than gaps: **settlement
+linkage** — "feeds the estate settlement deduction breakdown" means a `Deducted` request should
+flow into `fertilizer_charges` → `settlements.fertilizer_deduction`, but settlement generation
+itself is still seeded/process-only (deferred from the Estates slice, needs `grade_rates` from
+ADM-01 too) — this slice only produces the `Deducted` status, the charge-row/settlement wiring
+lands whenever settlement auto-generation does; **new-batch category** — `StockMovementEntryPage`'s
+quick "+ New batch" path (Incoming, no existing batch selected) has no category selector and
+always creates a `Fertilizer` batch — registering a new `Beneficiary` (e.g. Rice) batch needs
+`POST /fertilizer/batches` directly, not this form; **request logging date** — `LogRequestPage`'s
+"Requested date" field is validated client-side but not sent; the backend always stamps a logged
+request with "now" (there's no backdating field yet); and **dual owner/factory approval** — the
+DB's `owner_status`/`factory_status` columns on `fertilizer_requests` stay unused by this slice
+(portal approval runs off the single `status` lifecycle instead), reserved for a possible future
+mobile owner-approval step.

@@ -74,7 +74,7 @@ module instead of being baked into all six.
 - [ ] Add tables the web portal needs that the schema has never had:
       - [x] `employee_attendance`, `payroll_runs`, `salary_advances` — done 2026-07-26 with the
         Employees + Payroll slice (2.3), plus a new `employees` table not listed here originally
-      - `fertilizer_batches`, `stock_movements`
+      - [x] `fertilizer_batches`, `stock_movements` — done 2026-07-27 with the Fertilizer slice (2.4)
       - `grade_rates` — **effective-dated**; ADM-01 depends on past settlements never
         recalculating when a rate changes
       - `system_settings`, `audit_logs`
@@ -145,7 +145,13 @@ Order is by dependency, not by sidebar order:
       `employees` table (separate from `factory_employees`); payroll is live-computed
       (attendance × pay rates via a "Generate" step, snapshotted for immutability), not seeded;
       roster writes are Administrator-only (stricter than Estates' Officer-can-edit).
-- [ ] **2.4 Fertilizer (FERT-01..04)** — feeds the estate settlement deduction breakdown.
+- [x] **2.4 Fertilizer (FERT-01..04)** — feeds the estate settlement deduction breakdown. Done
+      2026-07-27, `feature/fertilizer-backend` — resolved: both ad-hoc and request-linked dispatch
+      allowed (matches the portal's optional `linkedRequest`); extended the pre-existing
+      `fertilizer_requests` table in place (added `fertilizer_batches`/`stock_movements`) rather
+      than splitting a new table, since it's the same entity the portal manages; `requested_by`
+      made nullable — neither the Estates module nor the portal ever populates a manager row.
+      Settlement auto-generation from live fertilizer data is still deferred (unchanged from 2.2).
 - [ ] **2.5 Reports (RPT-01..04)** — pure aggregation; needs the others populated to be
       meaningful. Must aggregate **Confirmed records only**.
 - [ ] **2.6 Administration (ADM-01..04)** — last, because it makes previously-static things
@@ -177,7 +183,7 @@ Fold these into whichever phase touches the relevant code.
 **Open business questions** — decide before the module that needs them ships:
 - [x] Who absorbs the ~Rs. 3 per-transaction bank charge — resolved 2026-07-26: nobody, it's
       never deducted from estate owners/employees; the factory is billed a separate periodic fee.
-- [ ] Ad-hoc vs request-linked fertilizer dispatch (blocks 2.4)
+- [x] Ad-hoc vs request-linked fertilizer dispatch — resolved 2026-07-27: both allowed.
 - [ ] Beneficiary-items scope
 
 ---
