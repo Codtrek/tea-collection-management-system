@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
@@ -60,6 +61,7 @@ export class ReportsService {
     private readonly settlementRepo: Repository<SettlementEntity>,
     @InjectRepository(PayrollRunEntity)
     private readonly payrollRepo: Repository<PayrollRunEntity>,
+    private readonly audit: AuditService,
   ) {}
 
   // ── RPT-01 — Collection ─────────────────────────────────────────
@@ -369,7 +371,15 @@ export class ReportsService {
       entryDate: dto.date,
       enteredBy: actor.name,
     });
-    return this.toPublicExpense(await this.expenseRepo.save(entry));
+    const saved = await this.expenseRepo.save(entry);
+    await this.audit.record(actor, {
+      action: 'Logged daily expense',
+      module: 'Reports',
+      record: saved.id,
+      recordHref: '/reports/expenses',
+      details: `${dto.category} · Rs. ${dto.amount} — ${dto.description}`,
+    });
+    return this.toPublicExpense(saved);
   }
 
   private assertCanWrite(actor: Actor): void {

@@ -148,6 +148,7 @@ describe('EstatesService', () => {
       settlementRepo as unknown as Repository<SettlementEntity>,
       routeRepo as unknown as Repository<RouteEntity>,
       {} as UsersService,
+      { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
     );
   });
 

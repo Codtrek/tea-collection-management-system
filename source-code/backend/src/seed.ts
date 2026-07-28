@@ -1694,6 +1694,66 @@ const EXPENSE_ENTRY_SEEDS: SeedExpenseEntry[] = [
   },
 ];
 
+// ── Administration (ADM-01..04) ──
+// role_permissions is seeded from the portal's DEFAULT_PERMISSIONS (src/context/
+// permissions.ts) — the backend is now the source of truth and the client
+// constant is only a fallback. grade_rates mirror the ADM-01 fixture's version
+// history; a settings baseline and a few audit rows so the pages aren't empty.
+
+const PERMISSION_MATRIX: Record<
+  'Administrator' | 'Officer' | 'Manager',
+  Record<string, string>
+> = {
+  Administrator: {
+    dashboard: 'approve', collection: 'approve', fertilizer: 'approve',
+    estateOwners: 'approve', payroll: 'approve', advances: 'approve',
+    employees: 'approve', attendance: 'approve', performance: 'approve',
+    reports: 'approve', administration: 'approve',
+  },
+  Officer: {
+    dashboard: 'view', collection: 'edit', fertilizer: 'edit',
+    estateOwners: 'edit', payroll: 'edit', advances: 'approve',
+    employees: 'view', attendance: 'edit', performance: 'view',
+    reports: 'edit', administration: 'none',
+  },
+  Manager: {
+    dashboard: 'view', collection: 'view', fertilizer: 'view',
+    estateOwners: 'view', payroll: 'view', advances: 'view',
+    employees: 'view', attendance: 'view', performance: 'approve',
+    reports: 'view', administration: 'none',
+  },
+};
+
+const GRADE_RATE_SEEDS = [
+  { id: 'GR-2026-0001', superRate: 172, normalRate: 88, effectiveDate: '2026-01-01' },
+  { id: 'GR-2026-0002', superRate: 180, normalRate: 92, effectiveDate: '2026-04-01' },
+  { id: 'GR-2026-0003', superRate: 185, normalRate: 95, effectiveDate: '2026-07-01' },
+];
+
+const SETTING_SEEDS: { key: string; value: unknown }[] = [
+  {
+    key: 'notifications',
+    value: {
+      'route-assigned': true,
+      'advance-approved': true,
+      'fertilizer-expiry': true,
+      'payment-processed': true,
+      'weight-mismatch': true,
+    },
+  },
+  { key: 'defaultChannel', value: 'in-app' },
+  { key: 'sessionTimeout', value: '30' },
+  { key: 'passwordPolicy', value: 'standard' },
+];
+
+const AUDIT_LOG_SEEDS = [
+  { id: 'AUD-00001', createdAt: '2026-07-01T09:15:00', userName: 'A. Bandara', role: 'Administrator', action: 'Processed settlement run', module: 'Estate Owner', record: 'June 2026', recordHref: '/estates/settlements', details: 'Rs. 1,207,464 across 2 estates' },
+  { id: 'AUD-00002', createdAt: '2026-07-05T10:02:00', userName: 'S. Fernando', role: 'Officer', action: 'Issued advance Rs. 50000', module: 'Estate Owner', record: 'EADV-2026-0031', recordHref: '/estates/EST-0001', details: 'Green Valley Estate — pre-season labour' },
+  { id: 'AUD-00003', createdAt: '2026-07-12T14:18:00', userName: 'S. Fernando', role: 'Officer', action: 'Logged outgoing stock movement', module: 'Fertilizer', record: 'FB-2291', recordHref: '/fertilizer', details: '60 kg Urea' },
+  { id: 'AUD-00004', createdAt: '2026-07-15T11:30:00', userName: 'A. Bandara', role: 'Administrator', action: 'Processed payroll run', module: 'Employee', record: 'July 2026', recordHref: '/employees/payroll', details: '27 employees' },
+  { id: 'AUD-00005', createdAt: '2026-07-17T15:44:00', userName: 'A. Bandara', role: 'Administrator', action: 'Updated grade rates', module: 'Administration', record: 'Rates effective 2026-07-01', details: 'Super Rs. 185/kg · Normal Rs. 95/kg' },
+];
+
 /** Manual find-then-insert for tables without a usable unique constraint (routes, estates). */
 async function findOrCreate(
   client: Client,
@@ -2336,6 +2396,53 @@ async function seed() {
       );
     }
     console.log(`Seeded ${EXPENSE_ENTRY_SEEDS.length} expense entries`);
+
+    // ── Administration (ADM-01..04) ──
+
+    let permCount = 0;
+    for (const [role, mods] of Object.entries(PERMISSION_MATRIX)) {
+      for (const [module, level] of Object.entries(mods)) {
+        await client.query(
+          `INSERT INTO role_permissions (role, module, level) VALUES ($1, $2, $3)
+           ON CONFLICT (role, module) DO UPDATE SET level = EXCLUDED.level`,
+          [role, module, level],
+        );
+        permCount++;
+      }
+    }
+    console.log(`Seeded ${permCount} role-permission cells`);
+
+    for (const g of GRADE_RATE_SEEDS) {
+      await client.query(
+        `INSERT INTO grade_rates (id, super_rate, normal_rate, effective_date, set_by)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (id) DO UPDATE SET
+           super_rate = EXCLUDED.super_rate, normal_rate = EXCLUDED.normal_rate,
+           effective_date = EXCLUDED.effective_date`,
+        [g.id, g.superRate, g.normalRate, g.effectiveDate, 'A. Bandara'],
+      );
+    }
+    console.log(`Seeded ${GRADE_RATE_SEEDS.length} grade-rate versions`);
+
+    for (const s of SETTING_SEEDS) {
+      await client.query(
+        `INSERT INTO system_settings (key, value, updated_by)
+         VALUES ($1, $2::jsonb, $3)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [s.key, JSON.stringify(s.value), 'A. Bandara'],
+      );
+    }
+    console.log(`Seeded ${SETTING_SEEDS.length} system settings`);
+
+    for (const a of AUDIT_LOG_SEEDS) {
+      await client.query(
+        `INSERT INTO audit_logs (id, created_at, user_name, role, action, module, record, record_href, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (id) DO NOTHING`,
+        [a.id, a.createdAt, a.userName, a.role, a.action, a.module, a.record, a.recordHref, a.details],
+      );
+    }
+    console.log(`Seeded ${AUDIT_LOG_SEEDS.length} audit-log baseline rows`);
   } finally {
     await client.end();
   }

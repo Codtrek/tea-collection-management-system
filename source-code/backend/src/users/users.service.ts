@@ -28,6 +28,11 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { id } });
   }
 
+  /** Stamp a successful login so ADM-02 can show a real "last login". */
+  async markLogin(userId: number): Promise<void> {
+    await this.usersRepository.update({ id: userId }, { last_login_at: new Date() });
+  }
+
   /**
    * Provisions a login row for a non-portal user registered through the
    * portal (e.g. an estate owner via EST-02). No password is issued through

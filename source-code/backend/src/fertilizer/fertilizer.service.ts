@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { EstateEntity } from '../estates/estate.entity';
 import { parseEstateId } from '../estates/estate-map';
@@ -69,6 +70,7 @@ export class FertilizerService {
     private readonly requestRepo: Repository<FertilizerRequestEntity>,
     @InjectRepository(EstateEntity)
     private readonly estateRepo: Repository<EstateEntity>,
+    private readonly audit: AuditService,
   ) {}
 
   // ── Batches ──────────────────────────────────────────────────────
@@ -85,7 +87,15 @@ export class FertilizerService {
   /** FERT-01/03 — direct registration; also reached implicitly via an Incoming movement with no `batchId`. */
   async createBatch(dto: CreateBatchDto, actor: Actor): Promise<PublicBatch> {
     this.assertCanWrite(actor);
-    return this.toPublicBatch(await this.saveNewBatch(dto, actor));
+    const batch = await this.saveNewBatch(dto, actor);
+    await this.audit.record(actor, {
+      action: 'Registered fertilizer batch',
+      module: 'Fertilizer',
+      record: formatBatchId(batch.id),
+      recordHref: `/fertilizer/${formatBatchId(batch.id)}`,
+      details: `${dto.item} — ${dto.quantityKg} kg`,
+    });
+    return this.toPublicBatch(batch);
   }
 
   /** FERT-03 — marks a batch discarded; excluded from on-hand from that point on. */
@@ -95,7 +105,14 @@ export class FertilizerService {
     batch.discarded = true;
     batch.lastUpdatedBy = actor.name;
     batch.lastUpdatedOn = new Date();
-    return this.toPublicBatch(await this.batchRepo.save(batch));
+    const saved = await this.batchRepo.save(batch);
+    await this.audit.record(actor, {
+      action: 'Discarded fertilizer batch',
+      module: 'Fertilizer',
+      record: formatBatchId(saved.id),
+      recordHref: `/fertilizer/${formatBatchId(saved.id)}`,
+    });
+    return this.toPublicBatch(saved);
   }
 
   // ── Positions (FERT-01 — the single source of stock arithmetic) ────
@@ -176,10 +193,14 @@ export class FertilizerService {
       decidedOn: null,
     });
 
-    return this.toPublicRequest(
-      await this.requestRepo.save(request),
-      estate.name,
-    );
+    const saved = await this.requestRepo.save(request);
+    await this.audit.record(actor, {
+      action: 'Logged fertilizer request',
+      module: 'Fertilizer',
+      record: formatRequestId(saved.id, saved.createdAt),
+      details: `${estate.name} — ${dto.item} ${dto.quantityKg} kg`,
+    });
+    return this.toPublicRequest(saved, estate.name);
   }
 
   /**
@@ -219,6 +240,12 @@ export class FertilizerService {
     const estate = await this.estateRepo.findOne({
       where: { id: saved.estateId },
     });
+    await this.audit.record(actor, {
+      action: `${request.status} fertilizer request`,
+      module: 'Fertilizer',
+      record: formatRequestId(saved.id, saved.createdAt),
+      details: estate?.name ?? 'Unknown estate',
+    });
     return this.toPublicRequest(saved, estate?.name ?? 'Unknown estate');
   }
 
@@ -252,10 +279,20 @@ export class FertilizerService {
   ): Promise<PublicMovement> {
     this.assertCanWrite(actor);
 
-    if (dto.type === 'Incoming') {
-      return this.recordIncoming(dto, actor);
-    }
-    return this.recordOutgoing(dto, actor);
+    const movement =
+      dto.type === 'Incoming'
+        ? await this.recordIncoming(dto, actor)
+        : await this.recordOutgoing(dto, actor);
+    await this.audit.record(actor, {
+      action: `Logged ${dto.type.toLowerCase()} stock movement`,
+      module: 'Fertilizer',
+      record: movement.id,
+      recordHref: '/fertilizer',
+      details: dto.item
+        ? `${dto.item} — ${dto.quantityKg} kg`
+        : `${dto.quantityKg} kg`,
+    });
+    return movement;
   }
 
   private async recordIncoming(

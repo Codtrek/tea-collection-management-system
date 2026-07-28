@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { CollectionRecordEntity } from './collection-record.entity';
 import {
@@ -29,6 +30,7 @@ export class CollectionsService {
   constructor(
     @InjectRepository(CollectionRecordEntity)
     private readonly repo: Repository<CollectionRecordEntity>,
+    private readonly audit: AuditService,
   ) {}
 
   async findAll(): Promise<PublicCollection[]> {
@@ -73,7 +75,14 @@ export class CollectionsService {
     record.lastUpdatedBy = actor.name;
     record.lastUpdatedOn = new Date();
 
-    return this.toPublic(await this.repo.save(record));
+    const saved = await this.repo.save(record);
+    await this.audit.record(actor, {
+      action: 'Edited collection record',
+      module: 'Collection',
+      record: saved.id,
+      recordHref: `/collections/${saved.id}`,
+    });
+    return this.toPublic(saved);
   }
 
   /**
@@ -114,7 +123,15 @@ export class CollectionsService {
       lastUpdatedOn: now,
     });
 
-    return this.toPublic(await this.repo.save(record));
+    const saved = await this.repo.save(record);
+    await this.audit.record(actor, {
+      action: 'Logged provisional collection entry',
+      module: 'Collection',
+      record: saved.id,
+      recordHref: `/collections/${saved.id}`,
+      details: `${dto.estateName} — ${dto.reason}`,
+    });
+    return this.toPublic(saved);
   }
 
   /** Audit-tracked correction request against a locked (Confirmed) record. */
@@ -132,11 +149,12 @@ export class CollectionsService {
       );
     }
 
-    // No global audit_logs table yet (that lands with Administration, PLAN.md
-    // Phase 2.6) — record the correction request as a timeline entry for now.
+    // The correction request is captured both as a timeline entry (rendered on
+    // CollectionDetailPage) and, since the Administration slice (2.6), as a
+    // real audit_logs row via AuditService below.
     // Note: CollectionDetailPage's timeline view matches the first entry for a
     // given status, so this second 'Confirmed' entry isn't rendered as its own
-    // row there today; the data is still captured for when audit_logs lands.
+    // row there today; the data is still captured.
     record.timeline = [
       ...record.timeline,
       {
@@ -148,7 +166,15 @@ export class CollectionsService {
     record.lastUpdatedBy = actor.name;
     record.lastUpdatedOn = new Date();
 
-    return this.toPublic(await this.repo.save(record));
+    const saved = await this.repo.save(record);
+    await this.audit.record(actor, {
+      action: 'Flagged collection record for correction',
+      module: 'Collection',
+      record: saved.id,
+      recordHref: `/collections/${saved.id}`,
+      details: dto.reason,
+    });
+    return this.toPublic(saved);
   }
 
   private async findEntity(id: string): Promise<CollectionRecordEntity> {

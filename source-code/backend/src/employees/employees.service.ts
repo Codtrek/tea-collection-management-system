@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { GeneratePayrollDto } from './dto/generate-payroll.dto';
@@ -46,6 +47,7 @@ export class EmployeesService {
     private readonly advanceRepo: Repository<SalaryAdvanceEntity>,
     @InjectRepository(PayrollRunEntity)
     private readonly payrollRepo: Repository<PayrollRunEntity>,
+    private readonly audit: AuditService,
   ) {}
 
   async findAll(): Promise<PublicEmployee[]> {
@@ -100,7 +102,15 @@ export class EmployeesService {
       lastUpdatedOn: new Date(),
     });
 
-    return this.toPublic(await this.employeeRepo.save(employee));
+    const saved = await this.employeeRepo.save(employee);
+    await this.audit.record(actor, {
+      action: 'Registered employee',
+      module: 'Employee',
+      record: formatEmployeeId(saved.id),
+      recordHref: `/employees/${formatEmployeeId(saved.id)}`,
+      details: `${dto.name} — ${dto.role}`,
+    });
+    return this.toPublic(saved);
   }
 
   /** EMP-04 — Administrator only, same as create. */
@@ -135,7 +145,14 @@ export class EmployeesService {
     employee.lastUpdatedBy = actor.name;
     employee.lastUpdatedOn = new Date();
 
-    return this.toPublic(await this.employeeRepo.save(employee));
+    const saved = await this.employeeRepo.save(employee);
+    await this.audit.record(actor, {
+      action: 'Updated employee details',
+      module: 'Employee',
+      record: formatEmployeeId(saved.id),
+      recordHref: `/employees/${formatEmployeeId(saved.id)}`,
+    });
+    return this.toPublic(saved);
   }
 
   /** Administrator only (portal: `employees: 'approve'`). */
@@ -145,7 +162,14 @@ export class EmployeesService {
     employee.status = 'Inactive';
     employee.lastUpdatedBy = actor.name;
     employee.lastUpdatedOn = new Date();
-    return this.toPublic(await this.employeeRepo.save(employee));
+    const saved = await this.employeeRepo.save(employee);
+    await this.audit.record(actor, {
+      action: 'Deactivated employee',
+      module: 'Employee',
+      record: formatEmployeeId(saved.id),
+      recordHref: `/employees/${formatEmployeeId(saved.id)}`,
+    });
+    return this.toPublic(saved);
   }
 
   async listAttendance(
@@ -208,6 +232,13 @@ export class EmployeesService {
         existing.push(created);
       }
     }
+
+    await this.audit.record(actor, {
+      action: `Marked attendance for ${dto.records.length} employee(s)`,
+      module: 'Employee',
+      record: dto.date,
+      recordHref: '/employees/attendance',
+    });
   }
 
   async listAdvances(): Promise<PublicAdvance[]> {
@@ -236,7 +267,15 @@ export class EmployeesService {
       deducted: false,
     });
 
-    return this.toPublicAdvance(await this.advanceRepo.save(advance));
+    const saved = await this.advanceRepo.save(advance);
+    await this.audit.record(actor, {
+      action: `Requested advance Rs. ${dto.amount}`,
+      module: 'Employee',
+      record: saved.id,
+      recordHref: '/employees/advances',
+      details: `${employee.name} — ${dto.reason}`,
+    });
+    return this.toPublicAdvance(saved);
   }
 
   /** EMP-10 (approval side) — Officer or Administrator (portal: `advances: 'approve'` for both). */
@@ -258,7 +297,15 @@ export class EmployeesService {
     advance.decidedBy = actor.name;
     advance.decidedOn = new Date();
 
-    return this.toPublicAdvance(await this.advanceRepo.save(advance));
+    const saved = await this.advanceRepo.save(advance);
+    await this.audit.record(actor, {
+      action: `${decision === 'approve' ? 'Approved' : 'Rejected'} advance Rs. ${Number(advance.amount)}`,
+      module: 'Employee',
+      record: saved.id,
+      recordHref: '/employees/advances',
+      details: advance.employeeName,
+    });
+    return this.toPublicAdvance(saved);
   }
 
   async listPayroll(
@@ -378,6 +425,13 @@ export class EmployeesService {
       }
     }
 
+    await this.audit.record(actor, {
+      action: 'Generated payroll',
+      module: 'Employee',
+      record: dto.period,
+      recordHref: '/employees/payroll',
+      details: `${results.length} employee row(s)`,
+    });
     return results.map((r) => this.toPublicPayroll(r));
   }
 
@@ -431,6 +485,13 @@ export class EmployeesService {
       }
     }
 
+    await this.audit.record(actor, {
+      action: 'Processed payroll run',
+      module: 'Employee',
+      record: dto.period ?? 'All pending periods',
+      recordHref: '/employees/payroll',
+      details: `${processed.length} employee(s)`,
+    });
     return processed.map((r) => this.toPublicPayroll(r));
   }
 

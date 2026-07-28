@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AdminModule } from './admin/admin.module';
+import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { CollectionsModule } from './collections/collections.module';
 import { EmployeesModule } from './employees/employees.module';
@@ -29,6 +31,8 @@ import { UsersModule } from './users/users.module';
     EmployeesModule,
     FertilizerModule,
     ReportsModule,
+    AuditModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

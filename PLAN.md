@@ -12,11 +12,11 @@ decisions*); this file holds the *execution order*.
 
 | Layer | State |
 |---|---|
-| **Web portal** | All 6 modules UI-complete (~40 screens). **Running entirely on static fixtures.** |
-| **Backend** | Stock 5-file NestJS scaffold. No DB, auth, or validation dependencies installed. |
-| **Database** | `init.sql` is the *old* schema — does not match the domain model in `Claude.md`. |
+| **Web portal** | All 6 modules UI-complete (~40 screens). **All six now backend-wired (Phase 2 complete, 2026-07-28)** — no module on mock fixtures; a few individual config tabs stay static by design. |
+| **Backend** | NestJS + TypeORM + JWT auth. Auth + all six module slices built (Collections, Estates, Employees, Fertilizer, Reports, Administration) + cross-cutting audit. |
+| **Database** | `init.sql` reconciled to the `Claude.md` domain model across the slices; dev DB runs in the isolated `tea_authslice` schema (`synchronize:false`, migrated by hand per slice). |
 | **Infra** | Done. `source-code/docker-compose.yml` = postgres 16 + redis + api + admin + nginx. |
-| **Mobile** | Shared shell only (theme tokens, minimal layout). No flows. |
+| **Mobile** | Shared shell only (theme tokens, minimal layout). No flows. **This is the only phase left.** |
 
 ### Two things to know before starting
 
@@ -77,9 +77,11 @@ module instead of being baked into all six.
       - [x] `fertilizer_batches`, `stock_movements` — done 2026-07-27 with the Fertilizer slice (2.4)
       - [x] `expense_entries` — done 2026-07-27 with the Reports slice (2.5), RPT-04's manual
         daily-expense table
-      - `grade_rates` — **effective-dated**; ADM-01 depends on past settlements never
-        recalculating when a rate changes
-      - `system_settings`, `audit_logs`
+      - [x] `grade_rates` — **effective-dated**; done 2026-07-28 with the Administration slice
+        (2.6). Settlements snapshot their rate, so past settlements never recalculate.
+      - [x] `system_settings`, `audit_logs` — done 2026-07-28 with the Administration slice (2.6);
+        plus a new `role_permissions` table (server-driven ADM-02 matrix) and `users.status`/
+        `users.last_login_at` columns.
 
 **Done when:** `docker compose up postgres` applies `init.sql` cleanly on an empty volume, and
 inserting a `factory_officer` user succeeds (it fails today).
@@ -161,9 +163,13 @@ Order is by dependency, not by sidebar order:
       `expense_entries` table + write path, resolving the last "no backing table" gap. Seeded
       Mar–Jul 2026 history (collection records, processed settlements, a few payroll rows) so
       the trend charts show a real multi-point line instead of a single July point.
-- [ ] **2.6 Administration (ADM-01..04)** — last, because it makes previously-static things
-      server-driven: versioned grade rates and the ADM-02 editable permission matrix (which is
-      what the data-driven `permissions.ts` model was designed for).
+- [x] **2.6 Administration (ADM-01..04)** — last, because it makes previously-static things
+      server-driven. Done 2026-07-28, `feature/administration-backend` — versioned grade rates
+      (`grade_rates`), the ADM-02 editable permission matrix now server-backed (`role_permissions`,
+      attached to the login/`/auth/me` response; `permissions.ts` becomes a fallback default),
+      system settings (`system_settings`), and a cross-cutting best-effort `AuditService` that
+      writes a real `audit_logs` row on every mutation across all six modules (ADM-04). Suspend is
+      real (blocks login); password-reset delivery and per-user overrides deferred (see Claude.md).
 
 ---
 

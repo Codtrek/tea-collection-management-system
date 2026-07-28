@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditModule } from '../audit/audit.module';
 import { UsersModule } from '../users/users.module';
 import { EstateAdvanceEntity } from './estate-advance.entity';
 import { EstateDocumentEntity } from './estate-document.entity';
@@ -21,6 +22,7 @@ import { SettlementEntity } from './settlement.entity';
       RouteEntity,
     ]),
     UsersModule,
+    AuditModule,
   ],
   controllers: [EstatesController],
   providers: [EstatesService],

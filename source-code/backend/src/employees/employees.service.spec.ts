@@ -169,6 +169,7 @@ describe('EmployeesService', () => {
       attendanceRepo as unknown as Repository<EmployeeAttendanceEntity>,
       advanceRepo as unknown as Repository<SalaryAdvanceEntity>,
       payrollRepo as unknown as Repository<PayrollRunEntity>,
+      { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
     );
   });
 

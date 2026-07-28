@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditModule } from '../audit/audit.module';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
 import { SettlementEntity } from '../estates/settlement.entity';
@@ -21,6 +22,7 @@ import { ReportsService } from './reports.service';
       PayrollRunEntity,
     ]),
     UsersModule,
+    AuditModule,
   ],
   controllers: [ReportsController],
   providers: [ReportsService],

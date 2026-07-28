@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { UsersService } from '../users/users.service';
 import { EstateAdvanceEntity } from './estate-advance.entity';
@@ -49,6 +50,7 @@ export class EstatesService {
     @InjectRepository(RouteEntity)
     private readonly routeRepo: Repository<RouteEntity>,
     private readonly usersService: UsersService,
+    private readonly audit: AuditService,
   ) {}
 
   async findAll(): Promise<PublicEstate[]> {
@@ -108,7 +110,15 @@ export class EstatesService {
       lastUpdatedOn: now,
     });
 
-    return this.toPublicOne(await this.estateRepo.save(estate));
+    const saved = await this.estateRepo.save(estate);
+    await this.audit.record(actor, {
+      action: 'Registered estate',
+      module: 'Estate Owner',
+      record: formatEstateId(saved.id),
+      recordHref: `/estates/${formatEstateId(saved.id)}`,
+      details: `${dto.estateName} — ${dto.ownerName}`,
+    });
+    return this.toPublicOne(saved);
   }
 
   /** EST-04 — same fields as EST-02. Route stays read-only regardless of what's sent. */
@@ -141,7 +151,14 @@ export class EstatesService {
     estate.lastUpdatedBy = actor.name;
     estate.lastUpdatedOn = new Date();
 
-    return this.toPublicOne(await this.estateRepo.save(estate));
+    const saved = await this.estateRepo.save(estate);
+    await this.audit.record(actor, {
+      action: 'Updated estate details',
+      module: 'Estate Owner',
+      record: formatEstateId(saved.id),
+      recordHref: `/estates/${formatEstateId(saved.id)}`,
+    });
+    return this.toPublicOne(saved);
   }
 
   /** Administrator only (portal: `estateOwners: 'approve'`). */
@@ -151,7 +168,14 @@ export class EstatesService {
     estate.status = 'inactive';
     estate.lastUpdatedBy = actor.name;
     estate.lastUpdatedOn = new Date();
-    return this.toPublicOne(await this.estateRepo.save(estate));
+    const saved = await this.estateRepo.save(estate);
+    await this.audit.record(actor, {
+      action: 'Deactivated estate',
+      module: 'Estate Owner',
+      record: formatEstateId(saved.id),
+      recordHref: `/estates/${formatEstateId(saved.id)}`,
+    });
+    return this.toPublicOne(saved);
   }
 
   async listAdvances(): Promise<PublicAdvance[]> {
@@ -180,7 +204,15 @@ export class EstatesService {
       status: 'pending_deduction',
     });
 
-    return this.toPublicAdvance(await this.advanceRepo.save(advance));
+    const saved = await this.advanceRepo.save(advance);
+    await this.audit.record(actor, {
+      action: `Issued advance Rs. ${dto.amount}`,
+      module: 'Estate Owner',
+      record: saved.id,
+      recordHref: `/estates/${formatEstateId(estate.id)}`,
+      details: `${estate.name} — ${dto.reason}`,
+    });
+    return this.toPublicAdvance(saved);
   }
 
   async listSettlements(): Promise<PublicSettlement[]> {
@@ -234,6 +266,12 @@ export class EstatesService {
       }
     }
 
+    await this.audit.record(actor, {
+      action: 'Processed settlement run',
+      module: 'Estate Owner',
+      record: `${processed.length} settlement(s)`,
+      recordHref: '/estates/settlements',
+    });
     return processed.map((s) => this.toPublicSettlement(s));
   }
 

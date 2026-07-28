@@ -167,6 +167,7 @@ describe('FertilizerService', () => {
       movementRepo as unknown as Repository<StockMovementEntity>,
       requestRepo as unknown as Repository<FertilizerRequestEntity>,
       estateRepo as unknown as Repository<EstateEntity>,
+      { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
     );
   });
 

@@ -28,6 +28,12 @@ export interface User {
   factory: string
   /** Data URL (mock) or Cloudinary URL (real backend); absent = initials fallback. */
   avatarUrl?: string
+  /**
+   * Server-driven permission map for this user's role (from `role_permissions`,
+   * ADM-02). `can()`/`level()` read this first, falling back to the client-side
+   * DEFAULT_PERMISSIONS constant when absent (e.g. an unseeded backend).
+   */
+  permissions?: Record<ModuleKey, PermissionLevel>
 }
 
 export type NotificationTone = 'success' | 'warning' | 'danger' | 'info'

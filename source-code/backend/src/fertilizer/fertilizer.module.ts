@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditModule } from '../audit/audit.module';
 import { EstateEntity } from '../estates/estate.entity';
 import { UsersModule } from '../users/users.module';
 import { FertilizerBatchEntity } from './fertilizer-batch.entity';
@@ -20,6 +21,7 @@ import { StockMovementEntity } from './stock-movement.entity';
       EstateEntity,
     ]),
     UsersModule,
+    AuditModule,
   ],
   controllers: [FertilizerController],
   providers: [FertilizerService],

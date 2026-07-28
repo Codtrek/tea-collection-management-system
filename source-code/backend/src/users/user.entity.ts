@@ -30,6 +30,14 @@ export class User {
   @Column()
   role: DbRole;
 
+  /** ADM-02 — a suspended account is rejected at login. */
+  @Column({ default: 'active' })
+  status: 'active' | 'suspended';
+
+  /** Stamped on each successful login; shown as "last login" in Users & Roles. */
+  @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
+  last_login_at: Date | null;
+
   @CreateDateColumn()
   created_at: Date;
 }

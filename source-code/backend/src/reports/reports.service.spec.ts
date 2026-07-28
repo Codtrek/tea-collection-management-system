@@ -148,11 +148,13 @@ describe('ReportsService', () => {
     payrollRepo = new FakeRepository();
     expenseRepo = new FakeRepository();
 
+    const audit = { record: jest.fn().mockResolvedValue(undefined) };
     service = new ReportsService(
       expenseRepo as unknown as Repository<ExpenseEntryEntity>,
       collectionRepo as unknown as Repository<CollectionRecordEntity>,
       settlementRepo as unknown as Repository<SettlementEntity>,
       payrollRepo as unknown as Repository<PayrollRunEntity>,
+      audit as unknown as import('../audit/audit.service').AuditService,
     );
   });
 

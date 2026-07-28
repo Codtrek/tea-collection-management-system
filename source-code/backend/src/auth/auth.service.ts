@@ -1,6 +1,14 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { RolePermissionEntity } from '../admin/role-permission.entity';
+import {
+  roleMapFromRows,
+  type ModuleKey,
+  type PermissionLevel,
+} from '../admin/admin-map';
 import type { DbRole } from '../users/user.entity';
 import { UsersService } from '../users/users.service';
 import type { JwtPayload } from './jwt-payload.interface';
@@ -12,6 +20,8 @@ export interface PublicUser {
   role: AppRole;
   phone: string;
   factory: string;
+  /** The role's server-stored permission map — the portal's `can()` reads this. */
+  permissions: Record<ModuleKey, PermissionLevel>;
 }
 
 export interface LoginResult {
@@ -24,6 +34,8 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    @InjectRepository(RolePermissionEntity)
+    private readonly permissionRepo: Repository<RolePermissionEntity>,
   ) {}
 
   async login(phone: string, password: string): Promise<LoginResult> {
@@ -36,7 +48,13 @@ export class AuthService {
     if (!(await bcrypt.compare(password, user.password_hash))) {
       throw new UnauthorizedException('The password is incorrect.');
     }
+    if (user.status === 'suspended') {
+      throw new UnauthorizedException(
+        'This account has been suspended. Contact an administrator.',
+      );
+    }
 
+    await this.usersService.markLogin(user.id);
     const publicUser = await this.buildPublicUser(
       user.id,
       user.phone,
@@ -68,12 +86,16 @@ export class AuthService {
         'No employee profile found for this account.',
       );
     }
+    // Server-driven permissions: the role's map from `role_permissions`. Empty
+    // if unseeded — the portal falls back to its DEFAULT_PERMISSIONS constant.
+    const permRows = await this.permissionRepo.find({ where: { role } });
     return {
       id: String(id),
       name: profile.name,
       role,
       phone,
       factory: profile.factory,
+      permissions: roleMapFromRows(permRows, role),
     };
   }
 }

@@ -4,8 +4,14 @@ import type { ModuleKey, PermissionLevel, Role } from '@/types'
   Data-driven permission model (visual-foundations open-item #11).
 
   The §4 three-role model is only the DEFAULT. Real checks read this map rather
-  than hardcoding `if (role === 'Officer')`, so when ADM-02 (Users & Roles) lets
-  an Administrator customise privileges, only this table changes — no screen does.
+  than hardcoding `if (role === 'Officer')`.
+
+  As of the Administration slice (2.6), the RUNTIME source of truth is the
+  server's `role_permissions` table: login/`/auth/me` attach the user's role
+  map onto `User.permissions`, and `AuthContext.level()` reads that first.
+  This constant is now the FALLBACK default — used only when the backend didn't
+  supply a map (older token, unseeded table) — and the seed for that table
+  (backend `seed.ts` PERMISSION_MATRIX) is kept in sync with it.
 */
 
 const LEVEL_RANK: Record<PermissionLevel, number> = {

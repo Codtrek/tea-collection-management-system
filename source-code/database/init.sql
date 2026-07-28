@@ -10,6 +10,12 @@ CREATE TABLE users (
         CHECK (role IN ('estate_owner', 'estate_manager', 'plucking_employee',
                          'collection_agent', 'receiving_officer', 'factory_admin',
                          'factory_officer', 'factory_manager')),
+    -- Added 2026-07-28 (Administration slice, 2.6). ADM-02 suspend flips this;
+    -- a suspended account is rejected at login. last_login_at is stamped on a
+    -- successful login so the Users & Roles list shows a real "last login".
+    status        VARCHAR(20) NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'suspended')),
+    last_login_at TIMESTAMP,
     created_at    TIMESTAMP DEFAULT NOW()
 );
 
@@ -512,6 +518,61 @@ CREATE TABLE expense_entries (
     created_at   TIMESTAMP DEFAULT NOW()
 );
 
+-- ─── ADMINISTRATION ───────────────────────────────────────────────
+-- Added 2026-07-28 (Administration vertical slice, 2.6). The four Phase 0
+-- tables the admin module makes server-driven: effective-dated grade rates
+-- (ADM-01), the editable permission matrix (ADM-02), key/value system config
+-- (ADM-03) and the append-only audit trail every module writes to (ADM-04).
+
+-- ADM-01 — grade rates are VERSIONED by effective date. Settlements snapshot
+-- the rate onto each row at settlement time, so past settlements never
+-- recalculate when a new version is added here; the newest effective_date is
+-- "current".
+CREATE TABLE grade_rates (
+    id             VARCHAR(20) PRIMARY KEY, -- business key, e.g. 'GR-2026-0001'
+    super_rate     DECIMAL(8,2) NOT NULL,
+    normal_rate    DECIMAL(8,2) NOT NULL,
+    effective_date DATE NOT NULL,
+    set_by         VARCHAR(100) NOT NULL,
+    created_at     TIMESTAMP DEFAULT NOW()
+);
+
+-- ADM-02 — the data-driven permission matrix. One row per (role, module).
+-- Seeded from the portal's DEFAULT_PERMISSIONS; the backend is now the source
+-- of truth and the client constant is only a fallback default.
+CREATE TABLE role_permissions (
+    role   VARCHAR(20) NOT NULL
+        CHECK (role IN ('Administrator', 'Officer', 'Manager')),
+    module VARCHAR(30) NOT NULL,
+    level  VARCHAR(10) NOT NULL
+        CHECK (level IN ('none', 'view', 'edit', 'approve')),
+    PRIMARY KEY (role, module)
+);
+
+-- ADM-03 — system-level configuration as key/value JSON (notification toggles,
+-- session/security). One row per setting key.
+CREATE TABLE system_settings (
+    key        VARCHAR(60) PRIMARY KEY,
+    value      JSONB NOT NULL,
+    updated_by VARCHAR(100),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ADM-04 — append-only audit trail. A shared AuditService writes one row per
+-- mutation across every module; the log is read-only in the portal.
+CREATE TABLE audit_logs (
+    id          VARCHAR(20) PRIMARY KEY, -- business key, e.g. 'AUD-00001'
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+    user_id     INTEGER REFERENCES users(id),
+    user_name   VARCHAR(100) NOT NULL,
+    role        VARCHAR(20) NOT NULL,
+    action      VARCHAR(200) NOT NULL,
+    module      VARCHAR(40) NOT NULL,
+    record      VARCHAR(120),
+    record_href VARCHAR(200),
+    details     TEXT
+);
+
 -- ─── NOTIFICATIONS ────────────────────────────────────────────────
 
 CREATE TABLE notifications (
@@ -557,3 +618,7 @@ CREATE INDEX idx_expense_entries_date ON expense_entries(entry_date);
 CREATE INDEX idx_fertilizer_requests_status ON fertilizer_requests(status);
 CREATE INDEX idx_fertilizer_batches_item ON fertilizer_batches(item);
 CREATE INDEX idx_stock_movements_batch ON stock_movements(batch_id);
+CREATE INDEX idx_grade_rates_effective ON grade_rates(effective_date DESC);
+CREATE INDEX idx_audit_logs_created ON audit_logs(created_at DESC);
+CREATE INDEX idx_audit_logs_module ON audit_logs(module);
+CREATE INDEX idx_audit_logs_user ON audit_logs(user_name);

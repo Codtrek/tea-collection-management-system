@@ -27,7 +27,13 @@ this time extending a pre-existing table in place rather than building fresh or 
 new one. Updated again 2026-07-27 to record the Reports vertical slice
 (`feature/reports-backend`, `PLAN.md` Phase 2.5) — the fifth module, and the first that's mostly
 pure aggregation (no new tables for RPT-01/02) with one greenfield write path (RPT-04's
-`expense_entries`).
+`expense_entries`). Updated 2026-07-28 to record the Administration vertical slice
+(`feature/administration-backend`, `PLAN.md` Phase 2.6) — the **sixth and final web-portal
+module**: the permission matrix is now server-driven (`role_permissions`), grade rates are a
+real effective-dated table (`grade_rates`), system settings persist (`system_settings`), and a
+cross-cutting `AuditService` writes a real `audit_logs` row on every mutation across all six
+modules. With this, **zero web-portal modules remain on mock fixtures** — only Phase 3 (Mobile)
+is left.
 
 ## What this system does
 
@@ -370,8 +376,41 @@ gap while wiring RPT-04: `reports` was `'view'` for both Officer and Manager in
 split), so the button now hides for Manager via the existing data-driven `can()` check rather
 than a hardcoded role branch.
 
-**Backend (`source-code/backend/`) — auth, collections, estates, employees, fertilizer, and
-reports slices built, rest still to come.**
+**Administration wired to the real backend (2026-07-28, `feature/administration-backend`) —
+`PLAN.md` Phase 2.6, the sixth and final web-portal module.** All four screens (ADM-01 Factory
+Setup, ADM-02 Users & Roles, ADM-03 System Settings, ADM-04 Audit Logs) read/write through
+`src/services/admin.ts`; there was no `features/admin/data.ts` fixture to delete (its mock arrays
+lived inline in the page files), and the Public* shapes were lifted into a new
+`features/admin/types.ts` per the recipe. Two things became server-driven that previously weren't:
+- **Permissions are now truly data-driven end to end.** The `role_permissions` table (one row per
+  role×module, seeded from the portal's `DEFAULT_PERMISSIONS`) is the runtime source of truth.
+  `AuthService.buildPublicUser()` attaches the user's own role map onto `PublicUser.permissions`
+  (returned on both login and `/auth/me`); `AuthContext.level()` reads
+  `user.permissions?.[module] ?? DEFAULT_PERMISSIONS[...]` — the client constant is now only a
+  fallback. `can()`/`level()` signatures are byte-identical, so **no page or guard changed**.
+  ADM-02's matrix editor writes back via `PUT /admin/permissions`; the **Administrator row is
+  immutable server-side** (a real downgrade attempt 403s — the factory always keeps one
+  unrestricted account). Changes take effect at a user's next login (the map is baked into the
+  login response, not re-fetched per request).
+- **Audit capture is real and cross-cutting.** A shared `AuditService.record(actor, {...})` (in
+  the new `AuditModule`, imported by every write module) inserts one `audit_logs` row after each
+  successful mutation across Collections, Estates, Employees, Fertilizer, Reports, and Admin. It
+  is **best-effort** — wrapped in try/catch so an audit-insert failure can never roll back or
+  break the business mutation. `GET /audit` (Administrator-only, matching `AdminGuard`) feeds
+  ADM-04. This closed the temporary "no audit_logs table yet" note in `CollectionsService.flag`.
+
+ADM-01 grade rates are a real effective-dated `grade_rates` table (newest `effective_date` is
+"current"); because settlements already snapshot their rate at settlement time, adding a new
+version never retro-recalculates past settlements. ADM-02's System Users tab lists factory users
+by joining `users`+`factory_employees`; **suspend is real** — it flips `users.status` and a
+suspended account is then rejected at login (401), and `users.last_login_at` is stamped on each
+successful login. Password reset stays a stub (records an audit entry; no email infra until Phase
+3). ADM-03 persists to a key/value `system_settings` table. Left static (no backing table this
+slice, noted in code): ADM-01's General Info / Transport / Beneficiary Items tabs, and the
+audit-log CSV/PDF export button.
+
+**Backend (`source-code/backend/`) — auth, collections, estates, employees, fertilizer, reports,
+and administration slices built; all six web-portal modules now backend-wired.**
 The default NestJS scaffold (`app.controller.ts`, `app.service.ts`, their spec, and the e2e test)
 was **deleted**; `package.json` now depends on TypeORM, pg, @nestjs/jwt, passport-jwt, bcrypt, and
 class-validator. Built:
@@ -450,6 +489,24 @@ class-validator. Built:
   holds the period-key helpers (`'YYYY-MM'` ↔ `'Month YYYY'` label conversion, since
   `settlements`/`payroll_runs` store the latter) and the `Public*` report shapes; no DB↔portal
   enum mapping is needed since Reports doesn't own a status lifecycle.
+- **Audit** (`src/audit/`): cross-cutting `AuditModule` exporting `AuditService`; imported by
+  every write module. `record(actor, {action, module, record?, recordHref?, details?})` is
+  **best-effort** (try/catch swallows failures — an audit write never breaks the mutation) and
+  formats a running `AUD-NNNNN` id. `GET /audit` (module/user/search filters) is
+  **Administrator-only** (checked off `req.user.role`, matching the portal's `AdminGuard`). Unit
+  tests in `audit.service.spec.ts` cover the shape, the id sequence, the swallow-on-failure
+  contract, and filtering.
+- **Administration** (`src/admin/`): `GET/POST /admin/grade-rates`, `GET/PUT /admin/permissions`,
+  `GET/PUT /admin/settings`, `GET /admin/users`, `POST /admin/users/:id/{suspend,reset-password}`,
+  all JWT-guarded and **Administrator-only** (`assertIsAdmin`; `administration: 'approve'`). Owns
+  `grade_rates`/`role_permissions`/`system_settings` and binds read/write onto `User` +
+  read-only `FactoryEmployee` for the Users tab. `admin-map.ts` holds the shared permission
+  vocabulary (`ModuleKey`/`PermissionLevel`/`PortalRole`, mirrored from the portal) and the
+  matrix (de)serialisation helpers. `updatePermissions` enforces the immutable-Administrator
+  invariant server-side; `createGradeRate` never mutates past rows (newest effective date is
+  current); `suspendUser` blocks self-suspend. Unit tests in `admin.service.spec.ts`.
+  `AuthService` also binds `RolePermissionEntity` read-only to attach the caller's role map onto
+  the login/`/auth/me` response (`PublicUser.permissions`), and rejects a `suspended` login.
 - **Seed** (`src/seed.ts`, `npm run seed`, idempotent): three factory users, DEV creds
   `0771234567` / `Password123!` (admin / officer / manager on `…67/68/69`), plus reference
   routes/collection agents, 5 estates (1 inactive, 1 missing-bank) with owners/documents, 3 estate
@@ -464,7 +521,11 @@ class-validator. Built:
   Submitted, 1 Dispatched, 1 Rejected — natural-keyed by `(estate, item, quantity)` for idempotent
   re-seeding, since `fertilizer_requests` has no business-key column), 6 stock movements, and 5
   expense entries (3 July + 2 earlier months, mirroring the old fixture's manual rows) — spanning
-  every status each module needs.
+  every status each module needs. For Administration: the 33-cell `role_permissions` matrix
+  (seeded from the portal's `DEFAULT_PERMISSIONS`, kept in sync via the script's
+  `PERMISSION_MATRIX`), 3 `grade_rates` versions (Jan/Apr/Jul 2026), a `system_settings` baseline,
+  and 5 `audit_logs` baseline rows so ADM-04 isn't empty on first load (real capture appends from
+  there).
 - **Config**: `app.module.ts` wires ConfigModule + TypeORM (`synchronize: false`,
   `autoLoadEntities`); `main.ts` has a global ValidationPipe and dev-tolerant CORS (see below).
 
@@ -524,8 +585,14 @@ beneficiary items like Rice into the same `category` column rather than a parall
 On 2026-07-27 (same day, Reports slice) exactly **one** new table was added — `expense_entries`,
 for RPT-04's manual daily-expense entries — the smallest schema footprint of any slice so far,
 since RPT-01/02 read existing `tea_collection_records`/`settlements` columns as-is with no
-schema change at all. The local dev DB runs everything in an isolated `tea_authslice` schema; the
-older, more-advanced `tea` schema left over from the abandoned test01 branch is untouched.
+schema change at all. On 2026-07-28 the Administration slice added **four** tables —
+`grade_rates` (effective-dated), `role_permissions` (PK `(role, module)`), `system_settings`
+(key/`jsonb` value), and `audit_logs` (append-only) — plus two columns on `users` (`status`
+`active`/`suspended`, `last_login_at`). Because the dev DB runs `synchronize: false`, the same
+changes were applied as a scoped non-destructive migration (`ALTER … ADD COLUMN IF NOT EXISTS`,
+`CREATE TABLE IF NOT EXISTS`) against the running instance in addition to landing in `init.sql`.
+The local dev DB runs everything in an isolated `tea_authslice` schema; the older, more-advanced
+`tea` schema left over from the abandoned test01 branch is untouched.
 
 Infra is already in place and needs no work: `source-code/docker-compose.yml` defines postgres 16,
 redis, api, admin, and nginx.
@@ -535,7 +602,7 @@ tokens (`src/theme/`: colors, spacing, typography — note `colors.primary` is t
 `#53cf81` the web portal's hybrid palette is built from) and a minimal `_layout.tsx` +
 `index.tsx`. No role-based login, route/pickup/weight/payment flows exist here yet.
 
-## Remaining work (as of 2026-07-27)
+## Remaining work (as of 2026-07-28)
 
 **See `PLAN.md` at the repo root for the phased execution roadmap** (schema → auth slice →
 module-by-module vertical slices → mobile), with per-phase done-criteria and checkboxes.
@@ -547,18 +614,19 @@ this branch. Do not propose merging or cherry-picking from it.
 Two facts that shaped the sequencing — **both resolved by the auth slice, and the seam is now
 proven end-to-end by the Collections, Estates, Employees, and Fertilizer slices**:
 
-1. **The portal has a data-fetching seam, and four modules besides auth now prove it holds.** It
-   was previously fixture-only (no `services/` layer, zero `useQuery` calls). The auth slice built
-   the seam (`src/lib/api.ts` + `src/services/`); Collections (2026-07-26) was the first module to
-   actually use it, Estates (2026-07-26, same day) the second — including a money-moving write
-   path (advances, settlement processing) — Employees (2026-07-26, same day) the third, adding
-   live server-side computation (payroll generation) on top of that pattern for the first time —
-   and Fertilizer (2026-07-27) the fourth, the first to extend a pre-existing table in place
-   instead of building fresh. Reports (2026-07-27, same day) is the fifth — the first that's
-   mostly pure aggregation over other modules' tables rather than owning a workflow of its own.
-   Administration is the only module left — see "Modules, in dependency order" in `PLAN.md`
-   Phase 2. The remaining pages (EST-09, EMP-14) still import static fixtures by design (see
-   their slices' notes above), and Administration's screens are still mock until it lands.
+1. **The portal has a data-fetching seam, and all six modules besides auth now prove it holds.**
+   It was previously fixture-only (no `services/` layer, zero `useQuery` calls). The auth slice
+   built the seam (`src/lib/api.ts` + `src/services/`); Collections (2026-07-26) was the first
+   module to actually use it, Estates (2026-07-26, same day) the second — including a money-moving
+   write path (advances, settlement processing) — Employees (2026-07-26, same day) the third,
+   adding live server-side computation (payroll generation) on top of that pattern for the first
+   time — and Fertilizer (2026-07-27) the fourth, the first to extend a pre-existing table in
+   place instead of building fresh. Reports (2026-07-27, same day) is the fifth — the first that's
+   mostly pure aggregation over other modules' tables. Administration (2026-07-28) is the sixth and
+   last, making permissions and audit server-driven. **No web-portal module remains on mock
+   fixtures** — only Phase 3 (Mobile) is left; see "Modules, in dependency order" in `PLAN.md`.
+   (A few individual pages still keep static config UI where there's no backing table, e.g.
+   ADM-01's General Info / Transport / Beneficiary Items tabs — noted in code.)
 2. **The schema no longer blocks auth**, and the Collections table is now reconciled to the
    photo-evidence design too. The `users.role` (and `factory_employees.role`) CHECK constraints
    were extended to include `factory_officer` and `factory_manager`, so all three factory roles
@@ -579,10 +647,10 @@ calculation above and the Fertilizer slice note below.) Deferred a11y polish fro
 review: modal focus trap, DataTable keyboard rows, tab ARIA wiring, Toggle hit area.
 
 Deferred from the Collections slice (2026-07-26), noted as seams rather than gaps: auto-generating
-a `complaint` on weight mismatch (currently display-only on the record); a real `audit_logs` table
-for Flag for Correction (currently appended to the record's own `timeline`, which the detail
-page's per-status lookup doesn't yet render as a distinct row — lands with Administration, Phase
-2.6); Cloudinary photo upload (the mobile capture path — `photos` is JSONB metadata for now).
+a `complaint` on weight mismatch (currently display-only on the record); Cloudinary photo upload
+(the mobile capture path — `photos` is JSONB metadata for now). *(The `audit_logs` seam for Flag
+for Correction is now **resolved** — the Administration slice, 2026-07-28, added the real table
+and `CollectionsService.flag` writes a row via `AuditService`; the timeline entry is kept too.)*
 
 Deferred from the Estates slice (2026-07-26), noted as seams rather than gaps: settlement
 **generation** (currently seeded/process-only — auto-generating a run from live collections needs
@@ -621,8 +689,10 @@ DB's `owner_status`/`factory_status` columns on `fertilizer_requests` stay unuse
 mobile owner-approval step.
 
 Deferred from the Reports slice (2026-07-27), noted as seams rather than gaps: **live grade-rate
-revenue** — RPT-02 reads settlements' *snapshot* rates, same as Estates; a version that recomputes
-off live `grade_rates` lands with Administration (ADM-01, Phase 2.6); **available-periods
+revenue** — RPT-02 reads settlements' *snapshot* rates, same as Estates. *(The `grade_rates` table
+itself now exists as of the Administration slice, 2026-07-28, but a RPT-02 variant that recomputes
+off it is still deferred — and by design settlements keep their snapshot rate so past revenue
+never moves.)* **available-periods
 endpoint** — the portal's period filter is a hardcoded `REPORT_PERIODS` list (the five seeded
 months) rather than a "what periods have data" call, since each report already defaults sensibly
 to its own latest month when no period is given; **export/print/schedule/share** — `ReportActionsBar`'s
@@ -631,3 +701,16 @@ buttons; **receipt upload** — RPT-04's receipt dropzone stays decorative, same
 pattern as Collections' photos / Estates' documents; and **quarter-range periods** — the old
 fixture's "Q2 2026" period option was dropped rather than wired, since aggregating a quarter needs
 a range parameter the backend doesn't accept yet (single `YYYY-MM` only).
+
+Deferred from the Administration slice (2026-07-28), noted as seams rather than gaps: **password
+reset delivery** — `POST /admin/users/:id/reset-password` records an audit entry but sends no email
+(no email/SMS infra until Phase 3; the UI frames it as "a reset link is emailed"); **user
+reactivation** — suspend is one-way in the UI (a suspended account is un-suspended only by a direct
+DB update this slice); **ADM-01 non-rate config** — the Factory Setup General Info / Transport
+Rates / Beneficiary Item tabs have no backing table yet and stay demo saves (only grade rates
+persist); **audit-log export** — ADM-04's "Export CSV / PDF" button is still a demo toast; **audit
+`user_id`** — `AuditService` stamps the human-facing `user_name`/`role` always but leaves
+`user_id` null for the existing modules' `Actor` (which carries no `sub`); only the Admin module
+passes it; and **per-user permission overrides** — permissions are per-*role*, not per-user (the
+matrix edits a role's row; there's no per-account exception), matching the original three-role
+model.

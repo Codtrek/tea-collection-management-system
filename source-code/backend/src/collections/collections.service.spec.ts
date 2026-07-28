@@ -84,6 +84,7 @@ describe('CollectionsService', () => {
     repo = new FakeRepository();
     service = new CollectionsService(
       repo as unknown as Repository<CollectionRecordEntity>,
+      { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
     );
   });
 
