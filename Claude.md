@@ -150,6 +150,21 @@ Sequence:
 5. If collected weight vs. factory weight differs beyond a configured threshold → system
    **auto-generates a complaint** (do not just store both numbers silently)
 
+**Grading is factory-side only (decided 2026-10-09).** Tea collection agents and estate owners
+record only the collected (estate) weight — never a grade. Grades are assigned at the factory
+during receiving/grading, as **grade lines**: one delivery can carry several lines
+(`delivery_grade_lines`: Super and/or Normal, at most one line per grade per delivery), and the
+delivery's graded total is the **sum of its lines** — never a separately stored total. Rules that
+follow from this:
+- The mobile app has **no grade input anywhere** (collector or owner side).
+- Grade-line create/edit is restricted to factory roles; agents and owners can never write one.
+- The estate weight stays its own field (`tea_collection_records.weight_kg`) — it's what the
+  mismatch check compares the graded total against, so it is never overwritten by grading.
+- Before any grade line exists, the delivery displays as **Ungraded** (showing the estate weight).
+- Grade is a reference/enum value on the line, not a per-grade weight column, so a grade catalogue
+  can replace the Super/Normal enum later by migration. Pricing a line uses the ADM-01 rate
+  version effective on the collection date.
+
 ## Offline behavior
 
 Two distinct problems, don't conflate them:
@@ -770,6 +785,44 @@ redis, api, admin, and nginx.
 tokens (`src/theme/`: colors, spacing, typography — note `colors.primary` is the same
 `#53cf81` the web portal's hybrid palette is built from) and a minimal `_layout.tsx` +
 `index.tsx`. No role-based login, route/pickup/weight/payment flows exist here yet.
+
+## Agent Dispatch, absence cover & multi-grade deliveries (2026-10-09)
+
+Branch `feature/agent-dispatch` (from `feature/estate-owner-directory`; `origin/dev` NOT merged yet).
+Spec: `docs/specs/Collection-Agent-Dispatch-Addendum.md`. Backend + web done; **mobile deferred** (only the
+agent API exists, exercised by unit tests and curl — merge `origin/dev` for the teammate's collector app first).
+
+- **Requests go to a ROUTE, not an agent.** `RouteResolverService.getAgentForRoute(routeId, date)`
+  (`backend/src/dispatch/`): ACTIVE cover > ACTIVE permanent > null. Every routing path uses it; uncollected
+  records show the route's *current* agent at read time (`agent_id` is stamped only when collected), so covers
+  hand over and back with no rewrites. Table: `route_assignments` (`PERMANENT`|`COVER`; statuses PENDING/ACTIVE/
+  DECLINED/EXPIRED/CANCELLED; `stop_scope` is the unused hook for splitting a route later).
+- **Cover flow:** officer marks absent → system ranks candidates (neighbour routes first, then fewest remaining
+  stops; soft 30-day-best-day ceiling is a warning only; one cover per agent per day) → request → agent
+  accepts/declines or it expires (`system_settings.dispatch.coverRequestTimeoutMin`, default 15). Reassign
+  "today only" is an instruction (instantly ACTIVE); "from now on" ends the permanent (valid_to = yesterday).
+  Both blocked once the route has collected today. Shared load maths live ONLY in `RouteLoadService`.
+- **Agent auth is a separate token audience:** `POST /auth/agent/login` → role `CollectionAgent`; the portal
+  `JwtStrategy` rejects it and `AgentJwtStrategy` ('jwt-agent') rejects portal tokens. Agent API: `/dispatch/me/*`.
+- **Live location (overrides the old "no live tracking" rule — the GPS "Deferred" bullet above is stale; user
+  owns that edit):** shift-only pings, batch upload keeps device `recorded_at`; a fix is accepted only if recorded
+  inside a shift. Latest position in Redis (`agent:pos:{id}`, 12h TTL; in-process fallback when Redis is down),
+  history in `agent_location_pings`, **30-day retention** (nightly job). UI shows *age* (green <5 min, amber
+  5–30, grey "Last seen HH:MM"), never "live". Foreground-only this round.
+- **Grade lines:** `delivery_grade_lines` (UNIQUE delivery+grade); the old `tea_collection_records.grade` column
+  is gone. `weight_kg` = **estate weight** (mismatch input). Total = Σ lines via `weightSummary()` in
+  `collection-map.ts` (one place). `PUT /collections/:id/grade-lines` is factory-only; it confirms the record and
+  raises a `complaints` row when the graded total strays >5% (`MISMATCH_THRESHOLD`). Settlement math:
+  `estates/settlement-calc.ts` (`computeGross` per line × that grade's effective-dated rate) — not yet wired into
+  a settlement generator (settlements are still seeded snapshots).
+- **COL-02 is estate-first:** client sends only `estateId`; server derives route + today's agent (cover-aware).
+  `GET /dispatch/estates/:id/route-agent` feeds the form.
+- **Web:** `/collections/dispatch` (`features/dispatch/`), Leaflet map lazy-loaded; `dispatch` is a data-driven
+  permission module (view / edit = absent+cover+today-only / approve = permanent). `ReceivingOfficer` row exists
+  in `role_permissions` with level `none` (the "agent hasn't arrived" flag is deferred).
+- **Gotchas:** seed re-runs burn serial values, so seeded agent ids are 1, 2, 45–47 (don't hardcode). `expo-server-sdk`
+  is ESM-only, loaded lazily in `DispatchNotifier`. Redis isn't installed locally — the fallback is what runs.
+  Migration: `source-code/database/migrations/2026-10-09-agent-dispatch.sql` (idempotent; mirrored in `init.sql`).
 
 ## Remaining work (as of 2026-08-05)
 
