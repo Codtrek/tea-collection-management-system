@@ -1,7 +1,7 @@
 // app/index.tsx
 import { StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { AppText, AppButton, Screen } from "@/components/ui";
+import { AppText, AppButton, Screen, EstateOwnerBottomTab, AppCard } from "@/components/ui";
 import { colors } from "@/theme/colors";
 import { typography } from "@/theme/typography";
 
@@ -50,11 +50,10 @@ export default function OnboardingScreen() {
           </HStack>
 
           <AppButton
-            title="🚜 Tea Collector App"
+            title="Tea Collector App"
             width="full"
             variant="primary"
             onPress={handleTeaCollectorPress}
-            style={styles.teaCollectorButton}
           />
         </VStack>
       </VStack>
