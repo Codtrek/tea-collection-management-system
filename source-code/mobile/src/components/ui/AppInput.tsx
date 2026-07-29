@@ -1,14 +1,16 @@
 import { useState } from "react";
 import {
-	TextInput,
-	TextInputProps,
 	View,
+	TextInputProps,
+	TextInput,
 	Text,
 	StyleSheet,
 	StyleProp,
 	ViewStyle,
 	TextStyle,
 } from "react-native";
+
+// import {TextInput} from "react-native-paper";
 
 import { colors } from "@/theme/colors";
 
@@ -20,6 +22,7 @@ interface AppInputProps extends TextInputProps {
 	labelStyle?: StyleProp<TextStyle>;
 	helperTextStyle?: StyleProp<TextStyle>;
 	errorStyle?: StyleProp<TextStyle>;
+	rightAccessory?: React.ReactNode;
 }
 
 export default function AppInput({
@@ -33,6 +36,7 @@ export default function AppInput({
 	style,
 	onFocus,
 	onBlur,
+	rightAccessory,
 	...props
 }: AppInputProps) {
 	const [isFocused, setIsFocused] = useState(false);
@@ -41,24 +45,33 @@ export default function AppInput({
 		<View style={[styles.container, containerStyle]}>
 			{label ? <Text style={[styles.label, labelStyle]}>{label}</Text> : null}
 
-			<TextInput
-				{...props}
-				onFocus={(event) => {
-					setIsFocused(true);
-					onFocus?.(event);
-				}}
-				onBlur={(event) => {
-					setIsFocused(false);
-					onBlur?.(event);
-				}}
-				placeholderTextColor={colors.text.placeholder}
-				style={[
-					styles.input,
-					isFocused && styles.focused,
-					error && styles.errorInput,
-					style,
-				]}
-			/>
+			<View style={[
+				styles.inputWrapper
+				, isFocused && styles.focused
+				, error && styles.errorInput
+			]}>
+				<TextInput
+					{...props}
+					underlineColorAndroid="transparent"
+					onFocus={(event) => {
+						setIsFocused(true);
+						onFocus?.(event);
+					}}
+					onBlur={(event) => {
+						setIsFocused(false);
+						onBlur?.(event);
+					}}
+					placeholderTextColor={colors.text.placeholder}
+					style={[
+						styles.input
+					]}
+				/>
+
+				{rightAccessory}
+
+
+			</View>
+
 
 			{error ? <Text style={[styles.errorText, errorStyle]}>{error}</Text> : null}
 			{!error && helperText ? (
@@ -71,6 +84,19 @@ export default function AppInput({
 const styles = StyleSheet.create({
 	container: {
 		width: "100%",
+		marginBottom: 16,
+	},
+
+	inputWrapper: {
+		flexDirection: "row",
+		width: "100%",
+		alignItems: "center",
+		borderWidth: 1,
+		borderColor: colors.border.default,
+		borderRadius: 12,
+		backgroundColor: colors.surface,
+		minHeight: 52,
+		paddingHorizontal: 12,	
 	},
 
 	label: {
@@ -81,19 +107,15 @@ const styles = StyleSheet.create({
 	},
 
 	input: {
-		minHeight: 52,
-		borderWidth: 1,
-		borderColor: colors.border.default,
-		borderRadius: 12,
-		backgroundColor: colors.surface,
-		paddingHorizontal: 16,
+		flex: 1,
 		paddingVertical: 14,
 		color: colors.text.primary,
 		fontSize: 16,
+		paddingHorizontal: 0,
 	},
 
 	focused: {
-		borderColor: colors.primary,
+		borderColor: colors.border.focused,
 	},
 
 	errorInput: {

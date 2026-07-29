@@ -21,7 +21,7 @@ export const colors = {
   border: {
     default: "#D1D5DB",
     light: "#E5E7EB",
-    focus: "#53CF81",
+    focused: "#53CF81",
   },
 
   // Status

@@ -1,6 +1,6 @@
 import { StyleSheet } from "react-native";
 
-import { AppText, AppButton, Screen } from "@/components/ui";
+import { AppText, AppButton, Screen, AppInput, PasswordInput } from "@/components/ui";
 import { colors } from "@/theme/colors";
 import { typography } from "@/theme/typography";
 
@@ -11,51 +11,15 @@ export default function OnboardingScreen() {
   return (
     <Screen style={styles.container}>
 
-      <VStack spacing={20}>
-
-        {/* App name */}
-        <AppText
-          variant="heading"
-          style={styles.brandTitle}
-        >
-          Harboost
-        </AppText>
-
-
-        {/* Welcome message */}
-        <VStack spacing={8}>
-
-          <AppText style={styles.title}>
-            Welcome to TestingPage
-          </AppText>
-
-          <AppText style={styles.description}>
-            Manage your tea collection easily and efficiently
-          </AppText>
-
-        </VStack>
-
-
-        {/* Buttons */}
-        <HStack spacing={16}>
-
-          <AppButton
-            title="Login"
-            width="half"
-            onPress={() => console.log("Login pressed")}
-          />
-
-          <AppButton
-            title="Register"
-            width="half"
-            variant="secondary"
-            onPress={() => console.log("Register pressed")}
-          />
-
-        </HStack>
-
-
+      <VStack>
+        <AppText style={styles.brandTitle}>Welcome! to Harboost</AppText>
+        <AppText style={styles.title}>Sign in to your account</AppText>
+        <AppText style={styles.description}>Please sign in to access your account</AppText>
+        <AppInput label="Username" helperText="Enter your username"/>
+        <PasswordInput label="Password" helperText="Enter your password" />
+        <AppButton title="Sign In" onPress={() => {}} />
       </VStack>
+
 
     </Screen>
   );
