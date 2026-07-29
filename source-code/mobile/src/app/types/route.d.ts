@@ -3,6 +3,10 @@ declare global {
   namespace ReactNavigation {
     interface RootParamList {
       index: undefined;
+
+      signin: undefined;
+      signup: undefined;
+      'change-password': undefined;
       'teacollector/teacollectorMobile': undefined;
     }
   }

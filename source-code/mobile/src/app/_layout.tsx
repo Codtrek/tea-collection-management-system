@@ -21,6 +21,15 @@ export default function RootLayout() {
           title: 'Tea Collector',
         }}
       />
+      <Stack.Screen 
+        name="auth/signin" 
+      />
+      <Stack.Screen 
+        name="auth/signup" 
+      />
+      <Stack.Screen 
+        name="auth/change-password"
+      />
     </Stack>
   );
 }
