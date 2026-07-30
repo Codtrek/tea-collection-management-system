@@ -32,22 +32,68 @@ const SEED_USERS = [
   },
 ] as const;
 
+const USER_ROLES = [
+  'estate_owner',
+  'estate_manager',
+  'plucking_employee',
+  'collection_agent',
+  'receiving_officer',
+  'factory_admin',
+  'factory_officer',
+  'factory_manager',
+] as const;
+
+const FACTORY_EMPLOYEE_ROLES = [
+  'collection_agent',
+  'receiving_officer',
+  'factory_admin',
+  'factory_officer',
+  'factory_manager',
+] as const;
+
+/** Patch role CHECK constraints on volumes created before auth-slice schema updates. */
+async function ensureDevSchema(client: Client) {
+  const userRoles = USER_ROLES.map((role) => `'${role}'`).join(', ');
+  await client.query(
+    `ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`,
+  );
+  await client.query(
+    `ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN (${userRoles}))`,
+  );
+
+  const factoryRoles = FACTORY_EMPLOYEE_ROLES.map((role) => `'${role}'`).join(
+    ', ',
+  );
+  await client.query(
+    `ALTER TABLE factory_employees DROP CONSTRAINT IF EXISTS factory_employees_role_check`,
+  );
+  await client.query(
+    `ALTER TABLE factory_employees ADD CONSTRAINT factory_employees_role_check CHECK (role IN (${factoryRoles}))`,
+  );
+}
+
 async function seed() {
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is not set');
+  }
+
+  const client = new Client({ connectionString: databaseUrl });
   await client.connect();
 
   try {
-    const factory = await client.query<{ id: number }>(
-      `INSERT INTO factories (name, location) VALUES ($1, $2)
-       ON CONFLICT DO NOTHING RETURNING id`,
-      [FACTORY_NAME, 'Nuwara Eliya'],
+    await ensureDevSchema(client);
+
+    const existingFactory = await client.query<{ id: number }>(
+      `SELECT id FROM factories WHERE name = $1 LIMIT 1`,
+      [FACTORY_NAME],
     );
     const factoryId =
-      factory.rows[0]?.id ??
+      existingFactory.rows[0]?.id ??
       (
         await client.query<{ id: number }>(
-          `SELECT id FROM factories WHERE name = $1`,
-          [FACTORY_NAME],
+          `INSERT INTO factories (name, location) VALUES ($1, $2) RETURNING id`,
+          [FACTORY_NAME, 'Nuwara Eliya'],
         )
       ).rows[0].id;
 
