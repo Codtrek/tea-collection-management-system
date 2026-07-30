@@ -7,6 +7,7 @@ export {default as ButtonGroup} from './ButtonGroup';
 export {default as Avatar} from './Avatar';
 export {default as Header} from './Header';
 export {default as SearchBar} from './SearchBar';
-export { default as AppCard } from './AppCard';
+
 export {default as PasswordInput} from './PasswordInput';
 export {default as EstateOwnerBottomTab} from './EstateOwnerBottomTab';
+export { default as StatCard} from './StatCard';
