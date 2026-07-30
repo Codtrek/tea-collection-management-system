@@ -59,6 +59,10 @@ CREATE TABLE estates (
     -- Distinct from created_at (a row-insert timestamp, always ~seed time
     -- for every seeded estate) so backfilled multi-year history is honest.
     registered_on      DATE NOT NULL DEFAULT CURRENT_DATE,
+    -- Agent Dispatch (2026-10-09): map pin / route line coordinates. Nullable — set by the seed
+    -- or an officer; the dispatch map skips estates without a pin.
+    lat                DECIMAL(9,6),
+    lng                DECIMAL(9,6),
     created_at         TIMESTAMP DEFAULT NOW()
 );
 
@@ -198,9 +202,9 @@ CREATE TABLE tea_collection_records (
     estate_name      VARCHAR(100) NOT NULL, -- denormalized snapshot, as shown in the UI
     route_id         INTEGER REFERENCES routes(id),
     route_name       VARCHAR(100) NOT NULL,
+    -- ESTATE weight: what the agent weighed at the estate (owner-confirmed). Grading is
+    -- factory-side only and lives in delivery_grade_lines; this stays the mismatch-check input.
     weight_kg        DECIMAL(10,2) NOT NULL,
-    grade            VARCHAR(10) NOT NULL DEFAULT 'pending'
-        CHECK (grade IN ('super', 'normal', 'pending')),
     status           VARCHAR(30) NOT NULL DEFAULT 'submitted'
         CHECK (status IN ('submitted', 'approved', 'agent_assigned', 'collected',
                            'confirmed', 'pending_agent_confirmation')),
@@ -215,6 +219,102 @@ CREATE TABLE tea_collection_records (
     last_updated_on  TIMESTAMP,
     created_at       TIMESTAMP DEFAULT NOW()
 );
+
+
+-- ─── AGENT DISPATCH (2026-10-09) ─────────────────────────────────
+-- Spec: docs/specs/Collection-Agent-Dispatch-Addendum.md. Hand-migrated into existing
+-- schemas by database/migrations/2026-10-09-agent-dispatch.sql.
+
+-- ─── Route assignments (requests go to a ROUTE; a resolver finds the agent) ──
+CREATE TABLE IF NOT EXISTS route_assignments (
+    id                   SERIAL PRIMARY KEY,
+    route_id             INTEGER NOT NULL REFERENCES routes(id),
+    agent_id             INTEGER NOT NULL REFERENCES collection_agents(id),
+    type                 VARCHAR(10) NOT NULL
+        CHECK (type IN ('PERMANENT', 'COVER')),
+    status               VARCHAR(10) NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING', 'ACTIVE', 'DECLINED', 'EXPIRED', 'CANCELLED')),
+    valid_from           DATE NOT NULL,
+    valid_to             DATE, -- null = open-ended (permanent)
+    created_by           VARCHAR(100) NOT NULL,
+    accepted_at          TIMESTAMP,
+    responded_at         TIMESTAMP,
+    expires_at           TIMESTAMP, -- PENDING covers lapse here
+    reason               TEXT,
+    covers_assignment_id INTEGER REFERENCES route_assignments(id), -- the PERMANENT being covered
+    stop_scope           JSONB, -- hook: stop-level overrides for splitting a route (not used yet)
+    created_at           TIMESTAMP DEFAULT NOW(),
+    CHECK (valid_to IS NULL OR valid_to >= valid_from)
+);
+
+-- One live (open-ended) permanent assignment per route. A replaced permanent keeps
+-- status ACTIVE but gets a valid_to, so history stays date-resolvable.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_route_one_open_permanent
+    ON route_assignments (route_id)
+    WHERE type = 'PERMANENT' AND status = 'ACTIVE' AND valid_to IS NULL;
+CREATE INDEX IF NOT EXISTS idx_route_assignments_route ON route_assignments (route_id, valid_from);
+CREATE INDEX IF NOT EXISTS idx_route_assignments_agent ON route_assignments (agent_id, status);
+
+-- ─── Neighbouring routes (primary proximity signal; stored symmetric) ───────
+CREATE TABLE IF NOT EXISTS route_neighbours (
+    route_id           INTEGER NOT NULL REFERENCES routes(id),
+    neighbour_route_id INTEGER NOT NULL REFERENCES routes(id),
+    PRIMARY KEY (route_id, neighbour_route_id),
+    CHECK (route_id <> neighbour_route_id)
+);
+
+-- ─── Per-agent per-day availability + shift ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS agent_day_status (
+    agent_id         INTEGER NOT NULL REFERENCES collection_agents(id),
+    day              DATE NOT NULL,
+    status           VARCHAR(10) NOT NULL DEFAULT 'AVAILABLE'
+        CHECK (status IN ('AVAILABLE', 'ABSENT')),
+    source           VARCHAR(10) CHECK (source IN ('self', 'officer')),
+    reason           TEXT,
+    marked_by        VARCHAR(100),
+    shift_started_at TIMESTAMPTZ,
+    shift_ended_at   TIMESTAMPTZ,
+    PRIMARY KEY (agent_id, day)
+);
+
+-- ─── Location pings (shift-only; 30-day retention enforced by a nightly job) ─
+CREATE TABLE IF NOT EXISTS agent_location_pings (
+    id          BIGSERIAL PRIMARY KEY,
+    agent_id    INTEGER NOT NULL REFERENCES collection_agents(id),
+    recorded_at TIMESTAMPTZ NOT NULL, -- device clock: when the fix was taken
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- server clock: when it arrived
+    lat         DECIMAL(9,6) NOT NULL CHECK (lat BETWEEN -90 AND 90),
+    lng         DECIMAL(9,6) NOT NULL CHECK (lng BETWEEN -180 AND 180),
+    accuracy_m  DECIMAL(8,2),
+    source      VARCHAR(10) NOT NULL DEFAULT 'ping'
+        CHECK (source IN ('ping', 'checkin'))
+);
+CREATE INDEX IF NOT EXISTS idx_pings_agent_time ON agent_location_pings (agent_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pings_recorded ON agent_location_pings (recorded_at);
+
+-- ─── Push tokens ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS device_push_tokens (
+    token      VARCHAR(200) PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    platform   VARCHAR(10),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON device_push_tokens (user_id);
+
+-- ─── Grade lines (grading is FACTORY-SIDE ONLY) ─────────────────────────────
+-- One delivery → many lines, at most one per grade. The graded total is always
+-- the SUM of lines — there is no stored total to drift. tea_collection_records
+-- .weight_kg keeps meaning "estate weight" (agent-entered; mismatch check input).
+CREATE TABLE IF NOT EXISTS delivery_grade_lines (
+    id          SERIAL PRIMARY KEY,
+    delivery_id VARCHAR(20) NOT NULL REFERENCES tea_collection_records(id) ON DELETE CASCADE,
+    grade       VARCHAR(10) NOT NULL CHECK (grade IN ('super', 'normal')),
+    weight_kg   DECIMAL(10,2) NOT NULL CHECK (weight_kg > 0),
+    graded_by   VARCHAR(100) NOT NULL,
+    graded_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (delivery_id, grade)
+);
+CREATE INDEX IF NOT EXISTS idx_grade_lines_delivery ON delivery_grade_lines (delivery_id);
 
 -- ─── FERTILIZER WORKFLOW ──────────────────────────────────────────
 -- (created before complaints, since complaints references fertilizer_requests)
@@ -555,7 +655,7 @@ CREATE TABLE grade_rates (
 -- of truth and the client constant is only a fallback default.
 CREATE TABLE role_permissions (
     role   VARCHAR(20) NOT NULL
-        CHECK (role IN ('Administrator', 'Officer', 'Manager')),
+        CHECK (role IN ('Administrator', 'Officer', 'Manager', 'ReceivingOfficer')),
     module VARCHAR(30) NOT NULL,
     level  VARCHAR(10) NOT NULL
         CHECK (level IN ('none', 'view', 'edit', 'approve')),
@@ -594,7 +694,9 @@ CREATE TABLE notifications (
     type           VARCHAR(50) NOT NULL
         CHECK (type IN ('delivery_confirmation', 'otp', 'complaint',
                          'fertilizer_approval', 'payment_update',
-                         'collection_complete', 'no_agents')),
+                         'collection_complete', 'no_agents',
+                         'cover_request', 'cover_response', 'missed_checkin',
+                         'route_reassigned', 'exception_request')),
     title          VARCHAR(150),
     body           TEXT,
     is_read        BOOLEAN DEFAULT FALSE,

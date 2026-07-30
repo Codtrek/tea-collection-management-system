@@ -36,7 +36,7 @@ const SEED_USERS = [
   },
 ] as const;
 
-const ROUTE_NAMES = ['Route 2', 'Route 3', 'Route 5'] as const;
+const ROUTE_NAMES = ['Route 2', 'Route 3', 'Route 4', 'Route 5'] as const;
 
 interface SeedDocument {
   name: string;
@@ -968,7 +968,35 @@ const ATTENDANCE_SEEDS: SeedAttendance[] = [
 const AGENT_SEEDS = [
   { phone: '0777000011', name: 'R. Senanayake', nic: '198712345701' },
   { phone: '0777000012', name: 'W. Gunaratne', nic: '198912345702' },
+  { phone: '0777000013', name: 'K. Weerasinghe', nic: '199012345703' },
+  { phone: '0777000014', name: 'N. Perera', nic: '199112345704' },
+  { phone: '0777000015', name: 'D. Silva', nic: '199212345705' },
 ] as const;
+
+/* ── Agent Dispatch (COL-05) reference data ─────────────────────────────────
+   Each route's permanent agent (D. Silva is deliberately a floater with no
+   route — an obvious zero-load cover candidate), neighbouring routes, and map
+   coordinates for the estates. Only inserted where nothing is assigned yet, so
+   re-seeding never overrides an officer's reassignment. */
+const PERMANENT_AGENT_SEEDS: Record<string, string> = {
+  'Route 2': 'K. Weerasinghe',
+  'Route 3': 'R. Senanayake',
+  'Route 4': 'N. Perera',
+  'Route 5': 'W. Gunaratne',
+};
+const NEIGHBOUR_ROUTE_SEEDS: [string, string][] = [
+  ['Route 2', 'Route 3'],
+  ['Route 2', 'Route 4'],
+  ['Route 3', 'Route 4'],
+  ['Route 3', 'Route 5'],
+];
+const ESTATE_COORD_SEEDS: Record<string, [number, number]> = {
+  'Green Valley Estate': [6.981, 80.765],
+  'Silver Peak Estate': [6.965, 80.75],
+  'Hilltop Estate': [7.035, 80.83],
+  'Mount Rest Estate': [6.91, 80.82],
+  'Riverside Estate': [6.93, 80.85],
+};
 
 interface SeedPhoto {
   label:
@@ -990,7 +1018,10 @@ interface SeedCollectionRecord {
   estateName: string;
   routeName: string;
   weightKg: number;
+  /** Seed shorthand: 'pending' = Ungraded (no grade lines). Real grading is factory-side grade lines. */
   grade: 'super' | 'normal' | 'pending';
+  /** Optional multi-grade split (kg per grade); overrides `grade`. Must sum to weightKg. */
+  gradeSplit?: { super: number; normal: number };
   status:
     | 'submitted'
     | 'approved'
@@ -1015,6 +1046,8 @@ const COLLECTION_RECORD_SEEDS: SeedCollectionRecord[] = [
     routeName: 'Route 3',
     weightKg: 210,
     grade: 'super',
+    // one multi-grade delivery in the seed, so the Super + Normal chips have something to show
+    gradeSplit: { super: 170, normal: 40 },
     status: 'confirmed',
     date: '2026-07-14',
     agentName: 'R. Senanayake',
@@ -1959,19 +1992,19 @@ const PERMISSION_MATRIX: Record<
     dashboard: 'approve', collection: 'approve', fertilizer: 'approve',
     estateOwners: 'approve', payroll: 'approve', advances: 'approve',
     employees: 'approve', attendance: 'approve', performance: 'approve',
-    reports: 'approve', administration: 'approve',
+    reports: 'approve', administration: 'approve', dispatch: 'approve',
   },
   Officer: {
     dashboard: 'view', collection: 'edit', fertilizer: 'edit',
     estateOwners: 'edit', payroll: 'edit', advances: 'approve',
     employees: 'view', attendance: 'edit', performance: 'view',
-    reports: 'edit', administration: 'none',
+    reports: 'edit', administration: 'none', dispatch: 'edit',
   },
   Manager: {
     dashboard: 'view', collection: 'view', fertilizer: 'view',
     estateOwners: 'view', payroll: 'view', advances: 'view',
     employees: 'view', attendance: 'view', performance: 'approve',
-    reports: 'view', administration: 'none',
+    reports: 'view', administration: 'none', dispatch: 'approve',
   },
 };
 
@@ -1995,6 +2028,9 @@ const SETTING_SEEDS: { key: string; value: unknown }[] = [
   { key: 'defaultChannel', value: 'in-app' },
   { key: 'sessionTimeout', value: '30' },
   { key: 'passwordPolicy', value: 'standard' },
+  // Agent Dispatch: minutes a cover request waits for an answer; 'HH:MM' factory-local
+  // cutoff after which an agent with no shift start raises a missed check-in alert.
+  { key: 'dispatch', value: { coverRequestTimeoutMin: 15, shiftStartTime: '06:00' } },
 ];
 
 const AUDIT_LOG_SEEDS = [
@@ -2017,6 +2053,195 @@ async function findOrCreate(
   if (existing.rows[0]) return existing.rows[0].id;
   const inserted = await client.query<{ id: number }>(insertSql, insertParams);
   return inserted.rows[0].id;
+}
+
+interface DispatchSeedContext {
+  factoryId: number;
+  routeIds: Record<string, number>;
+  agentIds: Record<string, number>;
+  estateIds: Record<string, number>;
+}
+
+/**
+ * Agent Dispatch demo data (COL-05). Idempotent and conservative: permanent
+ * assignments are only created where a route has none (never overriding an officer's
+ * reassignment); recent deliveries are `collected` (awaiting factory grading), so
+ * Reports / estate lifetime — which count Confirmed records only — are unaffected.
+ */
+async function seedDispatch(client: Client, ctx: DispatchSeedContext) {
+  const { routeIds, agentIds, estateIds } = ctx;
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Colombo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const now = new Date();
+  const dayOffset = (n: number) => fmt.format(new Date(now.getTime() - n * 86_400_000));
+  const today = dayOffset(0);
+
+  // neighbouring routes (symmetric)
+  for (const [a, b] of NEIGHBOUR_ROUTE_SEEDS) {
+    for (const [x, y] of [
+      [routeIds[a], routeIds[b]],
+      [routeIds[b], routeIds[a]],
+    ]) {
+      await client.query(
+        `INSERT INTO route_neighbours (route_id, neighbour_route_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [x, y],
+      );
+    }
+  }
+
+  // permanent assignments — only where the route has none
+  for (const [routeName, agentName] of Object.entries(PERMANENT_AGENT_SEEDS)) {
+    const routeId = routeIds[routeName];
+    const agentId = agentIds[agentName];
+    const open = await client.query(
+      `SELECT 1 FROM route_assignments
+        WHERE route_id = $1 AND type = 'PERMANENT' AND status = 'ACTIVE' AND valid_to IS NULL`,
+      [routeId],
+    );
+    if (open.rowCount === 0) {
+      await client.query(
+        `INSERT INTO route_assignments
+           (route_id, agent_id, type, status, valid_from, created_by, accepted_at, reason)
+         VALUES ($1, $2, 'PERMANENT', 'ACTIVE', '2026-01-01', 'seed', NOW(), 'Seeded route owner')`,
+        [routeId, agentId],
+      );
+    }
+  }
+
+  // estate map coordinates
+  for (const [name, [lat, lng]] of Object.entries(ESTATE_COORD_SEEDS)) {
+    if (estateIds[name]) {
+      await client.query(`UPDATE estates SET lat = $2, lng = $3 WHERE id = $1`, [
+        estateIds[name],
+        lat,
+        lng,
+      ]);
+    }
+  }
+
+  // who owns each route right now (so seeded rows match what the board resolves)
+  const owners = await client.query<{ route_id: number; agent_id: number; name: string }>(
+    `SELECT ra.route_id, ra.agent_id, fe.name
+       FROM route_assignments ra
+       JOIN collection_agents ca ON ca.id = ra.agent_id
+       JOIN factory_employees fe ON fe.id = ca.employee_id
+      WHERE ra.type = 'PERMANENT' AND ra.status = 'ACTIVE' AND ra.valid_to IS NULL`,
+  );
+  const ownerByRoute = new Map(owners.rows.map((r) => [r.route_id, r]));
+
+  const estates = await client.query<{
+    id: number;
+    name: string;
+    route_id: number | null;
+    route_name: string | null;
+  }>(
+    `SELECT id, name, route_id, route_name FROM estates
+      WHERE status = 'active' AND self_delivery = FALSE AND route_id IS NOT NULL ORDER BY id`,
+  );
+
+  // The last 10 days: collected, awaiting factory grading → gives load history
+  // for the "expected route load" and the agent's soft ceiling.
+  let history = 0;
+  for (let back = 1; back <= 10; back++) {
+    const date = dayOffset(back);
+    for (const [idx, e] of estates.rows.entries()) {
+      const owner = ownerByRoute.get(e.route_id as number);
+      if (!owner) continue;
+      const kg = 40 + ((idx * 37 + back * 53) % 70);
+      const id = `DSP-${date.replace(/-/g, '')}-${e.id}`;
+      await client.query(
+        `INSERT INTO tea_collection_records
+           (id, estate_id, estate_name, route_id, route_name, weight_kg, status,
+            collection_date, agent_id, agent_name, photos, timeline)
+         VALUES ($1, $2, $3, $4, $5, $6, 'collected', $7, $8, $9, '[]', $10)
+         ON CONFLICT (id) DO UPDATE SET
+           weight_kg = EXCLUDED.weight_kg, agent_id = EXCLUDED.agent_id,
+           agent_name = EXCLUDED.agent_name, collection_date = EXCLUDED.collection_date`,
+        [
+          id, e.id, e.name, e.route_id, e.route_name ?? '', kg, date,
+          owner.agent_id, owner.name,
+          JSON.stringify([{ status: 'Collected', timestamp: `${date}T09:00:00`, by: owner.name }]),
+        ],
+      );
+      history++;
+    }
+  }
+
+  // Today: the first estate on each route is the day's stop. Route 3 has already been
+  // collected (so reassigning it is blocked); the rest are still to do (so they can be
+  // covered / reassigned, and COL-01 shows the resolver-driven agent).
+  const seenRoute = new Set<number>();
+  for (const e of estates.rows) {
+    const routeId = e.route_id as number;
+    if (seenRoute.has(routeId)) continue;
+    seenRoute.add(routeId);
+    const owner = ownerByRoute.get(routeId);
+    if (!owner) continue;
+    const started = e.route_name === 'Route 3';
+    await client.query(
+      `INSERT INTO tea_collection_records
+         (id, estate_id, estate_name, route_id, route_name, weight_kg, status,
+          collection_date, agent_id, agent_name, photos, timeline)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, '[]', $11)
+       ON CONFLICT (id) DO UPDATE SET
+         status = EXCLUDED.status, agent_id = EXCLUDED.agent_id,
+         agent_name = EXCLUDED.agent_name, collection_date = EXCLUDED.collection_date`,
+      [
+        `DSP-${today.replace(/-/g, '')}-${e.id}`, e.id, e.name, e.route_id, e.route_name ?? '',
+        started ? 88 : 72, started ? 'collected' : 'approved', today,
+        started ? owner.agent_id : null, owner.name,
+        JSON.stringify([
+          started
+            ? { status: 'Collected', timestamp: `${today}T08:00:00`, by: owner.name }
+            : { status: 'Approved', timestamp: `${today}T06:00:00`, by: 'S. Fernando' },
+        ]),
+      ],
+    );
+  }
+
+  // Live-ish state for "today": two agents are on shift with fresh-ish pings
+  // (green / amber on the board); the rest haven't started, so the missed
+  // check-in alert has something to show after the shift-start cutoff.
+  const onShift: [string, number, [number, number]][] = [
+    ['R. Senanayake', 4, [6.972, 80.758]], // last seen 4 min ago → green
+    ['W. Gunaratne', 12, [7.02, 80.82]], // last seen 12 min ago → amber
+  ];
+  for (const [name, lastSeenMin, [lat, lng]] of onShift) {
+    const agentId = agentIds[name];
+    const shiftStart = new Date(now.getTime() - 95 * 60_000);
+    await client.query(
+      `INSERT INTO agent_day_status (agent_id, day, status, shift_started_at)
+       VALUES ($1, $2, 'AVAILABLE', $3)
+       ON CONFLICT (agent_id, day) DO UPDATE SET
+         status = 'AVAILABLE', shift_started_at = EXCLUDED.shift_started_at, shift_ended_at = NULL`,
+      [agentId, today, shiftStart],
+    );
+    await client.query(
+      `DELETE FROM agent_location_pings WHERE agent_id = $1 AND recorded_at > NOW() - INTERVAL '1 day'`,
+      [agentId],
+    );
+    for (const minsAgo of [lastSeenMin + 60, lastSeenMin + 30, lastSeenMin]) {
+      await client.query(
+        `INSERT INTO agent_location_pings (agent_id, recorded_at, received_at, lat, lng, accuracy_m, source)
+         VALUES ($1, $2, $2, $3, $4, 12, 'ping')`,
+        [
+          agentId,
+          new Date(now.getTime() - minsAgo * 60_000),
+          lat + (minsAgo - lastSeenMin) * 0.00004,
+          lng - (minsAgo - lastSeenMin) * 0.00003,
+        ],
+      );
+    }
+  }
+
+  console.log(
+    `Seeded dispatch: ${NEIGHBOUR_ROUTE_SEEDS.length} neighbour pairs, ${Object.keys(PERMANENT_AGENT_SEEDS).length} route owners, ${history} recent deliveries, ${seenRoute.size} stops today, ${onShift.length} agents on shift`,
+  );
 }
 
 async function seed() {
@@ -2440,16 +2665,15 @@ async function seed() {
 
       await client.query(
         `INSERT INTO tea_collection_records
-           (id, estate_id, estate_name, route_id, route_name, weight_kg, grade, status,
+           (id, estate_id, estate_name, route_id, route_name, weight_kg, status,
             collection_date, agent_id, agent_name, photos, timeline, provisional, mismatch)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          ON CONFLICT (id) DO UPDATE SET
            estate_id = EXCLUDED.estate_id,
            estate_name = EXCLUDED.estate_name,
            route_id = EXCLUDED.route_id,
            route_name = EXCLUDED.route_name,
            weight_kg = EXCLUDED.weight_kg,
-           grade = EXCLUDED.grade,
            status = EXCLUDED.status,
            collection_date = EXCLUDED.collection_date,
            agent_id = EXCLUDED.agent_id,
@@ -2465,7 +2689,6 @@ async function seed() {
           routeId,
           c.routeName,
           c.weightKg,
-          c.grade,
           c.status,
           c.date,
           agentId,
@@ -2478,7 +2701,30 @@ async function seed() {
       );
     }
 
+    // Grading is factory-side: a seeded record's grade becomes grade line(s); 'pending'
+    // leaves it Ungraded. Lines are reset from the seed each run (deterministic).
+    for (const c of COLLECTION_RECORD_SEEDS) {
+      await client.query(`DELETE FROM delivery_grade_lines WHERE delivery_id = $1`, [c.id]);
+      const lines: { grade: 'super' | 'normal'; kg: number }[] = c.gradeSplit
+        ? [
+            { grade: 'super' as const, kg: c.gradeSplit.super },
+            { grade: 'normal' as const, kg: c.gradeSplit.normal },
+          ].filter((l) => l.kg > 0)
+        : c.grade === 'pending'
+          ? []
+          : [{ grade: c.grade, kg: c.weightKg }];
+      for (const l of lines) {
+        await client.query(
+          `INSERT INTO delivery_grade_lines (delivery_id, grade, weight_kg, graded_by, graded_at)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [c.id, l.grade, l.kg, 'Seed', c.date],
+        );
+      }
+    }
+
     console.log(`Seeded ${COLLECTION_RECORD_SEEDS.length} collection records`);
+
+    await seedDispatch(client, { factoryId, routeIds, agentIds, estateIds });
 
     // ── Fertilizer (FERT-01..08) ──
 
@@ -2704,6 +2950,11 @@ async function seed() {
         permCount++;
       }
     }
+    // Kept in data but disabled this round — the "agent hasn't arrived" flag is deferred.
+    await client.query(
+      `INSERT INTO role_permissions (role, module, level) VALUES ('ReceivingOfficer', 'dispatch', 'none')
+       ON CONFLICT (role, module) DO UPDATE SET level = EXCLUDED.level`,
+    );
     console.log(`Seeded ${permCount} role-permission cells`);
 
     for (const g of GRADE_RATE_SEEDS) {
