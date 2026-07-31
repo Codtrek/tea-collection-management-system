@@ -202,16 +202,6 @@ export const StopCard = ({
         ================================================== */}
 
         <View style={styles.header}>
-          {/* Estate Icon */}
-
-          <View style={styles.iconContainer}>
-            <Ionicons
-              name="leaf-outline"
-              size={20}
-              color={c.forest}
-            />
-          </View>
-
           {/* Estate Information */}
 
           <View style={styles.mainInfo}>
@@ -286,17 +276,15 @@ export const StopCard = ({
 
             {/* Existing View Details button */}
 
-            <View style={styles.viewDetailsButton}>
-              <Text style={styles.viewDetailsText}>
-                View Details
-              </Text>
-
-              <Ionicons
-                name="chevron-forward-outline"
-                size={16}
-                color={c.forest}
-              />
-            </View>
+            <Btn
+              variant="secondary"
+              small
+              block
+              onPress={() => onViewDetails?.(stop)}
+              style={styles.viewDetailsButton}
+            >
+              View Details
+            </Btn>
           </>
         )}
 
@@ -428,15 +416,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
-  iconContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: c.forestLight,
-  },
-
   mainInfo: {
     flex: 1,
   },
@@ -487,22 +466,8 @@ const styles = StyleSheet.create({
   ======================================================= */
 
   viewDetailsButton: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     width: "100%",
     marginTop: 12,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1.5,
-    borderColor: c.forestLight,
-  },
-
-  viewDetailsText: {
-    fontWeight: "600",
-    fontSize: 15,
-    color: c.forest,
   },
 
   /* =======================================================
