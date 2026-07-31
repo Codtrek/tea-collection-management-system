@@ -160,7 +160,6 @@ export default function DemoTeaCollectorCollect({
 
           {loaded.length > 0 && (
             <Card
-              dark
               style={styles.loadedCard}
             >
               <View style={styles.loadedHeader}>
@@ -172,10 +171,10 @@ export default function DemoTeaCollectorCollect({
                   <Ionicons
                     name="business-outline"
                     size={20}
-                    color={colors.white}
+                    color={colors.primary}
                   />
                 </View>
-
+ 
                 <View
                   style={
                     styles.loadedTextContainer
@@ -190,7 +189,7 @@ export default function DemoTeaCollectorCollect({
                       : ""}{" "}
                     loaded · {totalLoaded} kg
                   </Text>
-
+ 
                   <Text
                     style={styles.loadedSubtitle}
                   >
@@ -199,9 +198,9 @@ export default function DemoTeaCollectorCollect({
                   </Text>
                 </View>
               </View>
-
+ 
               {/* EXISTING FACTORY NAVIGATION */}
-
+ 
               <Btn
                 variant="primary"
                 block
@@ -442,44 +441,46 @@ const styles = StyleSheet.create({
      LOADED / FACTORY
   ======================================================= */
 
-  loadedCard: {
-    marginBottom: 16,
-  },
-
   loadedHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
-
+ 
+  loadedCard: {
+    marginBottom: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+ 
   factoryIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor:
-      "rgba(255,255,255,0.14)",
+    backgroundColor: colors.successBackground,
   },
-
+ 
   loadedTextContainer: {
     flex: 1,
   },
-
+ 
   loadedTitle: {
     fontFamily:
       fontDisplay.fontFamily,
     fontWeight: "600",
     fontSize: 15,
-    color: colors.white,
+    color: colors.text.primary,
   },
-
+ 
   loadedSubtitle: {
     fontSize: 12,
     marginTop: 2,
-    color: "#BFE0C6",
+    color: colors.text.secondary,
   },
-
+ 
   factoryButton: {
     marginTop: 14,
   },
