@@ -1,62 +1,126 @@
-import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Pill } from '@/components/ui/demo-teacollector-pill';
-import { Btn } from '@/components/ui/demo-teacollector-button';
-import { c, fontDisplay, fontMono } from "@/components/ui/demo-teacollector-theme";
 
-export const FertRequestCard = ({ request, onViewDetails, onLoadFertilizer, onDeliverFertilizer }: any) => {
+import React from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
+
+import { Ionicons } from "@expo/vector-icons";
+
+import { Pill } from "@/components/ui/demo-teacollector-pill";
+import { Btn } from "@/components/ui/demo-teacollector-button";
+
+import {
+  c,
+  fontDisplay,
+  fontMono,
+} from "@/components/ui/demo-teacollector-theme";
+
+import { colors } from "@/theme/colors";
+
+/* =========================================================
+   FERTILIZER REQUEST CARD
+========================================================= */
+
+interface FertRequestCardProps {
+  request: any;
+  onViewDetails?: (request: any) => void;
+  onLoadFertilizer?: (request: any) => void;
+  onDeliverFertilizer?: (request: any) => void;
+}
+
+export const FertRequestCard = ({
+  request,
+  onViewDetails,
+  onLoadFertilizer,
+  onDeliverFertilizer,
+}: FertRequestCardProps) => {
   const statusMap: any = {
-    confirmed: { label: "Confirmed", action: "Load Fertilizer", handler: onLoadFertilizer },
-    loaded: { label: "Loaded", action: "Deliver", handler: onDeliverFertilizer },
-    delivered: { label: "Delivered", action: null, handler: null },
+    confirmed: {
+      label: "Confirmed",
+      action: "Load Fertilizer",
+      handler: onLoadFertilizer,
+    },
+
+    loaded: {
+      label: "Loaded",
+      action: "Deliver",
+      handler: onDeliverFertilizer,
+    },
+
+    delivered: {
+      label: "Delivered",
+      action: null,
+      handler: null,
+    },
   };
 
   const currentStatus = statusMap[request.status];
 
   return (
-    <View style={{
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 10,
-      backgroundColor: c.card,
-      borderWidth: 1,
-      borderColor: c.line,
-    }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{
-            fontFamily: fontDisplay.fontFamily,
-            fontWeight: '600',
-            fontSize: 16,
-          }}>{request.estateName}</Text>
-          <Text style={{
-            fontSize: 12,
-            marginTop: 2,
-            color: c.muted,
-          }}>{request.fertilizerType} · {request.quantity} kg</Text>
-          <Text style={{
-            fontSize: 12,
-            marginTop: 2,
-            color: c.muted,
-          }}>
-            {request.status === "confirmed" && `Confirmed at ${request.confirmedAt}`}
-            {request.status === "loaded" && `Loaded at ${request.loadedAt}`}
-            {request.status === "delivered" && `Delivered at ${request.deliveredAt}`}
+    <View style={styles.card}>
+      {/* =========================
+          HEADER
+      ========================= */}
+
+      <View style={styles.header}>
+        <View style={styles.mainInfo}>
+          <Text style={styles.title}>
+            {request.estateName || "Tea Estate"}
+          </Text>
+
+          <Text style={styles.subtitle}>
+            {request.fertilizerType || "Fertilizer"} ·{" "}
+            {request.quantity} kg
+          </Text>
+
+          <Text style={styles.timeText}>
+            {request.status === "confirmed" &&
+              `Confirmed at ${request.confirmedAt}`}
+
+            {request.status === "loaded" &&
+              `Loaded at ${request.loadedAt}`}
+
+            {request.status === "delivered" &&
+              `Delivered at ${request.deliveredAt}`}
           </Text>
         </View>
+
         <Pill status={request.status} />
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="ghost" small onPress={() => onViewDetails(request)}>
+      {/* =========================
+          BUTTONS
+      ========================= */}
+
+      <View style={styles.buttonRow}>
+        {/* View Details */}
+
+        <View style={styles.buttonWrapper}>
+          <Btn
+            variant="secondary"
+            small
+            block
+            onPress={() => onViewDetails?.(request)}
+          >
             View Details
           </Btn>
         </View>
-        {currentStatus.action && (
-          <View style={{ flex: 1 }}>
-            <Btn variant="primary" small onPress={() => currentStatus.handler(request)}>
+
+        {/* Status Action */}
+
+        {currentStatus?.action && (
+          <View style={styles.buttonWrapper}>
+            <Btn
+              variant="primary"
+              small
+              block
+              onPress={() =>
+                currentStatus.handler?.(request)
+              }
+            >
               {currentStatus.action}
             </Btn>
           </View>
@@ -66,118 +130,471 @@ export const FertRequestCard = ({ request, onViewDetails, onLoadFertilizer, onDe
   );
 };
 
-export const StopCard = ({ stop, onViewDetails, onArrivedDetails }: any) => {
-  const clickable = stop.status === "pending" || stop.status === "accepted";
+/* =========================================================
+   TEA COLLECTION STOP CARD
+========================================================= */
 
-  const handleCardPress = () => {
-    if (stop.status === "pending") onViewDetails(stop);
-    if (stop.status === "accepted") onArrivedDetails(stop);
-  };
+interface StopCardProps {
+  stop: any;
+
+  /*
+   * Existing flow:
+   * Pending -> request details
+   */
+  onViewDetails?: (stop: any) => void;
+
+  /*
+   * Existing flow:
+   * Accepted -> continue collection process
+   */
+  onArrivedDetails?: (stop: any) => void;
+
+  /*
+   * NEW:
+   * Accepted -> navigate to particular tea estate
+   */
+  onGoToEstate?: (stop: any) => void;
+}
+
+export const StopCard = ({
+  stop,
+  onViewDetails,
+  onArrivedDetails,
+  onGoToEstate,
+}: StopCardProps) => {
+  const isPending = stop.status === "pending";
+  const isAccepted = stop.status === "accepted";
+  const isLoaded = stop.status === "loaded";
+  const isDelivered = stop.status === "delivered";
+  const isCancelled = stop.status === "cancelled";
 
   return (
-    <TouchableOpacity
-      onPress={handleCardPress}
-      disabled={!clickable}
-      style={{
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 10,
-        backgroundColor: c.card,
-        borderWidth: 1,
-        borderColor: c.line,
-        opacity: clickable ? 1 : 0.7,
-      }}
-    >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <View>
-          <Text style={{
-            fontFamily: fontDisplay.fontFamily,
-            fontWeight: '600',
-            fontSize: 16,
-          }}>{stop.name}</Text>
-          <Text style={{
-            fontSize: 12,
-            marginTop: 2,
-            color: c.muted,
-          }}>
-            {stop.status === "cancelled" && `Reason: ${stop.reason}`}
-            {stop.status === "pending" && `Owner: ${stop.owner}`}
-            {stop.status === "accepted" && `Accepted at ${stop.acceptedAt}`}
-            {stop.status === "loaded" && "Awaiting factory drop-off"}
-            {stop.status === "delivered" && "✓ Completed"}
-          </Text>
-        </View>
-        <Pill status={stop.mismatch && stop.status === "delivered" ? "mismatch" : stop.status} />
-      </View>
+    <View style={styles.card}>
+      {/* =================================================
+          MAIN CARD CONTENT
 
-      {stop.status === "pending" && (
-        <>
-          <View style={{ flexDirection: 'row', gap: 14, marginTop: 10 }}>
-            <Text style={{
-              fontFamily: fontMono.fontFamily,
-              fontSize: 12,
-              color: c.forest,
-            }}>~{stop.estWeight} kg</Text>
-            <Text style={{
-              fontFamily: fontMono.fontFamily,
-              fontSize: 12,
-              color: c.forest,
-            }}>{stop.dist} km</Text>
+          Pending:
+          tapping the card continues to existing details flow.
+
+          Accepted:
+          tapping the card continues to existing
+          collection/arrival flow.
+
+          This is IMPORTANT — we are not removing
+          onArrivedDetails.
+      ================================================== */}
+
+      <TouchableOpacity
+        disabled={!isPending && !isAccepted}
+        activeOpacity={0.85}
+        onPress={() => {
+          if (isPending) {
+            onViewDetails?.(stop);
+          }
+
+          if (isAccepted) {
+            onArrivedDetails?.(stop);
+          }
+        }}
+      >
+        {/* =================================================
+            HEADER
+        ================================================== */}
+
+        <View style={styles.header}>
+          {/* Estate Icon */}
+
+          <View style={styles.iconContainer}>
+            <Ionicons
+              name="leaf-outline"
+              size={20}
+              color={c.forest}
+            />
           </View>
-          <TouchableOpacity
-            onPress={() => onViewDetails(stop)}
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              width: '100%',
-              marginTop: 12,
-              borderRadius: 14,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              borderWidth: 1.5,
-              borderColor: c.forestLight,
+
+          {/* Estate Information */}
+
+          <View style={styles.mainInfo}>
+            <Text style={styles.title}>
+              {stop.name || "Tea Estate"}
+            </Text>
+
+            {stop.address && (
+              <Text style={styles.subtitle}>
+                {stop.address}
+              </Text>
+            )}
+
+            {stop.location && (
+              <Text style={styles.subtitle}>
+                {stop.location}
+              </Text>
+            )}
+
+            {/* Status Information */}
+
+            <Text style={styles.timeText}>
+              {isCancelled &&
+                `Reason: ${stop.reason || "Cancelled"}`}
+
+              {isPending &&
+                `Owner: ${stop.owner || "Estate Owner"}`}
+
+              {isAccepted &&
+                `Accepted at ${stop.acceptedAt || "—"}`}
+
+              {isLoaded &&
+                "Awaiting factory drop-off"}
+
+              {isDelivered &&
+                "✓ Completed"}
+            </Text>
+          </View>
+
+          {/* Status */}
+
+          <Pill
+            status={
+              stop.mismatch && isDelivered
+                ? "mismatch"
+                : stop.status
+            }
+          />
+        </View>
+
+        {/* =================================================
+            PENDING REQUEST
+        ================================================== */}
+
+        {isPending && (
+          <>
+            {/* Estimated weight + distance */}
+
+            <View style={styles.metaRow}>
+              {stop.estWeight != null && (
+                <Text style={styles.metaText}>
+                  ~{stop.estWeight} kg
+                </Text>
+              )}
+
+              {stop.dist != null && (
+                <Text style={styles.metaText}>
+                  {stop.dist} km
+                </Text>
+              )}
+            </View>
+
+            {/* Existing View Details button */}
+
+            <View style={styles.viewDetailsButton}>
+              <Text style={styles.viewDetailsText}>
+                View Details
+              </Text>
+
+              <Ionicons
+                name="chevron-forward-outline"
+                size={16}
+                color={c.forest}
+              />
+            </View>
+          </>
+        )}
+
+        {/* =================================================
+            ACCEPTED REQUEST
+        ================================================== */}
+
+        {isAccepted && (
+          <>
+            {/* Keep existing accepted information */}
+
+            <View style={styles.metaRow}>
+              {stop.estWeight != null && (
+                <Text style={styles.metaText}>
+                  ~{stop.estWeight} kg
+                </Text>
+              )}
+
+              {stop.dist != null && (
+                <Text style={styles.metaText}>
+                  {stop.dist} km
+                </Text>
+              )}
+            </View>
+
+            {/* Existing flow indicator */}
+
+            <View style={styles.continueContainer}>
+              <Text style={styles.continueText}>
+                Tap the request to continue collection
+              </Text>
+
+              <Ionicons
+                name="chevron-forward-outline"
+                size={16}
+                color={c.forest}
+              />
+            </View>
+          </>
+        )}
+
+        {/* =================================================
+            LOADED REQUEST
+
+            Keep existing loaded information.
+
+            Factory navigation is NOT added here.
+            It remains in DemoTeaCollectorCollect.
+        ================================================== */}
+
+        {isLoaded && (
+          <View style={styles.metaRow}>
+            {stop.actualWeight != null && (
+              <Text style={styles.metaText}>
+                {stop.actualWeight} kg
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* =================================================
+            DELIVERED
+        ================================================== */}
+
+        {isDelivered && (
+          <View style={styles.metaRow}>
+            {stop.actualWeight != null && (
+              <Text style={styles.mutedMetaText}>
+                {stop.actualWeight} kg delivered
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* =================================================
+            CANCELLED
+        ================================================== */}
+
+        {isCancelled && (
+          <View style={styles.cancelledContainer}>
+            <Ionicons
+              name="close-circle-outline"
+              size={18}
+              color={colors.error}
+            />
+
+            <Text style={styles.cancelledText}>
+              This request was cancelled
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      {/* =================================================
+          NEW NAVIGATION BUTTON
+
+          This is OUTSIDE the TouchableOpacity.
+
+          Therefore:
+          - Clicking the card -> existing collection flow
+          - Clicking Navigate -> estate navigation
+
+          They are completely separate actions.
+      ================================================== */}
+
+      {isAccepted && (
+        <View style={styles.actionContainer}>
+          <Btn
+            variant="navigation"
+            small
+            block
+            onPress={() => {
+              console.log(
+                "Navigate to estate:",
+                stop.name
+              );
+
+              onGoToEstate?.(stop);
             }}
           >
-            <Text style={{
-              fontWeight: '600',
-              fontSize: 15,
-              color: c.forest,
-            }}>View Details</Text>
-            <Ionicons name="chevron-forward-outline" size={16} color={c.forest} />
-          </TouchableOpacity>
-        </>
-      )}
-
-      {stop.status === "accepted" && (
-        <View style={{ marginTop: 12 }}>
-          <Btn variant="forest" small onPress={() => {
-            console.log("Navigate to", stop.name);
-          }}>
-            Navigate
+            Navigate to Estate
           </Btn>
         </View>
       )}
-
-      {stop.status === "loaded" && (
-        <View style={{ flexDirection: 'row', gap: 14, marginTop: 10 }}>
-          <Text style={{
-            fontFamily: fontMono.fontFamily,
-            fontSize: 12,
-            color: c.forest,
-          }}>{stop.actualWeight} kg</Text>
-        </View>
-      )}
-
-      {stop.status === "delivered" && (
-        <View style={{ flexDirection: 'row', gap: 14, marginTop: 10 }}>
-          <Text style={{
-            fontFamily: fontMono.fontFamily,
-            fontSize: 12,
-            color: c.muted,
-          }}>{stop.actualWeight} kg delivered</Text>
-        </View>
-      )}
-    </TouchableOpacity>
+    </View>
   );
 };
+
+/* =========================================================
+   STYLES
+========================================================= */
+
+const styles = StyleSheet.create({
+  /* =======================================================
+     COMMON CARD
+  ======================================================= */
+
+  card: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 10,
+    backgroundColor: c.card,
+    borderWidth: 1,
+    borderColor: c.line,
+  },
+
+  /* =======================================================
+     HEADER
+  ======================================================= */
+
+  header: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+
+  iconContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: c.forestLight,
+  },
+
+  mainInfo: {
+    flex: 1,
+  },
+
+  title: {
+    fontFamily: fontDisplay.fontFamily,
+    fontWeight: "600",
+    fontSize: 16,
+    color: c.ink,
+  },
+
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    color: c.muted,
+  },
+
+  timeText: {
+    fontSize: 12,
+    marginTop: 4,
+    color: c.muted,
+  },
+
+  /* =======================================================
+     META INFORMATION
+  ======================================================= */
+
+  metaRow: {
+    flexDirection: "row",
+    gap: 14,
+    marginTop: 10,
+  },
+
+  metaText: {
+    fontFamily: fontMono.fontFamily,
+    fontSize: 12,
+    color: c.forest,
+  },
+
+  mutedMetaText: {
+    fontFamily: fontMono.fontFamily,
+    fontSize: 12,
+    color: c.muted,
+  },
+
+  /* =======================================================
+     PENDING → VIEW DETAILS
+  ======================================================= */
+
+  viewDetailsButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    marginTop: 12,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: c.forestLight,
+  },
+
+  viewDetailsText: {
+    fontWeight: "600",
+    fontSize: 15,
+    color: c.forest,
+  },
+
+  /* =======================================================
+     ACCEPTED → EXISTING FLOW
+  ======================================================= */
+
+  continueContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    marginTop: 12,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: c.forestLight,
+  },
+
+  continueText: {
+    fontWeight: "600",
+    fontSize: 13,
+    color: c.forest,
+  },
+
+  /* =======================================================
+     ACCEPTED → NEW ESTATE NAVIGATION
+  ======================================================= */
+
+  actionContainer: {
+    marginTop: 14,
+    width: "100%",
+  },
+
+  /* =======================================================
+     CANCELLED
+  ======================================================= */
+
+  cancelledContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 14,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: colors.errorBackground,
+  },
+
+  cancelledText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.error,
+  },
+
+  /* =======================================================
+     FERTILIZER BUTTONS
+  ======================================================= */
+
+  buttonRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+
+  buttonWrapper: {
+    flex: 1,
+  },
+});
+
+
