@@ -322,19 +322,6 @@ export const StopCard = ({
               )}
             </View>
 
-            {/* Existing flow indicator */}
-
-            <View style={styles.continueContainer}>
-              <Text style={styles.continueText}>
-                Tap the request to continue collection
-              </Text>
-
-              <Ionicons
-                name="chevron-forward-outline"
-                size={16}
-                color={c.forest}
-              />
-            </View>
           </>
         )}
 
@@ -375,19 +362,6 @@ export const StopCard = ({
             CANCELLED
         ================================================== */}
 
-        {isCancelled && (
-          <View style={styles.cancelledContainer}>
-            <Ionicons
-              name="close-circle-outline"
-              size={18}
-              color={colors.error}
-            />
-
-            <Text style={styles.cancelledText}>
-              This request was cancelled
-            </Text>
-          </View>
-        )}
       </TouchableOpacity>
 
       {/* =================================================
@@ -421,6 +395,7 @@ export const StopCard = ({
           </Btn>
         </View>
       )}
+
     </View>
   );
 };
