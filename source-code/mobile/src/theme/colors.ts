@@ -37,4 +37,6 @@ export const colors = {
   // Common
   white: "#FFFFFF",
   black: "#000000",
+
+  disabled: "#D1D5DB",
 } as const;

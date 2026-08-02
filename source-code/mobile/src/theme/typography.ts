@@ -1,6 +1,19 @@
 export const typography = {
+  //Hero
+  hero: {
+    fontSize: 38,
+    fontWeight: "700",
+    lineHeight: 46,
+  },
+
   // Large page titles
   heading: {
+    fontSize: 24,
+    fontWeight: "700",
+    lineHeight: 32,
+  },
+
+  headingBlack: {
     fontSize: 24,
     fontWeight: "700",
     lineHeight: 32,
