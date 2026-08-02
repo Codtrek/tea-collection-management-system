@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 120">
+  <defs>
+    <style>
+      .cls-1 {
+        letter-spacing: 0em;
+      }
+
+      .cls-2 {
+        letter-spacing: 0em;
+      }
+
+      .cls-3 {
+        letter-spacing: -.02em;
+      }
+
+      .cls-4 {
+        fill: #fff;
+        font-family: MomoTrustDisplay-Regular, 'Momo Trust Display';
+        font-size: 128.38px;
+      }
+
+      .cls-5 {
+        letter-spacing: -.01em;
+      }
+
+      .cls-6 {
+        letter-spacing: 0em;
+      }
+
+      .cls-7 {
+        letter-spacing: 0em;
+      }
+
+      .cls-8 {
+        letter-spacing: 0em;
+      }
+    </style>
+  </defs>
+  <text class="cls-4" transform="translate(20.04 107.46)"><tspan class="cls-7" x="0" y="0">H</tspan><tspan class="cls-3" x="97.05" y="0">a</tspan><tspan class="cls-2" x="178.58" y="0">r</tspan><tspan class="cls-8" x="233.52" y="0">b</tspan><tspan class="cls-6" x="320.17" y="0">o</tspan><tspan class="cls-1" x="403.87" y="0">o</tspan><tspan class="cls-5" x="488.09" y="0">s</tspan><tspan x="554.2" y="0">t</tspan></text>
+</svg>

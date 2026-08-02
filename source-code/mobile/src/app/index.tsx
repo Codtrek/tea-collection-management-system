@@ -1,62 +1,26 @@
-// app/index.tsx
-import { StyleSheet } from "react-native";
+import { useEffect } from "react";
 import { useRouter } from "expo-router";
-import { AppText, AppButton, Screen, EstateOwnerBottomTab, AppCard } from "@/components/ui";
-import { colors } from "@/theme/colors";
-import { typography } from "@/theme/typography";
+import { StyleSheet, Image } from "react-native";
 
-import HStack from "@/components/layout/Hstack";
-import VStack from "@/components/layout/Vstack";
+import Screen from "@/components/ui/Screen";
+import AppText from "@/components/ui/AppText";
 
-export default function OnboardingScreen() {
+import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoGreen.png";
+
+export default function SplashScreen() {
   const router = useRouter();
 
-  const handleTeaCollectorPress = () => {
-    router.push("/teacollector/teacollectorMobile" as any);
-  };
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      router.replace("./(onboarding)");
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [router]);
 
   return (
-    <Screen style={styles.container}>
-      <VStack spacing={20}>
-        {/* App name */}
-        <AppText variant="heading" style={styles.brandTitle}>
-          Harboost
-        </AppText>
-
-        {/* Welcome message */}
-        <VStack spacing={8}>
-          <AppText style={styles.title}>
-            Welcome to TestingPage
-          </AppText>
-          <AppText style={styles.description}>
-            Manage your tea collection easily and efficiently
-          </AppText>
-        </VStack>
-
-        {/* Buttons */}
-        <VStack spacing={12} style={styles.buttonContainer}>
-          <HStack spacing={16}>
-            <AppButton
-              title="Login"
-              width="half"
-              onPress={() => console.log("Login pressed")}
-            />
-            <AppButton
-              title="Register"
-              width="half"
-              variant="secondary"
-              onPress={() => console.log("Register pressed")}
-            />
-          </HStack>
-
-          <AppButton
-            title="Tea Collector App"
-            width="full"
-            variant="primary"
-            onPress={handleTeaCollectorPress}
-          />
-        </VStack>
-      </VStack>
+    <Screen style={styles.container}>  
+      <Image source={BrandLogo} style={styles.logo} resizeMode="contain"/>
     </Screen>
   );
 }
@@ -66,31 +30,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 24,
   },
-  brandTitle: {
-    ...typography.heading,
-    color: colors.text.primaryGreen,
-    textAlign: "center",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  description: {
-    fontSize: 16,
-    textAlign: "center",
-    color: colors.text.secondary,
-  },
-  buttonContainer: {
-    width: '100%',
-    marginTop: 10,
-  },
-  teaCollectorButton: {
-    marginTop: 8,
-    backgroundColor: colors.primary[500],
-    borderWidth: 2,
-    borderColor: colors.primary[700],
-  },
+  logo: {
+    width: 150,
+  }
 });
