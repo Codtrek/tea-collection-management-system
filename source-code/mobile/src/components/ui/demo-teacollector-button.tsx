@@ -1,135 +1,203 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { c } from './demo-teacollector-theme';
+import React from "react";
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  ViewStyle,
+  TextStyle,
+} from "react-native";
+
+import { colors } from "@/theme/colors";
+
+interface BtnProps {
+  variant?: "primary" | "secondary" | "danger" | "navigation"|  "ghost"| "forest";
+  small?: boolean;
+  block?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
+  children: React.ReactNode;
+  onPress?: () => void;
+  style?: ViewStyle;
+  textStyle?: TextStyle;
+}
 
 export const Btn = ({
-  variant = 'primary',
+  variant = "primary",
   small = false,
   block = false,
   disabled = false,
+  loading = false,
   children,
   onPress,
   style,
   textStyle,
-}: any) => {
-  const variantStyles: Record<string, any> = {
-    primary: styles.primaryBtn,
-    danger: styles.dangerBtn,
-    forest: styles.forestBtn,
-    ghost: styles.ghostBtn,
-    secondary: styles.secondaryBtn,
-  };
-
-  const variantTextStyles: Record<string, any> = {
-    primary: styles.primaryBtnText,
-    danger: styles.dangerBtnText,
-    forest: styles.forestBtnText,
-    ghost: styles.ghostBtnText,
-    secondary: styles.secondaryBtnText,
-  };
+}: BtnProps) => {
+  const isDisabled = disabled || loading;
 
   return (
     <TouchableOpacity
-      onPress={disabled ? undefined : onPress}
+      onPress={isDisabled ? undefined : onPress}
       activeOpacity={0.85}
-      disabled={disabled}
+      disabled={isDisabled}
       style={[
-        styles.btn,
-        small ? styles.btnSmall : styles.btnRegular,
-        block && styles.btnBlock,
-        variantStyles[variant] || styles.primaryBtn,
-        disabled && styles.btnDisabled,
+        styles.container,
+
+        small ? styles.small : styles.regular,
+
+        block && styles.block,
+
+        variant === "primary" && styles.primary,
+        variant === "secondary" && styles.secondary,
+        variant === "danger" && styles.danger,
+        variant === "navigation" && styles.navigation,
+        variant === "ghost" && styles.ghost,
+        variant === "forest" && styles.forest,
+
+        isDisabled && styles.disabled,
+
         style,
       ]}
     >
-      <Text
-        style={[
-          styles.btnText,
-          variantTextStyles[variant] || styles.primaryBtnText,
-          textStyle,
-        ]}
-      >
-        {children}
-      </Text>
+      {loading ? (
+        <ActivityIndicator
+          color={
+            variant === "secondary" ||
+            variant === "navigation"||
+            variant === "ghost"
+              ? colors.primary
+              : colors.white
+          }
+        />
+      ) : (
+        <Text
+          style={[
+            styles.text,
+
+            variant === "secondary" && styles.secondaryText,
+            variant === "danger" && styles.dangerText,
+            variant === "navigation" && styles.navigationText,
+            variant === "ghost" && styles.ghostText,
+            variant === "forest" && styles.forestText,
+
+            textStyle,
+          ]}
+        >
+          {children}
+        </Text>
+      )}
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
-  btn: {
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+  container: {
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
   },
 
-  btnRegular: {
+  regular: {
+    height: 52,
+  },
+
+  small: {
+    height: 40,
     paddingHorizontal: 16,
-    paddingVertical: 12,
   },
 
-  btnSmall: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  block: {
+    width: "100%",
   },
 
-  btnBlock: {
-    width: '100%',
+  /* =========================
+     PRIMARY
+  ========================= */
+
+  primary: {
+    backgroundColor: colors.primary,
   },
 
-  btnDisabled: {
-    opacity: 0.6,
+  /* =========================
+     SECONDARY
+  ========================= */
+
+  secondary: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
   },
 
-  primaryBtn: {
-    backgroundColor: c.forest,
+  /* =========================
+     DANGER / DECLINE
+  ========================= */
+
+  danger: {
+    backgroundColor: colors.error,
   },
 
-  primaryBtnText: {
-    color: '#fff',
-    fontWeight: '600',
+  /* =========================
+     ESTATE NAVIGATION
+  ========================= */
+
+  navigation: {
+    backgroundColor: colors.successBackground,
+    borderWidth: 1.5,
+    borderColor: colors.success,
   },
 
-  dangerBtn: {
-    backgroundColor: c.rust,
+  /* =========================
+   GHOST
+  ========================= */
+
+  ghost: {
+
+    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.border.default,
   },
 
-  dangerBtnText: {
-    color: '#fff',
-    fontWeight: '600',
+  ghostText: {
+
+    color: colors.text.primary,
   },
 
-  forestBtn: {
-    backgroundColor: c.forestLight,
+  /* =========================
+     FOREST
+  ========================= */
+
+  forest: {
+    backgroundColor: colors.success,
   },
 
-  forestBtnText: {
-    color: '#fff',
-    fontWeight: '600',
+  forestText: {
+    color: colors.text.inverse,
   },
 
-  ghostBtn: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.2,
-    borderColor: c.line,
-  },
+  /* =========================
+     TEXT
+  ========================= */
 
-  ghostBtnText: {
-    color: c.forestDeep,
-    fontWeight: '600',
-  },
-
-  secondaryBtn: {
-    backgroundColor: c.card,
-    borderWidth: 1,
-    borderColor: c.line,
-  },
-
-  secondaryBtnText: {
-    color: c.ink,
-    fontWeight: '600',
-  },
-
-  btnText: {
+  text: {
+    color: colors.white,
     fontSize: 15,
+    fontWeight: "600",
+  },
+
+  secondaryText: {
+    color: colors.primary,
+  },
+
+  dangerText: {
+    color: colors.white,
+  },
+
+  navigationText: {
+    color: colors.success,
+  },
+
+  disabled: {
+    opacity: 0.5,
   },
 });

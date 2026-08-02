@@ -23,7 +23,7 @@ import { Sheet } from '@/components/ui/demo-teacollector-sheet';
 import { Btn } from '@/components/ui/demo-teacollector-button';
 import { Card } from '@/components/ui/demo-teacollector-card';
 import { Select, Field, Input } from '@/components/forms/demo-teacollector-fields';
-import DemoTeaCollectorNav from '@/components/layout/demo-teacollector-nav';
+import DemoTeaCollectorBottomTab from '@/components/layout/demo-teacollector-BottomTab';
 import { FertRequestCard, StopCard } from '@/components/ui/demo-teacollector-cards';
 import { c, fontDisplay, fontMono, STATUS_STYLE } from '@/components/ui/demo-teacollector-theme';
 import DemoTeaCollectorHome from '@/app/teacollector/demo-teacollector-home';
@@ -1098,7 +1098,7 @@ export default function TeaCollectorMobile() {
 
         {renderScreen()}
 
-        <DemoTeaCollectorNav items={NAV} activeId={tab} onSelect={setTab} />
+        <DemoTeaCollectorBottomTab items={NAV} activeId={tab} onSelect={setTab} />
 
         {/* Tea collection overlays */}
         <PickupSheet open={sheet === "pickup"} stop={activeStop} onClose={() => setSheet(null)} onAccept={acceptPickup} onDecline={goToDecline} />
