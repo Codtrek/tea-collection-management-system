@@ -11,7 +11,7 @@ import {
 import { colors } from "@/theme/colors";
 
 interface BtnProps {
-  variant?: "primary" | "secondary" | "danger" | "navigation";
+  variant?: "primary" | "secondary" | "danger" | "navigation"|  "ghost"| "forest";
   small?: boolean;
   block?: boolean;
   disabled?: boolean;
@@ -51,6 +51,8 @@ export const Btn = ({
         variant === "secondary" && styles.secondary,
         variant === "danger" && styles.danger,
         variant === "navigation" && styles.navigation,
+        variant === "ghost" && styles.ghost,
+        variant === "forest" && styles.forest,
 
         isDisabled && styles.disabled,
 
@@ -60,7 +62,9 @@ export const Btn = ({
       {loading ? (
         <ActivityIndicator
           color={
-            variant === "secondary" || variant === "navigation"
+            variant === "secondary" ||
+            variant === "navigation"||
+            variant === "ghost"
               ? colors.primary
               : colors.white
           }
@@ -73,6 +77,8 @@ export const Btn = ({
             variant === "secondary" && styles.secondaryText,
             variant === "danger" && styles.dangerText,
             variant === "navigation" && styles.navigationText,
+            variant === "ghost" && styles.ghostText,
+            variant === "forest" && styles.forestText,
 
             textStyle,
           ]}
@@ -139,6 +145,34 @@ const styles = StyleSheet.create({
     backgroundColor: colors.successBackground,
     borderWidth: 1.5,
     borderColor: colors.success,
+  },
+
+  /* =========================
+   GHOST
+  ========================= */
+
+  ghost: {
+
+    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.border.default,
+  },
+
+  ghostText: {
+
+    color: colors.text.primary,
+  },
+
+  /* =========================
+     FOREST
+  ========================= */
+
+  forest: {
+    backgroundColor: colors.success,
+  },
+
+  forestText: {
+    color: colors.text.inverse,
   },
 
   /* =========================
