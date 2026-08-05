@@ -25,52 +25,105 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
 
   return (
     <ScrollView style={{ flex: 1, paddingHorizontal: 20, paddingBottom: 100, backgroundColor: colors.background }}>
-      <Card dark>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View>
-            <Text style={{ fontSize: 12, color: '#BFE0C6' }}>Today's work</Text>
+      <Card style={{ width: width, marginHorizontal: -20, borderRadius: 0, padding: 24, backgroundColor: colors.primary, borderWidth: 0 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={{ fontSize: 12, color: '#BFE0C6', textTransform: 'uppercase', letterSpacing: 1.5 }}>
+              Today's collection
+            </Text>
             <Text style={{
               fontFamily: fontDisplay.fontFamily,
-              fontWeight: '600',
-              marginTop: 2,
-              fontSize: 17,
+              fontWeight: '700',
+              marginTop: 8,
+              fontSize: 28,
               color: '#fff',
-            }}>Today's Collection Tasks</Text>
-          </View>
-          <View style={{
-            borderRadius: 20,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            backgroundColor: '#EFE6C8',
-          }}>
+              lineHeight: 36,
+            }}>
+              Collection Tasks
+            </Text>
             <Text style={{
               fontFamily: fontMono.fontFamily,
-              fontWeight: 'bold',
-              textTransform: 'uppercase',
-              fontSize: 10,
-              color: c.amberDeep,
-            }}>In progress</Text>
+              fontSize: 13,
+              color: '#DCEAE1',
+              marginTop: 14,
+              lineHeight: 20,
+            }}>
+              7 pickup requests · Factory: Kotmale MPT
+            </Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <View style={{
+              borderRadius: 18,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              backgroundColor: '#EFE6C8',
+            }}>
+              <Text style={{
+                fontFamily: fontMono.fontFamily,
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                fontSize: 10,
+                color: c.amberDeep,
+              }}>In progress</Text>
+            </View>
           </View>
         </View>
-        <View style={{ flexDirection: 'row', gap: 20, marginTop: 14, flexWrap: 'wrap' }}>
-          <Text style={{
-            fontFamily: fontMono.fontFamily,
-            fontSize: 12,
-            color: '#DCEAE1',
-          }}>7 pickup requests</Text>
-          <Text style={{ color: '#DCEAE1' }}>·</Text>
-          <Text style={{
-            fontFamily: fontMono.fontFamily,
-            fontSize: 12,
-            color: '#DCEAE1',
-          }}>Factory: Kotmale MPT</Text>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 }}>
+          <View style={{
+            minWidth: 128,
+            borderRadius: 16,
+            paddingVertical: 16,
+            paddingHorizontal: 14,
+            backgroundColor: 'rgba(255,255,255,0.08)',
+          }}>
+            <Text style={{
+              fontFamily: fontDisplay.fontFamily,
+              fontWeight: '700',
+              fontSize: 24,
+              color: '#fff',
+            }}>
+              7
+            </Text>
+            <Text style={{
+              marginTop: 6,
+              fontSize: 12,
+              color: '#DCEAE1',
+            }}>
+              Stops today
+            </Text>
+          </View>
+          <View style={{
+            minWidth: 128,
+            borderRadius: 16,
+            paddingVertical: 16,
+            paddingHorizontal: 14,
+            backgroundColor: 'rgba(255,255,255,0.08)',
+          }}>
+            <Text style={{
+              fontFamily: fontDisplay.fontFamily,
+              fontWeight: '700',
+              fontSize: 24,
+              color: '#fff',
+            }}>
+              135 kg
+            </Text>
+            <Text style={{
+              marginTop: 6,
+              fontSize: 12,
+              color: '#DCEAE1',
+            }}>
+              Collected so far
+            </Text>
+          </View>
         </View>
-        <Btn variant="primary" block style={{ marginTop: 14 }} onPress={() => setTab('collect')}>
+
+        <Btn variant="secondary" block style={{ marginTop: 20 }} onPress={() => setTab('collect')}>
           View Today's Stops
         </Btn>
       </Card>
 
-      <VStack spacing={10} style={{ marginBottom: 14 }}>
+      <VStack spacing={10} style={{ marginBottom: 14, marginTop: 12 }}>
         {[0, 1].map((row) => (
           <HStack key={row} spacing={10} style={{ width: '100%' }}>
             {summaryCards.slice(row * 2, row * 2 + 2).map(([n, l], i) => (
