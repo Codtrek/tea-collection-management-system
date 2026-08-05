@@ -170,6 +170,17 @@ Order is by dependency, not by sidebar order:
       system settings (`system_settings`), and a cross-cutting best-effort `AuditService` that
       writes a real `audit_logs` row on every mutation across all six modules (ADM-04). Suspend is
       real (blocks login); password-reset delivery and per-user overrides deferred (see Claude.md).
+- [x] **2.2+ Estate Owner Lifetime History (EST-03 amended + EST-10, new)** — not a new numbered
+      module; deepens 2.2 from a design-addendum doc (`estate-owner-lifetime-history-addendum.md`)
+      once 2.6 unblocked it (needed `grade_rates` + `audit_logs`). Done 2026-08-05,
+      `feature/estate-lifetime-history` — a server-side lifetime selector (`EstateLifetimeService`)
+      backs a new Lifetime Summary strip on EST-03's Overview and the new EST-10 unified timeline
+      tab (Tenure Ribbon signature); EST-09 Analytics is de-mocked and reused pre-scoped as a third
+      new tab. Redefined the never-modeled `fertilizer_charges` table (1-row-per-dispatch, not
+      1:1-on-request) to finally give Fertilizer a money figure, resolving the Outstanding-to-
+      factory figure the addendum calls its most important number; dropped two long-orphaned
+      tables (`monthly_payments`, `payment_deduction_items`). Deliveries/Payments/Advances tabs
+      moved to server-side pagination (25/page, last-90-days default).
 
 ---
 

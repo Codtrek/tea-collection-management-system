@@ -54,6 +54,11 @@ CREATE TABLE estates (
     bank_account       VARCHAR(30),
     last_updated_by    VARCHAR(100),
     last_updated_on    TIMESTAMP,
+    -- Added 2026-07-28 (Estate Owner Lifetime History slice). The tenure
+    -- anchor for EST-03's "Member since" / EST-10's Tenure Ribbon origin.
+    -- Distinct from created_at (a row-insert timestamp, always ~seed time
+    -- for every seeded estate) so backfilled multi-year history is honest.
+    registered_on      DATE NOT NULL DEFAULT CURRENT_DATE,
     created_at         TIMESTAMP DEFAULT NOW()
 );
 
@@ -261,14 +266,9 @@ CREATE TABLE fertilizer_dispatches (
         CHECK (status IN ('scheduled', 'in_transit', 'delivered'))
 );
 
-CREATE TABLE fertilizer_charges (
-    id                     SERIAL PRIMARY KEY,
-    fertilizer_request_id  INTEGER NOT NULL UNIQUE REFERENCES fertilizer_requests(id),
-    rate_per_kg            DECIMAL(8,2) NOT NULL,
-    quantity_kg            DECIMAL(10,2) NOT NULL,
-    total_charge           DECIMAL(10,2) NOT NULL,
-    calculated_at          TIMESTAMP DEFAULT NOW()
-);
+-- fertilizer_charges used to live here, keyed 1:1 on fertilizer_request_id.
+-- Redefined 2026-07-28 (Estate Owner Lifetime History slice) below, after
+-- stock_movements/settlements — see that definition's comment for why.
 
 -- Stock side (added 2.4, alongside the request workflow above). Batches are
 -- FEFO-tracked (`expiry_date` drives allocation, never entry order);
@@ -304,7 +304,14 @@ CREATE TABLE stock_movements (
         CHECK (type IN ('Incoming', 'Outgoing')),
     quantity_kg        DECIMAL(10,2) NOT NULL,
     movement_date      DATE NOT NULL DEFAULT CURRENT_DATE,
-    destination        VARCHAR(100), -- Outgoing: estate owner or collection agent receiving the stock
+    destination        VARCHAR(100), -- Outgoing: free-text label (estate, agent, or other location)
+    -- Added 2026-07-28 (Estate Owner Lifetime History slice). `destination`
+    -- above is a free-text label, not a structured reference, so it can't
+    -- drive billing/rollup — this is the real FK, set from linked_request_id's
+    -- estate when present, or passed explicitly for an ad-hoc dispatch that's
+    -- billable to an estate. Null when the dispatch isn't estate-billable
+    -- (e.g. internal use) — a bare destination string is never guessed at.
+    estate_id          INTEGER REFERENCES estates(id),
     linked_request_id  INTEGER REFERENCES fertilizer_requests(id),
     supplier           VARCHAR(100), -- Incoming
     notes              TEXT,
@@ -328,32 +335,15 @@ CREATE TABLE complaints (
 );
 
 -- ─── PAYMENTS ────────────────────────────────────────────────────
--- `monthly_payments` / `payment_deduction_items` below predate the Estates +
--- Payments vertical slice (2026-07-26) and don't match the web portal's
+-- `monthly_payments` / `payment_deduction_items` predated the Estates +
+-- Payments vertical slice (2026-07-26) and didn't match the web portal's
 -- settlement contract (per-estate, per-period, with a transport/advance
--- breakdown). Superseded for the portal's purposes by `settlements` below;
--- left in place, unused, to avoid disturbing `fertilizer_charges`' only
--- other referencer. See Claude.md's Payment calculation section.
-
-CREATE TABLE monthly_payments (
-    id                    SERIAL PRIMARY KEY,
-    factory_id            INTEGER NOT NULL REFERENCES factories(id),
-    owner_id              INTEGER NOT NULL REFERENCES tea_estate_owners(id),
-    payment_month         DATE NOT NULL, -- first day of the month
-    gross_amount          DECIMAL(12,2) NOT NULL,
-    fertilizer_deductions DECIMAL(12,2) DEFAULT 0,
-    net_amount            DECIMAL(12,2) NOT NULL,
-    status                VARCHAR(20) DEFAULT 'pending'
-        CHECK (status IN ('pending', 'finalized', 'paid')),
-    finalized_at          TIMESTAMP
-);
-
-CREATE TABLE payment_deduction_items (
-    id                   SERIAL PRIMARY KEY,
-    monthly_payment_id   INTEGER NOT NULL REFERENCES monthly_payments(id),
-    fertilizer_charge_id INTEGER NOT NULL REFERENCES fertilizer_charges(id),
-    deducted_amount      DECIMAL(10,2) NOT NULL
-);
+-- breakdown) — superseded for the portal's purposes by `settlements` below.
+-- Both were dropped entirely 2026-07-28 (Estate Owner Lifetime History
+-- slice): unused (no entity, 0 rows), and payment_deduction_items' only
+-- reason to exist was pinning down `fertilizer_charges`' old shape, which
+-- this slice redefines below anyway. See Claude.md's Payment calculation
+-- section.
 
 -- `estate_advances` (EST-05/06) — money issued to an estate owner ahead of
 -- settlement, deducted at the next processed run for that estate.
@@ -398,6 +388,29 @@ CREATE TABLE settlements (
     processed_by         VARCHAR(100),
     processed_on         TIMESTAMP,
     created_at           TIMESTAMP DEFAULT NOW()
+);
+
+-- Redefined 2026-07-28 (Estate Owner Lifetime History slice). The original
+-- shape (one row per fertilizer_request_id, UNIQUE) couldn't hold an ad-hoc
+-- dispatch (no request behind it) or the repeated partial dispatches one
+-- approved request legitimately produces (Approved → Partially Dispatched →
+-- Dispatched, each a separate stock_movements row). This table was never
+-- modeled by the Fertilizer module (no entity, no rows) so redefining it is
+-- safe. One row per *dispatch event* now: estate_id is EST-10's Outstanding
+-- figure's source (Σ total_charge − Σ recovered-via-settlement); settlement_id
+-- is set when a settlement's fertilizer_deduction recovers it (no FK — the
+-- settlement/fertilizer modules don't cross-reference tables at the DB level
+-- elsewhere either, e.g. settlements.fertilizer_deduction is a plain decimal).
+CREATE TABLE fertilizer_charges (
+    id                     SERIAL PRIMARY KEY,
+    stock_movement_id      INTEGER NOT NULL UNIQUE REFERENCES stock_movements(id),
+    estate_id              INTEGER REFERENCES estates(id), -- null: not billable to an estate
+    fertilizer_request_id  INTEGER REFERENCES fertilizer_requests(id), -- null: ad-hoc dispatch
+    rate_per_kg            DECIMAL(8,2) NOT NULL,
+    quantity_kg            DECIMAL(10,2) NOT NULL,
+    total_charge           DECIMAL(10,2) NOT NULL,
+    settlement_id          VARCHAR(20), -- set once recovered at a settlement; null = outstanding
+    calculated_at          TIMESTAMP DEFAULT NOW()
 );
 
 -- ─── EMPLOYEES + PAYROLL ─────────────────────────────────────────
@@ -603,8 +616,6 @@ CREATE INDEX idx_collection_records_status ON tea_collection_records(status);
 CREATE INDEX idx_fertilizer_requests_estate ON fertilizer_requests(estate_id);
 CREATE INDEX idx_notifications_user ON notifications(user_id);
 CREATE INDEX idx_notifications_is_read ON notifications(is_read);
-CREATE INDEX idx_monthly_payments_owner ON monthly_payments(owner_id);
-CREATE INDEX idx_monthly_payments_month ON monthly_payments(payment_month);
 CREATE INDEX idx_estate_documents_estate ON estate_documents(estate_id);
 CREATE INDEX idx_estate_advances_estate ON estate_advances(estate_id);
 CREATE INDEX idx_settlements_estate ON settlements(estate_id);
@@ -622,3 +633,6 @@ CREATE INDEX idx_grade_rates_effective ON grade_rates(effective_date DESC);
 CREATE INDEX idx_audit_logs_created ON audit_logs(created_at DESC);
 CREATE INDEX idx_audit_logs_module ON audit_logs(module);
 CREATE INDEX idx_audit_logs_user ON audit_logs(user_name);
+CREATE INDEX idx_stock_movements_estate ON stock_movements(estate_id);
+CREATE INDEX idx_fertilizer_charges_estate ON fertilizer_charges(estate_id);
+CREATE INDEX idx_fertilizer_charges_settlement ON fertilizer_charges(settlement_id);

@@ -31,6 +31,15 @@ export class StockMovementEntity {
   @Column({ type: 'varchar', nullable: true })
   destination: string | null;
 
+  /**
+   * Structured estate link (Estate Owner Lifetime History slice) —
+   * `destination` above is a free-text label, so this is what billing/the
+   * lifetime timeline actually read. Set from a linked request's estate, or
+   * passed explicitly for an ad-hoc dispatch that's billable to an estate.
+   */
+  @Column({ name: 'estate_id', type: 'int', nullable: true })
+  estateId: number | null;
+
   @Column({ name: 'linked_request_id', type: 'int', nullable: true })
   linkedRequestId: number | null;
 

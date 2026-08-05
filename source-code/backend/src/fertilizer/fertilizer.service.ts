@@ -15,6 +15,7 @@ import { DecideRequestDto } from './dto/decide-request.dto';
 import { LogRequestDto } from './dto/log-request.dto';
 import { RecordMovementDto } from './dto/record-movement.dto';
 import { FertilizerBatchEntity } from './fertilizer-batch.entity';
+import { FertilizerChargeEntity } from './fertilizer-charge.entity';
 import {
   formatBatchId,
   formatMovementId,
@@ -70,6 +71,8 @@ export class FertilizerService {
     private readonly requestRepo: Repository<FertilizerRequestEntity>,
     @InjectRepository(EstateEntity)
     private readonly estateRepo: Repository<EstateEntity>,
+    @InjectRepository(FertilizerChargeEntity)
+    private readonly chargeRepo: Repository<FertilizerChargeEntity>,
     private readonly audit: AuditService,
   ) {}
 
@@ -398,21 +401,46 @@ export class FertilizerService {
     batch.lastUpdatedOn = new Date();
     await this.batchRepo.save(batch);
 
+    // Structured estate link (Estate Owner Lifetime History slice) —
+    // `destination` above stays a free-text label; this is what billing/the
+    // lifetime timeline actually reads. A linked request's estate wins over
+    // an explicitly-passed ad-hoc `estateId` (the request is authoritative).
+    const estateDbId = request
+      ? request.estateId
+      : dto.estateId
+        ? parseEstateId(dto.estateId)
+        : null;
+
     const movement = this.movementRepo.create({
       batchId: batch.id,
       type: 'Outgoing',
       quantityKg: String(dto.quantityKg),
       movementDate: dto.date,
       destination: dto.destination,
+      estateId: estateDbId,
       linkedRequestId: request?.id ?? null,
       supplier: null,
       notes: dto.notes ?? null,
       recordedBy: actor.name,
     });
-    return this.toPublicMovement(
-      await this.movementRepo.save(movement),
-      request ?? undefined,
-    );
+    const savedMovement = await this.movementRepo.save(movement);
+
+    // A rate is optional — not every dispatch is billed (e.g. free
+    // replacement stock). No rate → no charge row, no crash.
+    if (dto.ratePerKg) {
+      const charge = this.chargeRepo.create({
+        stockMovementId: savedMovement.id,
+        estateId: estateDbId,
+        fertilizerRequestId: request?.id ?? null,
+        ratePerKg: String(dto.ratePerKg),
+        quantityKg: String(dto.quantityKg),
+        totalCharge: String(dto.ratePerKg * dto.quantityKg),
+        settlementId: null,
+      });
+      await this.chargeRepo.save(charge);
+    }
+
+    return this.toPublicMovement(savedMovement, request ?? undefined);
   }
 
   // ── Shared helpers ───────────────────────────────────────────────

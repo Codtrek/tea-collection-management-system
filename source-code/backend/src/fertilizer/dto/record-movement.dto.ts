@@ -74,4 +74,24 @@ export class RecordMovementDto {
   @IsOptional()
   @IsString()
   linkedRequest?: string;
+
+  /**
+   * Formatted estate id, e.g. 'EST-0001' — for an ad-hoc dispatch that's
+   * billable to an estate. `destination` is a free-text label (could be a
+   * location, not an estate), so it's never guessed at for billing; when
+   * `linkedRequest` is set its estate is used instead and this is ignored.
+   */
+  @IsOptional()
+  @IsString()
+  estateId?: string;
+
+  /**
+   * Rs./kg — when supplied, a `fertilizer_charges` row is written alongside
+   * this dispatch (Estate Owner Lifetime History slice). Omit for dispatches
+   * that aren't billed (e.g. free replacement stock).
+   */
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  ratePerKg?: number;
 }

@@ -7,6 +7,7 @@ import type { Repository } from 'typeorm';
 import type { EstateEntity } from '../estates/estate.entity';
 import type { CreateBatchDto } from './dto/create-batch.dto';
 import type { FertilizerBatchEntity } from './fertilizer-batch.entity';
+import type { FertilizerChargeEntity } from './fertilizer-charge.entity';
 import type { FertilizerRequestEntity } from './fertilizer-request.entity';
 import { type Actor, FertilizerService } from './fertilizer.service';
 import type { StockMovementEntity } from './stock-movement.entity';
@@ -14,6 +15,7 @@ import type { StockMovementEntity } from './stock-movement.entity';
 /** Minimal in-memory stand-in for the TypeORM Repository surface the service uses. */
 class FakeRepository<T extends { id: string | number }> {
   private readonly store = new Map<string | number, T>();
+  private nextId = 1000; // comfortably clear of any explicitly-seeded id
 
   seed(record: T): void {
     this.store.set(record.id, record);
@@ -36,8 +38,11 @@ class FakeRepository<T extends { id: string | number }> {
 
   save(record: T): Promise<T> {
     // Mirrors what a real INSERT ... RETURNING does for `@CreateDateColumn` —
-    // populated on first save, never overwritten after.
-    const withCreatedAt = { createdAt: new Date(), ...record } as T;
+    // populated on first save, never overwritten after — and for a
+    // `@PrimaryGeneratedColumn` id left unset by `.create()`.
+    const withId =
+      record.id === undefined ? { ...record, id: this.nextId++ } : record;
+    const withCreatedAt = { createdAt: new Date(), ...withId } as T;
     this.store.set(withCreatedAt.id, withCreatedAt);
     return Promise.resolve(withCreatedAt);
   }
@@ -103,6 +108,7 @@ function makeMovement(
     quantityKg: '700.00',
     movementDate: '2026-06-01',
     destination: null,
+    estateId: null,
     linkedRequestId: null,
     supplier: 'CIC Agri Businesses',
     notes: null,
@@ -150,6 +156,7 @@ describe('FertilizerService', () => {
   let movementRepo: FakeRepository<StockMovementEntity>;
   let requestRepo: FakeRepository<FertilizerRequestEntity>;
   let estateRepo: FakeRepository<EstateEntity>;
+  let chargeRepo: FakeRepository<FertilizerChargeEntity>;
   let service: FertilizerService;
 
   const admin: Actor = { name: 'A. Bandara', role: 'Administrator' };
@@ -161,12 +168,14 @@ describe('FertilizerService', () => {
     movementRepo = new FakeRepository();
     requestRepo = new FakeRepository();
     estateRepo = new FakeRepository();
+    chargeRepo = new FakeRepository();
 
     service = new FertilizerService(
       batchRepo as unknown as Repository<FertilizerBatchEntity>,
       movementRepo as unknown as Repository<StockMovementEntity>,
       requestRepo as unknown as Repository<FertilizerRequestEntity>,
       estateRepo as unknown as Repository<EstateEntity>,
+      chargeRepo as unknown as Repository<FertilizerChargeEntity>,
       { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
     );
   });
@@ -505,6 +514,111 @@ describe('FertilizerService', () => {
       expect(movement.linkedRequest).toBeUndefined();
       const [batch] = await batchRepo.find();
       expect(Number(batch.quantityKg)).toBe(580);
+    });
+
+    it('writes no charge when no rate is supplied', async () => {
+      batchRepo.seed(makeBatch({ quantityKg: '700.00' }));
+      await service.recordMovement(
+        {
+          type: 'Outgoing',
+          batchId: 'FB-0001',
+          quantityKg: 120,
+          date: '2026-07-01',
+          destination: 'Mount Rest Estate',
+        },
+        officer,
+      );
+      expect(await chargeRepo.find()).toHaveLength(0);
+    });
+
+    it('writes a charge for an ad-hoc dispatch billed to an estate via estateId', async () => {
+      batchRepo.seed(makeBatch({ quantityKg: '700.00' }));
+      estateRepo.seed(makeEstate({ id: 3 }));
+      await service.recordMovement(
+        {
+          type: 'Outgoing',
+          batchId: 'FB-0001',
+          quantityKg: 50,
+          date: '2026-07-01',
+          destination: 'Green Valley Estate',
+          estateId: 'EST-0003',
+          ratePerKg: 95,
+        },
+        officer,
+      );
+      const [charge] = await chargeRepo.find();
+      expect(charge.estateId).toBe(3);
+      expect(charge.fertilizerRequestId).toBeNull();
+      expect(Number(charge.totalCharge)).toBe(4750);
+      expect(charge.settlementId).toBeNull();
+    });
+
+    it('writes a charge for a request-linked dispatch, using the request\'s estate over any passed estateId', async () => {
+      batchRepo.seed(makeBatch({ quantityKg: '700.00' }));
+      requestRepo.seed(
+        makeRequest({
+          id: 1,
+          status: 'Approved',
+          quantityKg: '400.00',
+          approvedQtyKg: '400.00',
+          estateId: 7,
+        }),
+      );
+      await service.recordMovement(
+        {
+          type: 'Outgoing',
+          batchId: 'FB-0001',
+          quantityKg: 150,
+          date: '2026-07-01',
+          destination: 'Green Valley Estate',
+          linkedRequest: 'FR-2026-0001',
+          estateId: 'EST-0099', // ignored — the request's estate wins
+          ratePerKg: 95,
+        },
+        officer,
+      );
+      const [charge] = await chargeRepo.find();
+      expect(charge.estateId).toBe(7);
+      expect(charge.fertilizerRequestId).toBe(1);
+      expect(Number(charge.totalCharge)).toBe(14250);
+    });
+
+    it('produces one charge per partial dispatch against the same request', async () => {
+      batchRepo.seed(makeBatch({ quantityKg: '700.00' }));
+      requestRepo.seed(
+        makeRequest({
+          id: 1,
+          status: 'Approved',
+          quantityKg: '400.00',
+          approvedQtyKg: '400.00',
+          estateId: 7,
+        }),
+      );
+      await service.recordMovement(
+        {
+          type: 'Outgoing',
+          batchId: 'FB-0001',
+          quantityKg: 100,
+          date: '2026-07-01',
+          destination: 'Green Valley Estate',
+          linkedRequest: 'FR-2026-0001',
+          ratePerKg: 95,
+        },
+        officer,
+      );
+      await service.recordMovement(
+        {
+          type: 'Outgoing',
+          batchId: 'FB-0001',
+          quantityKg: 100,
+          date: '2026-07-05',
+          destination: 'Green Valley Estate',
+          linkedRequest: 'FR-2026-0001',
+          ratePerKg: 95,
+        },
+        officer,
+      );
+      expect(await chargeRepo.find()).toHaveLength(2);
     });
 
     it('advances dispatchedQtyKg and flips Approved -> Partially Dispatched', async () => {

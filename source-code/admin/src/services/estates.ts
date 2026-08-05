@@ -1,5 +1,14 @@
 import { apiFetch } from '@/lib/api'
-import type { EstateAdvance, EstateOwner, Settlement } from '@/features/estates/types'
+import type { CollectionRecord } from '@/features/collections/types'
+import type {
+  EstateAdvance,
+  EstateAnalytics,
+  EstateLifetimeMetrics,
+  EstateOwner,
+  PaginatedResult,
+  Settlement,
+  TimelinePage,
+} from '@/features/estates/types'
 
 export interface EstateInput {
   ownerName: string
@@ -64,4 +73,66 @@ export function listSettlements(): Promise<Settlement[]> {
 
 export function processSettlements(): Promise<Settlement[]> {
   return apiFetch<Settlement[]>('/estates/settlements/process', { method: 'POST' })
+}
+
+/* ── Estate Owner Lifetime History (EST-03 amended + EST-10) ───────── */
+
+export interface DateRangeQuery {
+  from?: string
+  to?: string
+  page?: number
+  limit?: number
+}
+
+function toQueryString(q: object): string {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(q as Record<string, string | number | undefined>)) {
+    if (value !== undefined) params.set(key, String(value))
+  }
+  const s = params.toString()
+  return s ? `?${s}` : ''
+}
+
+/** §3 — the shared selector every Lifetime Summary figure comes from. */
+export function getLifetimeMetrics(id: string): Promise<EstateLifetimeMetrics> {
+  return apiFetch<EstateLifetimeMetrics>(`/estates/${id}/lifetime`)
+}
+
+export interface TimelineQuery {
+  type?: string
+  from?: string
+  to?: string
+  page?: number
+  limit?: number
+}
+
+/** §5 — the merged Delivery/Fertilizer/Settlement/Advance/Account feed. */
+export function getTimeline(id: string, q: TimelineQuery = {}): Promise<TimelinePage> {
+  return apiFetch<TimelinePage>(`/estates/${id}/timeline${toQueryString(q)}`)
+}
+
+/** §9 — EST-09 pre-scoped to this owner. */
+export function getEstateAnalytics(id: string): Promise<EstateAnalytics> {
+  return apiFetch<EstateAnalytics>(`/estates/${id}/analytics`)
+}
+
+/** §7 — paginated Deliveries tab, default window last 90 days. */
+export function getDeliveries(
+  id: string,
+  q: DateRangeQuery = {},
+): Promise<PaginatedResult<CollectionRecord>> {
+  return apiFetch<PaginatedResult<CollectionRecord>>(`/estates/${id}/deliveries${toQueryString(q)}`)
+}
+
+/** §7 — paginated Payments tab, default window last 90 days. */
+export function getPayments(id: string, q: DateRangeQuery = {}): Promise<PaginatedResult<Settlement>> {
+  return apiFetch<PaginatedResult<Settlement>>(`/estates/${id}/payments${toQueryString(q)}`)
+}
+
+/** §7 — paginated Advances tab, default window last 90 days. */
+export function getAdvancesFor(
+  id: string,
+  q: DateRangeQuery = {},
+): Promise<PaginatedResult<EstateAdvance>> {
+  return apiFetch<PaginatedResult<EstateAdvance>>(`/estates/${id}/advances${toQueryString(q)}`)
 }

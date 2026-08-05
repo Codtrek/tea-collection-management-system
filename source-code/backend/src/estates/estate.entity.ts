@@ -59,6 +59,15 @@ export class EstateEntity {
   @Column({ name: 'last_updated_on', type: 'timestamp', nullable: true })
   lastUpdatedOn: Date | null;
 
+  /**
+   * Added 2026-07-28 (Estate Owner Lifetime History slice) — the tenure
+   * anchor for EST-03's "Member since" / EST-10's Tenure Ribbon origin.
+   * Distinct from `createdAt` (a row-insert timestamp, always ~seed time for
+   * every seeded estate) so backfilled multi-year history is honest.
+   */
+  @Column({ name: 'registered_on', type: 'date' })
+  registeredOn: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

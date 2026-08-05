@@ -60,6 +60,13 @@ interface SeedEstate {
   documents: SeedDocument[];
   lastUpdatedBy?: string;
   lastUpdatedOn?: string;
+  /**
+   * Added 2026-07-28 (Estate Owner Lifetime History slice) — staggered
+   * 2019–2023 rather than seed time, so "Member since" and the Tenure
+   * Ribbon actually have years to span. Green Valley is the flagship
+   * long-tenured example (matches the addendum's own worked example).
+   */
+  registeredOn: string;
 }
 
 // Mirrors the portal's former `features/estates/data.ts` ESTATES fixture 1:1
@@ -89,6 +96,7 @@ const ESTATE_SEEDS: SeedEstate[] = [
     ],
     lastUpdatedBy: 'A. Bandara',
     lastUpdatedOn: '2026-06-30',
+    registeredOn: '2019-03-01', // flagship long-tenured estate — the addendum's own worked example
   },
   {
     ownerPhone: '0777000002',
@@ -106,6 +114,7 @@ const ESTATE_SEEDS: SeedEstate[] = [
     documents: [
       { name: 'Estate ownership deed.pdf', uploadedOn: '2025-03-02' },
     ],
+    registeredOn: '2021-06-15',
   },
   {
     ownerPhone: '0777000003',
@@ -125,6 +134,7 @@ const ESTATE_SEEDS: SeedEstate[] = [
       { name: 'Estate ownership deed.pdf', uploadedOn: '2024-11-20' },
       { name: 'Self-delivery agreement.pdf', uploadedOn: '2025-01-08' },
     ],
+    registeredOn: '2020-09-10',
   },
   {
     ownerPhone: '0777000004',
@@ -141,6 +151,7 @@ const ESTATE_SEEDS: SeedEstate[] = [
     // Missing bank details — excluded from settlement runs until added (UC-054 exception).
     bank: { bank: '', branch: '', account: '' },
     documents: [{ name: 'NIC copy.pdf', uploadedOn: '2026-01-15' }],
+    registeredOn: '2023-02-20', // youngest active estate — short tenure, thin ribbon
   },
   {
     ownerPhone: '0777000005',
@@ -160,6 +171,7 @@ const ESTATE_SEEDS: SeedEstate[] = [
     ],
     lastUpdatedBy: 'A. Bandara',
     lastUpdatedOn: '2026-04-12',
+    registeredOn: '2022-05-01',
   },
 ];
 
@@ -414,6 +426,95 @@ const SETTLEMENT_SEEDS: SeedSettlement[] = [
     selfDelivery: false,
     processedBy: 'A. Bandara',
     processedOn: '2026-06-01',
+  },
+  // Sparse multi-year history (Estate Owner Lifetime History slice,
+  // 2026-07-28) — one settlement per year back to each estate's
+  // registration, so EST-10's Tenure Ribbon and the Lifetime Summary's
+  // "earned" figure span real years instead of just Mar–Jul 2026. Round,
+  // illustrative rates rising year over year (matches ADM-01's own rate
+  // history precedent); not meant to reconcile against the detailed rows
+  // above.
+  // Each row's period is safely after that estate's registeredOn (see
+  // ESTATE_SEEDS above) — Mount Rest (Sep 2020), Hilltop (Jun 2021), Riverside
+  // (May 2022) and Silver Peak (Feb 2023) only start appearing the year after
+  // they register, avoiding a settlement that predates the relationship.
+  {
+    id: 'SET-2019-09-001', estateName: 'Green Valley Estate', period: 'September 2019',
+    superKg: 260, normalKg: 140, superRate: 140, normalRate: 70,
+    transportCost: 5200, fertilizerDeduction: 6000, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2019-10-01',
+  },
+  {
+    id: 'SET-2020-09-001', estateName: 'Green Valley Estate', period: 'September 2020',
+    superKg: 275, normalKg: 150, superRate: 148, normalRate: 74,
+    transportCost: 5400, fertilizerDeduction: 6400, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2020-10-01',
+  },
+  {
+    id: 'SET-2021-09-001', estateName: 'Green Valley Estate', period: 'September 2021',
+    superKg: 290, normalKg: 160, superRate: 155, normalRate: 78,
+    transportCost: 5600, fertilizerDeduction: 6900, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2021-10-01',
+  },
+  {
+    id: 'SET-2021-09-002', estateName: 'Hilltop Estate', period: 'September 2021',
+    superKg: 95, normalKg: 210, superRate: 155, normalRate: 78,
+    transportCost: 5300, fertilizerDeduction: 5800, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2021-10-01',
+  },
+  {
+    id: 'SET-2021-09-003', estateName: 'Mount Rest Estate', period: 'September 2021',
+    superKg: 180, normalKg: 150, superRate: 155, normalRate: 78,
+    transportCost: 0, fertilizerDeduction: 5100, advanceDeduction: 0,
+    status: 'processed', selfDelivery: true, processedBy: 'A. Bandara', processedOn: '2021-10-01',
+  },
+  {
+    id: 'SET-2022-09-001', estateName: 'Green Valley Estate', period: 'September 2022',
+    superKg: 305, normalKg: 165, superRate: 162, normalRate: 82,
+    transportCost: 5800, fertilizerDeduction: 7400, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2022-10-01',
+  },
+  {
+    id: 'SET-2022-09-002', estateName: 'Riverside Estate', period: 'September 2022',
+    superKg: 60, normalKg: 90, superRate: 162, normalRate: 82,
+    transportCost: 4200, fertilizerDeduction: 3600, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2022-10-01',
+  },
+  {
+    id: 'SET-2023-09-001', estateName: 'Green Valley Estate', period: 'September 2023',
+    superKg: 320, normalKg: 172, superRate: 168, normalRate: 85,
+    transportCost: 6100, fertilizerDeduction: 8100, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2023-10-01',
+  },
+  {
+    id: 'SET-2023-09-002', estateName: 'Silver Peak Estate', period: 'September 2023',
+    superKg: 80, normalKg: 0, superRate: 168, normalRate: 85,
+    transportCost: 3100, fertilizerDeduction: 2900, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2023-10-01',
+  },
+  {
+    id: 'SET-2024-09-001', estateName: 'Green Valley Estate', period: 'September 2024',
+    superKg: 335, normalKg: 178, superRate: 172, normalRate: 87,
+    transportCost: 6400, fertilizerDeduction: 8700, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2024-10-01',
+  },
+  {
+    id: 'SET-2024-09-002', estateName: 'Hilltop Estate', period: 'September 2024',
+    superKg: 100, normalKg: 225, superRate: 172, normalRate: 87,
+    transportCost: 5700, fertilizerDeduction: 6300, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2024-10-01',
+  },
+  {
+    id: 'SET-2025-09-001', estateName: 'Green Valley Estate', period: 'September 2025',
+    superKg: 350, normalKg: 182, superRate: 178, normalRate: 90,
+    transportCost: 6700, fertilizerDeduction: 9200, advanceDeduction: 0,
+    status: 'processed', selfDelivery: false, processedBy: 'A. Bandara', processedOn: '2025-10-01',
+  },
+  {
+    id: 'SET-2025-09-002', estateName: 'Mount Rest Estate', period: 'September 2025',
+    superKg: 205, normalKg: 172, superRate: 178, normalRate: 90,
+    transportCost: 0, fertilizerDeduction: 7900, advanceDeduction: 0,
+    status: 'processed', selfDelivery: true, processedBy: 'A. Bandara', processedOn: '2025-10-01',
   },
 ];
 
@@ -1327,6 +1428,79 @@ const COLLECTION_RECORD_SEEDS: SeedCollectionRecord[] = [
     photos: [],
     timeline: [{ status: 'Confirmed', timestamp: '2026-06-19T10:10:00', by: 'R. Jayasuriya' }],
   },
+  // Sparse multi-year confirmed deliveries (Estate Owner Lifetime History
+  // slice, 2026-07-28) — one per settlement-year added above, so EST-10's
+  // Delivery entries and the Lifetime Summary's deliveredKg/grade-split span
+  // real years rather than just Mar–Jul 2026. Same minimal shape as the
+  // Mar–Jun block above.
+  {
+    id: 'GV-2019-0905', estateName: 'Green Valley Estate', routeName: 'Route 3',
+    weightKg: 260, grade: 'super', status: 'confirmed', date: '2019-09-05', agentName: 'R. Senanayake',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2019-09-05T11:00:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'GV-2020-0906', estateName: 'Green Valley Estate', routeName: 'Route 3',
+    weightKg: 275, grade: 'super', status: 'confirmed', date: '2020-09-06', agentName: 'R. Senanayake',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2020-09-06T11:00:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'GV-2021-0907', estateName: 'Green Valley Estate', routeName: 'Route 3',
+    weightKg: 290, grade: 'super', status: 'confirmed', date: '2021-09-07', agentName: 'R. Senanayake',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2021-09-07T11:00:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'HT-2021-0908', estateName: 'Hilltop Estate', routeName: 'Route 5',
+    weightKg: 210, grade: 'normal', status: 'confirmed', date: '2021-09-08', agentName: 'W. Gunaratne',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2021-09-08T10:40:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'MR-2021-0909', estateName: 'Mount Rest Estate', routeName: 'Route 2',
+    weightKg: 180, grade: 'normal', status: 'confirmed', date: '2021-09-09', agentName: 'Self-delivered',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2021-09-09T10:00:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'GV-2022-0910', estateName: 'Green Valley Estate', routeName: 'Route 3',
+    weightKg: 305, grade: 'super', status: 'confirmed', date: '2022-09-10', agentName: 'R. Senanayake',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2022-09-10T11:00:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'RV-2022-0911', estateName: 'Riverside Estate', routeName: 'Route 2',
+    weightKg: 90, grade: 'normal', status: 'confirmed', date: '2022-09-11', agentName: 'W. Gunaratne',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2022-09-11T10:15:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'GV-2023-0912', estateName: 'Green Valley Estate', routeName: 'Route 3',
+    weightKg: 320, grade: 'super', status: 'confirmed', date: '2023-09-12', agentName: 'R. Senanayake',
+    // A mismatch example in the older history too, so the disputes rollup
+    // (§11 item 33) isn't only exercised by whatever's in the July fixture.
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2023-09-12T11:00:00', by: 'A. Bandara' }],
+    mismatch: { complaintId: 'C-2023-001', note: 'Owner reported 330 kg at pickup; agent recorded 320 kg.' },
+  },
+  {
+    id: 'SP-2023-0913', estateName: 'Silver Peak Estate', routeName: 'Route 3',
+    weightKg: 80, grade: 'super', status: 'confirmed', date: '2023-09-13', agentName: 'R. Senanayake',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2023-09-13T11:20:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'GV-2024-0914', estateName: 'Green Valley Estate', routeName: 'Route 3',
+    weightKg: 335, grade: 'super', status: 'confirmed', date: '2024-09-14', agentName: 'R. Senanayake',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2024-09-14T11:00:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'HT-2024-0915', estateName: 'Hilltop Estate', routeName: 'Route 5',
+    weightKg: 225, grade: 'normal', status: 'confirmed', date: '2024-09-15', agentName: 'W. Gunaratne',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2024-09-15T10:40:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'GV-2025-0916', estateName: 'Green Valley Estate', routeName: 'Route 3',
+    weightKg: 350, grade: 'super', status: 'confirmed', date: '2025-09-16', agentName: 'R. Senanayake',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2025-09-16T11:00:00', by: 'A. Bandara' }],
+  },
+  {
+    id: 'MR-2025-0917', estateName: 'Mount Rest Estate', routeName: 'Route 2',
+    weightKg: 205, grade: 'normal', status: 'confirmed', date: '2025-09-17', agentName: 'Self-delivered',
+    photos: [], timeline: [{ status: 'Confirmed', timestamp: '2025-09-17T10:00:00', by: 'A. Bandara' }],
+  },
 ];
 
 // ── Fertilizer (FERT-01..08) ──
@@ -1443,6 +1617,23 @@ const BATCH_SEEDS: SeedBatch[] = [
     location: 'Warehouse C',
     supplier: 'Govt Beneficiary Supply',
     lotNumber: 'LOT-R-7781',
+  },
+  // Historical placeholder lot (Estate Owner Lifetime History slice,
+  // 2026-07-28) — exists only so the priced multi-year dispatches below have
+  // a batch row to reference; this seed script doesn't decrement a batch's
+  // on-hand kg from its movement ledger (same snapshot-vs-ledger split every
+  // other batch here already has), so its quantity is nominal.
+  {
+    item: 'Urea Fertilizer',
+    category: 'Fertilizer',
+    quantityKg: 0,
+    unit: 'kg',
+    receivedDate: '2019-01-01',
+    expiryDate: '2099-01-01',
+    location: 'Warehouse A',
+    supplier: 'CIC Agri Businesses',
+    lotNumber: 'LOT-HIST-0001',
+    qualityNotes: 'Historical placeholder for pre-2026 dispatch records.',
   },
 ];
 
@@ -1577,6 +1768,16 @@ interface SeedMovement {
   supplier?: string;
   notes?: string;
   recordedBy: string;
+  /**
+   * Estate Owner Lifetime History slice — the structured billing link
+   * (`stock_movements.estate_id`) plus the rate that, together, produce a
+   * `fertilizer_charges` row. Omit either to leave the dispatch unbilled,
+   * same as the live `recordOutgoing` write path.
+   */
+  estateName?: string;
+  ratePerKg?: number;
+  /** When set, this charge is already recovered (a processed settlement's id). Omit = outstanding. */
+  recoveredBySettlement?: string;
 }
 
 const MOVEMENT_SEEDS: SeedMovement[] = [
@@ -1632,6 +1833,49 @@ const MOVEMENT_SEEDS: SeedMovement[] = [
     date: '2026-07-01',
     supplier: 'Govt Beneficiary Supply',
     recordedBy: 'S. Fernando',
+  },
+  // Sparse multi-year priced dispatches (Estate Owner Lifetime History slice,
+  // 2026-07-28), against the LOT-HIST-0001 placeholder batch — these are
+  // what give EST-10's Fertilizer entries and the Lifetime Summary's
+  // Outstanding panel real, multi-year figures. Most recover at that year's
+  // September settlement (see SETTLEMENT_SEEDS above); the most recent one
+  // is left outstanding on purpose, so a real owner shows a non-zero
+  // Outstanding panel rather than every seeded estate reading "Fully
+  // settled".
+  {
+    lotNumber: 'LOT-HIST-0001', type: 'Outgoing', quantityKg: 60, date: '2020-09-01',
+    destination: 'Green Valley Estate', estateName: 'Green Valley Estate',
+    ratePerKg: 68, recoveredBySettlement: 'SET-2020-09-001', recordedBy: 'A. Bandara',
+  },
+  {
+    lotNumber: 'LOT-HIST-0001', type: 'Outgoing', quantityKg: 70, date: '2021-09-01',
+    destination: 'Green Valley Estate', estateName: 'Green Valley Estate',
+    ratePerKg: 72, recoveredBySettlement: 'SET-2021-09-001', recordedBy: 'A. Bandara',
+  },
+  {
+    lotNumber: 'LOT-HIST-0001', type: 'Outgoing', quantityKg: 55, date: '2021-09-02',
+    destination: 'Hilltop Estate', estateName: 'Hilltop Estate',
+    ratePerKg: 72, recoveredBySettlement: 'SET-2021-09-002', recordedBy: 'A. Bandara',
+  },
+  {
+    lotNumber: 'LOT-HIST-0001', type: 'Outgoing', quantityKg: 65, date: '2022-09-01',
+    destination: 'Green Valley Estate', estateName: 'Green Valley Estate',
+    ratePerKg: 78, recoveredBySettlement: 'SET-2022-09-001', recordedBy: 'A. Bandara',
+  },
+  {
+    lotNumber: 'LOT-HIST-0001', type: 'Outgoing', quantityKg: 75, date: '2023-09-01',
+    destination: 'Green Valley Estate', estateName: 'Green Valley Estate',
+    ratePerKg: 82, recoveredBySettlement: 'SET-2023-09-001', recordedBy: 'A. Bandara',
+  },
+  {
+    lotNumber: 'LOT-HIST-0001', type: 'Outgoing', quantityKg: 80, date: '2024-09-01',
+    destination: 'Green Valley Estate', estateName: 'Green Valley Estate',
+    ratePerKg: 85, recoveredBySettlement: 'SET-2024-09-001', recordedBy: 'A. Bandara',
+  },
+  {
+    lotNumber: 'LOT-HIST-0001', type: 'Outgoing', quantityKg: 90, date: '2025-09-01',
+    destination: 'Green Valley Estate', estateName: 'Green Valley Estate',
+    ratePerKg: 90, recordedBy: 'A. Bandara', // left outstanding on purpose — see comment above
   },
 ];
 
@@ -1856,7 +2100,7 @@ async function seed() {
            location = $2, address = $3, route_id = $4, route_name = $5,
            self_delivery = $6, status = $7, ytd_deliveries_kg = $8,
            bank_name = $9, bank_branch = $10, bank_account = $11,
-           last_updated_by = $12, last_updated_on = $13
+           last_updated_by = $12, last_updated_on = $13, registered_on = $14
          WHERE id = $1`,
         [
           estateId,
@@ -1872,6 +2116,7 @@ async function seed() {
           e.bank.account || null,
           e.lastUpdatedBy ?? null,
           e.lastUpdatedOn ?? null,
+          e.registeredOn,
         ],
       );
 
@@ -2344,6 +2589,7 @@ async function seed() {
       `Seeded ${FERTILIZER_REQUEST_SEEDS.length} fertilizer requests`,
     );
 
+    let chargeCount = 0;
     for (const m of MOVEMENT_SEEDS) {
       const batchId = batchIds[m.lotNumber];
       const linkedRequestId = m.linkedRequest
@@ -2355,32 +2601,70 @@ async function seed() {
             )
           ]
         : null;
+      // Estate Owner Lifetime History slice — the structured billing link,
+      // mirroring `FertilizerService.recordOutgoing`'s estate resolution
+      // (a linked request's estate would win, but none of these seeds use both).
+      const estateId = m.estateName ? (estateIds[m.estateName] ?? null) : null;
 
-      const existing = await client.query(
+      const existing = await client.query<{ id: number }>(
         `SELECT id FROM stock_movements WHERE batch_id = $1 AND type = $2 AND movement_date = $3 AND quantity_kg = $4`,
         [batchId, m.type, m.date, m.quantityKg],
       );
-      if (!existing.rows[0]) {
-        await client.query(
+      let movementId = existing.rows[0]?.id;
+      if (!movementId) {
+        const inserted = await client.query<{ id: number }>(
           `INSERT INTO stock_movements
-             (batch_id, type, quantity_kg, movement_date, destination, linked_request_id,
-              supplier, notes, recorded_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+             (batch_id, type, quantity_kg, movement_date, destination, estate_id,
+              linked_request_id, supplier, notes, recorded_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           RETURNING id`,
           [
             batchId,
             m.type,
             m.quantityKg,
             m.date,
             m.destination ?? null,
+            estateId,
             linkedRequestId,
             m.supplier ?? null,
             m.notes ?? null,
             m.recordedBy,
           ],
         );
+        movementId = inserted.rows[0].id;
+      }
+
+      if (m.ratePerKg) {
+        const existingCharge = await client.query(
+          `SELECT id FROM fertilizer_charges WHERE stock_movement_id = $1`,
+          [movementId],
+        );
+        if (!existingCharge.rows[0]) {
+          await client.query(
+            `INSERT INTO fertilizer_charges
+               (stock_movement_id, estate_id, fertilizer_request_id, rate_per_kg,
+                quantity_kg, total_charge, settlement_id, calculated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [
+              movementId,
+              estateId,
+              linkedRequestId,
+              m.ratePerKg,
+              m.quantityKg,
+              m.ratePerKg * m.quantityKg,
+              m.recoveredBySettlement ?? null,
+              // Without this, DEFAULT NOW() would stamp every seeded charge
+              // "today" — wrong for a 2020-dated historical dispatch and the
+              // reason EST-10's Fertilizer entries were all showing today's
+              // date instead of their real dispatch date.
+              m.date,
+            ],
+          );
+          chargeCount++;
+        }
       }
     }
-    console.log(`Seeded ${MOVEMENT_SEEDS.length} stock movements`);
+    console.log(`Seeded ${MOVEMENT_SEEDS.length} stock movements, ${chargeCount} fertilizer charges`);
 
     // ── Reports (RPT-01..04) ──
 

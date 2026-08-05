@@ -32,6 +32,23 @@ export function formatNumber(n: number): string {
   return grouped.format(n)
 }
 
+/**
+ * `41.2M` / `284.7K` — abbreviated for a headline figure (EST-03's Lifetime
+ * Summary strip, addendum §4). Below 1,000 falls back to the plain grouped
+ * form. Callers pair this with the exact value on `title` for hover/a11y.
+ */
+export function formatCompact(n: number): string {
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (abs >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return grouped.format(n)
+}
+
+/** `Rs. 41.2M` — formatCompact with the currency prefix. */
+export function formatCompactCurrency(n: number): string {
+  return `Rs. ${formatCompact(n)}`
+}
+
 /** `6.2%` (or `+6.2%` when signed). */
 export function formatPercent(value: number, signed = false): string {
   const s = value.toFixed(1)

@@ -14,13 +14,15 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as estatesService from '@/services/estates'
 import { grossRevenue, netPayable } from './calc'
-import { collectionsForEstate } from '@/features/collections/data'
+import { EstateAnalyticsBody } from './EstateAnalyticsPage'
+import { EstateTimelineTab } from './EstateTimelineTab'
+import { LifetimeSummary } from './LifetimeSummary'
 import { COLLECTION_TONE } from '@/features/collections/status'
 import type { EstateAdvance, Settlement } from './types'
 import type { CollectionRecord } from '@/features/collections/types'
 import { formatCurrency, formatDate, formatWeight, initials, maskAccount } from '@/lib/format'
 
-/* EST-03 — DetailPageWithTabs: Overview | Deliveries | Payments | Advances | Documents. */
+/* EST-03 — DetailPageWithTabs: Overview | Timeline | Analytics | Deliveries | Payments | Advances | Documents. */
 export function EstateDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -32,6 +34,11 @@ export function EstateDetailPage() {
 
   const [deactivating, setDeactivating] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
+  // §7 — each paginated tab defaults to the last 90 days; "View all" widens
+  // the range rather than switching to client-side slicing of a full fetch.
+  const [deliveriesShowAll, setDeliveriesShowAll] = useState(false)
+  const [paymentsShowAll, setPaymentsShowAll] = useState(false)
+  const [advancesShowAll, setAdvancesShowAll] = useState(false)
 
   const {
     data: estate,
@@ -43,10 +50,28 @@ export function EstateDetailPage() {
     queryFn: () => estatesService.getById(id!),
     enabled: !!id,
   })
-  // Advances/settlements have no "for this estate" endpoint yet — fetch the
-  // (dev-scale) full lists and filter client-side, same shape the fixture gave.
-  const { data: allAdvances } = useQuery({ queryKey: ['estates', 'advances'], queryFn: estatesService.listAdvances })
-  const { data: allSettlements } = useQuery({ queryKey: ['estates', 'settlements'], queryFn: estatesService.listSettlements })
+
+  const { data: lifetime } = useQuery({
+    queryKey: ['estates', id, 'lifetime'],
+    queryFn: () => estatesService.getLifetimeMetrics(id!),
+    enabled: !!id,
+  })
+
+  const deliveriesQuery = useQuery({
+    queryKey: ['estates', id, 'deliveries', deliveriesShowAll],
+    queryFn: () => estatesService.getDeliveries(id!, deliveriesShowAll ? { from: '2000-01-01', limit: 25 } : { limit: 25 }),
+    enabled: !!id,
+  })
+  const paymentsQuery = useQuery({
+    queryKey: ['estates', id, 'payments', paymentsShowAll],
+    queryFn: () => estatesService.getPayments(id!, paymentsShowAll ? { from: '2000-01-01', limit: 25 } : { limit: 25 }),
+    enabled: !!id,
+  })
+  const advancesQuery = useQuery({
+    queryKey: ['estates', id, 'advances', advancesShowAll],
+    queryFn: () => estatesService.getAdvancesFor(id!, advancesShowAll ? { from: '2000-01-01', limit: 25 } : { limit: 25 }),
+    enabled: !!id,
+  })
 
   const deactivateMutation = useMutation({
     mutationFn: (estateId: string) => estatesService.deactivate(estateId),
@@ -71,10 +96,6 @@ export function EstateDetailPage() {
   if (isError || !estate) {
     return <ErrorState title="Estate not found" description={`No estate owner with ID “${id}”.`} onRetry={() => void refetch()} />
   }
-
-  const deliveries = collectionsForEstate(estate.id)
-  const advances = (allAdvances ?? []).filter((a) => a.estateId === estate.id)
-  const settlements = (allSettlements ?? []).filter((s) => s.estateId === estate.id)
 
   const deliveryColumns: Column<CollectionRecord>[] = [
     { key: 'id', header: 'Delivery', render: (c) => <span className="id text-xs">{c.id}</span> },
@@ -181,95 +202,118 @@ export function EstateDetailPage() {
             id: 'overview',
             label: 'Overview',
             content: (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-5">
-                  <h3 className="mb-3 text-[13px] font-semibold text-text-heading">Contact & location</h3>
-                  <dl className="flex flex-col gap-2.5">
-                    <InfoRow label="Owner" value={estate.ownerName} />
-                    <InfoRow label="NIC" value={estate.nic} mono />
-                    <InfoRow label="Contact" value={estate.contact} />
-                    <InfoRow label="Email" value={estate.email ?? '—'} />
-                    <InfoRow label="Address" value={estate.address} />
-                    <InfoRow label="Route" value={`${estate.route} (auto-assigned)`} />
-                  </dl>
-                </div>
-                <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-5">
-                  <h3 className="mb-3 text-[13px] font-semibold text-text-heading">Deliveries & bank</h3>
-                  <dl className="flex flex-col gap-2.5">
-                    <InfoRow label="YTD deliveries" value={formatWeight(estate.ytdDeliveriesKg)} />
-                    <InfoRow label="Transport" value={estate.selfDelivery ? 'Self-delivered — cost exempt' : 'Factory collection'} />
-                    <InfoRow label="Bank" value={estate.bank.bank || 'Missing — excluded from settlements'} />
-                    <InfoRow label="Branch" value={estate.bank.branch || '—'} />
-                    <div className="flex justify-between gap-4 text-sm">
-                      <dt className="text-text-muted">Account</dt>
-                      <dd className="flex items-center gap-1.5 text-right text-text">
-                        {estate.bank.account ? (
-                          <>
-                            <span className="id">{showAccount ? estate.bank.account : maskAccount(estate.bank.account)}</span>
-                            <button
-                              onClick={() => setShowAccount((s) => !s)}
-                              aria-label={showAccount ? 'Hide account number' : 'Reveal account number'}
-                              className="text-text-muted hover:text-text"
-                            >
-                              {showAccount ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                            </button>
-                          </>
-                        ) : (
-                          '—'
-                        )}
-                      </dd>
-                    </div>
-                  </dl>
-                  {estate.lastUpdatedBy && (
-                    <p className="mt-4 border-t border-border pt-3 text-xs text-text-muted">
-                      Last updated by {estate.lastUpdatedBy} on {estate.lastUpdatedOn && formatDate(estate.lastUpdatedOn)}
-                    </p>
-                  )}
+              <div className="flex flex-col gap-4">
+                {lifetime && <LifetimeSummary metrics={lifetime} />}
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-5">
+                    <h3 className="mb-3 text-[13px] font-semibold text-text-heading">Contact & location</h3>
+                    <dl className="flex flex-col gap-2.5">
+                      <InfoRow label="Owner" value={estate.ownerName} />
+                      <InfoRow label="NIC" value={estate.nic} mono />
+                      <InfoRow label="Contact" value={estate.contact} />
+                      <InfoRow label="Email" value={estate.email ?? '—'} />
+                      <InfoRow label="Address" value={estate.address} />
+                      <InfoRow label="Route" value={`${estate.route} (auto-assigned)`} />
+                    </dl>
+                  </div>
+                  <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-5">
+                    <h3 className="mb-3 text-[13px] font-semibold text-text-heading">Deliveries & bank</h3>
+                    <dl className="flex flex-col gap-2.5">
+                      <InfoRow label="YTD deliveries" value={formatWeight(estate.ytdDeliveriesKg)} />
+                      <InfoRow label="Transport" value={estate.selfDelivery ? 'Self-delivered — cost exempt' : 'Factory collection'} />
+                      <InfoRow label="Bank" value={estate.bank.bank || 'Missing — excluded from settlements'} />
+                      <InfoRow label="Branch" value={estate.bank.branch || '—'} />
+                      <div className="flex justify-between gap-4 text-sm">
+                        <dt className="text-text-muted">Account</dt>
+                        <dd className="flex items-center gap-1.5 text-right text-text">
+                          {estate.bank.account ? (
+                            <>
+                              <span className="id">{showAccount ? estate.bank.account : maskAccount(estate.bank.account)}</span>
+                              <button
+                                onClick={() => setShowAccount((s) => !s)}
+                                aria-label={showAccount ? 'Hide account number' : 'Reveal account number'}
+                                className="text-text-muted hover:text-text"
+                              >
+                                {showAccount ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                              </button>
+                            </>
+                          ) : (
+                            '—'
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                    {estate.lastUpdatedBy && (
+                      <p className="mt-4 border-t border-border pt-3 text-xs text-text-muted">
+                        Last updated by {estate.lastUpdatedBy} on {estate.lastUpdatedOn && formatDate(estate.lastUpdatedOn)}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             ),
           },
           {
+            id: 'timeline',
+            label: 'Timeline',
+            content: <EstateTimelineTab estateId={estate.id} />,
+          },
+          {
+            id: 'analytics',
+            label: 'Analytics',
+            content: <EstateAnalyticsBody estateId={estate.id} />,
+          },
+          {
             id: 'deliveries',
             label: 'Deliveries History',
             content: (
-              <DataTable
-                columns={deliveryColumns}
-                rows={deliveries}
-                rowKey={(c) => c.id}
-                onRowClick={(c) => navigate(`/collections/${c.id}`)}
-                emptyState={<EmptyState title="No deliveries yet" description="Collection records from the field flow appear here." />}
-              />
+              <PaginatedTabBody
+                query={deliveriesQuery}
+                showAll={deliveriesShowAll}
+                onShowAll={() => setDeliveriesShowAll(true)}
+              >
+                <DataTable
+                  columns={deliveryColumns}
+                  rows={deliveriesQuery.data?.rows ?? []}
+                  rowKey={(c) => c.id}
+                  onRowClick={(c) => navigate(`/collections/${c.id}`)}
+                  emptyState={<EmptyState title="No deliveries yet" description="Collection records from the field flow appear here." />}
+                />
+              </PaginatedTabBody>
             ),
           },
           {
             id: 'payments',
             label: 'Payment History',
             content: (
-              <DataTable
-                columns={paymentColumns}
-                rows={settlements}
-                rowKey={(s) => s.id}
-                emptyState={<EmptyState title="No settlements yet" description="Processed payment settlements appear here." />}
-              />
+              <PaginatedTabBody query={paymentsQuery} showAll={paymentsShowAll} onShowAll={() => setPaymentsShowAll(true)}>
+                <DataTable
+                  columns={paymentColumns}
+                  rows={paymentsQuery.data?.rows ?? []}
+                  rowKey={(s) => s.id}
+                  emptyState={<EmptyState title="No settlements yet" description="Processed payment settlements appear here." />}
+                />
+              </PaginatedTabBody>
             ),
           },
           {
             id: 'advances',
             label: 'Advances',
             content: (
-              <DataTable
-                columns={advanceColumns}
-                rows={advances}
-                rowKey={(a) => a.id}
-                emptyState={
-                  <EmptyState
-                    title="No advances issued"
-                    description="Advance payments issued to this estate appear here and deduct at the next settlement."
-                    action={canEdit ? <Button size="sm" onClick={() => navigate(`/estates/advances/new?estate=${estate.id}`)}>Issue Advance</Button> : undefined}
-                  />
-                }
-              />
+              <PaginatedTabBody query={advancesQuery} showAll={advancesShowAll} onShowAll={() => setAdvancesShowAll(true)}>
+                <DataTable
+                  columns={advanceColumns}
+                  rows={advancesQuery.data?.rows ?? []}
+                  rowKey={(a) => a.id}
+                  emptyState={
+                    <EmptyState
+                      title="No advances issued"
+                      description="Advance payments issued to this estate appear here and deduct at the next settlement."
+                      action={canEdit ? <Button size="sm" onClick={() => navigate(`/estates/advances/new?estate=${estate.id}`)}>Issue Advance</Button> : undefined}
+                    />
+                  }
+                />
+              </PaginatedTabBody>
             ),
           },
           {
@@ -318,6 +362,48 @@ export function EstateDetailPage() {
           </>
         }
       />
+    </div>
+  )
+}
+
+/**
+ * §7 — wraps a paginated tab's table with loading/error states and the
+ * "Showing last 90 days · View all" control. `query` is a TanStack Query
+ * result carrying a `PaginatedResult<T>`; this component doesn't care about
+ * the row type, only the pagination envelope.
+ */
+function PaginatedTabBody({
+  query,
+  showAll,
+  onShowAll,
+  children,
+}: {
+  query: { isPending: boolean; isError: boolean; data?: { total: number }; refetch: () => void }
+  showAll: boolean
+  onShowAll: () => void
+  children: React.ReactNode
+}) {
+  if (query.isPending) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+  if (query.isError) {
+    return <ErrorState title="Couldn't load this tab" onRetry={() => query.refetch()} />
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {!showAll && (
+        <p className="text-xs text-text-muted">
+          Showing last 90 days ({query.data?.total ?? 0}) ·{' '}
+          <button type="button" onClick={onShowAll} className="font-medium text-primary underline-offset-2 hover:underline">
+            View all
+          </button>
+        </p>
+      )}
+      {children}
     </div>
   )
 }
