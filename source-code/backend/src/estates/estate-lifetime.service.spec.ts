@@ -1,10 +1,14 @@
 import type { Repository } from 'typeorm';
 import type { AuditLogEntity } from '../audit/audit-log.entity';
 import type { CollectionRecordEntity } from '../collections/collection-record.entity';
+import type { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
 import type { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
 import type { FertilizerRequestEntity } from '../fertilizer/fertilizer-request.entity';
+import type { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import type { EstateAdvanceEntity } from './estate-advance.entity';
+import type { EstateDocumentEntity } from './estate-document.entity';
 import { EstateLifetimeService } from './estate-lifetime.service';
+import type { EstateOwnerEntity } from './estate-owner.entity';
 import type { EstateEntity } from './estate.entity';
 import type { SettlementEntity } from './settlement.entity';
 
@@ -55,6 +59,18 @@ function makeEstate(overrides: Partial<EstateEntity> = {}): EstateEntity {
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
   };
+}
+
+function makeOwner(overrides: Partial<EstateOwnerEntity> = {}): EstateOwnerEntity {
+  return {
+    id: 1,
+    userId: 1,
+    name: 'K. Perera',
+    nic: '901234567V',
+    contact: '0771234567',
+    email: null,
+    ...overrides,
+  } as EstateOwnerEntity;
 }
 
 function makeCollection(
@@ -164,6 +180,45 @@ function makeRequest(
   } as FertilizerRequestEntity;
 }
 
+function makeMovement(overrides: Partial<StockMovementEntity> = {}): StockMovementEntity {
+  return {
+    id: 1,
+    batchId: 9,
+    type: 'Outgoing',
+    quantityKg: '55.00',
+    movementDate: '2026-07-10',
+    destination: null,
+    estateId: 1,
+    linkedRequestId: null,
+    supplier: null,
+    notes: null,
+    recordedBy: 'A. Bandara',
+    createdAt: new Date('2026-07-10T00:00:00.000Z'),
+    ...overrides,
+  } as StockMovementEntity;
+}
+
+function makeBatch(overrides: Partial<FertilizerBatchEntity> = {}): FertilizerBatchEntity {
+  return {
+    id: 9,
+    item: 'Urea Fertilizer',
+    category: 'Fertilizer',
+    quantityKg: '400.00',
+    unit: 'kg',
+    receivedDate: '2026-06-01',
+    expiryDate: '2027-06-01',
+    location: null,
+    supplier: null,
+    lotNumber: null,
+    qualityNotes: null,
+    discarded: false,
+    lastUpdatedBy: null,
+    lastUpdatedOn: null,
+    createdAt: new Date('2026-06-01T00:00:00.000Z'),
+    ...overrides,
+  } as FertilizerBatchEntity;
+}
+
 function makeAudit(overrides: Partial<AuditLogEntity> = {}): AuditLogEntity {
   return {
     id: 'AUD-00001',
@@ -182,24 +237,45 @@ function makeAudit(overrides: Partial<AuditLogEntity> = {}): AuditLogEntity {
 
 function build() {
   const estateRepo = new FakeRepository<EstateEntity>();
+  const ownerRepo = new FakeRepository<EstateOwnerEntity>();
+  const documentRepo = new FakeRepository<EstateDocumentEntity>();
   const collectionRepo = new FakeRepository<CollectionRecordEntity>();
   const settlementRepo = new FakeRepository<SettlementEntity>();
   const advanceRepo = new FakeRepository<EstateAdvanceEntity>();
   const requestRepo = new FakeRepository<FertilizerRequestEntity>();
   const chargeRepo = new FakeRepository<FertilizerChargeEntity>();
+  const movementRepo = new FakeRepository<StockMovementEntity>();
+  const batchRepo = new FakeRepository<FertilizerBatchEntity>();
   const auditRepo = new FakeRepository<AuditLogEntity>();
 
   const service = new EstateLifetimeService(
     estateRepo as unknown as Repository<EstateEntity>,
+    ownerRepo as unknown as Repository<EstateOwnerEntity>,
+    documentRepo as unknown as Repository<EstateDocumentEntity>,
     collectionRepo as unknown as Repository<CollectionRecordEntity>,
     settlementRepo as unknown as Repository<SettlementEntity>,
     advanceRepo as unknown as Repository<EstateAdvanceEntity>,
     requestRepo as unknown as Repository<FertilizerRequestEntity>,
     chargeRepo as unknown as Repository<FertilizerChargeEntity>,
+    movementRepo as unknown as Repository<StockMovementEntity>,
+    batchRepo as unknown as Repository<FertilizerBatchEntity>,
     auditRepo as unknown as Repository<AuditLogEntity>,
   );
 
-  return { service, estateRepo, collectionRepo, settlementRepo, advanceRepo, requestRepo, chargeRepo, auditRepo };
+  return {
+    service,
+    estateRepo,
+    ownerRepo,
+    documentRepo,
+    collectionRepo,
+    settlementRepo,
+    advanceRepo,
+    requestRepo,
+    chargeRepo,
+    movementRepo,
+    batchRepo,
+    auditRepo,
+  };
 }
 
 describe('EstateLifetimeService — lifetime() (§3 shared selector)', () => {
@@ -307,6 +383,47 @@ describe('EstateLifetimeService — timeline() (§5 EST-10)', () => {
     expect(types).toEqual(['Fertilizer', 'Settlement', 'Advance', 'Delivery', 'Registered']);
   });
 
+  it('Fertilizer entry recordHref deep-links into this estate\'s own Fertilizer tab, request-linked charge', async () => {
+    const { service, estateRepo, chargeRepo, movementRepo, requestRepo, batchRepo } = build();
+    estateRepo.seed(makeEstate({ id: 1, registeredOn: '2019-03-01' }));
+    movementRepo.seed(makeMovement({ id: 1, batchId: 9, linkedRequestId: 10 }));
+    batchRepo.seed(makeBatch({ id: 9, item: 'Urea Fertilizer' }));
+    requestRepo.seed(makeRequest({ id: 10, createdAt: new Date('2026-07-27T00:00:00.000Z') }));
+    chargeRepo.seed(makeCharge({ id: 1, stockMovementId: 1, fertilizerRequestId: 10 }));
+
+    const result = await service.timeline('EST-0001', { type: 'Fertilizer', limit: 10 });
+    // Not the factory-side request/batch page — the owner's own tab, with
+    // this charge highlighted (an estate's other dispatches often share one
+    // factory batch, so a batch-page link would be identical across rows).
+    expect(result.entries[0].recordHref).toBe('/estates/EST-0001?tab=fertilizer&record=FC-0001');
+    expect(result.entries[0].description).toContain('Urea Fertilizer dispatched');
+  });
+
+  it('Fertilizer entry recordHref deep-links the same way for an ad-hoc charge (no linked request)', async () => {
+    const { service, estateRepo, chargeRepo, movementRepo, batchRepo } = build();
+    estateRepo.seed(makeEstate({ id: 1, registeredOn: '2019-03-01' }));
+    movementRepo.seed(makeMovement({ id: 2, batchId: 9, linkedRequestId: null }));
+    batchRepo.seed(makeBatch({ id: 9, item: 'Urea Fertilizer' }));
+    chargeRepo.seed(makeCharge({ id: 2, stockMovementId: 2, fertilizerRequestId: null }));
+
+    const result = await service.timeline('EST-0001', { type: 'Fertilizer', limit: 10 });
+    expect(result.entries[0].recordHref).toBe('/estates/EST-0001?tab=fertilizer&record=FC-0002');
+    expect(result.entries[0].description).toContain('Urea Fertilizer dispatched');
+  });
+
+  it('Fertilizer entry description falls back to "Dispatched" when the batch can\'t be resolved', async () => {
+    const { service, estateRepo, chargeRepo } = build();
+    estateRepo.seed(makeEstate({ id: 1, registeredOn: '2019-03-01' }));
+    chargeRepo.seed(makeCharge({ id: 3, stockMovementId: 999, fertilizerRequestId: null }));
+
+    const result = await service.timeline('EST-0001', { type: 'Fertilizer', limit: 10 });
+    // recordHref is always resolvable now (it only needs the estate + charge
+    // id, not the movement/batch), unlike the item name in the description.
+    expect(result.entries[0].recordHref).toBe('/estates/EST-0001?tab=fertilizer&record=FC-0003');
+    expect(result.entries[0].description).toContain('Dispatched');
+    expect(result.entries[0].description).not.toContain('undefined');
+  });
+
   it('only includes Account entries from audit_logs that match this estate\'s formatted id', async () => {
     const { service, estateRepo, auditRepo } = build();
     estateRepo.seed(makeEstate({ id: 1, registeredOn: '2019-03-01' }));
@@ -373,5 +490,136 @@ describe('EstateLifetimeService — per-estate paginated lists (§7)', () => {
     const advances = await service.advancesFor('EST-0001', {});
     expect(payments.rows[0]).toMatchObject({ id: 'SET-1', status: 'Processed' });
     expect(advances.rows[0]).toMatchObject({ id: 'EADV-1' });
+  });
+});
+
+describe('EstateLifetimeService — fertilizerFor() (EST-03 amended)', () => {
+  it('maps item/lot/rate/total from the charge\'s movement and batch', async () => {
+    const { service, estateRepo, chargeRepo, movementRepo, batchRepo } = build();
+    estateRepo.seed(makeEstate());
+    movementRepo.seed(makeMovement({ id: 1, batchId: 9 }));
+    batchRepo.seed(makeBatch({ id: 9, item: 'Urea Fertilizer', lotNumber: 'LOT-HIST-0001' }));
+    chargeRepo.seed(
+      makeCharge({
+        id: 1,
+        stockMovementId: 1,
+        quantityKg: '55.00',
+        ratePerKg: '72.00',
+        totalCharge: '3960.00',
+        calculatedAt: new Date(),
+      }),
+    );
+
+    const result = await service.fertilizerFor('EST-0001', {});
+    expect(result.rows[0]).toMatchObject({
+      id: 'FC-0001',
+      item: 'Urea Fertilizer',
+      quantityKg: 55,
+      ratePerKg: 72,
+      totalCharge: 3960,
+      batchId: 'FB-0009',
+      lotNumber: 'LOT-HIST-0001',
+    });
+  });
+
+  it('settlementId null means outstanding, not yet recovered', async () => {
+    const { service, estateRepo, chargeRepo } = build();
+    estateRepo.seed(makeEstate());
+    chargeRepo.seed(makeCharge({ id: 1, stockMovementId: 1, settlementId: null, calculatedAt: new Date() }));
+
+    const result = await service.fertilizerFor('EST-0001', {});
+    expect(result.rows[0].settlementId).toBeNull();
+  });
+
+  it('an ad-hoc charge has requestId null; a request-linked one has it formatted', async () => {
+    const { service, estateRepo, chargeRepo, requestRepo } = build();
+    estateRepo.seed(makeEstate());
+    requestRepo.seed(makeRequest({ id: 10, createdAt: new Date('2026-07-27T00:00:00.000Z') }));
+    chargeRepo.seed(makeCharge({ id: 1, stockMovementId: 1, fertilizerRequestId: null, calculatedAt: new Date() }));
+    chargeRepo.seed(makeCharge({ id: 2, stockMovementId: 2, fertilizerRequestId: 10, calculatedAt: new Date() }));
+
+    const result = await service.fertilizerFor('EST-0001', {});
+    const adHoc = result.rows.find((r) => r.id === 'FC-0001');
+    const linked = result.rows.find((r) => r.id === 'FC-0002');
+    expect(adHoc?.requestId).toBeNull();
+    expect(linked?.requestId).toBe('FR-2026-0010');
+  });
+
+  it('defaults to the last 90 days, same as deliveries/payments/advances', async () => {
+    const { service, estateRepo, chargeRepo } = build();
+    estateRepo.seed(makeEstate());
+    chargeRepo.seed(makeCharge({ id: 1, stockMovementId: 1, calculatedAt: new Date() }));
+    chargeRepo.seed(makeCharge({ id: 2, stockMovementId: 2, calculatedAt: new Date('2020-09-01T00:00:00.000Z') }));
+
+    const result = await service.fertilizerFor('EST-0001', {});
+    expect(result.rows.map((r) => r.id)).toEqual(['FC-0001']);
+  });
+
+  it('an explicit date range overrides the 90-day default — this is how the timeline\'s deep-link stays reachable for old charges', async () => {
+    const { service, estateRepo, chargeRepo } = build();
+    estateRepo.seed(makeEstate());
+    chargeRepo.seed(makeCharge({ id: 1, stockMovementId: 1, calculatedAt: new Date('2020-09-01T00:00:00.000Z') }));
+
+    const result = await service.fertilizerFor('EST-0001', { from: '2000-01-01' });
+    expect(result.rows.map((r) => r.id)).toEqual(['FC-0001']);
+  });
+});
+
+describe('EstateLifetimeService — directory() (EST-01 amended)', () => {
+  it('applies the same §3 rules as lifetime(): Confirmed-only deliveries, processed-only earnings, outstanding = unrecovered charges', async () => {
+    const { service, estateRepo, ownerRepo, documentRepo, collectionRepo, settlementRepo, chargeRepo } = build();
+    estateRepo.seed(makeEstate());
+    ownerRepo.seed(makeOwner());
+    documentRepo.seed({ id: 1, estateId: 1, name: 'NIC copy', uploadedOn: '2021-03-01' } as EstateDocumentEntity);
+    collectionRepo.seed(makeCollection({ id: 'A', status: 'confirmed', grade: 'super', weightKg: '100.00' }));
+    collectionRepo.seed(makeCollection({ id: 'B', status: 'pending_agent_confirmation', weightKg: '999.00' }));
+    settlementRepo.seed(
+      makeSettlement({ id: 'S1', status: 'processed', superKg: '100.00', superRate: '185.00', normalKg: '0.00' }),
+    );
+    settlementRepo.seed(makeSettlement({ id: 'S2', status: 'pending', superKg: '9999.00' }));
+    chargeRepo.seed(makeCharge({ id: 1, totalCharge: '4750.00', settlementId: null }));
+    chargeRepo.seed(makeCharge({ id: 2, totalCharge: '9500.00', settlementId: 'SET-2026-06-001' }));
+
+    const [row] = await service.directory();
+    expect(row.lifetimeDeliveredKg).toBe(100);
+    expect(row.lifetimeEarnedRs).toBe(18500);
+    expect(row.outstandingRs).toBe(4750);
+    expect(row.hasOutstanding).toBe(true);
+    expect(row.documentCount).toBe(1);
+  });
+
+  it('a brand-new owner with no history returns 0s, never null/NaN, and hasOutstanding false', async () => {
+    const { service, estateRepo, ownerRepo } = build();
+    estateRepo.seed(makeEstate({ id: 2, registeredOn: new Date().toISOString().slice(0, 10) }));
+    ownerRepo.seed(makeOwner({ id: 2 }));
+
+    const [row] = await service.directory();
+    expect(row.lifetimeDeliveredKg).toBe(0);
+    expect(row.lifetimeEarnedRs).toBe(0);
+    expect(row.outstandingRs).toBe(0);
+    expect(row.hasOutstanding).toBe(false);
+    expect(row.lastPaymentRs).toBeNull();
+    expect(row.tenureMonths).toBe(0);
+  });
+
+  it('does not bleed one estate\'s figures into another\'s', async () => {
+    const { service, estateRepo, ownerRepo, collectionRepo, chargeRepo } = build();
+    estateRepo.seed(makeEstate({ id: 1, ownerId: 1, name: 'Green Valley Estate' }));
+    estateRepo.seed(makeEstate({ id: 2, ownerId: 2, name: 'Silver Peak Estate' }));
+    ownerRepo.seed(makeOwner({ id: 1, name: 'K. Perera' }));
+    ownerRepo.seed(makeOwner({ id: 2, name: 'M. Silva' }));
+    collectionRepo.seed(makeCollection({ id: 'A', estateId: 1, status: 'confirmed', weightKg: '100.00' }));
+    collectionRepo.seed(makeCollection({ id: 'B', estateId: 2, status: 'confirmed', weightKg: '250.00' }));
+    chargeRepo.seed(makeCharge({ id: 1, estateId: 1, totalCharge: '1000.00', settlementId: null }));
+
+    const rows = await service.directory();
+    const gv = rows.find((r) => r.estateName === 'Green Valley Estate')!;
+    const sp = rows.find((r) => r.estateName === 'Silver Peak Estate')!;
+    expect(gv.lifetimeDeliveredKg).toBe(100);
+    expect(gv.outstandingRs).toBe(1000);
+    expect(sp.lifetimeDeliveredKg).toBe(250);
+    expect(sp.outstandingRs).toBe(0);
+    expect(gv.ownerName).toBe('K. Perera');
+    expect(sp.ownerName).toBe('M. Silva');
   });
 });

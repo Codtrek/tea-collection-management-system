@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, HandCoins, Banknote, CircleSlash, FileText, Eye, EyeOff, Loader2, Truck } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -18,14 +18,23 @@ import { EstateAnalyticsBody } from './EstateAnalyticsPage'
 import { EstateTimelineTab } from './EstateTimelineTab'
 import { LifetimeSummary } from './LifetimeSummary'
 import { COLLECTION_TONE } from '@/features/collections/status'
-import type { EstateAdvance, Settlement } from './types'
+import type { EstateAdvance, EstateFertilizerRecord, Settlement } from './types'
 import type { CollectionRecord } from '@/features/collections/types'
 import { formatCurrency, formatDate, formatWeight, initials, maskAccount } from '@/lib/format'
 
-/* EST-03 — DetailPageWithTabs: Overview | Timeline | Analytics | Deliveries | Payments | Advances | Documents. */
+/* EST-03 — DetailPageWithTabs: Overview | Timeline | Analytics | Deliveries | Payments | Fertilizer | Advances | Documents. */
 export function EstateDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  // EST-01/EST-03 amended — the directory's "View payments" and the
+  // Timeline's Fertilizer entries deep-link here via `?tab=…` (+ `?record=`
+  // for the latter). Derived from the URL every render, not seeded once at
+  // mount: clicking View while already on this page is a same-route
+  // navigation (only the query string changes), and a `useState` initializer
+  // never re-runs for that — the tab would silently fail to switch.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('tab') ?? 'overview'
+  const highlightRecord = searchParams.get('record') ?? undefined
   const { toast } = useToast()
   const { can } = useAuth()
   const queryClient = useQueryClient()
@@ -39,6 +48,11 @@ export function EstateDetailPage() {
   const [deliveriesShowAll, setDeliveriesShowAll] = useState(false)
   const [paymentsShowAll, setPaymentsShowAll] = useState(false)
   const [advancesShowAll, setAdvancesShowAll] = useState(false)
+  // §7's own manual "View all" choice, separate from the derived override
+  // below — a deep-linked record can be years old (the tab's 90-day default
+  // would hide it), so `?record=` forces all-time regardless of this.
+  const [fertilizerShowAllChosen, setFertilizerShowAllChosen] = useState(false)
+  const fertilizerShowAll = fertilizerShowAllChosen || !!highlightRecord
 
   const {
     data: estate,
@@ -70,6 +84,11 @@ export function EstateDetailPage() {
   const advancesQuery = useQuery({
     queryKey: ['estates', id, 'advances', advancesShowAll],
     queryFn: () => estatesService.getAdvancesFor(id!, advancesShowAll ? { from: '2000-01-01', limit: 25 } : { limit: 25 }),
+    enabled: !!id,
+  })
+  const fertilizerQuery = useQuery({
+    queryKey: ['estates', id, 'fertilizer', fertilizerShowAll],
+    queryFn: () => estatesService.getFertilizerFor(id!, fertilizerShowAll ? { from: '2000-01-01', limit: 25 } : { limit: 25 }),
     enabled: !!id,
   })
 
@@ -143,6 +162,65 @@ export function EstateDetailPage() {
     },
   ]
 
+  const fertilizerColumns: Column<EstateFertilizerRecord>[] = [
+    { key: 'id', header: 'Charge', render: (f) => <span className="id text-xs">{f.id}</span> },
+    { key: 'date', header: 'Date', render: (f) => formatDate(f.date) },
+    { key: 'item', header: 'Item' },
+    { key: 'quantityKg', header: 'Quantity', align: 'right', render: (f) => formatWeight(f.quantityKg) },
+    { key: 'ratePerKg', header: 'Rate/kg', align: 'right', render: (f) => `${formatCurrency(f.ratePerKg)}/kg` },
+    { key: 'totalCharge', header: 'Total', align: 'right', render: (f) => formatCurrency(f.totalCharge) },
+    {
+      key: 'status',
+      // Same rule OutstandingPanel uses (§6.3): amber for owed, never
+      // danger-red — owing for recently-issued fertilizer is normal.
+      header: 'Status',
+      render: (f) =>
+        f.settlementId ? (
+          <span className="text-xs font-medium text-success-fg">Deducted · {f.settlementId}</span>
+        ) : (
+          <span className="text-xs font-medium text-warning-fg">Outstanding</span>
+        ),
+    },
+    {
+      key: 'requestId',
+      header: 'Request',
+      render: (f) =>
+        f.requestId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/fertilizer/requests/${f.requestId}`)
+            }}
+            className="id text-xs text-primary underline-offset-2 hover:underline"
+          >
+            {f.requestId}
+          </button>
+        ) : (
+          <span className="text-xs text-text-muted">—</span>
+        ),
+    },
+    {
+      key: 'batchId',
+      header: 'Lot',
+      render: (f) =>
+        f.batchId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/fertilizer/${f.batchId}`)
+            }}
+            className="id text-xs text-primary underline-offset-2 hover:underline"
+          >
+            {f.lotNumber ?? f.batchId}
+          </button>
+        ) : (
+          <span className="text-xs text-text-muted">—</span>
+        ),
+    },
+  ]
+
   return (
     <div>
       <PageHeader
@@ -170,6 +248,22 @@ export function EstateDetailPage() {
       />
 
       <DetailPageWithTabs
+        activeTab={activeTab}
+        onTabChange={(tabId) => {
+          // `replace: true` — ordinary tab-clicking shouldn't grow the
+          // history stack — but the Timeline's View link uses `navigate()`
+          // (a push), so Back from it still returns to Timeline correctly.
+          // `record` belongs to the arrival, not to a tab clicked into later.
+          setSearchParams(
+            (prev) => {
+              const updated = new URLSearchParams(prev)
+              updated.set('tab', tabId)
+              updated.delete('record')
+              return updated
+            },
+            { replace: true },
+          )
+        }}
         header={
           <div className="flex flex-wrap items-center gap-4">
             <span className="flex size-14 items-center justify-center rounded-full bg-brand-soft text-lg font-semibold text-primary">
@@ -292,6 +386,21 @@ export function EstateDetailPage() {
                   rows={paymentsQuery.data?.rows ?? []}
                   rowKey={(s) => s.id}
                   emptyState={<EmptyState title="No settlements yet" description="Processed payment settlements appear here." />}
+                />
+              </PaginatedTabBody>
+            ),
+          },
+          {
+            id: 'fertilizer',
+            label: 'Fertilizer',
+            content: (
+              <PaginatedTabBody query={fertilizerQuery} showAll={fertilizerShowAll} onShowAll={() => setFertilizerShowAllChosen(true)}>
+                <DataTable
+                  columns={fertilizerColumns}
+                  rows={fertilizerQuery.data?.rows ?? []}
+                  rowKey={(f) => f.id}
+                  highlightRowKey={highlightRecord}
+                  emptyState={<EmptyState title="No fertilizer dispatched" description="Priced dispatches charged to this estate appear here." />}
                 />
               </PaginatedTabBody>
             ),

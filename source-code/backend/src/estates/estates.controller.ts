@@ -25,6 +25,8 @@ import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import { UpdateEstateDto } from './dto/update-estate.dto';
 import type {
   EstateAnalytics,
+  EstateDirectoryRow,
+  EstateFertilizerRecord,
   EstateLifetimeMetrics,
   PaginatedResult,
   TimelinePage,
@@ -62,6 +64,17 @@ export class EstatesController {
   @Get('settlements')
   listSettlements(): Promise<PublicSettlement[]> {
     return this.estatesService.listSettlements();
+  }
+
+  /**
+   * EST-01 amended — the roster-wide directory (registered before the `:id`
+   * catch-all for the same reason `advances`/`settlements` are). Distinct
+   * from `GET /estates` below: that one stays a lightweight id+name lookup
+   * for the four other screens that use it; this one does real aggregation.
+   */
+  @Get('directory')
+  directory(): Promise<EstateDirectoryRow[]> {
+    return this.lifetimeService.directory();
   }
 
   @Post('settlements/process')
@@ -187,6 +200,26 @@ export class EstatesController {
     @Query('limit') limit?: string,
   ): Promise<PaginatedResult<PublicAdvance>> {
     return this.lifetimeService.advancesFor(id, {
+      from,
+      to,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  /**
+   * EST-03 amended — paginated Fertilizer tab, default window last 90 days.
+   * The Timeline's Fertilizer entries' `recordHref` deep-links here.
+   */
+  @Get(':id/fertilizer')
+  fertilizerForEstate(
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<PaginatedResult<EstateFertilizerRecord>> {
+    return this.lifetimeService.fertilizerFor(id, {
       from,
       to,
       page: page ? Number(page) : undefined,

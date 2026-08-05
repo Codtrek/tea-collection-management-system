@@ -3,6 +3,8 @@ import type { CollectionRecord } from '@/features/collections/types'
 import type {
   EstateAdvance,
   EstateAnalytics,
+  EstateDirectoryRow,
+  EstateFertilizerRecord,
   EstateLifetimeMetrics,
   EstateOwner,
   PaginatedResult,
@@ -32,6 +34,15 @@ export interface IssueAdvanceInput {
 
 export function list(): Promise<EstateOwner[]> {
   return apiFetch<EstateOwner[]>('/estates')
+}
+
+/**
+ * EST-01 amended — the roster-wide directory (money + tenure per owner, one
+ * grouped backend pass). Distinct call from `list()` above: that one stays a
+ * lightweight id+name fetch reused by several other screens' dropdowns.
+ */
+export function getDirectory(): Promise<EstateDirectoryRow[]> {
+  return apiFetch<EstateDirectoryRow[]>('/estates/directory')
 }
 
 export function getById(id: string): Promise<EstateOwner> {
@@ -135,4 +146,15 @@ export function getAdvancesFor(
   q: DateRangeQuery = {},
 ): Promise<PaginatedResult<EstateAdvance>> {
   return apiFetch<PaginatedResult<EstateAdvance>>(`/estates/${id}/advances${toQueryString(q)}`)
+}
+
+/**
+ * EST-03 amended — paginated Fertilizer tab, default window last 90 days.
+ * The Timeline's Fertilizer entries' `recordHref` deep-links here.
+ */
+export function getFertilizerFor(
+  id: string,
+  q: DateRangeQuery = {},
+): Promise<PaginatedResult<EstateFertilizerRecord>> {
+  return apiFetch<PaginatedResult<EstateFertilizerRecord>>(`/estates/${id}/fertilizer${toQueryString(q)}`)
 }

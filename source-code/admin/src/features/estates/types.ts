@@ -136,3 +136,50 @@ export interface PaginatedResult<T> {
   total: number
   hasMore: boolean
 }
+
+/*
+  EST-01 amended — the roster-wide directory row. Mirrors the backend's
+  `EstateDirectoryRow` byte-for-byte; the same §3 rules apply (Confirmed
+  deliveries, processed-only earnings, outstanding = charges − recovered),
+  so these figures always agree with what EST-03's Lifetime Summary shows.
+*/
+export interface EstateDirectoryRow {
+  id: string
+  estateName: string
+  ownerName: string
+  route: string
+  status: EstateStatus
+  registeredOn: string
+  tenureMonths: number
+  ytdDeliveriesKg: number
+  lastDeliveryDate: string | null
+  lastPaymentRs: number | null
+  lastPaymentDate: string | null
+  outstandingRs: number
+  hasOutstanding: boolean
+  lifetimeEarnedRs: number
+  lifetimeDeliveredKg: number
+  superPct: number
+  qualityTrend: Array<{ month: string; superPct: number }>
+  documentCount: number
+}
+
+/*
+  EST-03 amended — a Fertilizer tab row, one per dispatch charged to this
+  estate. Mirrors the backend's `EstateFertilizerRecord` byte-for-byte. The
+  Timeline's Fertilizer entries' `recordHref` deep-links to this tab.
+*/
+export interface EstateFertilizerRecord {
+  id: string // 'FC-0001'
+  date: string // ISO
+  item: string
+  quantityKg: number
+  ratePerKg: number
+  totalCharge: number
+  /** null = outstanding, not yet recovered at a settlement. */
+  settlementId: string | null
+  /** formatted 'FR-2026-0001'; null for an ad-hoc dispatch. */
+  requestId: string | null
+  batchId: string | null // formatted 'FB-0001'
+  lotNumber: string | null
+}

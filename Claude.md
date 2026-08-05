@@ -480,6 +480,98 @@ not a replay. The ribbon draws once per mount only (`useRef` guard read/written 
 read as an error). Lifetime figures never count up (`useCountUp` is for live/today figures, not
 settled history).
 
+**Estate Owner Directory (2026-08-05, `feature/estate-owner-directory`) — amends EST-01.** Grew out
+of a plain question: "where do I browse all the estate owners?" The roster page already existed
+(`EstateListPage.tsx`) but was invisible (no sidebar entry — the one nav item pointing at `/estates`
+was labelled "Estate Owner Payments" and filed under Finance) and moneyless (only column was YTD
+kg; no last payment, no outstanding, no lifetime figure, and `DataTable` had no sorting at all, so
+"in order" meant insertion order). Rather than add a second, parallel "directory" page — which
+would drift from the roster page over time — **EST-01 was turned into a role-aware directory**:
+same table, same backend shape, three views (Management/Payments/Oversight) that swap default
+columns, sort, filters, primary action, row actions and empty-state copy.
+
+Which view renders is driven by `level('estateOwners')` (`'approve'|'edit'|'view'|'none'` →
+management/payments/oversight), **never `user.role`** — this repo's hardest non-negotiable
+(`AGENTS.md`: "gate UI with `useAuth().can(module, level)`, never hardcode `if (role === ...)`").
+That matters beyond style: if an Administrator regrades Officer down to `view` in ADM-02, that user
+correctly drops to the read-only Oversight view on their very next login — a role-keyed version
+would keep showing them payment actions they can no longer take. Two things the original per-role
+design asked for don't exist in this system and weren't faked in: a per-row "Issue Settlement"
+(EST-08 processes every Pending settlement in one bulk run — `estates.service.ts` says outright
+"there's no per-settlement targeting" — so the Payments view's row action is **View payments**,
+deep-linking to EST-03's Payments tab via a new `?tab=` query param `EstateDetailPage` now reads
+into `DetailPageWithTabs`' `defaultTab`); and per-role column-visibility design docs that aren't in
+this repo (`tea-estate-owner-screen-prompt.md` etc. don't exist here) — the amended contract lives
+in this file instead.
+
+New backend: `GET /estates/directory` (`EstateLifetimeService.directory()`) — deliberately a
+separate endpoint from `GET /estates`, which four other screens (`IssueAdvancePage`,
+`EstateAnalyticsPage`, `LogRequestPage`, dropdowns) use for lightweight id+name lookups that
+shouldn't pay for roster-wide aggregation. One grouped pass over estates/owners/confirmed
+collections/processed settlements/charges/documents (same shape as the existing
+`factoryAverages()` helper), applying the *same* §3 rules `lifetime()` uses per-estate — Confirmed
+deliveries only, processed-settlements-only earnings, outstanding = Σ unrecovered charges — so a
+directory row always agrees with what EST-03 shows for that estate; nothing is summed twice with
+different rules. Returns `EstateDirectoryRow[]` (`estate-lifetime-map.ts`), including a 6-month
+`qualityTrend` for the Oversight view's sparkline and a `documentCount` (cheap addition to the same
+query, not a new endpoint).
+
+`DataTable` (18 existing consumers) gained two **additive, opt-in** capabilities so no other screen
+changed: per-column `sortable`/`sortValue` (click-cycles asc → desc → none, `aria-sort`) and
+`hideable` + `columnPrefsKey` (a "Columns" popover, persisted to `localStorage` the same way the
+existing density toggle is) plus `initialHidden` for a view's pre-localStorage default. New
+`components/charts/Sparkline.tsx` (a bare recharts `LineChart`, no axes/tooltip) is the first
+consumer of `hideable`. `formatTenure()` (was a private helper duplicated nowhere — now promoted to
+`lib/format.ts`) is shared by `LifetimeSummary` and the directory's Registered/Tenure columns.
+
+Nav (`components/layout/nav.ts`): added **Estate Owners** → `/estates` under **People** (the actual
+browse entry point this whole slice was about); repointed Finance's existing **Estate Owner
+Payments** to `/estates/settlements` (the real payment-processing screen) instead of the roster, so
+the two entries no longer point at the same route under different names.
+
+**EST-03 gained a Fertilizer tab (2026-08-05, same branch) — fixing the Timeline's Fertilizer
+"View" link, which went through two wrong destinations before this.** It started as a hardcoded
+`/fertilizer` constant (the factory-wide inventory list). The first fix pointed it at the
+request/batch detail pages instead — better, but still factory-side, and every one of an estate's
+ad-hoc historical dispatches typically draws from the *same* batch (a `LOT-HIST-0001` placeholder
+for pre-2026 records), so every one of that estate's View links landed on the identical page. The
+actual gap: EST-03 had no list of the owner's *own* fertilizer records anywhere — Overview already
+headlines "Fertilizer taken" and "Outstanding to factory" from this exact data, but there was
+nowhere to see the line items behind those figures. Added `EstateLifetimeService.fertilizerFor()` +
+`GET /estates/:id/fertilizer` (mirrors `advancesFor()`; page size 25, default last-90-days window)
+and a new **Fertilizer** tab (Date · Item · Quantity · Rate/kg · Total · Status · Request · Lot) —
+`Status` is Deducted (+ its settlement id) in success-fg or Outstanding in warning-fg, same
+never-danger-red rule as `OutstandingPanel`; `Request`/`Lot` are still clickable through to the
+factory-side pages, just no longer the *destination*. The timeline entry's `recordHref` is now
+`/estates/:id?tab=fertilizer&record=FC-…` (a new `formatChargeId` id, since the charge — not the
+batch or request — is the row actually being listed). A deep-linked charge can be years old, and
+the tab defaults to last-90-days like every other paginated tab, so `EstateDetailPage` derives that
+tab's `showAll` from whether `?record=` is present, forcing all-time so a historical row is actually
+on screen. `DataTable` gained one more additive prop for this, `highlightRowKey`, tinting the
+deep-linked row the same way the existing bulk-select tint does. Known, accepted limit: past 25
+charges for one estate the highlighted row could be off the first page — not worth solving at
+today's data volume (largest estate has 6).
+
+**EST-03's tabs had to become URL-driven (2026-08-05, same day) — the View link set the right URL
+but the page didn't move.** The first cut of the above seeded state at mount
+(`useState(() => !!highlightRecord)` for `showAll`, and `DetailPageWithTabs`'s own
+`useState(defaultTab ?? tabs[0]?.id)` for the active tab) — but a `useState` initializer only runs
+on first mount, and clicking View while already on `/estates/:id` is a **same-route** navigation:
+React Router updates the query string, `EstateDetailPage` stays mounted, neither initializer
+re-runs, and the tab silently never switches. Fixed by making the URL the actual source of truth
+instead of a one-time seed: `DetailPageWithTabs` gained an opt-in **controlled mode**
+(`activeTab`/`onTabChange` props, standard controlled/uncontrolled split — its other two consumers,
+EMP-03 and the fertilizer batch page, pass neither and are untouched); `EstateDetailPage` now
+*derives* `activeTab`, `highlightRecord`, and `fertilizerShowAll` from `searchParams` every render
+instead of capturing them once. Tab clicks write `?tab=` back via `setSearchParams(..., {replace:
+true})` and drop `record` (a highlight belongs to the arrival, not a tab clicked into afterward);
+`replace` keeps ordinary tab-browsing out of the history stack while the Timeline's `navigate()`
+push still gives Back a real "return to Timeline". The `useEffect`-based "sync a prop into state"
+fix that comes to mind first isn't available here — this repo's ESLint bans `setState` inside
+`useEffect` (`react-hooks/set-state-in-effect`) — which is exactly why derived-from-render, not
+effect-synced, is the pattern to reach for the *next* time a same-route deep-link needs to move
+something that used to be `useState`-seeded.
+
 **Backend (`source-code/backend/`) — auth, collections, estates, employees, fertilizer, reports,
 and administration slices built; all six web-portal modules now backend-wired.**
 The default NestJS scaffold (`app.controller.ts`, `app.service.ts`, their spec, and the e2e test)

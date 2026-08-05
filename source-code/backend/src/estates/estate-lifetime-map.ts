@@ -78,3 +78,52 @@ export interface PaginatedResult<T> {
   total: number;
   hasMore: boolean;
 }
+
+/**
+ * EST-01 amended — the roster-wide directory row. One grouped pass over the
+ * same tables `lifetime()` reads per-estate (§3's rules apply here too:
+ * deliveries Confirmed only, earnings processed-settlements only,
+ * outstanding = Σ charges − Σ recovered), so the directory's figures always
+ * agree with what EST-03 shows for the same estate — no separate math.
+ */
+export interface EstateDirectoryRow {
+  id: string;
+  estateName: string;
+  ownerName: string;
+  route: string;
+  status: 'Active' | 'Inactive';
+  registeredOn: string;
+  tenureMonths: number;
+  ytdDeliveriesKg: number;
+  lastDeliveryDate: string | null;
+  lastPaymentRs: number | null;
+  lastPaymentDate: string | null;
+  outstandingRs: number;
+  hasOutstanding: boolean;
+  lifetimeEarnedRs: number;
+  lifetimeDeliveredKg: number;
+  superPct: number;
+  /** last 6 months, oldest first — feeds the Oversight view's sparkline. */
+  qualityTrend: Array<{ month: string; superPct: number }>;
+  documentCount: number;
+}
+
+/**
+ * EST-03 amended — a Fertilizer tab row, one per dispatch charged to this
+ * estate. Added so the Timeline's Fertilizer entries have somewhere of the
+ * owner's own to link to, instead of the factory-wide batch page.
+ */
+export interface EstateFertilizerRecord {
+  id: string; // 'FC-0001'
+  date: string; // ISO — charge's calculatedAt
+  item: string;
+  quantityKg: number;
+  ratePerKg: number;
+  totalCharge: number;
+  /** null = outstanding, not yet recovered at a settlement. */
+  settlementId: string | null;
+  /** formatted 'FR-2026-0001'; null for an ad-hoc dispatch. */
+  requestId: string | null;
+  batchId: string | null; // formatted 'FB-0001'
+  lotNumber: string | null;
+}

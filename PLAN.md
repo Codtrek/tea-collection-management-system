@@ -181,6 +181,14 @@ Order is by dependency, not by sidebar order:
       factory figure the addendum calls its most important number; dropped two long-orphaned
       tables (`monthly_payments`, `payment_deduction_items`). Deliveries/Payments/Advances tabs
       moved to server-side pagination (25/page, last-90-days default).
+- [x] **2.2++ Estate Owner Directory (EST-01 amended)** — the roster page existed but was
+      unreachable (no sidebar entry) and moneyless (YTD kg only, no sort). Done 2026-08-05,
+      `feature/estate-owner-directory` — turned EST-01 into three role-driven views (Management/
+      Payments/Oversight, picked by `level('estateOwners')`, never `user.role`) over one new
+      grouped backend selector (`GET /estates/directory`); gave `DataTable` opt-in sorting +
+      column-visibility (18 existing consumers unaffected); added a sidebar **Estate Owners**
+      entry. See Claude.md for the two spec gaps this surfaced (no per-row settlement action;
+      per-role screen-design docs not present in this repo).
 
 ---
 

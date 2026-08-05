@@ -4,25 +4,33 @@ import { Repository } from 'typeorm';
 import { AuditLogEntity } from '../audit/audit-log.entity';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { toAppGrade, toAppStatus, type PublicCollection } from '../collections/collection-map';
+import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
 import { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
+import { formatBatchId, formatChargeId, formatRequestId } from '../fertilizer/fertilizer-map';
 import { FertilizerRequestEntity } from '../fertilizer/fertilizer-request.entity';
+import { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import { EstateAdvanceEntity } from './estate-advance.entity';
 import {
   formatEstateId,
   parseEstateId,
   toAppAdvanceStatus,
+  toAppEstateStatus,
   toAppSettlementStatus,
   type PublicAdvance,
   type PublicSettlement,
 } from './estate-map';
 import type {
   EstateAnalytics,
+  EstateDirectoryRow,
+  EstateFertilizerRecord,
   EstateLifetimeMetrics,
   PaginatedResult,
   TimelineEntry,
   TimelinePage,
 } from './estate-lifetime-map';
+import { EstateDocumentEntity } from './estate-document.entity';
 import { EstateEntity } from './estate.entity';
+import { EstateOwnerEntity } from './estate-owner.entity';
 import { SettlementEntity } from './settlement.entity';
 
 /** Mirrors `CollectionsService.toPublic` — kept local since that mapper is private to its own module. */
@@ -117,6 +125,10 @@ export class EstateLifetimeService {
   constructor(
     @InjectRepository(EstateEntity)
     private readonly estateRepo: Repository<EstateEntity>,
+    @InjectRepository(EstateOwnerEntity)
+    private readonly ownerRepo: Repository<EstateOwnerEntity>,
+    @InjectRepository(EstateDocumentEntity)
+    private readonly documentRepo: Repository<EstateDocumentEntity>,
     @InjectRepository(CollectionRecordEntity)
     private readonly collectionRepo: Repository<CollectionRecordEntity>,
     @InjectRepository(SettlementEntity)
@@ -127,6 +139,13 @@ export class EstateLifetimeService {
     private readonly requestRepo: Repository<FertilizerRequestEntity>,
     @InjectRepository(FertilizerChargeEntity)
     private readonly chargeRepo: Repository<FertilizerChargeEntity>,
+    // Read-only lookups for resolving a Fertilizer timeline entry's
+    // `recordHref` — batchId comes from the dispatch's stock_movements row,
+    // item name from the batch it drew from.
+    @InjectRepository(StockMovementEntity)
+    private readonly movementRepo: Repository<StockMovementEntity>,
+    @InjectRepository(FertilizerBatchEntity)
+    private readonly batchRepo: Repository<FertilizerBatchEntity>,
     @InjectRepository(AuditLogEntity)
     private readonly auditRepo: Repository<AuditLogEntity>,
   ) {}
@@ -250,14 +269,23 @@ export class EstateLifetimeService {
     const page = Math.max(0, filters.page ?? 0);
     const limit = Math.min(100, Math.max(1, filters.limit ?? 25));
 
-    const [collections, settlements, advances, chargesWithMovement, auditEntries] =
+    const [collections, settlements, advances, chargesWithMovement, movements, requests, batches, auditEntries] =
       await Promise.all([
         this.collectionRepo.find({ where: { estateId: estate.id } }),
         this.settlementRepo.find({ where: { estateId: estate.id } }),
         this.advanceRepo.find({ where: { estateId: estate.id } }),
         this.chargeRepo.find({ where: { estateId: estate.id } }),
+        // Same estate scope a charge's stock_movement carries — resolves a
+        // Fertilizer entry's recordHref without querying per charge.
+        this.movementRepo.find({ where: { estateId: estate.id } }),
+        this.requestRepo.find({ where: { estateId: estate.id } }),
+        this.batchRepo.find(),
         this.auditRepo.find({ where: { module: 'Estate Owner' } }),
       ]);
+    const movementById = new Map(movements.map((m) => [m.id, m]));
+    const requestById = new Map(requests.map((r) => [r.id, r]));
+    const batchById = new Map(batches.map((b) => [b.id, b]));
+    const estateRecord = formatEstateId(estate.id);
 
     const entries: TimelineEntry[] = [];
 
@@ -301,17 +329,28 @@ export class EstateLifetimeService {
     }
 
     for (const c of chargesWithMovement) {
+      // recordHref — was a hardcoded '/fertilizer' constant (the factory-wide
+      // inventory list), then briefly pointed at the request/batch pages
+      // (factory-side, and every one of an estate's ad-hoc historical
+      // dispatches shares one placeholder batch, so all their links landed on
+      // the *same* page). Points at this estate's own Fertilizer tab instead,
+      // with the charge highlighted — `EstateDetailPage` reads `?record=` and
+      // forces `showAll` so a multi-year-old charge is actually on screen
+      // (the tab defaults to the last 90 days like the other paginated tabs).
+      const movement = movementById.get(c.stockMovementId);
+      const batch = movement ? batchById.get(movement.batchId) : undefined;
+      const itemLabel = batch ? `${batch.item} dispatched` : 'Dispatched';
+
       entries.push({
         id: `fert-${c.id}`,
         type: 'Fertilizer',
         date: c.calculatedAt.toISOString(),
-        description: `Dispatched — ${Number(c.quantityKg)} kg — Rs. ${Math.round(Number(c.totalCharge)).toLocaleString()}${c.settlementId ? ' (deducted)' : ' (deducted at next settlement)'}`,
+        description: `${itemLabel} — ${Number(c.quantityKg)} kg — Rs. ${Math.round(Number(c.totalCharge)).toLocaleString()}${c.settlementId ? ' (deducted)' : ' (deducted at next settlement)'}`,
         value: Math.round(Number(c.totalCharge)),
-        recordHref: '/fertilizer',
+        recordHref: `/estates/${estateRecord}?tab=fertilizer&record=${formatChargeId(c.id)}`,
       });
     }
 
-    const estateRecord = formatEstateId(estate.id);
     for (const log of auditEntries) {
       if (log.record !== estateRecord) continue;
       entries.push({
@@ -415,6 +454,99 @@ export class EstateLifetimeService {
     };
   }
 
+  // ── EST-01 amended — the roster-wide directory ──────────────────
+  // One grouped pass over the same tables `lifetime()` reads per-estate, so
+  // the directory's figures always agree with EST-03's for the same estate.
+  // Deliberately a separate endpoint from `GET /estates` (which four other
+  // screens use for lightweight id+name lookups) — this one does real
+  // aggregation and shouldn't slow those down.
+
+  async directory(): Promise<EstateDirectoryRow[]> {
+    const [estates, owners, confirmed, processed, charges, documents] = await Promise.all([
+      this.estateRepo.find(),
+      this.ownerRepo.find(),
+      this.collectionRepo.find({ where: { status: 'confirmed' } }),
+      this.settlementRepo.find({ where: { status: 'processed' } }),
+      this.chargeRepo.find(),
+      this.documentRepo.find(),
+    ]);
+
+    const now = new Date();
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 5); // this month + 5 back = 6 months
+    const trendMonths = [...Array(6)].map((_, i) => {
+      const d = new Date(cutoff);
+      d.setMonth(d.getMonth() + i);
+      return d.toISOString().slice(0, 7); // 'YYYY-MM'
+    });
+
+    return estates.map((estate) => {
+      const owner = owners.find((o) => o.id === estate.ownerId);
+      const ownDeliveries = confirmed.filter((c) => c.estateId === estate.id);
+      const ownSettlements = processed.filter((s) => s.estateId === estate.id);
+      const ownCharges = charges.filter((c) => c.estateId === estate.id);
+
+      const deliveredKg = ownDeliveries.reduce((s, c) => s + Number(c.weightKg), 0);
+      const superKg = ownDeliveries
+        .filter((c) => c.grade === 'super')
+        .reduce((s, c) => s + Number(c.weightKg), 0);
+
+      const earnedRs = ownSettlements.reduce(
+        (s, r) => s + Number(r.superKg) * Number(r.superRate) + Number(r.normalKg) * Number(r.normalRate),
+        0,
+      );
+
+      const outstandingRs = ownCharges
+        .filter((c) => !c.settlementId)
+        .reduce((s, c) => s + Number(c.totalCharge), 0);
+
+      const lastDelivery = [...ownDeliveries].sort((a, b) => b.collectionDate.localeCompare(a.collectionDate))[0];
+
+      const lastSettlement = [...ownSettlements].sort((a, b) =>
+        (b.processedOn?.toISOString() ?? '').localeCompare(a.processedOn?.toISOString() ?? ''),
+      )[0];
+      const lastPaymentRs = lastSettlement
+        ? Math.round(
+            Number(lastSettlement.superKg) * Number(lastSettlement.superRate) +
+              Number(lastSettlement.normalKg) * Number(lastSettlement.normalRate) -
+              Number(lastSettlement.transportCost) -
+              Number(lastSettlement.fertilizerDeduction) -
+              Number(lastSettlement.advanceDeduction),
+          )
+        : null;
+
+      const qualityTrend = trendMonths.map((month) => {
+        const monthDeliveries = ownDeliveries.filter((c) => c.collectionDate.slice(0, 7) === month);
+        const monthKg = monthDeliveries.reduce((s, c) => s + Number(c.weightKg), 0);
+        const monthSuperKg = monthDeliveries
+          .filter((c) => c.grade === 'super')
+          .reduce((s, c) => s + Number(c.weightKg), 0);
+        return { month, superPct: monthKg > 0 ? round1((monthSuperKg / monthKg) * 100) : 0 };
+      });
+
+      return {
+        id: formatEstateId(estate.id),
+        estateName: estate.name,
+        ownerName: owner?.name ?? 'Unknown',
+        route: estate.routeName ?? '',
+        status: toAppEstateStatus(estate.status),
+        registeredOn: estate.registeredOn,
+        tenureMonths: monthsBetween(new Date(estate.registeredOn), now),
+        ytdDeliveriesKg: Number(estate.ytdDeliveriesKg),
+        lastDeliveryDate: lastDelivery?.collectionDate ?? null,
+        lastPaymentRs,
+        lastPaymentDate: lastSettlement?.processedOn ? lastSettlement.processedOn.toISOString() : null,
+        outstandingRs: Math.round(outstandingRs),
+        hasOutstanding: outstandingRs > 0,
+        lifetimeEarnedRs: Math.round(earnedRs),
+        lifetimeDeliveredKg: round1(deliveredKg),
+        superPct: deliveredKg > 0 ? round1((superKg / deliveredKg) * 100) : 0,
+        qualityTrend,
+        documentCount: documents.filter((d) => d.estateId === estate.id).length,
+      };
+    });
+  }
+
   // ── Per-estate paginated lists (§7) ─────────────────────────────
   // Default window: last 90 days, server-side page size 25 — a long-tenured
   // estate's tab must load one page, not its whole multi-year history.
@@ -451,6 +583,49 @@ export class EstateLifetimeService {
     const all = await this.advanceRepo.find({ where: { estateId: estate.id } });
     const paged = this.paginate(all, q, (r) => r.dateIssued);
     return { ...paged, rows: paged.rows.map((r) => toPublicAdvance(r)) };
+  }
+
+  /**
+   * EST-03 amended — the Fertilizer tab, the destination the timeline's
+   * Fertilizer entries' `recordHref` now points at. Same joins `timeline()`
+   * builds (movement → batch, charge → request), scoped to one estate.
+   */
+  async fertilizerFor(
+    formattedId: string,
+    q: DateRangeQuery,
+  ): Promise<PaginatedResult<EstateFertilizerRecord>> {
+    const estate = await this.findEstate(formattedId);
+    const [charges, movements, requests, batches] = await Promise.all([
+      this.chargeRepo.find({ where: { estateId: estate.id } }),
+      this.movementRepo.find({ where: { estateId: estate.id } }),
+      this.requestRepo.find({ where: { estateId: estate.id } }),
+      this.batchRepo.find(),
+    ]);
+    const movementById = new Map(movements.map((m) => [m.id, m]));
+    const requestById = new Map(requests.map((r) => [r.id, r]));
+    const batchById = new Map(batches.map((b) => [b.id, b]));
+
+    const paged = this.paginate(charges, q, (c) => c.calculatedAt.toISOString().slice(0, 10));
+    return {
+      ...paged,
+      rows: paged.rows.map((c) => {
+        const movement = movementById.get(c.stockMovementId);
+        const batch = movement ? batchById.get(movement.batchId) : undefined;
+        const linkedRequest = c.fertilizerRequestId ? requestById.get(c.fertilizerRequestId) : undefined;
+        return {
+          id: formatChargeId(c.id),
+          date: c.calculatedAt.toISOString(),
+          item: batch?.item ?? 'Unknown',
+          quantityKg: Number(c.quantityKg),
+          ratePerKg: Number(c.ratePerKg),
+          totalCharge: Number(c.totalCharge),
+          settlementId: c.settlementId,
+          requestId: linkedRequest ? formatRequestId(linkedRequest.id, linkedRequest.createdAt) : null,
+          batchId: batch ? formatBatchId(batch.id) : null,
+          lotNumber: batch?.lotNumber ?? null,
+        };
+      }),
+    };
   }
 
   // ── helpers ─────────────────────────────────────────────────────

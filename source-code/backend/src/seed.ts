@@ -1800,6 +1800,13 @@ const MOVEMENT_SEEDS: SeedMovement[] = [
       item: 'Urea Fertilizer',
       quantityKg: 120,
     },
+    // Priced + estate-linked (unlike every other seed here) so the estate
+    // lifetime timeline's request-linked recordHref path — View → the
+    // request detail page, not just the batch — is exercised against real
+    // seeded data, not only unit tests. Left outstanding (no
+    // recoveredBySettlement): freshly dispatched, not yet deducted.
+    estateName: 'Mount Rest Estate',
+    ratePerKg: 90,
     recordedBy: 'S. Fernando',
   },
   {
@@ -2601,9 +2608,12 @@ async function seed() {
             )
           ]
         : null;
-      // Estate Owner Lifetime History slice — the structured billing link,
-      // mirroring `FertilizerService.recordOutgoing`'s estate resolution
-      // (a linked request's estate would win, but none of these seeds use both).
+      // Estate Owner Lifetime History slice — the structured billing link.
+      // Unlike `FertilizerService.recordOutgoing` (where a linked request's
+      // estate wins over an explicit one), this seed script only ever reads
+      // `m.estateName` — simpler is fine here since the one seed using both
+      // fields (LOT-U-4471 → Mount Rest) sets the same estate on each, so
+      // there's no precedence to get wrong.
       const estateId = m.estateName ? (estateIds[m.estateName] ?? null) : null;
 
       const existing = await client.query<{ id: number }>(

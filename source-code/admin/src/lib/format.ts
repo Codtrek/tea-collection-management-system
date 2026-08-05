@@ -49,6 +49,15 @@ export function formatCompactCurrency(n: number): string {
   return `Rs. ${formatCompact(n)}`
 }
 
+/** `6 yr 4 mo` / `6 yr` / `4 mo` — tenure length, used by EST-03's summary strip and EST-01's directory. */
+export function formatTenure(tenureMonths: number): string {
+  const years = Math.floor(tenureMonths / 12)
+  const months = tenureMonths % 12
+  if (years === 0) return `${months} mo`
+  if (months === 0) return `${years} yr`
+  return `${years} yr ${months} mo`
+}
+
 /** `6.2%` (or `+6.2%` when signed). */
 export function formatPercent(value: number, signed = false): string {
   const s = value.toFixed(1)

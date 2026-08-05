@@ -1,6 +1,6 @@
 import { OutstandingPanel } from './OutstandingPanel'
 import type { EstateLifetimeMetrics } from './types'
-import { formatCompact, formatCompactCurrency, formatCurrency, formatPercent, formatWeight } from '@/lib/format'
+import { formatCompact, formatCompactCurrency, formatCurrency, formatPercent, formatTenure, formatWeight } from '@/lib/format'
 
 /*
   Addendum §4 — the Lifetime Summary strip. Sits above the rest of Overview;
@@ -9,14 +9,6 @@ import { formatCompact, formatCompactCurrency, formatCurrency, formatPercent, fo
   §3 shared selector (useEstateLifetimeMetrics-equivalent) — this component
   never sums a table itself.
 */
-
-function tenureLabel(tenureMonths: number): string {
-  const years = Math.floor(tenureMonths / 12)
-  const months = tenureMonths % 12
-  if (years === 0) return `${months} mo`
-  if (months === 0) return `${years} yr`
-  return `${years} yr ${months} mo`
-}
 
 export function LifetimeSummary({ metrics }: { metrics: EstateLifetimeMetrics }) {
   const { lifetime, comparison } = metrics
@@ -29,7 +21,7 @@ export function LifetimeSummary({ metrics }: { metrics: EstateLifetimeMetrics })
     <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-5">
       {/* Tenure as an eyebrow, not a stat (§6.2) — context that frames every figure below it. */}
       <p className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
-        Member since {memberSinceLabel} · {tenureLabel(metrics.tenureMonths)}
+        Member since {memberSinceLabel} · {formatTenure(metrics.tenureMonths)}
       </p>
 
       <div className="mt-4 grid gap-5 sm:grid-cols-3">

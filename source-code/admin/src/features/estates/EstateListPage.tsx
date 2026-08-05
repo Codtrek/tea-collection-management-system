@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Eye, Pencil, CircleSlash, Loader2, Mountain } from 'lucide-react'
+import { Plus, Eye, Pencil, CircleSlash, HandCoins, Wallet, Loader2, Mountain } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorState } from '@/components/data/ErrorState'
-import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -14,29 +13,44 @@ import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as estatesService from '@/services/estates'
-import type { EstateOwner } from './types'
-import { formatWeight, initials } from '@/lib/format'
+import { columnsForView, DIRECTORY_VIEWS, hiddenByDefault, type DirectoryView } from './directory-columns'
+import type { EstateDirectoryRow } from './types'
+import { initials } from '@/lib/format'
 
-/* EST-01 — roster of tea estates. Admin full CRUD; Officer view + payments; Manager view-only. */
+/*
+  EST-01 amended — the estate owner directory. One roster, three role-driven
+  views (Management/Payments/Oversight), picked by `level('estateOwners')`
+  — never `user.role` (see Claude.md's "level, not role" note). Same table,
+  same backend shape; only the default columns, sort, filters, primary action
+  and empty state change per view.
+*/
+function viewFor(level: 'none' | 'view' | 'edit' | 'approve'): DirectoryView {
+  if (level === 'approve') return 'management'
+  if (level === 'edit') return 'payments'
+  return 'oversight'
+}
+
 export function EstateListPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { can } = useAuth()
+  const { level } = useAuth()
   const queryClient = useQueryClient()
-  const canManage = can('estateOwners', 'approve') // register/deactivate — Administrator
-  const canEdit = can('estateOwners', 'edit')
+  const view = viewFor(level('estateOwners'))
+  const config = DIRECTORY_VIEWS[view]
+  const canManage = view === 'management'
 
   const [search, setSearch] = useState('')
   const [route, setRoute] = useState('')
   const [status, setStatus] = useState('')
-  const [deactivating, setDeactivating] = useState<EstateOwner | null>(null)
+  const [outstanding, setOutstanding] = useState('')
+  const [deactivating, setDeactivating] = useState<EstateDirectoryRow | null>(null)
 
   const {
     data: estates,
     isPending,
     isError,
     refetch,
-  } = useQuery({ queryKey: ['estates'], queryFn: estatesService.list })
+  } = useQuery({ queryKey: ['estates', 'directory'], queryFn: estatesService.getDirectory })
 
   const deactivateMutation = useMutation({
     mutationFn: (id: string) => estatesService.deactivate(id),
@@ -55,10 +69,11 @@ export function EstateListPage() {
         return (
           (e.estateName.toLowerCase().includes(q) || e.ownerName.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)) &&
           (!route || e.route === route) &&
-          (!status || e.status === status)
+          (!status || e.status === status) &&
+          (!outstanding || (outstanding === 'yes' ? e.hasOutstanding : !e.hasOutstanding))
         )
       }),
-    [estates, search, route, status],
+    [estates, search, route, status, outstanding],
   )
 
   if (isPending) {
@@ -73,48 +88,51 @@ export function EstateListPage() {
     return <ErrorState title="Couldn't load estates" description="Something went wrong fetching the estate roster." onRetry={() => void refetch()} />
   }
 
-  const columns: Column<EstateOwner>[] = [
-    {
-      key: 'estateName',
-      header: 'Estate',
-      render: (e) => (
-        <div className="flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-primary">
-            {initials(e.estateName)}
-          </span>
-          <div>
-            <p className="font-medium text-text">{e.estateName}</p>
-            <p className="id text-xs text-text-muted">{e.id}</p>
-          </div>
+  const nameColumn: Column<EstateDirectoryRow> = {
+    key: 'estateName',
+    header: 'Estate',
+    sortable: true,
+    sortValue: (e) => e.estateName,
+    render: (e) => (
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-8 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-primary">
+          {initials(e.estateName)}
+        </span>
+        <div>
+          <p className="font-medium text-text">{e.estateName}</p>
+          <p className="id text-xs text-text-muted">{e.id}</p>
         </div>
-      ),
-    },
-    { key: 'ownerName', header: 'Owner' },
-    { key: 'location', header: 'Location' },
-    { key: 'route', header: 'Route' },
-    { key: 'ytd', header: 'YTD Deliveries', align: 'right', render: (e) => formatWeight(e.ytdDeliveriesKg) },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (e) => <StatusBadge tone={e.status === 'Active' ? 'success' : 'danger'}>{e.status}</StatusBadge>,
-    },
-  ]
+      </div>
+    ),
+  }
+  const columns = columnsForView(view).map((c) => (c.key === 'estateName' ? nameColumn : c))
+
+  const primaryAction =
+    config.primaryAction === 'register' ? (
+      <Button onClick={() => navigate('/estates/new')}>
+        <Plus className="size-4" /> Register Estate Owner
+      </Button>
+    ) : config.primaryAction === 'issueAdvance' ? (
+      <Button onClick={() => navigate('/estates/advances/new')}>
+        <HandCoins className="size-4" /> Issue Advance Payment
+      </Button>
+    ) : undefined
 
   return (
     <div>
       <PageHeader
-        title="Tea Estate Owners"
+        title="Estate Owners"
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Estate Owners' }]}
-        actions={
-          canManage ? (
-            <Button onClick={() => navigate('/estates/new')}>
-              <Plus className="size-4" /> Register Estate Owner
-            </Button>
-          ) : undefined
-        }
+        actions={primaryAction}
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px_180px]">
+      <div
+        className={
+          config.hasOutstandingFilter
+            ? 'mb-4 grid gap-3 sm:grid-cols-[1fr_180px_180px_180px]'
+            : 'mb-4 grid gap-3 sm:grid-cols-[1fr_180px_180px]'
+        }
+      >
         <Input placeholder="Search estate, owner or ID…" value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select
           placeholder="All routes"
@@ -128,25 +146,56 @@ export function EstateListPage() {
           onChange={(e) => setStatus(e.target.value)}
           options={['Active', 'Inactive'].map((s) => ({ value: s, label: s }))}
         />
+        {config.hasOutstandingFilter && (
+          <Select
+            placeholder="Outstanding: any"
+            value={outstanding}
+            onChange={(e) => setOutstanding(e.target.value)}
+            options={[
+              { value: 'yes', label: 'Outstanding: Yes' },
+              { value: 'no', label: 'Outstanding: No' },
+            ]}
+          />
+        )}
       </div>
 
       <DataTable
+        key={view}
         columns={columns}
         rows={rows}
         rowKey={(e) => e.id}
         onRowClick={(e) => navigate(`/estates/${e.id}`)}
+        defaultSort={config.defaultSort}
+        columnPrefsKey={`estate-directory-${view}`}
+        initialHidden={hiddenByDefault(view)}
         emptyState={
           <EmptyState
             icon={<Mountain className="size-6" strokeWidth={1.5} />}
-            title="Register your first estate owner"
-            description="No estates match your filters yet."
+            title={config.emptyTitle}
+            description={config.emptyDescription}
             action={canManage ? <Button size="sm" onClick={() => navigate('/estates/new')}>Register Estate Owner</Button> : undefined}
           />
         }
         actions={(e) => (
           <>
             <RowAction icon={<Eye className="size-4" />} label="View" onClick={() => navigate(`/estates/${e.id}`)} />
-            {canEdit && <RowAction icon={<Pencil className="size-4" />} label="Edit" onClick={() => navigate(`/estates/${e.id}/edit`)} />}
+            {view === 'payments' && (
+              <>
+                <RowAction
+                  icon={<HandCoins className="size-4" />}
+                  label="Issue Advance"
+                  onClick={() => navigate(`/estates/advances/new?estate=${e.id}`)}
+                />
+                <RowAction
+                  icon={<Wallet className="size-4" />}
+                  label="View payments"
+                  onClick={() => navigate(`/estates/${e.id}?tab=payments`)}
+                />
+              </>
+            )}
+            {view === 'management' && (
+              <RowAction icon={<Pencil className="size-4" />} label="Edit" onClick={() => navigate(`/estates/${e.id}/edit`)} />
+            )}
             {canManage && e.status === 'Active' && (
               <RowAction icon={<CircleSlash className="size-4" />} label="Deactivate" tone="danger" onClick={() => setDeactivating(e)} />
             )}

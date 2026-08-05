@@ -49,6 +49,20 @@ export function parseRequestId(formatted: string): number {
   return match ? Number(match[1]) : NaN;
 }
 
+/**
+ * 'FC-0001' — formatted from fertilizer_charges.id. Added for the Estate
+ * Owner Lifetime History slice's per-estate Fertilizer tab (EST-03) — the
+ * charge, not the batch or request, is the row an owner's dispatch record
+ * actually is, so it needs its own stable business key.
+ */
+export function formatChargeId(id: number): string {
+  return `FC-${String(id).padStart(4, '0')}`;
+}
+
+export function parseChargeId(formatted: string): number {
+  return Number(formatted.replace(/^FC-/, ''));
+}
+
 /* ── Portal-facing shapes — byte-identical to `features/fertilizer/types.ts` ── */
 
 export interface PublicBatch {
