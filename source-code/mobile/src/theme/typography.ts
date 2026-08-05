@@ -13,11 +13,6 @@ export const typography = {
     lineHeight: 32,
   },
 
-  headingBlack: {
-    fontSize: 24,
-    fontWeight: "700",
-    lineHeight: 32,
-  },
 
   // Section titles / card titles
   subheading: {

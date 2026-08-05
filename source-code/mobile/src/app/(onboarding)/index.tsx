@@ -30,6 +30,7 @@ export default function OnboardingScreen() {
   const router = useRouter();
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(width);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -41,46 +42,47 @@ export default function OnboardingScreen() {
     viewAreaCoveragePercentThreshold: 50,
   }).current;
 
+  const flatListRef = useRef<FlatList<typeof slides[0]>>(null);
+
   return (
     <>
-    
+    <Screen style={styles.container}>
+
+      <View style={{ flex: 1 }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
+
       <FlatList
+        ref={flatListRef}
         data={slides}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <Screen style={[styles.container, { width }]}>
-            <View style={styles.slide}>
-              {<AppText style={styles.title}>{item.title}</AppText>}
-              {<AppText style={styles.caption}>{item.description}</AppText>}
-              
-              if(currentIndex === slides.length - 1) {
-                <AppButton
-                  title="Get Started"
-                  onPress={() => router.push("./select-role")}
-                />
-              } else {
-                <AppButton
-                  title="Next"
-                  onPress={() => {
-                    const nextIndex = currentIndex + 1;
-                    if (nextIndex < slides.length) {
-                      setCurrentIndex(nextIndex);
-                    }
-                  }}
-                />
-              }
-              
-              
-            </View>
-          </Screen>
+          <View style={[styles.slide, { width: containerWidth }]}>
+            <AppText style={styles.title}>{item.title}</AppText>
+            <AppText style={styles.caption}>{item.description}</AppText>
+          </View>
         )}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
       />
-        <View style={styles.pagination}>
+
+      <AppButton
+        title={currentIndex === slides.length - 1 ? "Get Started" : "Next"}
+        onPress={() => {
+          if (currentIndex === slides.length - 1) {
+            router.push("/(onboarding)/select-role");
+          } else {
+            flatListRef.current?.scrollToIndex({
+              index: currentIndex + 1,
+              animated: true,
+            });
+          }
+        }}
+        style={styles.button}
+      />
+
+      <View style={styles.pagination}>
         {slides.map((_, index) => (
           <View
             key={index}
@@ -91,6 +93,8 @@ export default function OnboardingScreen() {
           />
         ))}
       </View>
+      </View>
+    </Screen>
     </>
 
   );
@@ -99,16 +103,15 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
   },
   slide: {
     flex: 1,
     justifyContent: "center",
+    alignItems: "center",
   },
   title: {
-    ...typography.hero,
-    color: colors.primary,
+    ...typography.heading,
+    color: colors.black,
     marginBottom: spacing.xl,
 
   },
@@ -116,9 +119,14 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.secondary,
   },
-  pagination: {
+  button: {
     position: "absolute",
-    bottom: 100,
+    bottom: 50,
+    alignSelf: "center",
+  },
+  pagination: {
+    // position: "absolute",
+    // bottom: 100,
     alignSelf: "center",
     flexDirection: "row",
   },
