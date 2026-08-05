@@ -1,13 +1,9 @@
-import {
-  IsIn,
-  IsNumber,
-  IsOptional,
-  IsPositive,
-  IsString,
-} from 'class-validator';
-import type { AppGrade } from '../collection-map';
+import { IsNumber, IsPositive, IsString } from 'class-validator';
 
-/** COL-04 edit form: weight, date, and grade. Estate/route are never editable here. */
+/**
+ * COL-04 edit form: ESTATE weight and date only. Estate/route are never editable, and
+ * grade is never editable here — grading is factory-side via PUT /collections/:id/grade-lines.
+ */
 export class UpdateCollectionDto {
   @IsNumber()
   @IsPositive()
@@ -15,8 +11,4 @@ export class UpdateCollectionDto {
 
   @IsString()
   date: string;
-
-  @IsOptional()
-  @IsIn(['Super', 'Normal', 'Pending'])
-  grade?: AppGrade;
 }

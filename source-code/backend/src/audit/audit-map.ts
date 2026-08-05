@@ -13,6 +13,7 @@ export type AuditModuleName =
   | 'Fertilizer'
   | 'Employee'
   | 'Reports'
+  | 'Dispatch'
   | 'Administration';
 
 export interface PublicAuditEntry {

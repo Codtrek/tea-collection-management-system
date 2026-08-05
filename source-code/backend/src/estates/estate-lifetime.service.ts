@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditLogEntity } from '../audit/audit-log.entity';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
-import { toAppGrade, toAppStatus, type PublicCollection } from '../collections/collection-map';
+import { gradeKg, toAppStatus, weightSummary, type PublicCollection } from '../collections/collection-map';
 import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
 import { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
 import { formatBatchId, formatChargeId, formatRequestId } from '../fertilizer/fertilizer-map';
@@ -40,8 +40,7 @@ function toPublicCollection(entity: CollectionRecordEntity): PublicCollection {
     estateId: entity.estateRef ?? (entity.estateId !== null ? String(entity.estateId) : ''),
     estateName: entity.estateName,
     route: entity.routeName,
-    weightKg: Number(entity.weightKg),
-    grade: toAppGrade(entity.grade),
+    ...weightSummary(entity),
     status: toAppStatus(entity.status),
     date: entity.collectionDate,
     agent: entity.agentName,
@@ -173,10 +172,8 @@ export class EstateLifetimeService {
         this.chargeRepo.find({ where: { estateId: estate.id } }),
       ]);
 
-    const deliveredKg = confirmed.reduce((s, c) => s + Number(c.weightKg), 0);
-    const superKg = confirmed
-      .filter((c) => c.grade === 'super')
-      .reduce((s, c) => s + Number(c.weightKg), 0);
+    const deliveredKg = confirmed.reduce((s, c) => s + weightSummary(c).weightKg, 0);
+    const superKg = confirmed.reduce((s, c) => s + gradeKg(c, 'super'), 0);
     const normalKg = deliveredKg - superKg;
 
     const earnedRs = processed.reduce(
@@ -294,7 +291,7 @@ export class EstateLifetimeService {
         id: `col-${c.id}`,
         type: 'Delivery',
         date: new Date(c.collectionDate).toISOString(),
-        description: `Delivery ${c.id} — ${Number(c.weightKg)} kg${c.grade !== 'pending' ? ` ${c.grade === 'super' ? 'Super' : 'Normal'}` : ''}`,
+        description: `Delivery ${c.id} — ${weightSummary(c).weightKg} kg${weightSummary(c).graded ? ` ${weightSummary(c).gradeLines.map((l) => l.grade).join(' + ')}` : ' (Ungraded)'}`,
         recordHref: `/collections/${c.id}`,
       });
     }
@@ -431,10 +428,8 @@ export class EstateLifetimeService {
         revenue: Math.round(revenue),
       }));
 
-    const superKg = confirmed
-      .filter((c) => c.grade === 'super')
-      .reduce((s, c) => s + Number(c.weightKg), 0);
-    const totalKg = confirmed.reduce((s, c) => s + Number(c.weightKg), 0);
+    const superKg = confirmed.reduce((s, c) => s + gradeKg(c, 'super'), 0);
+    const totalKg = confirmed.reduce((s, c) => s + weightSummary(c).weightKg, 0);
     const superPct = totalKg > 0 ? Math.round((superKg / totalKg) * 100) : 0;
 
     const { deliveredVsAvgPct } = await this.compareToFactoryAverage(estate.id);
@@ -486,10 +481,8 @@ export class EstateLifetimeService {
       const ownSettlements = processed.filter((s) => s.estateId === estate.id);
       const ownCharges = charges.filter((c) => c.estateId === estate.id);
 
-      const deliveredKg = ownDeliveries.reduce((s, c) => s + Number(c.weightKg), 0);
-      const superKg = ownDeliveries
-        .filter((c) => c.grade === 'super')
-        .reduce((s, c) => s + Number(c.weightKg), 0);
+      const deliveredKg = ownDeliveries.reduce((s, c) => s + weightSummary(c).weightKg, 0);
+      const superKg = ownDeliveries.reduce((s, c) => s + gradeKg(c, 'super'), 0);
 
       const earnedRs = ownSettlements.reduce(
         (s, r) => s + Number(r.superKg) * Number(r.superRate) + Number(r.normalKg) * Number(r.normalRate),
@@ -517,10 +510,8 @@ export class EstateLifetimeService {
 
       const qualityTrend = trendMonths.map((month) => {
         const monthDeliveries = ownDeliveries.filter((c) => c.collectionDate.slice(0, 7) === month);
-        const monthKg = monthDeliveries.reduce((s, c) => s + Number(c.weightKg), 0);
-        const monthSuperKg = monthDeliveries
-          .filter((c) => c.grade === 'super')
-          .reduce((s, c) => s + Number(c.weightKg), 0);
+        const monthKg = monthDeliveries.reduce((s, c) => s + weightSummary(c).weightKg, 0);
+        const monthSuperKg = monthDeliveries.reduce((s, c) => s + gradeKg(c, 'super'), 0);
         return { month, superPct: monthKg > 0 ? round1((monthSuperKg / monthKg) * 100) : 0 };
       });
 
@@ -672,10 +663,8 @@ export class EstateLifetimeService {
 
     const all = await this.collectionRepo.find({ where: { status: 'confirmed' } });
     const recent = all.filter((c) => c.collectionDate >= cutoffStr);
-    const totalKg = recent.reduce((s, c) => s + Number(c.weightKg), 0);
-    const superKg = recent
-      .filter((c) => c.grade === 'super')
-      .reduce((s, c) => s + Number(c.weightKg), 0);
+    const totalKg = recent.reduce((s, c) => s + weightSummary(c).weightKg, 0);
+    const superKg = recent.reduce((s, c) => s + gradeKg(c, 'super'), 0);
 
     const estateCount = Math.max(1, estates.length);
     return {
@@ -695,15 +684,11 @@ export class EstateLifetimeService {
       where: { estateId, status: 'confirmed' },
     });
     const recentOwn = own.filter((c) => c.collectionDate >= cutoffStr);
-    const ownRecentKg = recentOwn.reduce((s, c) => s + Number(c.weightKg), 0);
+    const ownRecentKg = recentOwn.reduce((s, c) => s + weightSummary(c).weightKg, 0);
     const ownMonthlyKg = round1(ownRecentKg / 6);
-    const ownSuperKg = recentOwn
-      .filter((c) => c.grade === 'super')
-      .reduce((s, c) => s + Number(c.weightKg), 0);
+    const ownSuperKg = recentOwn.reduce((s, c) => s + gradeKg(c, 'super'), 0);
     const ownSuperPct = recentOwn.length
-      ? round1(
-          (ownSuperKg / recentOwn.reduce((s, c) => s + Number(c.weightKg), 0)) * 100,
-        )
+      ? round1((ownSuperKg / ownRecentKg) * 100)
       : null;
 
     const factoryAvg = await this.factoryAverages();

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
+import { gradeKg, weightSummary } from '../collections/collection-map';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
 import { SettlementEntity } from '../estates/settlement.entity';
@@ -77,7 +78,7 @@ export class ReportsService {
       period ?? latestKey(Object.keys(byMonth)) ?? monthKeyOfDate(new Date());
     const periodRecords = byMonth[resolvedPeriod] ?? [];
 
-    const totalKg = sumBy(periodRecords, (r) => Number(r.weightKg));
+    const totalKg = sumBy(periodRecords, (r) => weightSummary(r).weightKg);
     const estatesInPeriod = new Set(periodRecords.map((r) => r.estateName));
     const avgPerEstate = estatesInPeriod.size
       ? totalKg / estatesInPeriod.size
@@ -88,7 +89,7 @@ export class ReportsService {
     for (const r of confirmed) {
       byEstateMap.set(
         r.estateName,
-        (byEstateMap.get(r.estateName) ?? 0) + Number(r.weightKg),
+        (byEstateMap.get(r.estateName) ?? 0) + weightSummary(r).weightKg,
       );
     }
     const byEstate = [...byEstateMap.entries()]
@@ -96,14 +97,8 @@ export class ReportsService {
       .sort((a, b) => b.kg - a.kg);
     const topEstate = byEstate[0] ?? null;
 
-    const superKg = sumBy(
-      periodRecords.filter((r) => r.grade === 'super'),
-      (r) => Number(r.weightKg),
-    );
-    const normalKg = sumBy(
-      periodRecords.filter((r) => r.grade === 'normal'),
-      (r) => Number(r.weightKg),
-    );
+    const superKg = sumBy(periodRecords, (r) => gradeKg(r, 'super'));
+    const normalKg = sumBy(periodRecords, (r) => gradeKg(r, 'normal'));
     const gradedTotal = superKg + normalKg;
     const gradeSplit = {
       superPct: gradedTotal ? Math.round((superKg / gradedTotal) * 100) : 0,
@@ -114,7 +109,7 @@ export class ReportsService {
       .sort()
       .map((key) => ({
         month: shortMonth(key),
-        value: sumBy(byMonth[key], (r) => Number(r.weightKg)),
+        value: sumBy(byMonth[key], (r) => weightSummary(r).weightKg),
       }));
 
     const rowAcc = new Map<
@@ -128,8 +123,8 @@ export class ReportsService {
         superKg: 0,
       };
       cur.deliveries += 1;
-      cur.kg += Number(r.weightKg);
-      if (r.grade === 'super') cur.superKg += Number(r.weightKg);
+      cur.kg += weightSummary(r).weightKg;
+      cur.superKg += gradeKg(r, 'super');
       rowAcc.set(r.estateName, cur);
     }
     const rows = [...rowAcc.entries()]

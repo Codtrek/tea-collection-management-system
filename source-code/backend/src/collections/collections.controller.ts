@@ -16,6 +16,7 @@ import type { PublicCollection } from './collection-map';
 import { type Actor, CollectionsService } from './collections.service';
 import { CreateExceptionDto } from './dto/create-exception.dto';
 import { FlagCollectionDto } from './dto/flag-collection.dto';
+import { SetGradeLinesDto } from './dto/set-grade-lines.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 
 type AuthedRequest = Request & { user: JwtPayload };
@@ -62,6 +63,20 @@ export class CollectionsController {
     );
   }
 
+  /** Factory-side grading — grade lines are never written by agents or owners. */
+  @Put(':id/grade-lines')
+  async setGradeLines(
+    @Param('id') id: string,
+    @Body() dto: SetGradeLinesDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicCollection> {
+    return this.collectionsService.setGradeLines(
+      id,
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
   @Post(':id/flag')
   async flag(
     @Param('id') id: string,
@@ -74,6 +89,10 @@ export class CollectionsController {
   /** Resolves the JWT's `sub` to the acting user's display name + role for stamping. */
   private async resolveActor(req: AuthedRequest): Promise<Actor> {
     const profile = await this.usersService.getProfile(Number(req.user.sub));
-    return { name: profile?.name ?? 'Unknown', role: req.user.role };
+    return {
+      name: profile?.name ?? 'Unknown',
+      role: req.user.role,
+      sub: Number(req.user.sub),
+    };
   }
 }

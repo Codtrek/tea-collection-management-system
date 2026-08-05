@@ -1,10 +1,17 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryColumn,
+  type Relation,
+} from 'typeorm';
 import type {
-  DbGrade,
   DbStatus,
   EvidencePhoto,
   TimelineEntry,
 } from './collection-map';
+import { DeliveryGradeLineEntity } from './delivery-grade-line.entity';
 
 @Entity('tea_collection_records')
 export class CollectionRecordEntity {
@@ -28,11 +35,20 @@ export class CollectionRecordEntity {
   @Column({ name: 'route_name' })
   routeName: string;
 
+  /**
+   * ESTATE weight: what the agent weighed at the estate (owner-confirmed on the agent's
+   * device). Never overwritten by grading — it is the mismatch-check input. The graded
+   * total lives in `gradeLines` (see `weightSummary` in collection-map.ts).
+   */
   @Column({ name: 'weight_kg', type: 'decimal', precision: 10, scale: 2 })
   weightKg: string;
 
-  @Column({ type: 'varchar' })
-  grade: DbGrade;
+  /** Factory-assigned grade lines. Eager so every existing `find` returns them. Empty = Ungraded. */
+  @OneToMany(() => DeliveryGradeLineEntity, (l) => l.delivery, {
+    eager: true,
+    cascade: true,
+  })
+  gradeLines: Relation<DeliveryGradeLineEntity[]>;
 
   @Column({ type: 'varchar' })
   status: DbStatus;

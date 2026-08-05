@@ -68,6 +68,13 @@ export class EstateEntity {
   @Column({ name: 'registered_on', type: 'date' })
   registeredOn: string;
 
+  /** Agent Dispatch map pin — nullable; estates without coordinates are skipped on the map. */
+  @Column({ type: 'decimal', precision: 9, scale: 6, nullable: true })
+  lat: string | null;
+
+  @Column({ type: 'decimal', precision: 9, scale: 6, nullable: true })
+  lng: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

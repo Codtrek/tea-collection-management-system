@@ -1,38 +1,27 @@
 import {
+  IsInt,
   IsNumber,
-  IsOptional,
   IsPositive,
   IsString,
+  Matches,
   MinLength,
 } from 'class-validator';
 
 /**
- * COL-02 exception entry. The Estates module isn't wired to the backend yet, so
- * the portal still resolves estate/route/agent from its own fixtures and sends
- * the resolved display values here — see `estate_ref` on the entity.
+ * COL-02 exception entry, estate-first. The client sends only the estate it picked;
+ * the server derives the route from the estate and today's agent from the route
+ * resolver (so a cover is honoured). Display values are never trusted from the client.
  */
 export class CreateExceptionDto {
-  @IsString()
-  @MinLength(1)
-  estateId: string;
-
-  @IsString()
-  @MinLength(1)
-  estateName: string;
-
-  @IsString()
-  @MinLength(1)
-  route: string;
-
-  @IsOptional()
-  @IsString()
-  agent?: string;
+  /** `estates.id` */
+  @IsInt()
+  estateId: number;
 
   @IsNumber()
   @IsPositive()
   reportedWeight: number;
 
-  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
   date: string;
 
   @IsString()
