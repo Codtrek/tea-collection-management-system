@@ -21,6 +21,7 @@ export type ModuleKey =
   | 'attendance'
   | 'performance'
   | 'reports'
+  | 'dispatch'
   | 'administration';
 
 export const PORTAL_ROLES: PortalRole[] = ['Administrator', 'Officer', 'Manager'];
@@ -36,6 +37,7 @@ export const MODULE_KEYS: ModuleKey[] = [
   'attendance',
   'performance',
   'reports',
+  'dispatch',
   'administration',
 ];
 
