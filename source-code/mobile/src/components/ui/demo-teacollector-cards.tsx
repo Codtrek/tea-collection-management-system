@@ -21,6 +21,133 @@ import {
 import { colors } from "@/theme/colors";
 
 /* =========================================================
+   HOME / STATS CARDS
+   These lightweight statistic cards are used on the home screen
+   to show high-level metrics (pending, loaded, delivered, collected).
+   They follow the colors defined in theme/colors.ts and expose a
+   small API so the home screen can pass an array of stats.
+========================================================= */
+
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  variant?: "primary" | "success" | "warning" | "muted";
+  iconName?: React.ComponentProps<typeof Ionicons>["name"];
+  onPress?: () => void;
+}
+
+export const StatCard: React.FC<StatCardProps> = ({
+  title,
+  value,
+  subtitle,
+  variant = "primary",
+  iconName,
+  onPress,
+}) => {
+  const bg =
+    variant === "primary"
+      ? colors.primary
+      : variant === "success"
+      ? colors.success
+      : variant === "warning"
+      ? colors.warning
+      : c.card; // muted fallback
+
+  const textColor =
+    variant === "primary" || variant === "success" || variant === "warning"
+      ? colors.white
+      : c.ink;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={onPress ? 0.85 : 1}
+      onPress={onPress}
+      style={[
+        statStyles.statCard,
+        { backgroundColor: variant === "muted" ? c.card : bg },
+      ]}
+    >
+      <View style={statStyles.statRow}>
+        {iconName && (
+          <View
+            style={[
+              statStyles.iconWrap,
+              { backgroundColor: variant === "muted" ? c.line : textColor },
+            ]}
+          >
+            <Ionicons
+              name={iconName}
+              size={18}
+              color={variant === "muted" ? c.ink : bg}
+            />
+          </View>
+        )}
+
+        <View style={statStyles.statTextWrap}>
+          <Text
+            style={[
+              statStyles.statValue,
+              { color: variant === "muted" ? c.ink : colors.white },
+            ]}
+            numberOfLines={1}
+          >
+            {value}
+          </Text>
+
+          <Text
+            style={[
+              statStyles.statTitle,
+              { color: variant === "muted" ? c.muted : colors.white },
+            ]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+
+          {subtitle ? (
+            <Text style={[statStyles.statSubtitle, { color: c.muted }]}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+interface HomeStatsRowProps {
+  stats: Array<{
+    id: string;
+    title: string;
+    value: string | number;
+    subtitle?: string;
+    variant?: "primary" | "success" | "warning" | "muted";
+    iconName?: React.ComponentProps<typeof Ionicons>["name"];
+    onPress?: () => void;
+  }>;
+  style?: any;
+}
+
+export const HomeStatsRow: React.FC<HomeStatsRowProps> = ({ stats, style }) => {
+  return (
+    <View style={[statStyles.rowWrap, style]}>
+      {stats.map((s) => (
+        <StatCard
+          key={s.id}
+          title={s.title}
+          value={s.value}
+          subtitle={s.subtitle}
+          variant={s.variant}
+          iconName={s.iconName}
+          onPress={s.onPress}
+        />
+      ))}
+    </View>
+  );
+};
+
+/* =========================================================
    FERTILIZER REQUEST CARD
 ========================================================= */
 
@@ -388,8 +515,70 @@ export const StopCard = ({
   );
 };
 
+const statStyles = StyleSheet.create({
+ rowWrap: {
+   flexDirection: "row",
+   flexWrap: "wrap",
+   gap: 10,
+   marginBottom: 12,
+ },
+
+ statCard: {
+   width: "48%",
+   borderRadius: 16,
+   paddingVertical: 18,
+   paddingHorizontal: 16,
+   marginBottom: 12,
+   shadowColor: "#000",
+   shadowOpacity: 0.04,
+   shadowRadius: 8,
+   elevation: 2,
+   borderWidth: 1,
+   borderColor: c.line,
+   alignSelf: "flex-start",
+ },
+
+
+ statRow: {
+   flexDirection: "row",
+   alignItems: "center",
+   gap: 10,
+ },
+
+ iconWrap: {
+   width: 52,
+   height: 52,
+   borderRadius: 12,
+   alignItems: "center",
+   justifyContent: "center",
+   marginRight: 10,
+ },
+
+
+ statTextWrap: {
+   flex: 1,
+ },
+
+ statValue: {
+   fontFamily: fontDisplay.fontFamily,
+   fontSize: 26,
+   fontWeight: "700",
+   lineHeight: 30,
+ },
+
+ statTitle: {
+   fontSize: 14,
+   marginTop: 4,
+ },
+
+ statSubtitle: {
+   fontSize: 11,
+   marginTop: 6,
+ },
+});
+
 /* =========================================================
-   STYLES
+  STYLES
 ========================================================= */
 
 const styles = StyleSheet.create({
