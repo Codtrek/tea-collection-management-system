@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { StyleSheet, View, Pressable } from "react-native";
-import { Link } from "expo-router";
+import { StyleSheet, View, Pressable, Platform} from "react-native";
+import { Link, useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import { login } from "../services/api/auth.api";
+
 
 import {
   Screen,
@@ -13,19 +16,66 @@ import {
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 
-export default function SignInScreen() {
-  const [email, setEmail] = useState("");
+export default function LogInScreen() {
+  const router = useRouter();
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
 
-  function handleSignIn() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+//this function won't be necessary when running on mobile
+  async function persistSession(accessToken: string, user: object) {
+    const serializedUser = JSON.stringify(user);
+    if (Platform.OS === "web") {
+      localStorage.setItem("accessToken", accessToken);
+      localStorage.setItem("user", serializedUser);
+      return;
+    }
+
+    await SecureStore.setItemAsync("accessToken", accessToken);
+    await SecureStore.setItemAsync("user", serializedUser);
+  }
+
+  async function handleLogIn() {
     console.log({
-      email,
+      phoneNumber,
       password,
     });
 
-    // TODO:
-    // Authenticate user
-    // router.replace("/teacollector/teacollectorMobile");
+    setError("");
+
+  if (!phoneNumber || !password) {
+    setError("Please enter your phone number and password.");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    const result = await login(phoneNumber, password);
+
+    console.log("Logged in user:", result.user);
+    console.log("Access token:", result.accessToken);
+    console.log(result.user.role);
+
+    await persistSession(result.accessToken, result.user);
+
+    if (result.user.role === "Estate Owner") {
+      router.replace("/(estate-owner)/home");
+      return;
+    }
+
+    setError("This account does not have a mobile dashboard yet.");
+  } catch (error) {
+    setError(
+      error instanceof Error
+        ? error.message
+        : "Unable to log in.",
+    );
+  } finally {
+    setLoading(false);
+  }
+
   }
 
   return (
@@ -38,22 +88,19 @@ export default function SignInScreen() {
         </View>
 
         <AppText variant="heading" style={styles.title}>
-          Tea Collection
+          Login Portal
         </AppText>
 
-        <AppText variant="bodySmall" style={styles.subtitle}>
-          Sign in to continue
-        </AppText>
       </View>
 
       <View style={styles.form}>
         <AppInput
-          label="Email"
-          placeholder="Enter your email"
-          keyboardType="email-address"
+          label="Phone Number"
+          placeholder="Enter your phone number"
+          keyboardType="numeric"
           autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
+          value={phoneNumber}
+          onChangeText={setPhoneNumber}
         />
 
         <PasswordInput
@@ -72,22 +119,22 @@ export default function SignInScreen() {
         </Pressable>
 
         <AppButton
-          title="Sign In"
-          onPress={handleSignIn}
+          title="Log In"
+          onPress={handleLogIn}
         />
 
-        <View style={styles.signupContainer}>
+        <View style={styles.registerContainer}>
           <AppText variant="bodySmall">
             Don't have an account?{" "}
           </AppText>
 
-          <Link href="/auth/signup" asChild>
+          <Link href="/auth/register" asChild>
             <Pressable>
               <AppText
                 variant="bodySmall"
                 style={styles.link}
               >
-                Sign Up
+                Register
               </AppText>
             </Pressable>
           </Link>
@@ -99,7 +146,12 @@ export default function SignInScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+    maxWidth: Platform.OS === 'web' ? 393 : '100%',
+    alignSelf: "center",    
     backgroundColor: colors.background,
     paddingVertical: spacing.xl,
   },
@@ -146,7 +198,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
 
-  signupContainer: {
+  registerContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
