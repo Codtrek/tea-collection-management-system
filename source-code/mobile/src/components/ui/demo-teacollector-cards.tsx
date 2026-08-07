@@ -52,7 +52,7 @@ export const StatCard: React.FC<StatCardProps> = ({
       ? colors.success
       : variant === "warning"
       ? colors.warning
-      : c.card; // muted fallback
+      : colors.surface; // muted fallback
 
   const textColor =
     variant === "primary" || variant === "success" || variant === "warning"
@@ -65,7 +65,7 @@ export const StatCard: React.FC<StatCardProps> = ({
       onPress={onPress}
       style={[
         statStyles.statCard,
-        { backgroundColor: variant === "muted" ? c.card : bg },
+        { backgroundColor: variant === "muted" ? colors.surface : bg },
       ]}
     >
       <View style={statStyles.statRow}>
@@ -73,13 +73,13 @@ export const StatCard: React.FC<StatCardProps> = ({
           <View
             style={[
               statStyles.iconWrap,
-              { backgroundColor: variant === "muted" ? c.line : textColor },
+              { backgroundColor:bg },
             ]}
           >
             <Ionicons
               name={iconName}
-              size={18}
-              color={variant === "muted" ? c.ink : bg}
+             size={33}
+              color={variant === "muted" ? colors.text.primary : colors.text.inverse}
             />
           </View>
         )}
@@ -546,12 +546,12 @@ const statStyles = StyleSheet.create({
  },
 
  iconWrap: {
-   width: 52,
-   height: 52,
-   borderRadius: 12,
+   width: 60,
+   height: 60,
+   borderRadius: 16,
    alignItems: "center",
    justifyContent: "center",
-   marginRight: 10,
+   marginRight: 12,
  },
 
 
