@@ -1,0 +1,4 @@
+# Shell scripts must stay LF — they run inside Linux containers (see
+# source-code/backend/entrypoint.sh) and a CRLF line ending breaks `sh script.sh`
+# with a cryptic "$'\r': command not found" or similar.
+*.sh text eol=lf

@@ -7,9 +7,10 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - api
-      - admin
     networks:
       - tea-network
     restart: unless-stopped
@@ -19,6 +20,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       target: dev
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -37,13 +41,19 @@ services:
       - tea-network
     restart: unless-stopped
 
+  # Not started by `docker compose up -d` — run natively instead (`cd admin && npm run dev`)
+  # so the file watcher gets real inotify events across the Windows/Docker bind-mount boundary.
+  # Kept here, behind a profile, for anyone who wants the fully-containerised workflow anyway
+  # (`docker compose --profile frontend up -d admin`); HMR will be slow/absent in that mode.
   admin:
+    profiles: ["frontend"]
     build:
       context: ./admin
       dockerfile: Dockerfile
       target: dev
     volumes:
-      - ./admin/src:/app/src
+      - ./admin:/app
+      - /app/node_modules
     environment:
       - VITE_USE_MOCK_API=${VITE_USE_MOCK_API}
       - VITE_API_BASE_URL=${VITE_API_BASE_URL}
