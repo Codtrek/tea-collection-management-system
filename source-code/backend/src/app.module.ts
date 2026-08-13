@@ -5,6 +5,7 @@ import { AdminModule } from './admin/admin.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { CollectionsModule } from './collections/collections.module';
+import { DispatchModule } from './dispatch/dispatch.module';
 import { EmployeesModule } from './employees/employees.module';
 import { EstatesModule } from './estates/estates.module';
 import { FertilizerModule } from './fertilizer/fertilizer.module';
@@ -27,6 +28,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     AuthModule,
     CollectionsModule,
+    DispatchModule,
     EstatesModule,
     EmployeesModule,
     FertilizerModule,

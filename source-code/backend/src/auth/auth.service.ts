@@ -11,7 +11,12 @@ import {
 } from '../admin/admin-map';
 import type { DbRole } from '../users/user.entity';
 import { UsersService } from '../users/users.service';
-import type { JwtPayload } from './jwt-payload.interface';
+import { AgentDirectoryService } from '../dispatch/agent-directory.service';
+import {
+  AGENT_ROLE,
+  type AgentJwtPayload,
+  type JwtPayload,
+} from './jwt-payload.interface';
 import { toAppRole, type AppRole } from './role-map';
 
 export interface PublicUser {
@@ -29,6 +34,11 @@ export interface LoginResult {
   user: PublicUser;
 }
 
+export interface AgentLoginResult {
+  accessToken: string;
+  agent: { id: number; name: string; phone: string };
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -36,6 +46,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     @InjectRepository(RolePermissionEntity)
     private readonly permissionRepo: Repository<RolePermissionEntity>,
+    private readonly agentDirectory: AgentDirectoryService,
   ) {}
 
   async login(phone: string, password: string): Promise<LoginResult> {
@@ -64,6 +75,42 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
 
     return { accessToken, user: publicUser };
+  }
+
+  /**
+   * Mobile sign-in for collection agents (phone + password). Issues an AGENT-role
+   * token that the portal API refuses; only `/dispatch/me/*` accepts it.
+   */
+  async agentLogin(phone: string, password: string): Promise<AgentLoginResult> {
+    const user = await this.usersService.findByPhone(phone);
+    if (!user) {
+      throw new UnauthorizedException(
+        'No account found with this phone number.',
+      );
+    }
+    if (!(await bcrypt.compare(password, user.password_hash))) {
+      throw new UnauthorizedException('The password is incorrect.');
+    }
+    if (user.status === 'suspended') {
+      throw new UnauthorizedException(
+        'This account has been suspended. Contact your factory.',
+      );
+    }
+    const agent =
+      user.role === 'collection_agent'
+        ? await this.agentDirectory.byUserId(user.id)
+        : null;
+    if (!agent) {
+      throw new UnauthorizedException(
+        'This account is not a collection agent.',
+      );
+    }
+    await this.usersService.markLogin(user.id);
+    const payload: AgentJwtPayload = { sub: String(user.id), role: AGENT_ROLE };
+    return {
+      accessToken: this.jwtService.sign(payload),
+      agent: { id: agent.agentId, name: agent.name, phone: user.phone },
+    };
   }
 
   async me(userId: number): Promise<PublicUser> {

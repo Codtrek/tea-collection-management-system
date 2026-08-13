@@ -1,6 +1,11 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
-import { AuthService, type LoginResult, type PublicUser } from './auth.service';
+import {
+  AuthService,
+  type AgentLoginResult,
+  type LoginResult,
+  type PublicUser,
+} from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { JwtPayload } from './jwt-payload.interface';
@@ -12,6 +17,12 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto): Promise<LoginResult> {
     return this.authService.login(dto.phone, dto.password);
+  }
+
+  /** Mobile collection-agent sign-in — a separate token audience from the portal. */
+  @Post('agent/login')
+  agentLogin(@Body() dto: LoginDto): Promise<AgentLoginResult> {
+    return this.authService.agentLogin(dto.phone, dto.password);
   }
 
   @UseGuards(JwtAuthGuard)
