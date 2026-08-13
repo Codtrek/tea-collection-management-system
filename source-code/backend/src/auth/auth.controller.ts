@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
-import { AuthService, type LoginResult, type PublicUser } from './auth.service';
+import { AuthService, EstateOwnerPublicUser, type LoginResult, type PublicUser } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { JwtPayload } from './jwt-payload.interface';
@@ -16,7 +16,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  me(@Req() req: Request & { user: JwtPayload }): Promise<PublicUser> {
+  me(@Req() req: Request & { user: JwtPayload }): Promise<PublicUser |EstateOwnerPublicUser> {
     return this.authService.me(Number(req.user.sub));
   }
 }
