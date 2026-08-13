@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import type { SignOptions } from 'jsonwebtoken';
 import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
+import { AuthMobileController } from './auth.mobile.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 
@@ -26,7 +27,7 @@ import { JwtStrategy } from './jwt.strategy';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, AuthMobileController],
   providers: [AuthService, JwtStrategy],
   exports: [AuthService],
 })
