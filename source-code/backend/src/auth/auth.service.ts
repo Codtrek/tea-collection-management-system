@@ -14,9 +14,17 @@ export interface PublicUser {
   factory: string;
 }
 
+export interface EstateOwnerPublicUser {
+  id: string;
+  name: string;
+  role: AppRole;
+  phone: string;
+  estate: string;
+}
+
 export interface LoginResult {
   accessToken: string;
-  user: PublicUser;
+  user: PublicUser | EstateOwnerPublicUser;
 }
 
 @Injectable()
@@ -36,25 +44,73 @@ export class AuthService {
     if (!(await bcrypt.compare(password, user.password_hash))) {
       throw new UnauthorizedException('The password is incorrect.');
     }
+    switch (user.role) {
+      case 'estate_owner': {
+        const estateOwnerPublicUser = await this.buildEstateOwnerPublicUser(
+          user.id,
+          user.phone,
+          user.role,
+        );
+        const payload: JwtPayload = {
+          sub: String(user.id),
+          role: estateOwnerPublicUser.role,
+        };
+        return {
+          accessToken: this.jwtService.sign(payload),
+          user: estateOwnerPublicUser,
+        };
+      }
+      default: {
+        const publicUser = await this.buildPublicUser(
+          user.id,
+          user.phone,
+          user.role,
+        );
+        const payload: JwtPayload = {
+          sub: String(user.id),
+          role: publicUser.role,
+        };
+        return {
+          accessToken: this.jwtService.sign(payload),
+          user: publicUser,
+        };
+      }
+    }
 
-    const publicUser = await this.buildPublicUser(
-      user.id,
-      user.phone,
-      user.role,
-    );
-    const payload: JwtPayload = { sub: String(user.id), role: publicUser.role };
-    const accessToken = this.jwtService.sign(payload);
-
-    return { accessToken, user: publicUser };
   }
 
-  async me(userId: number): Promise<PublicUser> {
+  async me(userId: number): Promise<PublicUser | EstateOwnerPublicUser> {
     const user = await this.usersService.findById(userId);
     if (!user) {
       throw new UnauthorizedException('Account no longer exists.');
     }
+    if (user.role === 'estate_owner') {
+      return this.buildEstateOwnerPublicUser(user.id, user.phone, user.role);
+    }
     return this.buildPublicUser(user.id, user.phone, user.role);
   }
+
+  private async buildEstateOwnerPublicUser(
+    id: number,
+    phone: string,
+    dbRole: DbRole,
+  ): Promise<EstateOwnerPublicUser> {
+    const role = toAppRole(dbRole);
+    const profile = await this.usersService.getEstateOwnerProfile(id);
+
+    if (!profile) {
+      throw new UnauthorizedException(
+        'No Estate Owner profile found for this account.',
+      );
+    }
+    return {
+        id: String(id),
+        name: profile.name,
+        role,
+        phone,
+        estate: profile.estate,
+      };
+  }    
 
   private async buildPublicUser(
     id: number,
@@ -68,12 +124,13 @@ export class AuthService {
         'No employee profile found for this account.',
       );
     }
-    return {
-      id: String(id),
-      name: profile.name,
-      role,
-      phone,
-      factory: profile.factory,
-    };
+      return {
+        id: String(id),
+        name: profile.name,
+        role,
+        phone,
+        factory: profile.factory,
+      };
   }
+  
 }
