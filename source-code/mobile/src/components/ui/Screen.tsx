@@ -5,7 +5,7 @@ import {
   ScrollView,
 } from "react-native";
 
-import {SafeAreaView} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface ScreenProps extends ViewProps {
   children: React.ReactNode;
@@ -59,6 +59,5 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     backgroundColor: "#FFFFFF",
-    alignItems: "center",
   },
 });
