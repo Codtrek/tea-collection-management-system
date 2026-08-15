@@ -19,18 +19,13 @@ export default function SplashScreen() {
   }, [router]);
 
   return (
-    <Screen style={styles.container}>  
+    <Screen>  
       <Image source={BrandLogo} style={styles.logo} resizeMode="contain"/>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   logo: {
     width: 150,
   }

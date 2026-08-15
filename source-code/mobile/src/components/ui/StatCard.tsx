@@ -1,29 +1,38 @@
 import { View, StyleSheet, ViewStyle } from "react-native";
+import { Dimensions } from "react-native";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 import AppText from "./AppText";
-import { colors } from "@/theme/colors";
+import { colors, typography } from "@/theme";
 import { spacing } from "@/theme/spacing";
 
-interface AppCardProps {
+const CARD_GAP = spacing.sm;
+const HORIZONTAL_PADDING = spacing.lg; // Parent container's horizontal padding
+
+interface StatCardProps {
   title: string;
   subtitle?: string;
-  value?: string;
+  value1?: string;
+  value2?: string;
   variant?: "primary" | "surface";
   width?: "full" | "half";
   style?: ViewStyle;
   children?: React.ReactNode;
 }
 
-export default function AppCard({
+export default function StatCard({
   title,
   subtitle,
-  value,
+  value1,
+  value2,
   variant = "surface",
   width = "full",
   style,
   children,
-}: AppCardProps) {
+}: StatCardProps) {
   const isPrimary = variant === "primary";
+  const isHalfWidth = width === "half";
 
   return (
     <View
@@ -35,7 +44,7 @@ export default function AppCard({
       ]}
     >
       <AppText
-        variant="subheading"
+        variant={isHalfWidth ? "caption" : "label"}
         style={[
           styles.title,
           isPrimary && styles.primaryText,
@@ -46,7 +55,7 @@ export default function AppCard({
 
       {subtitle && (
         <AppText
-          variant="bodySmall"
+          variant={isHalfWidth ? "caption" : "bodySmall"}
           style={[
             styles.subtitle,
             isPrimary && styles.primarySubtitle,
@@ -56,15 +65,27 @@ export default function AppCard({
         </AppText>
       )}
 
-      {value && (
+      {value1 && (
         <AppText
-          variant="heading"
+          variant={isHalfWidth ? "label" : "heading"}
           style={[
             styles.value,
             isPrimary && styles.primaryText,
           ]}
         >
-          {value}
+          {value1}
+        </AppText>
+      )}
+
+      {value2 && (
+        <AppText
+          variant={isHalfWidth ? "bodySmall" : "label"}
+          style={[
+            styles.value,
+            isPrimary && styles.secondaryText,
+          ]}
+        >
+          {value2}
         </AppText>
       )}
 
@@ -94,11 +115,12 @@ const styles = StyleSheet.create({
   },
 
   half: {
-    flex: 1,
+    width: 200,
+    height: 140,
   },
 
   primary: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.black,
   },
 
   surface: {
@@ -121,6 +143,10 @@ const styles = StyleSheet.create({
 
   primaryText: {
     color: colors.white,
+  },
+
+  secondaryText: {
+    color: colors.primary,
   },
 
   primarySubtitle: {

@@ -1,4 +1,4 @@
-import { View, StyleSheet, Pressable } from 'react-native'
+import { View, StyleSheet, Pressable, Platform } from 'react-native'
 import { useRouter } from 'expo-router'
 import { AppText, Screen } from '@/components/ui'
 import { userRoles } from '@/data/userRoles'
@@ -27,8 +27,11 @@ export default function SelectRoleScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+    maxWidth: Platform.OS === 'web' ? 393 : '100%',
+    alignSelf: "center",
   },
   roleContainer: {
     width: '100%',
@@ -47,6 +50,7 @@ const styles = StyleSheet.create({
     ...typography.heading,
     color: colors.black,
     marginBottom: spacing.lg,
+    textAlign: "center",
   }
 
 })

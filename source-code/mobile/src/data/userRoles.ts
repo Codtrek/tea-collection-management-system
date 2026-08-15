@@ -5,7 +5,7 @@ export const userRoles: UserRole[] = [
     id: '1',
     role: 'Estate Owner',
     description: 'Manage your tea estate operations efficiently and effectively.',
-    route: '../(estate-owner)'
+    route: '../(estate-owner)/home'
   },
   {
     id: '2',

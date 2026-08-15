@@ -3,6 +3,7 @@ import {
   StyleSheet,
   ViewProps,
   ScrollView,
+  Platform,
 } from "react-native";
 
 import {SafeAreaView} from "react-native-safe-area-context";
@@ -59,6 +60,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     backgroundColor: "#FFFFFF",
-    alignItems: "center",
+    alignSelf: "center",
+    maxWidth: Platform.OS === 'web' ? 393 : '100%',
   },
 });

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { FlatList, View, Dimensions, StyleSheet } from "react-native";
+import { FlatList, View, Dimensions, StyleSheet, Platform } from "react-native";
 import { AppText, Screen, AppButton } from "@/components/ui";
 import { typography, colors, spacing } from "@/theme";
 import { useRouter } from "expo-router";
@@ -18,7 +18,7 @@ const slides = [
     description: "One connected platform for seamless communication and operations.",
   },
   {
-    id: "Select ",
+    id: "3",
     title: "Slide 3",
     description: "Description 3",
   },
@@ -31,6 +31,7 @@ export default function OnboardingScreen() {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [containerWidth, setContainerWidth] = useState(width);
+  const slideWidth = containerWidth || width;
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -47,53 +48,63 @@ export default function OnboardingScreen() {
   return (
     <>
     <Screen style={styles.container}>
+      <View style={styles.app}>
 
-      <View style={{ flex: 1 }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
+        <View style={{ flex: 1, width: "100%"}} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}> 
 
-      <FlatList
-        ref={flatListRef}
-        data={slides}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.slide, { width: containerWidth }]}>
-            <AppText style={styles.title}>{item.title}</AppText>
-            <AppText style={styles.caption}>{item.description}</AppText>
-          </View>
-        )}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-      />
-
-      <AppButton
-        title={currentIndex === slides.length - 1 ? "Get Started" : "Next"}
-        onPress={() => {
-          if (currentIndex === slides.length - 1) {
-            router.push("/(onboarding)/select-role");
-          } else {
-            flatListRef.current?.scrollToIndex({
-              index: currentIndex + 1,
-              animated: true,
-            });
-          }
-        }}
-        style={styles.button}
-      />
-
-      <View style={styles.pagination}>
-        {slides.map((_, index) => (
-          <View
-            key={index}
-            style={[
-              styles.dot,
-              currentIndex === index && styles.activeDot,
-            ]}
+          <FlatList
+            ref={flatListRef}
+            data={slides}
+            horizontal
+            pagingEnabled
+            style={styles.carousel}
+            contentContainerStyle={{ justifyContent: "center", alignItems: "center" }}
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            getItemLayout={(_, index) => ({
+              length: slideWidth,
+              offset: slideWidth * index,
+              index,
+            })}
+            renderItem={({ item }) => (
+              <View style={[styles.slide, { width: slideWidth }]}>
+                <AppText style={styles.title}>{item.title}</AppText>
+                <AppText style={styles.caption}>{item.description}</AppText>
+              </View>
+            )}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
           />
-        ))}
+
+          <AppButton
+            title={currentIndex === slides.length - 1 ? "Get Started" : "Next"}
+            onPress={() => {
+              if (currentIndex === slides.length - 1) {
+                router.push("/(onboarding)/select-role");
+              } else {
+                flatListRef.current?.scrollToOffset({
+                  offset: slideWidth * (currentIndex + 1),
+                  animated: true,
+                });
+              }
+            }}
+            style={styles.button}
+          />
+
+          <View style={styles.pagination}>
+            {slides.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  currentIndex === index && styles.activeDot,
+                ]}
+              />
+            ))}
+          </View>
+        </View>
       </View>
-      </View>
+
     </Screen>
     </>
 
@@ -103,9 +114,20 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: "100%",
+    alignItems: "center",
+  },
+  app: {
+    flex: 1,
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 393 : "100%",
+  },
+  carousel: {
+    flex: 1,
+    width: "100%",
+    
   },
   slide: {
-    flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
