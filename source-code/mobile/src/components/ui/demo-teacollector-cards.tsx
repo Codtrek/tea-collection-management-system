@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 10,
-    backgroundColor: c.card,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: c.line,
   },
