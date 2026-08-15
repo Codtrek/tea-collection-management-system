@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Avatar from "./Avatar";
 import AppText from "./AppText";
 import { colors } from "@/theme/colors";
+import { typography } from "@/theme";
 
 interface HeaderProps {
   companyName: string;
@@ -40,9 +41,8 @@ export default function Header({
 const styles = StyleSheet.create({
   container: {
     height: 70,
+    width: "100%",
     backgroundColor: colors.background,
-    paddingHorizontal: 20,
-
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -57,7 +57,8 @@ const styles = StyleSheet.create({
   },
 
   title: {
+    ...typography.subheading,
     marginLeft: 12,
-    color: colors.text.primaryGreen,
+    color: colors.text.secondary,
   },
 });
