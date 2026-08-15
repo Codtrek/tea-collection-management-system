@@ -4,10 +4,12 @@ import {
   ScrollView,
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
 } from "react-native";
-
+import {
+  RequestFilterTabs,
+  RequestFilter,
+} from "@/components/ui/demo-teacollector-requestfilter";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Pill } from "@/components/ui/demo-teacollector-pill";
@@ -24,8 +26,8 @@ import { colors } from "@/theme/colors";
 
 export default function DemoTeaCollectorCollect({
   stops,
-  segment,
-  setSegment,
+  filter,
+  setFilter,
   onViewDetails,
   onArrivedDetails,
   onGoToFactory,
@@ -62,34 +64,27 @@ export default function DemoTeaCollectorCollect({
     {
       key: "pending",
       label: "Needs your response",
-
       items: stops.filter(
         (s: any) => s.status === "pending"
       ),
     },
-
     {
-      key: "active",
+      key: "accepted",
       label: "Accepted",
-
       items: stops.filter(
         (s: any) => s.status === "accepted"
       ),
     },
-
     {
-      key: "loaded-group",
+      key: "loaded",
       label: "Loaded",
-
       items: stops.filter(
         (s: any) => s.status === "loaded"
       ),
     },
-
     {
       key: "cancelled",
       label: "Cancelled",
-
       items: stops.filter(
         (s: any) => s.status === "cancelled"
       ),
@@ -113,271 +108,201 @@ export default function DemoTeaCollectorCollect({
       showsVerticalScrollIndicator={false}
     >
       {/* ===================================================
-          TODAY / HISTORY TOGGLE
+          FILTER TABS
       =================================================== */}
 
-      <View style={styles.segmentContainer}>
-        {["today", "hist"].map((seg) => (
-          <TouchableOpacity
-            key={seg}
-            onPress={() => setSegment(seg)}
-            style={[
-              styles.segmentButton,
-
-              segment === seg &&
-                styles.segmentButtonActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-
-                segment === seg &&
-                  styles.segmentTextActive,
-              ]}
-            >
-              {seg === "today"
-                ? "Today"
-                : "History"}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <RequestFilterTabs
+        filter={filter}
+        setFilter={setFilter}
+      />
 
       {/* ===================================================
-          TODAY
+          LOADED / FACTORY
       =================================================== */}
 
-      {segment === "today" ? (
+      {filter !== "history" && loaded.length > 0 && (
+        <Card style={styles.loadedCard}>
+          <View style={styles.loadedHeader}>
+            <View style={styles.factoryIconContainer}>
+              <Ionicons
+                name="business-outline"
+                size={20}
+                color={colors.primary}
+              />
+            </View>
+
+            <View style={styles.loadedTextContainer}>
+              <Text style={styles.loadedTitle}>
+                {loaded.length} stop{loaded.length > 1 ? "s" : ""} loaded · {totalLoaded} kg
+              </Text>
+
+              <Text style={styles.loadedSubtitle}>
+                Ready whenever you head to Kotmale MPT
+              </Text>
+            </View>
+          </View>
+
+          <Btn
+            variant="primary"
+            block
+            style={styles.factoryButton}
+            onPress={onGoToFactory}
+          >
+            Navigate to Factory
+          </Btn>
+        </Card>
+      )}
+
+      {/* ===================================================
+          ALL REQUESTS
+      =================================================== */}
+
+      {filter === "all" && (
         <>
-          {/* =================================================
-              LOADED SUMMARY
-
-              EXISTING FLOW — DO NOT REMOVE.
-
-              This is the factory navigation.
-          ================================================= */}
-
-          {loaded.length > 0 && (
-            <Card
-              style={styles.loadedCard}
-            >
-              <View style={styles.loadedHeader}>
-                <View
-                  style={
-                    styles.factoryIconContainer
-                  }
-                >
-                  <Ionicons
-                    name="business-outline"
-                    size={20}
-                    color={colors.primary}
-                  />
-                </View>
- 
-                <View
-                  style={
-                    styles.loadedTextContainer
-                  }
-                >
-                  <Text
-                    style={styles.loadedTitle}
-                  >
-                    {loaded.length} stop
-                    {loaded.length > 1
-                      ? "s"
-                      : ""}{" "}
-                    loaded · {totalLoaded} kg
-                  </Text>
- 
-                  <Text
-                    style={styles.loadedSubtitle}
-                  >
-                    Ready whenever you head to
-                    Kotmale MPT
-                  </Text>
-                </View>
-              </View>
- 
-              {/* EXISTING FACTORY NAVIGATION */}
- 
-              <Btn
-                variant="primary"
-                block
-                style={styles.factoryButton}
-                onPress={onGoToFactory}
-              >
-                Navigate to Factory
-              </Btn>
-            </Card>
-          )}
-
-          {/* =================================================
-              COLLECTION GROUPS
-
-              Accepted requests appear here.
-
-              The Navigate to Estate button is INSIDE
-              the accepted StopCard.
-          ================================================= */}
-
           {groups
-            .filter(
-              (g) => g.items.length > 0
-            )
+            .filter((g) => g.items.length > 0)
             .map((g) => (
-              <View
-                key={g.key}
-                style={styles.group}
-              >
-                <Text
-                  style={styles.sectionTitle}
-                >
-                  {g.label} ·{" "}
-                  {g.items.length}
+              <View key={g.key} style={styles.group}>
+                <Text style={styles.sectionTitle}>
+                  {g.label} · {g.items.length}
                 </Text>
-
                 {g.items.map((s: any) => (
                   <StopCard
                     key={s.id}
                     stop={s}
+                    onViewDetails={onViewDetails}
+                    onArrivedDetails={onArrivedDetails}
+                    onGoToEstate={onGoToEstate}
+                  />
+                ))}
+              </View>
+            ))}
+        </>
+      )}
 
-                    /*
-                     * Existing pending flow
-                     */
-                    onViewDetails={
-                      onViewDetails
-                    }
+      {/* ===================================================
+          INDIVIDUAL STATUS FILTERS
+      =================================================== */}
 
-                    /*
-                     * Existing arrived/details flow
-                     */
-                    onArrivedDetails={
-                      onArrivedDetails
-                    }
-
-                    /*
-                     * NEW:
-                     * Navigate to the particular
-                     * tea estate.
-                     */
-                    onGoToEstate={
-                      onGoToEstate
-                    }
+      {filter !== "all" && filter !== "history" && (
+        <>
+          {groups
+            .filter((g) => g.key === filter)
+            .filter((g) => g.items.length > 0)
+            .map((g) => (
+              <View key={g.key} style={styles.group}>
+                <Text style={styles.sectionTitle}>
+                  {g.label} · {g.items.length}
+                </Text>
+                {g.items.map((s: any) => (
+                  <StopCard
+                    key={s.id}
+                    stop={s}
+                    onViewDetails={onViewDetails}
+                    onArrivedDetails={onArrivedDetails}
+                    onGoToEstate={onGoToEstate}
                   />
                 ))}
               </View>
             ))}
 
-          {/* =================================================
-              REGISTER NEW ESTATE
-          ================================================= */}
-
-          <Btn
-            variant="secondary"
-            block
-            style={styles.registerButton}
-            onPress={() =>
-              setSheet("register")
-            }
-          >
-            + Register New Estate
-          </Btn>
+          {/* Show empty state if no items for this filter */}
+          {groups
+            .filter((g) => g.key === filter)
+            .every((g) => g.items.length === 0) && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>
+                No {filter} requests
+              </Text>
+            </View>
+          )}
         </>
-      ) : (
-        <>
-          {/* =================================================
-              DELIVERED TODAY
-          ================================================= */}
+      )}
 
+      {/* ===================================================
+          HISTORY
+      =================================================== */}
+
+      {filter === "history" && (
+        <>
+          {/* Delivered Today */}
           {deliveredToday.length > 0 && (
             <>
-              <Text
-                style={styles.sectionTitle}
-              >
+              <Text style={styles.sectionTitle}>
                 Delivered today
               </Text>
 
-              {deliveredToday.map(
-                (s: any) => (
-                  <View
-                    key={s.id}
-                    style={styles.historyCard}
-                  >
-                    <View>
-                      <Text
-                        style={
-                          styles.historyTitle
-                        }
-                      >
-                        {s.name}
-                      </Text>
+              {deliveredToday.map((s: any) => (
+                <View key={s.id} style={styles.historyCard}>
+                  <View>
+                    <Text style={styles.historyTitle}>
+                      {s.name}
+                    </Text>
 
-                      <Text
-                        style={
-                          styles.historySubtitle
-                        }
-                      >
-                        Today ·{" "}
-                        {s.actualWeight} kg
-                      </Text>
-                    </View>
-
-                    <Pill
-                      status={
-                        s.mismatch
-                          ? "mismatch"
-                          : "delivered"
-                      }
-                    />
+                    <Text style={styles.historySubtitle}>
+                      Today · {s.actualWeight} kg
+                    </Text>
                   </View>
-                )
-              )}
+
+                  <Pill
+                    status={s.mismatch ? "mismatch" : "delivered"}
+                  />
+                </View>
+              ))}
             </>
           )}
 
-          {/* =================================================
-              EARLIER THIS WEEK
-          ================================================= */}
+          {/* Earlier This Week */}
+          {history.length > 0 && (
+            <>
+              <Text style={styles.earlierTitle}>
+                Earlier this week
+              </Text>
 
-          <Text
-            style={styles.earlierTitle}
-          >
-            Earlier this week
-          </Text>
+              {history.map((h: any, i: number) => (
+                <View key={i} style={styles.historyCard}>
+                  <View>
+                    <Text style={styles.historyTitle}>
+                      {h.name}
+                    </Text>
 
-          {history.map(
-            (h: any, i: number) => (
-              <View
-                key={i}
-                style={styles.historyCard}
-              >
-                <View>
-                  <Text
-                    style={
-                      styles.historyTitle
-                    }
-                  >
-                    {h.name}
-                  </Text>
+                    <Text style={styles.historySubtitle}>
+                      {h.date} · {h.type} · {h.weight} kg
+                    </Text>
+                  </View>
 
-                  <Text
-                    style={
-                      styles.historySubtitle
-                    }
-                  >
-                    {h.date} · {h.type} ·{" "}
-                    {h.weight} kg
-                  </Text>
+                  <Pill status="delivered">
+                    Delivered
+                  </Pill>
                 </View>
+              ))}
+            </>
+          )}
 
-                <Pill status="delivered">
-                  Delivered
-                </Pill>
-              </View>
-            )
+          {/* Empty history state */}
+          {deliveredToday.length === 0 && history.length === 0 && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>
+                No history available
+              </Text>
+            </View>
           )}
         </>
+      )}
+
+      {/* ===================================================
+          REGISTER NEW ESTATE
+      =================================================== */}
+
+      {filter !== "history" && (
+        <Btn
+          variant="secondary"
+          block
+          style={styles.registerButton}
+          onPress={() => setSheet("register")}
+        >
+          + Register New Estate
+        </Btn>
       )}
     </ScrollView>
   );
@@ -403,41 +328,6 @@ const styles = StyleSheet.create({
   },
 
   /* =======================================================
-     TODAY / HISTORY
-  ======================================================= */
-
-  segmentContainer: {
-    flexDirection: "row",
-    borderRadius: 14,
-    padding: 4,
-    marginBottom: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-  },
-
-  segmentButton: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 10,
-  },
-
-  segmentButtonActive: {
-    backgroundColor: colors.primary,
-  },
-
-  segmentText: {
-    fontWeight: "600",
-    fontSize: 15,
-    textAlign: "center",
-    color: colors.text.secondary,
-  },
-
-  segmentTextActive: {
-    color: colors.white,
-  },
-
-  /* =======================================================
      LOADED / FACTORY
   ======================================================= */
 
@@ -446,14 +336,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
- 
+
   loadedCard: {
     marginBottom: 16,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border.light,
   },
- 
+
   factoryIconContainer: {
     width: 44,
     height: 44,
@@ -462,25 +352,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.successBackground,
   },
- 
+
   loadedTextContainer: {
     flex: 1,
   },
- 
+
   loadedTitle: {
-    fontFamily:
-      fontDisplay.fontFamily,
+    fontFamily: fontDisplay.fontFamily,
     fontWeight: "600",
     fontSize: 15,
     color: colors.text.primary,
   },
- 
+
   loadedSubtitle: {
     fontSize: 12,
     marginTop: 2,
     color: colors.text.secondary,
   },
- 
+
   factoryButton: {
     marginTop: 14,
   },
@@ -494,8 +383,7 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontFamily:
-      fontMono.fontFamily,
+    fontFamily: fontMono.fontFamily,
     fontWeight: "bold",
     textTransform: "uppercase",
     letterSpacing: 1.8,
@@ -530,8 +418,7 @@ const styles = StyleSheet.create({
   },
 
   historyTitle: {
-    fontFamily:
-      fontDisplay.fontFamily,
+    fontFamily: fontDisplay.fontFamily,
     fontWeight: "600",
     fontSize: 16,
     color: colors.text.primary,
@@ -544,8 +431,7 @@ const styles = StyleSheet.create({
   },
 
   earlierTitle: {
-    fontFamily:
-      fontMono.fontFamily,
+    fontFamily: fontMono.fontFamily,
     fontWeight: "bold",
     textTransform: "uppercase",
     letterSpacing: 1.8,
@@ -554,5 +440,21 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 11,
     color: colors.text.primaryGreen,
+  },
+
+  /* =======================================================
+     EMPTY STATE
+  ======================================================= */
+
+  emptyState: {
+    padding: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  emptyStateText: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    textAlign: "center",
   },
 });

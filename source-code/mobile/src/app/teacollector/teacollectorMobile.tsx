@@ -31,6 +31,9 @@ import DemoTeaCollectorCollect from '@/app/teacollector/demo-teacollector-collec
 import DemoTeaCollectorFertilizer from '@/app/teacollector/demo-teacollector-fertilizer';
 import DemoTeaCollectorAlerts from '@/app/teacollector/demo-teacollector-alerts';
 import DemoTeaCollectorProfile from '@/app/teacollector/demo-teacollector-profile';
+import {
+  RequestFilter,
+} from '@/components/ui/demo-teacollector-requestfilter';
 
 const { width } = Dimensions.get('window');
 
@@ -823,7 +826,7 @@ const RegisterSheet = ({ open, onClose }: any) => {
 export default function TeaCollectorMobile() {
   const router = useRouter();
   const [tab, setTab] = useState("home");
-  const [segment, setSegment] = useState("today");
+  const [filter, setFilter] = useState<RequestFilter>("all");
   const [stops, setStops] = useState(INITIAL_STOPS);
   const [fertRequests, setFertRequests] = useState(INITIAL_FERT_REQUESTS);
   const [activeStop, setActiveStop] = useState<any>(null);
@@ -930,6 +933,13 @@ export default function TeaCollectorMobile() {
   };
 
   const goToFactory = () => setSheet("map");
+  
+  // Temporary handler for onGoToEstate - you can implement this as needed
+  const goToEstate = (stop: any) => {
+    if (!stop) return;
+    Alert.alert('Navigate', `Navigating to ${stop.name}`);
+  };
+  
   const arriveAtFactory = () => setSheet("delivery");
   const submitToFactory = (total: number) => {
     setBatchTotal(total);
@@ -1026,11 +1036,12 @@ export default function TeaCollectorMobile() {
         return (
           <DemoTeaCollectorCollect
             stops={stops}
-            segment={segment}
-            setSegment={setSegment}
+            filter={filter}
+            setFilter={setFilter}
             onViewDetails={openPickupDetails}
             onArrivedDetails={openArrivedDetails}
             onGoToFactory={goToFactory}
+            onGoToEstate={goToEstate}
             setSheet={setSheet}
             history={HISTORY}
           />
@@ -1084,8 +1095,6 @@ export default function TeaCollectorMobile() {
         backgroundColor: c.mist,
       }}>
         
-        
-
         <AppBar {...TITLES[tab]} />
         
         <View style={{
@@ -1152,5 +1161,3 @@ export default function TeaCollectorMobile() {
     </View>
   );
 }
-
-
