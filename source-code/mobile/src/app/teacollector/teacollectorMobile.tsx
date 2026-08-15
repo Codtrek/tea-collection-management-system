@@ -1,4 +1,4 @@
-// app/teacollector/teacollectorMobile.tsx
+﻿// app/teacollector/teacollectorMobile.tsx
 import React, { useState } from 'react';
 import {
   ScrollView,
@@ -34,20 +34,37 @@ import DemoTeaCollectorProfile from '@/app/teacollector/demo-teacollector-profil
 import {
   RequestFilter,
 } from '@/components/ui/demo-teacollector-requestfilter';
-
+import { colors } from '@/theme/colors';
 const { width } = Dimensions.get('window');
+
+// Sheets have been moved to a separate file to keep this file clean
+import {
+  FertDetailsSheet,
+  LoadFertSheet,
+  DeliverFertSheet,
+  PickupSheet,
+  DeclineSheet,
+  ArrivedSheet,
+  CollectSheet,
+  ConfirmSheet,
+  FactoryMapSheet,
+  DeliverySheet,
+  FactoryWeightSheet,
+  MismatchSheet,
+  RegisterSheet,
+} from './teacollectorMobileSheets';
 
 const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 // ---------- mock data ----------
 const INITIAL_STOPS = [
-  { id: 1, name: "Ceylon Green Estate", owner: "A. Wickramasinghe", phone: "077 812 4456", gps: "7.2906° N, 80.7718° E", notes: "Leaves picked this morning, ready by 9 AM", estWeight: 68, dist: 2.4, status: "pending" },
-  { id: 2, name: "Hill Breeze Gardens", owner: "N. Perera", phone: "071 220 9981", gps: "7.1935° N, 80.6812° E", notes: "Second harvest of the week", estWeight: 54, dist: 4.1, status: "accepted", acceptedAt: "8:20 AM" },
-  { id: 3, name: "Mistvale Tea Farm", owner: "K. Bandara", phone: "076 554 3312", gps: "7.2011° N, 80.7020° E", notes: "", estWeight: 61, actualWeight: 61, status: "loaded" },
-  { id: 4, name: "Oakridge Estate", owner: "D. Herath", phone: "072 118 2290", gps: "7.2299° N, 80.7115° E", notes: "", estWeight: 71, actualWeight: 71, status: "loaded" },
-  { id: 5, name: "Green Hollow Estate", owner: "S. Fernando", phone: "075 331 8820", gps: "7.2540° N, 80.7301° E", notes: "", estWeight: null, status: "cancelled", reason: "Road blocked" },
-  { id: 6, name: "Silverleaf Plantation", owner: "R. Dissanayake", phone: "070 442 7719", gps: "7.2180° N, 80.7422° E", notes: "New flush, small quantity", estWeight: 40, dist: 6.8, status: "pending" },
-  { id: 7, name: "Windsor Tea Gardens", owner: "P. Jayasuriya", phone: "077 903 4471", gps: "7.1850° N, 80.6690° E", notes: "", estWeight: 74, actualWeight: 74, status: "delivered" },
+  { id: 1, name: "Ceylon Green Estate", owner: "A. Wickramasinghe", phone: "077 812 4456", gps: "7.2906Â° N, 80.7718Â° E", notes: "Leaves picked this morning, ready by 9 AM", estWeight: 68, dist: 2.4, status: "pending" },
+  { id: 2, name: "Hill Breeze Gardens", owner: "N. Perera", phone: "071 220 9981", gps: "7.1935Â° N, 80.6812Â° E", notes: "Second harvest of the week", estWeight: 54, dist: 4.1, status: "accepted", acceptedAt: "8:20 AM" },
+  { id: 3, name: "Mistvale Tea Farm", owner: "K. Bandara", phone: "076 554 3312", gps: "7.2011Â° N, 80.7020Â° E", notes: "", estWeight: 61, actualWeight: 61, status: "loaded" },
+  { id: 4, name: "Oakridge Estate", owner: "D. Herath", phone: "072 118 2290", gps: "7.2299Â° N, 80.7115Â° E", notes: "", estWeight: 71, actualWeight: 71, status: "loaded" },
+  { id: 5, name: "Green Hollow Estate", owner: "S. Fernando", phone: "075 331 8820", gps: "7.2540Â° N, 80.7301Â° E", notes: "", estWeight: null, status: "cancelled", reason: "Road blocked" },
+  { id: 6, name: "Silverleaf Plantation", owner: "R. Dissanayake", phone: "070 442 7719", gps: "7.2180Â° N, 80.7422Â° E", notes: "New flush, small quantity", estWeight: 40, dist: 6.8, status: "pending" },
+  { id: 7, name: "Windsor Tea Gardens", owner: "P. Jayasuriya", phone: "077 903 4471", gps: "7.1850Â° N, 80.6690Â° E", notes: "", estWeight: 74, actualWeight: 74, status: "delivered" },
 ];
 
 const INITIAL_FERT_REQUESTS = [
@@ -56,7 +73,7 @@ const INITIAL_FERT_REQUESTS = [
     estateName: "Hill Breeze Gardens", 
     owner: "N. Perera", 
     phone: "071 220 9981",
-    gps: "7.1935° N, 80.6812° E",
+    gps: "7.1935Â° N, 80.6812Â° E",
     fertilizerType: "Urea 46%",
     quantity: 50,
     requestedAt: "2026-07-23 08:15",
@@ -69,7 +86,7 @@ const INITIAL_FERT_REQUESTS = [
     estateName: "Silverleaf Plantation", 
     owner: "R. Dissanayake", 
     phone: "070 442 7719",
-    gps: "7.2180° N, 80.7422° E",
+    gps: "7.2180Â° N, 80.7422Â° E",
     fertilizerType: "NPK 20-10-10",
     quantity: 25,
     requestedAt: "2026-07-23 07:45",
@@ -83,7 +100,7 @@ const INITIAL_FERT_REQUESTS = [
     estateName: "Ceylon Green Estate", 
     owner: "A. Wickramasinghe", 
     phone: "077 812 4456",
-    gps: "7.2906° N, 80.7718° E",
+    gps: "7.2906Â° N, 80.7718Â° E",
     fertilizerType: "Organic Compost",
     quantity: 100,
     requestedAt: "2026-07-23 06:30",
@@ -103,724 +120,14 @@ const HISTORY = [
 ];
 
 const NOTIFICATIONS = [
-  { icon: 'add-circle-outline', bg: "#FBEFD8", fg: c.amberDeep, title: "New pickup request", desc: "Ceylon Green Estate · ~68 kg estimated", time: "12m" },
+  { icon: 'add-circle-outline', bg: "#FBEFD8", fg: c.amberDeep, title: "New pickup request", desc: "Ceylon Green Estate Â· ~68 kg estimated", time: "12m" },
   { icon: 'checkmark-circle-outline', bg: "#E3EEE0", fg: c.sageDeep, title: "Pickup accepted", desc: "Hill Breeze Gardens confirmed for 10:30 AM", time: "40m" },
-  { icon: 'alert-circle-outline', bg: "#F5E1DC", fg: c.rust, title: "Weight mismatch flagged", desc: "Mistvale Tea Farm · factory recorded 58 kg vs 61 kg", time: "1h" },
-  { icon: 'business-outline', bg: "#DCEAE1", fg: c.forest, title: "Batch received at factory", desc: "Kotmale MPT confirmed 2 stops · 132 kg", time: "2h" },
-  { icon: 'leaf-outline', bg: "#FBEFD8", fg: c.amberDeep, title: "Fertilizer confirmed", desc: "Urea 46% · 50 kg for Hill Breeze Gardens", time: "3h" },
+  { icon: 'alert-circle-outline', bg: "#F5E1DC", fg: c.rust, title: "Weight mismatch flagged", desc: "Mistvale Tea Farm Â· factory recorded 58 kg vs 61 kg", time: "1h" },
+  { icon: 'business-outline', bg: "#DCEAE1", fg: c.forest, title: "Batch received at factory", desc: "Kotmale MPT confirmed 2 stops Â· 132 kg", time: "2h" },
+  { icon: 'leaf-outline', bg: "#FBEFD8", fg: c.amberDeep, title: "Fertilizer confirmed", desc: "Urea 46% Â· 50 kg for Hill Breeze Gardens", time: "3h" },
 ];
 
-// ---------- Fertilizer Sheets ----------
-const FertDetailsSheet = ({ open, request, onClose }: any) => {
-  if (!request) return null;
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontMono.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>
-        Fertilizer Request
-      </Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>{request.estateName}</Text>
-      <DetailRow k="Owner" v={request.owner} />
-      <DetailRow k="Phone" v={request.phone} />
-      <DetailRow k="Fertilizer Type" v={request.fertilizerType} />
-      <DetailRow k="Quantity" v={`${request.quantity} kg`} />
-      <DetailRow k="Requested" v={request.requestedAt} />
-      <DetailRow k="Status" v={STATUS_STYLE[request.status].label} />
-      {request.notes && <DetailRow k="Notes" v={request.notes} />}
-      <Btn variant="ghost" block style={{ marginTop: 16 }} onPress={onClose}>Close</Btn>
-    </Sheet>
-  );
-};
-
-const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
-  const [notes, setNotes] = useState('');
-  if (!request) return null;
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontMono.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>
-        Load Fertilizer
-      </Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>{request.estateName}</Text>
-      
-      <View style={{
-        borderRadius: 14,
-        padding: 14,
-        marginBottom: 14,
-        backgroundColor: c.mist,
-        borderWidth: 1,
-        borderColor: c.line,
-      }}>
-        <DetailRow k="Fertilizer" v={request.fertilizerType} />
-        <DetailRow k="Quantity" v={`${request.quantity} kg`} />
-        <DetailRow k="Destination" v={request.estateName} />
-      </View>
-
-      <Field label="Loading Notes (optional)">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: c.line,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Any loading details..."
-          value={notes}
-          onChangeText={setNotes}
-        />
-      </Field>
-
-      <Btn variant="primary" block onPress={onConfirm}>
-        Confirm Loaded
-      </Btn>
-    </Sheet>
-  );
-};
-
-const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => {
-  if (!request) return null;
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontMono.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>
-        Deliver to Estates
-      </Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>{request.estateName}</Text>
-      
-      <View style={{
-        borderRadius: 14,
-        padding: 14,
-        marginBottom: 14,
-        backgroundColor: c.mist,
-        borderWidth: 1,
-        borderColor: c.line,
-      }}>
-        <DetailRow k="Fertilizer" v={request.fertilizerType} />
-        <DetailRow k="Quantity" v={`${request.quantity} kg`} />
-      </View>
-
-      <Btn variant="primary" block onPress={onConfirm}>
-        Confirm Delivered
-      </Btn>
-    </Sheet>
-  );
-};
-
-// ---------- PickupSheet ----------
-const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) => {
-  if (!stop) return null;
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontMono.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>Pickup request</Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 4,
-        fontSize: 20,
-      }}>{stop.name}</Text>
-      <DetailRow k="Owner" v={stop.owner} />
-      <DetailRow k="Phone" v={stop.phone} />
-      <DetailRow k="Estimated Weight" v={`${stop.estWeight} kg`} />
-      {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="danger" block onPress={onDecline}>Decline</Btn>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Btn variant="primary" block onPress={onAccept}>Accept Pickup</Btn>
-        </View>
-      </View>
-    </Sheet>
-  );
-};
-
-// ---------- DeclineSheet ----------
-const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
-  const [reason, setReason] = useState<string | null>(null);
-  const [note, setNote] = useState('');
-  
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Decline pickup</Text>
-      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>Select a reason — this is required.</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {["Estate not ready", "Road blocked", "Vehicle issue", "Other"].map((r) => (
-          <Chip key={r} active={reason === r} onPress={() => setReason(r)}>{r}</Chip>
-        ))}
-      </View>
-      <Field label="Add a note (optional)">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: c.line,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Anything the factory should know..."
-          value={note}
-          onChangeText={setNote}
-        />
-      </Field>
-      <Btn variant="primary" block onPress={() => onConfirm(reason || "Other")}>Confirm Decline</Btn>
-    </Sheet>
-  );
-};
-
-// ---------- ArrivedSheet ----------
-const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall }: any) => {
-  if (!stop) return null;
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontMono.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>Arrived at estate</Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>{stop.name}</Text>
-
-      <View style={{
-        borderRadius: 14,
-        padding: 14,
-        marginBottom: 14,
-        backgroundColor: c.mist,
-        borderWidth: 1,
-        borderColor: c.line,
-      }}>
-        <Text style={{
-          fontWeight: '600',
-          fontSize: 15,
-          marginBottom: 8,
-          color: c.forestDeep,
-        }}>Tea Collection</Text>
-        <DetailRow k="Owner" v={stop.owner} />
-        <DetailRow k="Phone" v={stop.phone} />
-        <DetailRow k="Estimated weight" v={`${stop.estWeight} kg`} />
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="primary" block onPress={onStartCollection}>Start Collection</Btn>
-        </View>
-        <Btn variant="forest" small onPress={onCall}>📞 Call</Btn>
-      </View>
-    </Sheet>
-  );
-};
-
-// ---------- CollectSheet ----------
-const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
-  const [type, setType] = useState("Green");
-  const [weight, setWeight] = useState(stop ? String(stop.estWeight) : "");
-  const [remark, setRemark] = useState('');
-  
-  if (!stop) return null;
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontMono.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>{stop.name}</Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>Log Tea Collection</Text>
-      
-      <Field label="Actual weight (kg)">
-        <Input 
-          value={weight} 
-          onChangeText={setWeight}
-          keyboardType="decimal-pad"
-          placeholder="Enter weight in kg"
-        />
-      </Field>
-      
-      <Field label="Tea type">
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {["Green", "Black", "White"].map((t) => (
-            <Chip key={t} active={type === t} onPress={() => setType(t)}>{t}</Chip>
-          ))}
-        </View>
-      </Field>
-      
-      <Btn variant="ghost" block style={{ marginBottom: 14 }}>Add Photo of Tea Bags</Btn>
-      
-      <Field label="Remarks (optional)">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: c.line,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Leaf quality, moisture, anything unusual..."
-          value={remark}
-          onChangeText={setRemark}
-        />
-      </Field>
-      
-      <View style={{
-        borderRadius: 14,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        marginBottom: 16,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: "#F3EFE2",
-      }}>
-        <Text style={{
-          fontWeight: '600',
-          fontSize: 12,
-          color: c.muted,
-        }}>Estate Owner Confirmation</Text>
-        <Pill status="waiting" />
-      </View>
-      
-      <Btn variant="primary" block onPress={() => onSubmit(weight)}>Submit Collection</Btn>
-    </Sheet>
-  );
-};
-
-// ---------- ConfirmSheet ----------
-const ConfirmSheet = ({ open, weight, onClose }: any) => {
-  const w = parseFloat(weight) || 0;
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Estate Weight Confirmation</Text>
-      
-      <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-        <View style={{
-          width: 120,
-          height: 120,
-          borderRadius: 60,
-          borderWidth: 10,
-          borderColor: c.amber,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: 12,
-          backgroundColor: 'transparent',
-        }}>
-          <Text style={{
-            fontFamily: fontDisplay.fontFamily,
-            fontWeight: '700',
-            fontSize: 20,
-            color: c.forestDeep,
-          }}>{w.toFixed(1)} kg</Text>
-          <Text style={{
-            fontFamily: fontMono.fontFamily,
-            fontSize: 10,
-            color: "#8A9082",
-          }}>reported</Text>
-        </View>
-        
-        <Pill status="waiting">Waiting for confirmation…</Pill>
-        <Text style={{
-          textAlign: 'center',
-          fontSize: 15,
-          marginTop: 10,
-          color: c.muted,
-        }}>
-          Sent to the estate owner. This stop moves to Tea Loaded — you can head to the factory once you've picked up everything on your list.
-        </Text>
-      </View>
-      
-      <Btn variant="ghost" block style={{ marginTop: 8 }} onPress={onClose}>Continue Collecting</Btn>
-    </Sheet>
-  );
-};
-
-// ---------- FactoryMapSheet ----------
-const FactoryMapSheet = ({ open, stopCount, totalWeight, onClose, onArrived }: any) => {
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontMono.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>
-        {stopCount} stop{stopCount > 1 ? "s" : ""} loaded · {totalWeight} kg
-      </Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>Route to Kotmale MPT Factory</Text>
-
-      <View style={{
-        borderRadius: 16,
-        overflow: 'hidden',
-        marginBottom: 16,
-        height: 200,
-        backgroundColor: "#EAE5D5",
-        borderWidth: 1,
-        borderColor: c.line,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        <Text style={{ color: c.muted, fontSize: 15 }}>Map View</Text>
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-          marginTop: 8,
-          paddingHorizontal: 10,
-          paddingVertical: 4,
-          borderRadius: 20,
-          backgroundColor: 'rgba(253,251,245,0.92)',
-        }}>
-          <Ionicons name="locate-outline" size={12} color={c.forest} />
-          <Text style={{ fontWeight: '600', fontSize: 12, color: c.forest }}>Live location</Text>
-        </View>
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-        <View style={{
-          flex: 1,
-          borderRadius: 16,
-          padding: 14,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 10,
-          backgroundColor: c.mist,
-          borderWidth: 1,
-          borderColor: c.line,
-        }}>
-          <Ionicons name="map-outline" size={17} color={c.forest} />
-          <View>
-            <Text style={{
-              fontFamily: fontDisplay.fontFamily,
-              fontWeight: 'bold',
-              fontSize: 16,
-              color: c.forestDeep,
-            }}>8.4 km</Text>
-            <Text style={{ fontSize: 12, color: c.muted }}>Distance</Text>
-          </View>
-        </View>
-        <View style={{
-          flex: 1,
-          borderRadius: 16,
-          padding: 14,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 10,
-          backgroundColor: c.mist,
-          borderWidth: 1,
-          borderColor: c.line,
-        }}>
-          <Ionicons name="time-outline" size={17} color={c.forest} />
-          <View>
-            <Text style={{
-              fontFamily: fontDisplay.fontFamily,
-              fontWeight: 'bold',
-              fontSize: 16,
-              color: c.forestDeep,
-            }}>18 min</Text>
-            <Text style={{ fontSize: 12, color: c.muted }}>Est. arrival</Text>
-          </View>
-        </View>
-      </View>
-
-      <Btn variant="ghost" block style={{ marginBottom: 10 }}>
-        Open Turn-by-Turn in Google Maps
-      </Btn>
-      <Btn variant="primary" block onPress={onArrived}>I've Reached the Factory</Btn>
-    </Sheet>
-  );
-};
-
-// ---------- DeliverySheet ----------
-const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSubmit }: any) => {
-  const total = stops.reduce((sum: number, s: any) => sum + (s.actualWeight || 0), 0);
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontMono.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>Kotmale MPT Factory</Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>Submit Collection</Text>
-
-      <Field label="Tea from these estates">
-        <View style={{
-          borderRadius: 16,
-          padding: 16,
-          backgroundColor: c.mist,
-          borderWidth: 1,
-          borderColor: c.line,
-        }}>
-          {stops.map((s: any) => (
-            <View key={s.id} style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              paddingVertical: 6,
-            }}>
-              <Text style={{ fontSize: 15, color: c.ink }}>{s.name}</Text>
-              <Text style={{
-                fontFamily: fontMono.fontFamily,
-                fontWeight: '600',
-                fontSize: 15,
-                color: c.forest,
-              }}>{s.actualWeight} kg</Text>
-            </View>
-          ))}
-        </View>
-      </Field>
-
-      <DetailRow k="Total collection weight" v={`${total} kg`} />
-
-      <View style={{ marginTop: 14 }}>
-        <Field label="Receiving officer">
-          <Select
-            value={officer}
-            onChange={setOfficer}
-            placeholder="Select receiving officer"
-            options={RECEIVING_OFFICERS}
-          />
-        </Field>
-      </View>
-
-      <Btn variant="primary" block style={{ marginTop: 8 }} disabled={!officer} onPress={() => onSubmit(total)}>
-        Submit to Factory
-      </Btn>
-      {!officer && (
-        <Text style={{
-          fontSize: 12,
-          textAlign: 'center',
-          marginTop: 8,
-          color: c.muted,
-        }}>Select a receiving officer to continue</Text>
-      )}
-    </Sheet>
-  );
-};
-
-// ---------- FactoryWeightSheet ----------
-const FactoryWeightSheet = ({ open, collectionWeight, factoryWeight, onClose, onApprove, onReportMismatch }: any) => {
-  const diff = factoryWeight - collectionWeight;
-  const matches = diff === 0;
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontMono.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>Kotmale MPT Factory</Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>Factory Weight Received</Text>
-      <DetailRow k="Your collection weight" v={`${collectionWeight} kg`} />
-      <DetailRow k="Factory recorded weight" v={`${factoryWeight} kg`} />
-      <DetailRow k="Difference" v={`${diff > 0 ? "+" : ""}${diff} kg`} />
-      {!matches && (
-        <View style={{
-          borderRadius: 14,
-          paddingHorizontal: 14,
-          paddingVertical: 12,
-          marginTop: 12,
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-          gap: 10,
-          backgroundColor: "#FBEFD8",
-        }}>
-          <Ionicons name="alert-circle-outline" size={16} color={c.amberDeep} style={{ marginTop: 2 }} />
-          <Text style={{
-            fontSize: 12,
-            color: c.amberDeep,
-            flex: 1,
-          }}>
-            The factory's figure differs from what you recorded. Approve it if this looks right, or report it for review.
-          </Text>
-        </View>
-      )}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="danger" block onPress={onReportMismatch}>Report Mismatch</Btn>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Btn variant="primary" block onPress={onApprove}>Approve Weight</Btn>
-        </View>
-      </View>
-    </Sheet>
-  );
-};
-
-// ---------- MismatchSheet ----------
-const MismatchSheet = ({ open, onClose, onSubmit }: any) => {
-  const [reason, setReason] = useState<string | null>(null);
-  const [explanation, setExplanation] = useState('');
-  
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Report Weight Mismatch</Text>
-      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>What do you think caused the difference?</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {["Scale calibration", "Moisture loss in transit", "Miscount at estate", "Other"].map((r) => (
-          <Chip key={r} active={reason === r} onPress={() => setReason(r)}>{r}</Chip>
-        ))}
-      </View>
-      <Field label="Explanation">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: c.line,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 80,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={4}
-          placeholder="Add any detail for the receiving officer..."
-          value={explanation}
-          onChangeText={setExplanation}
-        />
-      </Field>
-      <Btn variant="primary" block onPress={() => onSubmit(reason || "Other")}>Submit for Review</Btn>
-    </Sheet>
-  );
-};
-
-// ---------- RegisterSheet ----------
-const RegisterSheet = ({ open, onClose }: any) => {
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Register New Estate</Text>
-      <Text style={{ fontSize: 15, marginBottom: 12, color: c.muted }}>For unregistered owners offering tea today.</Text>
-      
-      <Field label="Estate name"><Input placeholder="e.g. Sunhill Estate" /></Field>
-      <Field label="Owner name"><Input placeholder="Full name" /></Field>
-      <Field label="Phone"><Input placeholder="07X XXX XXXX" keyboardType="phone-pad" /></Field>
-      <Field label="Address"><Input placeholder="Village, district" /></Field>
-      <Field label="GPS location"><Input value="📍 Auto-captured" editable={false} style={{ color: c.muted }} /></Field>
-      <Field label="Bank details (optional)"><Input placeholder="Bank, branch, account no." /></Field>
-      <Field label="BR number (optional)"><Input placeholder="Business registration no." /></Field>
-      
-      <Btn variant="primary" block onPress={onClose}>Submit for Factory Approval</Btn>
-    </Sheet>
-  );
-};
+// Sheets moved to teacollectorMobileSheets.tsx (see ./teacollectorMobileSheets)
 
 // ---------- Main App ----------
 export default function TeaCollectorMobile() {
@@ -1161,3 +468,5 @@ export default function TeaCollectorMobile() {
     </View>
   );
 }
+
+
