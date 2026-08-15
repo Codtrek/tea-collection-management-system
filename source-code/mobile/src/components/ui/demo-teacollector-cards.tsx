@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: c.line,
+    borderColor: colors.border.light,
   },
 
   /* =======================================================
