@@ -165,14 +165,26 @@ export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) =
         fontFamily: fontDisplay.fontFamily,
         fontWeight: '600',
         marginTop: 2,
-        marginBottom: 4,
+        marginBottom: 12,
         fontSize: 20,
       }}>{stop.name}</Text>
-      <DetailRow k="Owner" v={stop.owner} />
-      <DetailRow k="Phone" v={stop.phone} />
-      <DetailRow k="Estimated Weight" v={`${stop.estWeight} kg`} />
-      {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+
+      <View style={{
+        backgroundColor: colors.surface,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: colors.border.light,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginBottom: 16,
+      }}>
+        <DetailRow k="Owner" v={stop.owner} />
+        <DetailRow k="Phone" v={stop.phone} />
+        <DetailRow k="Estimated Weight" v={`${stop.estWeight} kg`} />
+        {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
+      </View>
+
+      <View style={{ flexDirection: 'row', gap: 10 }}>
         <View style={{ flex: 1 }}>
           <Btn variant="danger" block onPress={onDecline}>Decline</Btn>
         </View>
@@ -207,7 +219,7 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
           style={{
             borderRadius: 14,
             borderWidth: 1.5,
-            borderColor: c.line,
+            borderColor: colors.border.light,
             paddingHorizontal: 12,
             paddingVertical: 10,
             fontSize: 15,
@@ -265,11 +277,11 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall }:
         <DetailRow k="Estimated weight" v={`${stop.estWeight} kg`} />
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 10 }}>
+      <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
         <View style={{ flex: 1 }}>
           <Btn variant="primary" block onPress={onStartCollection}>Start Collection</Btn>
         </View>
-        <Btn variant="forest" small onPress={onCall}>📞 Call</Btn>
+        <Btn variant="forest"  onPress={onCall} style={{ minWidth: 92 }}>📞 Call</Btn>
       </View>
     </Sheet>
   );
