@@ -3,8 +3,8 @@ import { View, Text, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Sheet } from '@/components/ui/demo-teacollector-sheet';
 import { DetailRow } from '@/components/ui/demo-teacollector-detail-row';
-import { Chip } from '@/components/ui/demo-teacollector-chip';
-import { Field, Input, Select } from '@/components/forms/demo-teacollector-fields';
+import { Chip } from '@/components/forms';
+import { FormField as Field, FormInput as Input, FormSelect as Select } from '@/components/forms';
 import { Btn } from '@/components/ui/demo-teacollector-button';
 import { Pill } from '@/components/ui/demo-teacollector-pill';
 import { c, fontDisplay, fontMono, STATUS_STYLE } from '@/components/ui/demo-teacollector-theme';
@@ -322,7 +322,7 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
       
       <Field label="Tea type">
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {["Green", "Black", "White"].map((t) => (
+          {["Normal", "Supper"].map((t) => (
             <Chip key={t} active={type === t} onPress={() => setType(t)}>{t}</Chip>
           ))}
         </View>
