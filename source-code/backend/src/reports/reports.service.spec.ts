@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import type { CollectionRecordEntity } from '../collections/collection-record.entity';
+import type { DeliveryGradeLineEntity } from '../collections/delivery-grade-line.entity';
 import type { PayrollRunEntity } from '../employees/payroll-run.entity';
 import type { SettlementEntity } from '../estates/settlement.entity';
 import type { ExpenseEntryEntity } from './expense-entry.entity';
@@ -37,9 +38,20 @@ class FakeRepository<T extends { id: string | number }> {
   }
 }
 
+/**
+ * Test shorthand: `grade` ('super' | 'normal' | 'pending') becomes a single factory grade
+ * line carrying the record's weight; 'pending' (the default for non-confirmed rows) leaves
+ * the delivery Ungraded. Real code reads `gradeLines`, never a `grade` column.
+ */
+type CollectionOverrides = Partial<CollectionRecordEntity> & {
+  grade?: 'super' | 'normal' | 'pending';
+};
+
 function makeCollection(
-  overrides: Partial<CollectionRecordEntity> = {},
+  overrides: CollectionOverrides = {},
 ): CollectionRecordEntity {
+  const { grade = 'super', ...rest } = overrides;
+  const weightKg = rest.weightKg ?? '210.00';
   return {
     id: 'GV-2026-0714',
     estateId: 1,
@@ -48,7 +60,8 @@ function makeCollection(
     routeId: 1,
     routeName: 'Route 3',
     weightKg: '210.00',
-    grade: 'super',
+    gradeLines:
+      grade === 'pending' ? [] : [{ grade, weightKg } as DeliveryGradeLineEntity],
     status: 'confirmed',
     collectionDate: '2026-07-14',
     agentId: 1,
@@ -60,7 +73,7 @@ function makeCollection(
     lastUpdatedBy: null,
     lastUpdatedOn: null,
     createdAt: new Date('2026-07-14T00:00:00.000Z'),
-    ...overrides,
+    ...rest,
   } as CollectionRecordEntity;
 }
 

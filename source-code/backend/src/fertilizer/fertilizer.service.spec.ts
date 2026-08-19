@@ -135,6 +135,8 @@ function makeEstate(overrides: Partial<EstateEntity> = {}): EstateEntity {
     bankAccount: null,
     lastUpdatedBy: null,
     lastUpdatedOn: null,
+    lat: null,
+    lng: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
   };
