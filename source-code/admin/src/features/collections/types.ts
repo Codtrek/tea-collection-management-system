@@ -1,4 +1,15 @@
-export type TeaGrade = 'Super' | 'Normal' | 'Pending'
+/*
+  Grades are assigned FACTORY-SIDE ONLY, at receiving. Agents and owners record only the
+  estate weight and the mobile app has no grade input. A delivery with no grade lines is
+  simply "Ungraded". Super and Normal today; a grade catalogue can replace this union later.
+*/
+export type TeaGrade = 'Super' | 'Normal'
+
+/** One factory-assigned grade line. A delivery has at most one line per grade. */
+export interface GradeLine {
+  grade: TeaGrade
+  weightKg: number
+}
 
 /*
   Status chain per master §5, plus "Pending Agent Confirmation" — the web-
@@ -31,8 +42,17 @@ export interface CollectionRecord {
   estateId: string
   estateName: string
   route: string
+  /**
+   * TOTAL weight: the sum of the grade lines once graded, else the estate weight. Computed
+   * by the server in one place (see `weights.ts` for the matching selector) — never
+   * recompute a delivery's total in a component.
+   */
   weightKg: number
-  grade: TeaGrade
+  /** What the agent weighed at the estate (owner-confirmed). Kept separate for the mismatch check. */
+  estateWeightKg: number
+  /** Factory grade lines; empty = Ungraded. */
+  gradeLines: GradeLine[]
+  graded: boolean
   status: CollectionStatus
   date: string
   agent: string

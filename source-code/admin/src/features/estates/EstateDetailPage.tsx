@@ -20,6 +20,7 @@ import { LifetimeSummary } from './LifetimeSummary'
 import { COLLECTION_TONE } from '@/features/collections/status'
 import type { EstateAdvance, EstateFertilizerRecord, Settlement } from './types'
 import type { CollectionRecord } from '@/features/collections/types'
+import { GradeChips } from '@/features/collections/GradeChips'
 import { formatCurrency, formatDate, formatWeight, initials, maskAccount } from '@/lib/format'
 
 /* EST-03 — DetailPageWithTabs: Overview | Timeline | Analytics | Deliveries | Payments | Fertilizer | Advances | Documents. */
@@ -120,16 +121,7 @@ export function EstateDetailPage() {
     { key: 'id', header: 'Delivery', render: (c) => <span className="id text-xs">{c.id}</span> },
     { key: 'date', header: 'Date', render: (c) => formatDate(c.date) },
     { key: 'weightKg', header: 'Weight', align: 'right', render: (c) => formatWeight(c.weightKg) },
-    {
-      key: 'grade',
-      header: 'Grade',
-      render: (c) =>
-        c.grade === 'Pending' ? (
-          <span className="text-xs text-text-muted">Pending</span>
-        ) : (
-          <StatusBadge tone={c.grade === 'Super' ? 'gradeSuper' : 'gradeNormal'}>{c.grade}</StatusBadge>
-        ),
-    },
+    { key: 'grade', header: 'Grade', render: (c) => <GradeChips record={c} /> },
     { key: 'status', header: 'Status', render: (c) => <StatusBadge tone={COLLECTION_TONE[c.status]}>{c.status}</StatusBadge> },
   ]
 

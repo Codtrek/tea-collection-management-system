@@ -51,5 +51,6 @@ export const AUDIT_MODULES = [
   'Fertilizer',
   'Employee',
   'Reports',
+  'Dispatch',
   'Administration',
 ] as const

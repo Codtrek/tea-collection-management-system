@@ -35,6 +35,7 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     attendance: 'approve',
     performance: 'approve',
     reports: 'approve',
+    dispatch: 'approve',
     administration: 'approve',
   },
   Officer: {
@@ -51,6 +52,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     // backend-wired — Officer edits like every other module's `edit` tier,
     // Manager stays read-only (§4 three-role model).
     reports: 'edit',
+    // Agent Dispatch: view the board · edit = mark absent / send cover · approve = permanent reassignment.
+    dispatch: 'edit',
     administration: 'none',
   },
   Manager: {
@@ -64,6 +67,7 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     attendance: 'view',
     performance: 'approve',
     reports: 'view',
+    dispatch: 'approve',
     administration: 'none',
   },
 }

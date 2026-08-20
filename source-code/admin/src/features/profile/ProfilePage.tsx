@@ -31,6 +31,7 @@ const MODULE_LABELS: Record<ModuleKey, string> = {
   attendance: 'Attendance',
   performance: 'Performance',
   reports: 'Reports',
+  dispatch: 'Agent Dispatch',
   administration: 'Administration',
 }
 

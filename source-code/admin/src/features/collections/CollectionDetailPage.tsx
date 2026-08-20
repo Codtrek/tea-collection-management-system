@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Flag, Loader2, Lock, Pencil, Upload } from 'lucide-react'
+import { Check, Flag, Loader2, Lock, Pencil, Scale, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PhotoEvidenceGallery } from '@/components/patterns/PhotoEvidenceGallery'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
@@ -13,7 +13,9 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as collectionsService from '@/services/collections'
 import { COLLECTION_TONE, isLocked } from './status'
-import type { CollectionStatus } from './types'
+import { GradeChips } from './GradeChips'
+import { GradeDeliveryModal } from './GradeDeliveryModal'
+import type { CollectionStatus, GradeLine } from './types'
 import { formatDate, formatDateTime, formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
@@ -28,6 +30,7 @@ export function CollectionDetailPage() {
   const { can } = useAuth()
   const canEdit = can('collection', 'edit')
   const [flagging, setFlagging] = useState(false)
+  const [grading, setGrading] = useState(false)
   const [flagReason, setFlagReason] = useState('')
 
   const {
@@ -53,6 +56,17 @@ export function CollectionDetailPage() {
     onError: (err) => toast(err instanceof Error ? err.message : 'Could not submit correction request', 'danger'),
   })
 
+  const gradeMutation = useMutation({
+    mutationFn: (lines: GradeLine[]) => collectionsService.setGradeLines(id!, lines),
+    onSuccess: () => {
+      toast('Graded and confirmed — record is now locked')
+      setGrading(false)
+      void queryClient.invalidateQueries({ queryKey: ['collection', id] })
+      void queryClient.invalidateQueries({ queryKey: ['collections'] })
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not save the grades', 'danger'),
+  })
+
   if (isPending) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -66,6 +80,8 @@ export function CollectionDetailPage() {
   }
 
   const locked = isLocked(record)
+  // Grading is a factory-side step: only staff who can edit Collection, and only once the agent has collected.
+  const canGrade = canEdit && record.status === 'Collected'
 
   return (
     <div>
@@ -74,15 +90,22 @@ export function CollectionDetailPage() {
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Tea Leaf Collection', to: '/collections' }, { label: record.id }]}
         actions={
           canEdit ? (
-            locked ? (
-              <Button variant="secondary" onClick={() => setFlagging(true)}>
-                <Flag className="size-4" /> Flag for Correction
-              </Button>
-            ) : (
-              <Button variant="secondary" onClick={() => navigate(`/collections/${record.id}/edit`)}>
-                <Pencil className="size-4" /> Edit
-              </Button>
-            )
+            <>
+              {canGrade && (
+                <Button onClick={() => setGrading(true)}>
+                  <Scale className="size-4" /> {record.graded ? 'Regrade' : 'Grade Delivery'}
+                </Button>
+              )}
+              {locked ? (
+                <Button variant="secondary" onClick={() => setFlagging(true)}>
+                  <Flag className="size-4" /> Flag for Correction
+                </Button>
+              ) : (
+                <Button variant="secondary" onClick={() => navigate(`/collections/${record.id}/edit`)}>
+                  <Pencil className="size-4" /> Edit
+                </Button>
+              )}
+            </>
           ) : undefined
         }
       />
@@ -100,8 +123,15 @@ export function CollectionDetailPage() {
           <div className="text-right">
             <p className="tabular text-3xl font-semibold text-text-heading">{formatWeight(record.weightKg)}</p>
             <p className="text-xs text-text-muted">
-              {record.status === 'Pending Agent Confirmation' ? 'reported weight' : 'measured weight'}
+              {record.graded
+                ? 'graded total'
+                : record.status === 'Pending Agent Confirmation'
+                  ? 'reported estate weight · ungraded'
+                  : 'estate weight · ungraded'}
             </p>
+            {record.graded && record.estateWeightKg !== record.weightKg && (
+              <p className="tabular mt-0.5 text-xs text-text-muted">Estate weight {formatWeight(record.estateWeightKg)}</p>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <StatusBadge
@@ -110,9 +140,7 @@ export function CollectionDetailPage() {
             >
               {record.status}
             </StatusBadge>
-            {record.grade !== 'Pending' && (
-              <StatusBadge tone={record.grade === 'Super' ? 'gradeSuper' : 'gradeNormal'}>{record.grade} grade</StatusBadge>
-            )}
+            <GradeChips record={record} expanded />
           </div>
         </div>
 
@@ -205,6 +233,18 @@ export function CollectionDetailPage() {
       </div>
 
       {/* Flag for Correction — audit-tracked request, not a direct edit */}
+      {canGrade && (
+        <GradeDeliveryModal
+          // remount per open so the inputs always start from the saved lines
+          key={grading ? 'open' : 'closed'}
+          record={record}
+          open={grading}
+          loading={gradeMutation.isPending}
+          onClose={() => setGrading(false)}
+          onSubmit={(lines) => gradeMutation.mutate(lines)}
+        />
+      )}
+
       <LightConfirmModal
         open={flagging}
         onClose={() => setFlagging(false)}

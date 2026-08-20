@@ -33,6 +33,7 @@ const MATRIX_MODULES: Array<{ key: ModuleKey; label: string }> = [
   { key: 'estateOwners', label: 'Estate Owner' },
   { key: 'fertilizer', label: 'Fertilizer' },
   { key: 'collection', label: 'Collection' },
+  { key: 'dispatch', label: 'Agent Dispatch' },
   { key: 'reports', label: 'Reports' },
   { key: 'administration', label: 'Administration' },
 ]

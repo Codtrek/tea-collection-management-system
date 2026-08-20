@@ -13,7 +13,9 @@ import { Select } from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
 import * as collectionsService from '@/services/collections'
 import { COLLECTION_TONE, isLocked } from './status'
-import type { CollectionRecord, CollectionStatus } from './types'
+import { GradeChips } from './GradeChips'
+import { gradeKg, hasGrade } from './weights'
+import type { CollectionRecord, CollectionStatus, TeaGrade } from './types'
 import { formatDate, formatWeight } from '@/lib/format'
 
 /* COL-01 — factory-wide oversight log of collection/delivery records. */
@@ -40,7 +42,8 @@ export function CollectionListPage() {
       (c) =>
         (c.estateName.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)) &&
         (!route || c.route === route) &&
-        (!grade || c.grade === grade) &&
+        // "contains this grade" — a multi-grade delivery matches either of its grades; Ungraded = no lines
+        (!grade || (grade === 'Ungraded' ? !c.graded : hasGrade(c, grade as TeaGrade))) &&
         (!status || c.status === status),
     )
   }, [collections, search, route, grade, status])
@@ -57,16 +60,26 @@ export function CollectionListPage() {
       ),
     },
     { key: 'route', header: 'Route' },
-    { key: 'weightKg', header: 'Weight', align: 'right', render: (c) => formatWeight(c.weightKg) },
+    {
+      key: 'weightKg',
+      header: 'Weight',
+      align: 'right',
+      render: (c) => (
+        <div>
+          <p>{formatWeight(c.weightKg)}</p>
+          {/* with a grade filter on, show that grade's own weight (the total stays above) */}
+          {grade && grade !== 'Ungraded' && hasGrade(c, grade as TeaGrade) && (
+            <p className="text-xs text-text-muted">
+              {grade}: {formatWeight(gradeKg(c, grade as TeaGrade))}
+            </p>
+          )}
+        </div>
+      ),
+    },
     {
       key: 'grade',
       header: 'Grade',
-      render: (c) =>
-        c.grade === 'Pending' ? (
-          <span className="text-xs text-text-muted">Pending</span>
-        ) : (
-          <StatusBadge tone={c.grade === 'Super' ? 'gradeSuper' : 'gradeNormal'}>{c.grade}</StatusBadge>
-        ),
+      render: (c) => <GradeChips record={c} highlight={grade && grade !== 'Ungraded' ? (grade as TeaGrade) : undefined} />,
     },
     {
       key: 'status',
@@ -110,7 +123,7 @@ export function CollectionListPage() {
           placeholder="All grades"
           value={grade}
           onChange={(e) => setGrade(e.target.value)}
-          options={['Super', 'Normal', 'Pending'].map((g) => ({ value: g, label: g }))}
+          options={['Super', 'Normal', 'Ungraded'].map((g) => ({ value: g, label: g }))}
         />
         <Select
           placeholder="All statuses"

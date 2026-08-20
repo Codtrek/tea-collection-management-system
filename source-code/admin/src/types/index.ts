@@ -14,6 +14,7 @@ export type ModuleKey =
   | 'attendance'
   | 'performance'
   | 'reports'
+  | 'dispatch'
   | 'administration'
 
 /** Ordered so that a higher level implies the lower ones. */

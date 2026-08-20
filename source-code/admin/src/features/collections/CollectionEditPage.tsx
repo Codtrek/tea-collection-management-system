@@ -6,12 +6,11 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Select } from '@/components/ui/Select'
 import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as collectionsService from '@/services/collections'
 import { isLocked } from './status'
-import type { CollectionRecord, TeaGrade } from './types'
+import type { CollectionRecord } from './types'
 import { formatDate } from '@/lib/format'
 
 /* COL-04 — editable only before Confirmed. Stale links to locked records get
@@ -97,10 +96,9 @@ function EditForm({ record }: { record: CollectionRecord }) {
 
   const [weight, setWeight] = useState(String(record.weightKg))
   const [date, setDate] = useState(record.date)
-  const [grade, setGrade] = useState<TeaGrade>(record.grade)
 
   const updateMutation = useMutation({
-    mutationFn: () => collectionsService.update(record.id, { weightKg: Number(weight), date, grade }),
+    mutationFn: () => collectionsService.update(record.id, { weightKg: Number(weight), date }),
     onSuccess: () => {
       toast('Collection record updated')
       void queryClient.invalidateQueries({ queryKey: ['collection', record.id] })
@@ -117,7 +115,8 @@ function EditForm({ record }: { record: CollectionRecord }) {
           <Input label="Estate owner" value={record.estateName} disabled hint="Change via a new record, not an edit." />
           <Input label="Route" value={record.route} disabled hint="System-assigned." />
           <Input
-            label={record.status === 'Pending Agent Confirmation' ? 'Reported weight (kg)' : 'Weight (kg)'}
+            label={record.status === 'Pending Agent Confirmation' ? 'Reported estate weight (kg)' : 'Estate weight (kg)'}
+            hint="What the agent weighed at the estate. Grades are set by the factory at receiving."
             type="number"
             min="0"
             step="any"
@@ -125,14 +124,6 @@ function EditForm({ record }: { record: CollectionRecord }) {
             onChange={(e) => setWeight(e.target.value)}
           />
           <Input label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <Select
-            label="Grade"
-            value={grade}
-            onChange={(e) => setGrade(e.target.value as TeaGrade)}
-            options={['Pending', 'Super', 'Normal'].map((g) => ({ value: g, label: g }))}
-            // Grading belongs to the Tea Receiving Officer (UC-053, mobile) — web edit keeps it view-mostly.
-            disabled={record.status !== 'Collected'}
-          />
         </div>
 
         <div className="flex justify-end gap-2 border-t border-border pt-4">

@@ -1,17 +1,19 @@
 import { apiFetch } from '@/lib/api'
-import type { CollectionRecord, TeaGrade } from '@/features/collections/types'
+import type { CollectionRecord, GradeLine } from '@/features/collections/types'
 
+/** COL-04: the ESTATE weight and date. Grade is never edited here — grading is factory-side. */
 export interface UpdateCollectionInput {
   weightKg: number
   date: string
-  grade?: TeaGrade
 }
 
+/**
+ * COL-02, estate-first: the client sends only the estate it picked. The server derives the
+ * route from the estate and today's agent from the route resolver (cover-aware).
+ */
 export interface CreateExceptionInput {
-  estateId: string
-  estateName: string
-  route: string
-  agent?: string
+  /** `estates.id` (the numeric id behind 'EST-0002') */
+  estateId: number
   reportedWeight: number
   date: string
   reason: string
@@ -36,6 +38,14 @@ export function createException(input: CreateExceptionInput): Promise<Collection
   return apiFetch<CollectionRecord>('/collections', {
     method: 'POST',
     body: JSON.stringify(input),
+  })
+}
+
+/** Factory-side grading at receiving: replaces the delivery's grade lines (one per grade) and confirms the record. */
+export function setGradeLines(id: string, lines: GradeLine[]): Promise<CollectionRecord> {
+  return apiFetch<CollectionRecord>(`/collections/${id}/grade-lines`, {
+    method: 'PUT',
+    body: JSON.stringify({ lines }),
   })
 }
 
