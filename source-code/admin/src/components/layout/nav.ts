@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Leaf,
+  Radar,
   Sprout,
   ClipboardList,
   Wallet,
@@ -40,6 +41,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Operations',
     items: [
       { label: 'Tea Leaf Collection', to: '/collections', icon: Leaf, module: 'collection' },
+      // Agent Dispatch (COL-05) — its own page, gated by the data-driven `dispatch` module
+      { label: 'Agent Dispatch', to: '/collections/dispatch', icon: Radar, module: 'dispatch' },
       { label: 'Fertilizer Inventory', to: '/fertilizer', icon: Sprout, module: 'fertilizer' },
       { label: 'Fertilizer Requests', to: '/fertilizer/requests', icon: ClipboardList, module: 'fertilizer' },
     ],
