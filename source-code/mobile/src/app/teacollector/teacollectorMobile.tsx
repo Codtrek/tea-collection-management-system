@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { AppBar } from '@/components/ui/demo-teacollector-app-bar';
+import { AppBar } from '@/components/ui/demo-teacollector-header';
 import { Chip } from '@/components/forms';
 import { DetailRow } from '@/components/ui/demo-teacollector-detail-row';
 import { Pill } from '@/components/ui/demo-teacollector-pill';
@@ -53,7 +53,35 @@ import {
   MismatchSheet,
   RegisterSheet,
 } from './teacollectorMobileSheets';
+const TITLES: Record<string, any> = {
+  home: {
+    eyebrow: "Wed, 04 Jul",
+    title: "Good morning, Sunil",
+  },
 
+  collect: {
+    eyebrow: "Today's Collections",
+    title: "Pickup Requests",
+    dark: true,
+    sub: ["Vehicle: LP-4471", "Factory: Kotmale MPT"],
+  },
+
+  fert: {
+    eyebrow: "Fertilizer Delivery",
+    title: "Assigned Today",
+    dark: true,
+  },
+
+  notif: {
+    eyebrow: "Alerts",
+    title: "Notifications",
+  },
+
+  profile: {
+    eyebrow: "Account",
+    title: "Profile",
+  },
+};
 const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 // ---------- mock data ----------
@@ -325,13 +353,7 @@ export default function TeaCollectorMobile() {
     { id: "profile", label: "Profile", icon: "person-outline" },
   ];
 
-  const TITLES: Record<string, any> = {
-    home: { eyebrow: "Wed, 04 Jul", title: "Good morning, Sunil" },
-    collect: { eyebrow: "Today's Collections", title: "Pickup Requests", dark: true, sub: ["Vehicle: LP-4471", "Factory: Kotmale MPT"] },
-    fert: { eyebrow: "Fertilizer Delivery", title: "Assigned Today", dark: true },
-    notif: { eyebrow: "Alerts", title: "Notifications" },
-    profile: { eyebrow: "Account", title: "Profile" },
-  };
+
 
   const loadedStops = stops.filter((s) => s.status === "loaded");
 
@@ -403,14 +425,16 @@ export default function TeaCollectorMobile() {
       }}>
         
         <AppBar {...TITLES[tab]} />
-        
-        <View style={{
+        <View
+        style={{
+
           height: 2,
           marginHorizontal: 20,
-          backgroundColor: c.gold,
+          backgroundColor: colors.border.focused,
           opacity: 0.6,
           borderRadius: 2,
-        }} />
+        }}
+        />
 
         {renderScreen()}
 
@@ -468,5 +492,4 @@ export default function TeaCollectorMobile() {
     </View>
   );
 }
-
 
