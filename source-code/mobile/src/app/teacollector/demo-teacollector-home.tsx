@@ -125,11 +125,13 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
               imageStyle={{ resizeMode: 'cover' }}
             >
               <Btn
-                variant="secondary"
+                variant="forest"
                 block
                 onPress={() => setTab('collect')}
-                style={{ backgroundColor: 'rgba(255,255,255,0.9)', borderColor: 'rgba(255,255,255,0.2)' }}
-                textStyle={{ color: colors.primary }}
+                style= {{
+                  borderEndWidth: 1.5,
+                  borderColor: "#3F8F5F",
+                }}
               >
                 View Today's Stops
               </Btn>
@@ -152,7 +154,7 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
         id: 'loaded',
         value: '2',
         title: 'Loaded, awaiting factory',
-        variant: 'success',
+        variant: 'primary',
         iconName: 'cube-outline',
       },
       {

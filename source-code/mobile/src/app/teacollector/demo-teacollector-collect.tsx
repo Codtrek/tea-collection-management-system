@@ -143,7 +143,7 @@ export default function DemoTeaCollectorCollect({
           </View>
 
           <Btn
-            variant="primary"
+            variant="forest"
             block
             style={styles.factoryButton}
             onPress={onGoToFactory}
