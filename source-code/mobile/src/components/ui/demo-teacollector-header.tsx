@@ -1,21 +1,35 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { fontDisplay, fontMono } from './demo-teacollector-theme';
 import { colors } from '@/theme/colors';
 
-export const AppBar = ({ eyebrow, title, dark = false, sub }: any) => {
+export const AppBar = ({ eyebrow, title, dark = false, sub, onProfilePress }: any) => {
   return (
     <View style={styles.appBar}>
+      <View style={styles.headerRow}>
+        <View style={styles.headerTextWrap}>
+          {eyebrow && (
+            <Text style={[styles.eyebrow, dark && styles.eyebrowDark]}>
+              {eyebrow}
+            </Text>
+          )}
 
-      {eyebrow && (
-        <Text style={[styles.eyebrow, dark && styles.eyebrowDark]}>
-          {eyebrow}
-        </Text>
-      )}
+          <Text style={[styles.title, dark && styles.titleDark]}>
+            {title}
+          </Text>
+        </View>
 
-      <Text style={[styles.title, dark && styles.titleDark]}>
-        {title}
-      </Text>
+        {onProfilePress && (
+          <Pressable
+            onPress={onProfilePress}
+            style={styles.profileButton}
+            accessibilityLabel="Open profile"
+          >
+            <Ionicons name="person-circle-outline" size={26} color={colors.text.primary} />
+          </Pressable>
+        )}
+      </View>
 
       {sub && (
         <View style={styles.subRow}>
@@ -29,7 +43,6 @@ export const AppBar = ({ eyebrow, title, dark = false, sub }: any) => {
           ))}
         </View>
       )}
-
     </View>
   );
 };
@@ -37,10 +50,31 @@ export const AppBar = ({ eyebrow, title, dark = false, sub }: any) => {
 const styles = StyleSheet.create({
 
   appBar: {
-    height: 90,
+    minHeight: 90,
     paddingHorizontal: 20,
     paddingTop: 18,
     backgroundColor: colors.surface,
+  },
+
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+
+  headerTextWrap: {
+    flex: 1,
+  },
+
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(27, 139, 78, 0.08)',
+    marginTop: 4,
   },
 
   eyebrow: {

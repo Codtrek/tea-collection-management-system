@@ -350,7 +350,6 @@ export default function TeaCollectorMobile() {
     { id: "collect", label: "Collect", icon: "leaf-outline" },
     { id: "fert", label: "Fertilizer", icon: "leaf-outline" },
     { id: "notif", label: "Alerts", icon: "notifications-outline" },
-    { id: "profile", label: "Profile", icon: "person-outline" },
   ];
 
 
@@ -424,7 +423,10 @@ export default function TeaCollectorMobile() {
         backgroundColor: c.mist,
       }}>
         
-        <AppBar {...TITLES[tab]} />
+        <AppBar
+          {...TITLES[tab]}
+          onProfilePress={tab === 'profile' ? undefined : () => setTab('profile')}
+        />
         <View
         style={{
 
