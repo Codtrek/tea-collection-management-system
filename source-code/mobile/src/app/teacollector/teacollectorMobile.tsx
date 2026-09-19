@@ -147,12 +147,12 @@ const HISTORY = [
   { name: "Rosemount Gardens", date: "02 Jul", type: "Black Tea", weight: 66 },
 ];
 
-const NOTIFICATIONS = [
-  { icon: 'add-circle-outline', bg: "#FBEFD8", fg: c.amberDeep, title: "New pickup request", desc: "Ceylon Green Estate Â· ~68 kg estimated", time: "12m" },
-  { icon: 'checkmark-circle-outline', bg: "#E3EEE0", fg: c.sageDeep, title: "Pickup accepted", desc: "Hill Breeze Gardens confirmed for 10:30 AM", time: "40m" },
-  { icon: 'alert-circle-outline', bg: "#F5E1DC", fg: c.rust, title: "Weight mismatch flagged", desc: "Mistvale Tea Farm Â· factory recorded 58 kg vs 61 kg", time: "1h" },
-  { icon: 'business-outline', bg: "#DCEAE1", fg: c.forest, title: "Batch received at factory", desc: "Kotmale MPT confirmed 2 stops Â· 132 kg", time: "2h" },
-  { icon: 'leaf-outline', bg: "#FBEFD8", fg: c.amberDeep, title: "Fertilizer confirmed", desc: "Urea 46% Â· 50 kg for Hill Breeze Gardens", time: "3h" },
+const NOTIFICATIONS: React.ComponentProps<typeof DemoTeaCollectorAlerts>['notifications'] = [
+  { icon: 'add-circle-outline', type: 'pickup', title: "New pickup request", desc: "Ceylon Green Estate Â· ~68 kg estimated", time: "12m" },
+  { icon: 'checkmark-circle-outline', type: 'success', title: "Pickup accepted", desc: "Hill Breeze Gardens confirmed for 10:30 AM", time: "40m" },
+  { icon: 'alert-circle-outline', type: 'warning', title: "Weight mismatch flagged", desc: "Mistvale Tea Farm Â· factory recorded 58 kg vs 61 kg", time: "1h" },
+  { icon: 'business-outline', type: 'info', title: "Batch received at factory", desc: "Kotmale MPT confirmed 2 stops Â· 132 kg", time: "2h" },
+  { icon: 'leaf-outline', type: 'fertilizer', title: "Fertilizer confirmed", desc: "Urea 46% Â· 50 kg for Hill Breeze Gardens", time: "3h" },
 ];
 
 // Sheets moved to teacollectorMobileSheets.tsx (see ./teacollectorMobileSheets)
@@ -494,4 +494,3 @@ export default function TeaCollectorMobile() {
     </View>
   );
 }
-
