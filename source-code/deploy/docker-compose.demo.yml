@@ -1,4 +1,23 @@
 services:
+  postgres-demo:
+    image: postgres:16-alpine
+    container_name: tea-cms-postgres-demo
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_demo_data:/var/lib/postgresql/data
+      - ../database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tea-cms-net
+    restart: unless-stopped
+
   backend-demo:
     build: ../backend
     container_name: tea-cms-backend-demo
@@ -6,21 +25,33 @@ services:
       - .env.demo
     environment:
       - NODE_ENV=demo
+    depends_on:
+      postgres-demo:
+        condition: service_healthy
     networks:
       - tea-cms-net
     restart: unless-stopped
 
   frontend-demo:
-    build: ../frontend
+    build:
+      context: ../admin
+      dockerfile: dockerfile
+      args:
+        VITE_API_URL: /api
     container_name: tea-cms-frontend-demo
     ports:
       - "8010:80"
+    volumes:
+      - ./nginx-demo.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - backend-demo
     networks:
       - tea-cms-net
     restart: unless-stopped
 
+volumes:
+  postgres_demo_data:
+
 networks:
   tea-cms-net:
-    external: true
+    driver: bridge
