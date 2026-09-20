@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Sheet } from '@/components/ui/demo-teacollector-sheet';
@@ -199,7 +199,14 @@ export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) =
 export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  
+
+  useEffect(() => {
+    if (open) {
+      setReason(null);
+      setNote('');
+    }
+  }, [open]);
+
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
@@ -211,7 +218,13 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
       <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>Select a reason — this is required.</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {["Estate not ready", "Road blocked", "Vehicle issue", "Other"].map((r) => (
-          <Chip key={r} active={reason === r} onPress={() => setReason(r)}>{r}</Chip>
+          <Chip
+            key={r}
+            active={reason === r}
+            onPress={() => setReason(reason === r ? null : r)}
+          >
+            {r}
+          </Chip>
         ))}
       </View>
       <Field label="Add a note (optional)">
@@ -233,7 +246,18 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
           onChangeText={setNote}
         />
       </Field>
-      <Btn variant="primary" block onPress={() => onConfirm(reason || "Other")}>Confirm Decline</Btn>
+      <Btn
+        variant="primary"
+        block
+        disabled={!reason}
+        onPress={() => {
+          if (reason) {
+            onConfirm(reason, note);
+          }
+        }}
+      >
+        Confirm Decline
+      </Btn>
     </Sheet>
   );
 };

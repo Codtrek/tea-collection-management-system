@@ -211,7 +211,7 @@ export default function TeaCollectorMobile() {
     setSheet("decline");
   };
 
-  const confirmDecline = (reason: string) => { 
+  const confirmDecline = (reason: string, note: string) => { 
     if (!activeStop) {
       console.warn("No active stop to decline");
       return;
@@ -219,7 +219,8 @@ export default function TeaCollectorMobile() {
     
     updateStop(activeStop.id, { 
       status: "cancelled", 
-      reason 
+      reason,
+      note 
     }); 
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
