@@ -25,7 +25,7 @@ import { Card } from '@/components/ui/demo-teacollector-card';
 import { FormField as Field, FormInput as Input, FormSelect as Select } from '@/components/forms';
 import DemoTeaCollectorBottomTab from '@/components/layout/demo-teacollector-BottomTab';
 import { FertRequestCard, StopCard } from '@/components/ui/demo-teacollector-cards';
-import { c, fontDisplay, fontMono, STATUS_STYLE } from '@/components/ui/demo-teacollector-theme';
+import { c, fontDisplay, fontMono } from '@/components/ui/demo-teacollector-theme';
 import DemoTeaCollectorHome from '@/app/teacollector/demo-teacollector-home';
 import DemoTeaCollectorCollect from '@/app/teacollector/demo-teacollector-collect';
 import DemoTeaCollectorFertilizer from '@/app/teacollector/demo-teacollector-fertilizer';

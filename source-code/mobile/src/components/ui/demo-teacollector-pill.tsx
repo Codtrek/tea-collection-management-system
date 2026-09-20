@@ -1,6 +1,6 @@
 import React from 'react';
 import {View,Text,StyleSheet} from 'react-native';
-import {STATUS_STYLE} from './demo-teacollector-theme';
+import { STATUS_STYLE } from '@/theme/teacollector-statusStyle';
 
 
 export const Pill=({status,children}:any)=>{

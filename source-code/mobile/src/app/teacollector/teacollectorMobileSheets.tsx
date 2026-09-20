@@ -7,7 +7,8 @@ import { Chip } from '@/components/forms';
 import { FormField as Field, FormInput as Input, FormSelect as Select } from '@/components/forms';
 import { Btn } from '@/components/ui/demo-teacollector-button';
 import { Pill } from '@/components/ui/demo-teacollector-pill';
-import { c, fontDisplay, fontMono, STATUS_STYLE } from '@/components/ui/demo-teacollector-theme';
+import { c, fontDisplay, fontMono } from '@/components/ui/demo-teacollector-theme';
+import { STATUS_STYLE } from '@/theme/teacollector-statusStyle';
 import { colors } from '@/theme/colors';
 
 const RECEIVING_OFFICERS = ["K. Abeysekera", "M. Rathnayake", "S. Weerasinghe", "T. Gunasekara"];
