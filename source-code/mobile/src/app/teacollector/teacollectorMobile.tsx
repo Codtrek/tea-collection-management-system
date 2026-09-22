@@ -15,17 +15,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { AppBar } from '@/components/ui/demo-teacollector-app-bar';
-import { Chip } from '@/components/ui/demo-teacollector-chip';
+import { AppBar } from '@/components/ui/demo-teacollector-header';
+import { Chip } from '@/components/forms';
 import { DetailRow } from '@/components/ui/demo-teacollector-detail-row';
 import { Pill } from '@/components/ui/demo-teacollector-pill';
 import { Sheet } from '@/components/ui/demo-teacollector-sheet';
 import { Btn } from '@/components/ui/demo-teacollector-button';
 import { Card } from '@/components/ui/demo-teacollector-card';
-import { Select, Field, Input } from '@/components/forms/demo-teacollector-fields';
+import { FormField as Field, FormInput as Input, FormSelect as Select } from '@/components/forms';
 import DemoTeaCollectorBottomTab from '@/components/layout/demo-teacollector-BottomTab';
 import { FertRequestCard, StopCard } from '@/components/ui/demo-teacollector-cards';
-import { c, fontDisplay, fontMono, STATUS_STYLE } from '@/components/ui/demo-teacollector-theme';
+import { c, fontDisplay, fontMono } from '@/components/ui/demo-teacollector-theme';
 import DemoTeaCollectorHome from '@/app/teacollector/demo-teacollector-home';
 import DemoTeaCollectorCollect from '@/app/teacollector/demo-teacollector-collect';
 import DemoTeaCollectorFertilizer from '@/app/teacollector/demo-teacollector-fertilizer';
@@ -53,7 +53,35 @@ import {
   MismatchSheet,
   RegisterSheet,
 } from './teacollectorMobileSheets';
+const TITLES: Record<string, any> = {
+  home: {
+    eyebrow: "Wed, 04 Jul",
+    title: "Good morning, Sunil",
+  },
 
+  collect: {
+    eyebrow: "Today's Collections",
+    title: "Pickup Requests",
+    dark: true,
+    sub: ["Vehicle: LP-4471", "Factory: Kotmale MPT"],
+  },
+
+  fert: {
+    eyebrow: "Fertilizer Delivery",
+    title: "Assigned Today",
+    dark: true,
+  },
+
+  notif: {
+    eyebrow: "Alerts",
+    title: "Notifications",
+  },
+
+  profile: {
+    eyebrow: "Account",
+    title: "Profile",
+  },
+};
 const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 // ---------- mock data ----------
@@ -119,12 +147,12 @@ const HISTORY = [
   { name: "Rosemount Gardens", date: "02 Jul", type: "Black Tea", weight: 66 },
 ];
 
-const NOTIFICATIONS = [
-  { icon: 'add-circle-outline', bg: "#FBEFD8", fg: c.amberDeep, title: "New pickup request", desc: "Ceylon Green Estate Â· ~68 kg estimated", time: "12m" },
-  { icon: 'checkmark-circle-outline', bg: "#E3EEE0", fg: c.sageDeep, title: "Pickup accepted", desc: "Hill Breeze Gardens confirmed for 10:30 AM", time: "40m" },
-  { icon: 'alert-circle-outline', bg: "#F5E1DC", fg: c.rust, title: "Weight mismatch flagged", desc: "Mistvale Tea Farm Â· factory recorded 58 kg vs 61 kg", time: "1h" },
-  { icon: 'business-outline', bg: "#DCEAE1", fg: c.forest, title: "Batch received at factory", desc: "Kotmale MPT confirmed 2 stops Â· 132 kg", time: "2h" },
-  { icon: 'leaf-outline', bg: "#FBEFD8", fg: c.amberDeep, title: "Fertilizer confirmed", desc: "Urea 46% Â· 50 kg for Hill Breeze Gardens", time: "3h" },
+const NOTIFICATIONS: React.ComponentProps<typeof DemoTeaCollectorAlerts>['notifications'] = [
+  { icon: 'add-circle-outline', type: 'pickup', title: "New pickup request", desc: "Ceylon Green Estate Â· ~68 kg estimated", time: "12m" },
+  { icon: 'checkmark-circle-outline', type: 'success', title: "Pickup accepted", desc: "Hill Breeze Gardens confirmed for 10:30 AM", time: "40m" },
+  { icon: 'alert-circle-outline', type: 'warning', title: "Weight mismatch flagged", desc: "Mistvale Tea Farm Â· factory recorded 58 kg vs 61 kg", time: "1h" },
+  { icon: 'business-outline', type: 'info', title: "Batch received at factory", desc: "Kotmale MPT confirmed 2 stops Â· 132 kg", time: "2h" },
+  { icon: 'leaf-outline', type: 'fertilizer', title: "Fertilizer confirmed", desc: "Urea 46% Â· 50 kg for Hill Breeze Gardens", time: "3h" },
 ];
 
 // Sheets moved to teacollectorMobileSheets.tsx (see ./teacollectorMobileSheets)
@@ -183,7 +211,7 @@ export default function TeaCollectorMobile() {
     setSheet("decline");
   };
 
-  const confirmDecline = (reason: string) => { 
+  const confirmDecline = (reason: string, note: string) => { 
     if (!activeStop) {
       console.warn("No active stop to decline");
       return;
@@ -191,7 +219,8 @@ export default function TeaCollectorMobile() {
     
     updateStop(activeStop.id, { 
       status: "cancelled", 
-      reason 
+      reason,
+      note 
     }); 
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -322,16 +351,9 @@ export default function TeaCollectorMobile() {
     { id: "collect", label: "Collect", icon: "leaf-outline" },
     { id: "fert", label: "Fertilizer", icon: "leaf-outline" },
     { id: "notif", label: "Alerts", icon: "notifications-outline" },
-    { id: "profile", label: "Profile", icon: "person-outline" },
   ];
 
-  const TITLES: Record<string, any> = {
-    home: { eyebrow: "Wed, 04 Jul", title: "Good morning, Sunil" },
-    collect: { eyebrow: "Today's Collections", title: "Pickup Requests", dark: true, sub: ["Vehicle: LP-4471", "Factory: Kotmale MPT"] },
-    fert: { eyebrow: "Fertilizer Delivery", title: "Assigned Today", dark: true },
-    notif: { eyebrow: "Alerts", title: "Notifications" },
-    profile: { eyebrow: "Account", title: "Profile" },
-  };
+
 
   const loadedStops = stops.filter((s) => s.status === "loaded");
 
@@ -402,15 +424,20 @@ export default function TeaCollectorMobile() {
         backgroundColor: c.mist,
       }}>
         
-        <AppBar {...TITLES[tab]} />
-        
-        <View style={{
+        <AppBar
+          {...TITLES[tab]}
+          onProfilePress={tab === 'profile' ? undefined : () => setTab('profile')}
+        />
+        <View
+        style={{
+
           height: 2,
           marginHorizontal: 20,
-          backgroundColor: c.gold,
+          backgroundColor: colors.border.focused,
           opacity: 0.6,
           borderRadius: 2,
-        }} />
+        }}
+        />
 
         {renderScreen()}
 
@@ -468,5 +495,3 @@ export default function TeaCollectorMobile() {
     </View>
   );
 }
-
-

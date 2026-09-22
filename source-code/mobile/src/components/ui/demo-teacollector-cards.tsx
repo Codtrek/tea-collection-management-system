@@ -351,8 +351,6 @@ export const StopCard = ({
             {/* Status Information */}
 
             <Text style={styles.timeText}>
-              {isCancelled &&
-                `Reason: ${stop.reason || "Cancelled"}`}
 
               {isPending &&
                 `Owner: ${stop.owner || "Estate Owner"}`}
@@ -476,7 +474,19 @@ export const StopCard = ({
         {/* =================================================
             CANCELLED
         ================================================== */}
+        {isCancelled && (
+          <View style={styles.cancelledContainer}>
+            <Text style={styles.cancelledText}>
+              Reason: {stop.reason || "Cancelled"}
+            </Text>
 
+            {Boolean(stop.note?.trim()) && (
+              <Text style={styles.cancelledNote}>
+                Note: {stop.note}
+              </Text>
+            )}
+          </View>
+        )}
       </TouchableOpacity>
 
       {/* =================================================
@@ -696,19 +706,22 @@ const styles = StyleSheet.create({
   ======================================================= */
 
   cancelledContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginTop: 14,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: colors.errorBackground,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 4,
+    marginTop: 10,
   },
 
   cancelledText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.error,
+    fontFamily: fontMono.fontFamily,
+    fontSize: 12,
+    color: c.muted,
+  },
+
+  cancelledNote: {
+    fontFamily: fontMono.fontFamily,
+    fontSize: 12,
+    color: c.muted,
   },
 
   /* =======================================================
@@ -725,5 +738,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-
-
