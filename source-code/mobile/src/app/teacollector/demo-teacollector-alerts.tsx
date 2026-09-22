@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 18,
     padding: 16,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.success,
   },
   summaryIcon: {
     width: 48,
