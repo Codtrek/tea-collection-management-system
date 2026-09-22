@@ -169,6 +169,8 @@ const styles = StyleSheet.create({
 
   forest: {
     backgroundColor: colors.success,
+    borderWidth: 1.5,
+    borderColor: colors.border.focused,
   },
 
   forestText: {

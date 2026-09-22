@@ -101,6 +101,7 @@ const styles = StyleSheet.create({
 
   contentContainer: {
     paddingHorizontal: 20,
+    paddingTop: 20,
     paddingBottom: 100,
   },
 

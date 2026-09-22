@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Sheet } from '@/components/ui/demo-teacollector-sheet';
 import { DetailRow } from '@/components/ui/demo-teacollector-detail-row';
-import { Chip } from '@/components/ui/demo-teacollector-chip';
-import { Field, Input, Select } from '@/components/forms/demo-teacollector-fields';
+import { Chip } from '@/components/forms';
+import { FormField as Field, FormInput as Input, FormSelect as Select } from '@/components/forms';
 import { Btn } from '@/components/ui/demo-teacollector-button';
 import { Pill } from '@/components/ui/demo-teacollector-pill';
-import { c, fontDisplay, fontMono, STATUS_STYLE } from '@/components/ui/demo-teacollector-theme';
+import { c, fontDisplay, fontMono } from '@/components/ui/demo-teacollector-theme';
+import { STATUS_STYLE } from '@/theme/teacollector-statusStyle';
 import { colors } from '@/theme/colors';
 
 const RECEIVING_OFFICERS = ["K. Abeysekera", "M. Rathnayake", "S. Weerasinghe", "T. Gunasekara"];
@@ -165,14 +166,26 @@ export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) =
         fontFamily: fontDisplay.fontFamily,
         fontWeight: '600',
         marginTop: 2,
-        marginBottom: 4,
+        marginBottom: 12,
         fontSize: 20,
       }}>{stop.name}</Text>
-      <DetailRow k="Owner" v={stop.owner} />
-      <DetailRow k="Phone" v={stop.phone} />
-      <DetailRow k="Estimated Weight" v={`${stop.estWeight} kg`} />
-      {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+
+      <View style={{
+        backgroundColor: colors.surface,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: colors.border.light,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginBottom: 16,
+      }}>
+        <DetailRow k="Owner" v={stop.owner} />
+        <DetailRow k="Phone" v={stop.phone} />
+        <DetailRow k="Estimated Weight" v={`${stop.estWeight} kg`} />
+        {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
+      </View>
+
+      <View style={{ flexDirection: 'row', gap: 10 }}>
         <View style={{ flex: 1 }}>
           <Btn variant="danger" block onPress={onDecline}>Decline</Btn>
         </View>
@@ -187,7 +200,14 @@ export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) =
 export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  
+
+  useEffect(() => {
+    if (open) {
+      setReason(null);
+      setNote('');
+    }
+  }, [open]);
+
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
@@ -199,7 +219,13 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
       <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>Select a reason — this is required.</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {["Estate not ready", "Road blocked", "Vehicle issue", "Other"].map((r) => (
-          <Chip key={r} active={reason === r} onPress={() => setReason(r)}>{r}</Chip>
+          <Chip
+            key={r}
+            active={reason === r}
+            onPress={() => setReason(reason === r ? null : r)}
+          >
+            {r}
+          </Chip>
         ))}
       </View>
       <Field label="Add a note (optional)">
@@ -207,7 +233,7 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
           style={{
             borderRadius: 14,
             borderWidth: 1.5,
-            borderColor: c.line,
+            borderColor: colors.border.light,
             paddingHorizontal: 12,
             paddingVertical: 10,
             fontSize: 15,
@@ -221,7 +247,18 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
           onChangeText={setNote}
         />
       </Field>
-      <Btn variant="primary" block onPress={() => onConfirm(reason || "Other")}>Confirm Decline</Btn>
+      <Btn
+        variant="primary"
+        block
+        disabled={!reason}
+        onPress={() => {
+          if (reason) {
+            onConfirm(reason, note);
+          }
+        }}
+      >
+        Confirm Decline
+      </Btn>
     </Sheet>
   );
 };
@@ -265,11 +302,11 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall }:
         <DetailRow k="Estimated weight" v={`${stop.estWeight} kg`} />
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 10 }}>
+      <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
         <View style={{ flex: 1 }}>
           <Btn variant="primary" block onPress={onStartCollection}>Start Collection</Btn>
         </View>
-        <Btn variant="forest" small onPress={onCall}>📞 Call</Btn>
+        <Btn variant="forest"  onPress={onCall} style={{ minWidth: 92 }}>📞 Call</Btn>
       </View>
     </Sheet>
   );
@@ -310,7 +347,7 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
       
       <Field label="Tea type">
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {["Green", "Black", "White"].map((t) => (
+          {["Normal", "Supper"].map((t) => (
             <Chip key={t} active={type === t} onPress={() => setType(t)}>{t}</Chip>
           ))}
         </View>

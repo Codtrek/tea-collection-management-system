@@ -51,22 +51,6 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
                 7 pickup requests · Factory: Kotmale MPT
               </Text>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <View style={{
-                borderRadius: 18,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                backgroundColor: '#EFE6C8',
-              }}>
-                <Text style={{
-                  fontFamily: fontMono.fontFamily,
-                  fontWeight: 'bold',
-                  textTransform: 'uppercase',
-                  fontSize: 10,
-                  color: c.amberDeep,
-                }}>In progress</Text>
-              </View>
-            </View>
           </View>
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 }}>
@@ -125,11 +109,13 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
               imageStyle={{ resizeMode: 'cover' }}
             >
               <Btn
-                variant="secondary"
+                variant="forest"
                 block
                 onPress={() => setTab('collect')}
-                style={{ backgroundColor: 'rgba(255,255,255,0.9)', borderColor: 'rgba(255,255,255,0.2)' }}
-                textStyle={{ color: colors.primary }}
+                style= {{
+                  borderEndWidth: 1.5,
+                  borderColor: "#3F8F5F",
+                }}
               >
                 View Today's Stops
               </Btn>
@@ -152,7 +138,7 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
         id: 'loaded',
         value: '2',
         title: 'Loaded, awaiting factory',
-        variant: 'success',
+        variant: 'primary',
         iconName: 'cube-outline',
       },
       {

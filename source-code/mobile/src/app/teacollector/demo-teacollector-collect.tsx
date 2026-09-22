@@ -102,19 +102,22 @@ export default function DemoTeaCollectorCollect({
   );
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.container}>
       {/* ===================================================
           FILTER TABS
       =================================================== */}
-
+    <View style={styles.stickyFilter}>
       <RequestFilterTabs
         filter={filter}
         setFilter={setFilter}
       />
+      </View>
+    <ScrollView
+      
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
+
 
       {/* ===================================================
           LOADED / FACTORY
@@ -143,7 +146,7 @@ export default function DemoTeaCollectorCollect({
           </View>
 
           <Btn
-            variant="primary"
+            variant="forest"
             block
             style={styles.factoryButton}
             onPress={onGoToFactory}
@@ -305,6 +308,7 @@ export default function DemoTeaCollectorCollect({
         </Btn>
       )}
     </ScrollView>
+    </View>
   );
 }
 
@@ -324,7 +328,14 @@ const styles = StyleSheet.create({
 
   contentContainer: {
     paddingHorizontal: 20,
+    
     paddingBottom: 100,
+  },
+    stickyFilter: {
+    backgroundColor: colors.background,
+    paddingTop: 20,
+    paddingBottom: 10,
+    zIndex: 10,
   },
 
   /* =======================================================
