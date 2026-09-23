@@ -2,7 +2,7 @@ import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/colors';
-import { fontMono } from '@/components/ui/demo-teacollector-theme';
+import { fonts } from "@/theme/fonts";
 
 type NotificationType = 'pickup' | 'success' | 'warning' | 'info' | 'fertilizer';
 
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionLabel: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.display,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.2,
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   },
   time: {
     marginLeft: 10,
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.display,
     fontSize: 11,
     color: colors.text.tertiary,
   },

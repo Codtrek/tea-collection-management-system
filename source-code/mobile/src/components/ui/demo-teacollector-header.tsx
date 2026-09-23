@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { fontDisplay, fontMono } from './demo-teacollector-theme';
 import { colors } from '@/theme/colors';
+import { fonts } from '@/theme/fonts';
+
 
 export const AppBar = ({ eyebrow, title, dark = false, sub, onProfilePress }: any) => {
   return (
@@ -78,7 +80,7 @@ const styles = StyleSheet.create({
   },
 
   eyebrow: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 11,
     color: colors.text.primaryGreen,
     textTransform: 'uppercase',
@@ -90,7 +92,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.display,
     fontWeight: '700',
     fontSize: 22,
     color: colors.text.primary,

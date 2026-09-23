@@ -57,7 +57,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   const textColor =
     variant === "primary" || variant === "success" || variant === "warning"
       ? colors.white
-      : c.ink;
+      : colors.primary;
 
   return (
     <TouchableOpacity
@@ -88,7 +88,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           <Text
             style={[
               statStyles.statValue,
-              { color: variant === "muted" ? c.ink : colors.white },
+              { color: variant === "muted" ? colors.text.muted : colors.white },
             ]}
             numberOfLines={1}
           >
@@ -98,7 +98,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           <Text
             style={[
               statStyles.statTitle,
-              { color: variant === "muted" ? c.muted : colors.white },
+              { color: variant === "muted" ?  colors.text.muted : colors.white },
             ]}
             numberOfLines={1}
           >
@@ -106,7 +106,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           </Text>
 
           {subtitle ? (
-            <Text style={[statStyles.statSubtitle, { color: c.muted }]}>
+            <Text style={[statStyles.statSubtitle, { color: colors.text.muted }]}>
               {subtitle}
             </Text>
           ) : null}

@@ -16,16 +16,13 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { AppBar } from '@/components/ui/demo-teacollector-header';
-import { Chip } from '@/components/forms';
+
 import { DetailRow } from '@/components/ui/demo-teacollector-detail-row';
-import { Pill } from '@/components/ui/demo-teacollector-pill';
-import { Sheet } from '@/components/ui/demo-teacollector-sheet';
-import { Btn } from '@/components/ui/demo-teacollector-button';
-import { Card } from '@/components/ui/demo-teacollector-card';
+
+
 import { FormField as Field, FormInput as Input, FormSelect as Select } from '@/components/forms';
 import DemoTeaCollectorBottomTab from '@/components/layout/demo-teacollector-BottomTab';
-import { FertRequestCard, StopCard } from '@/components/ui/demo-teacollector-cards';
-import { c, fontDisplay, fontMono } from '@/components/ui/demo-teacollector-theme';
+
 import DemoTeaCollectorHome from '@/app/teacollector/demo-teacollector-home';
 import DemoTeaCollectorCollect from '@/app/teacollector/demo-teacollector-collect';
 import DemoTeaCollectorFertilizer from '@/app/teacollector/demo-teacollector-fertilizer';
@@ -394,34 +391,16 @@ export default function TeaCollectorMobile() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.forestDeep }}>
+    <View style={{ flex: 1, backgroundColor: colors.success }}>
       
-      {/* Back button */}
-      <TouchableOpacity 
-        onPress={() => router.back()}
-        style={{
-          position: 'absolute',
-          top: Platform.OS === 'ios' ? 50 : 30,
-          left: 16,
-          zIndex: 100,
-          backgroundColor: 'rgba(255,255,255,0.9)',
-          padding: 8,
-          borderRadius: 20,
-          width: 40,
-          height: 40,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Ionicons name="arrow-back" size={24} color={c.forestDeep} />
-      </TouchableOpacity>
+
       
       <View style={{
         flex: 1,
         margin: Platform.OS === 'ios' ? 14 : 0,
         borderRadius: Platform.OS === 'ios' ? 38 : 0,
         overflow: 'hidden',
-        backgroundColor: c.mist,
+       
       }}>
         
         <AppBar

@@ -17,10 +17,7 @@ import { Btn } from "@/components/ui/demo-teacollector-button";
 import { Card } from "@/components/ui/demo-teacollector-card";
 import { StopCard } from "@/components/ui/demo-teacollector-cards";
 
-import {
-  fontDisplay,
-  fontMono,
-} from "@/components/ui/demo-teacollector-theme";
+import { fonts } from "@/theme/fonts";
 
 import { colors } from "@/theme/colors";
 
@@ -369,7 +366,7 @@ const styles = StyleSheet.create({
   },
 
   loadedTitle: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "600",
     fontSize: 15,
     color: colors.text.primary,
@@ -394,7 +391,7 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "bold",
     textTransform: "uppercase",
     letterSpacing: 1.8,
@@ -429,7 +426,7 @@ const styles = StyleSheet.create({
   },
 
   historyTitle: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "600",
     fontSize: 16,
     color: colors.text.primary,
@@ -442,7 +439,7 @@ const styles = StyleSheet.create({
   },
 
   earlierTitle: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "bold",
     textTransform: "uppercase",
     letterSpacing: 1.8,
