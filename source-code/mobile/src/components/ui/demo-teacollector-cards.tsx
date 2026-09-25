@@ -381,10 +381,11 @@ export const StopCard = ({
             {/* Estimated weight + distance */}
 
             <View style={styles.metaRow}>
-              {stop.estWeight != null && (
-                <Text style={styles.metaText}>
-                  ~{stop.estWeight} kg
-                </Text>
+              {stop.estNormalWeight > 0 && (
+                <Text style={styles.metaText}>Normal ~{stop.estNormalWeight} kg</Text>
+              )}
+              {stop.estSupperWeight > 0 && (
+                <Text style={styles.metaText}>Supper ~{stop.estSupperWeight} kg</Text>
               )}
 
               {stop.dist != null && (
@@ -417,10 +418,11 @@ export const StopCard = ({
             {/* Keep existing accepted information */}
 
             <View style={styles.metaRow}>
-              {stop.estWeight != null && (
-                <Text style={styles.metaText}>
-                  ~{stop.estWeight} kg
-                </Text>
+              {stop.estNormalWeight > 0 && (
+                <Text style={styles.metaText}>Normal ~{stop.estNormalWeight} kg</Text>
+              )}
+              {stop.estSupperWeight > 0 && (
+                <Text style={styles.metaText}>Supper ~{stop.estSupperWeight} kg</Text>
               )}
 
               {stop.dist != null && (
@@ -443,11 +445,12 @@ export const StopCard = ({
         ================================================== */}
 
         {isLoaded && (
-          <View style={styles.metaRow}>
-            {stop.actualWeight != null && (
-              <Text style={styles.metaText}>
-                {stop.actualWeight} kg
-              </Text>
+          <View style={styles.weightBreakdown}>
+            {stop.actualNormalWeight > 0 && (
+              <Text style={styles.metaText}>Normal {stop.actualNormalWeight} kg</Text>
+            )}
+            {stop.actualSupperWeight > 0 && (
+              <Text style={styles.metaText}>Supper {stop.actualSupperWeight} kg</Text>
             )}
           </View>
         )}
@@ -457,11 +460,12 @@ export const StopCard = ({
         ================================================== */}
 
         {isDelivered && (
-          <View style={styles.metaRow}>
-            {stop.actualWeight != null && (
-              <Text style={styles.mutedMetaText}>
-                {stop.actualWeight} kg delivered
-              </Text>
+          <View style={styles.weightBreakdown}>
+            {stop.actualNormalWeight > 0 && (
+              <Text style={styles.mutedMetaText}>Normal {stop.actualNormalWeight} kg delivered</Text>
+            )}
+            {stop.actualSupperWeight > 0 && (
+              <Text style={styles.mutedMetaText}>Supper {stop.actualSupperWeight} kg delivered</Text>
             )}
           </View>
         )}
@@ -639,6 +643,13 @@ const styles = StyleSheet.create({
 
   metaRow: {
     flexDirection: "row",
+    gap: 14,
+    marginTop: 10,
+  },
+
+  weightBreakdown: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 14,
     marginTop: 10,
   },

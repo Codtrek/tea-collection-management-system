@@ -10,6 +10,7 @@ import { Pill } from '@/components/ui/demo-teacollector-pill';
 import { STATUS_STYLE } from '@/theme/teacollector-statusStyle';
 import { colors } from '@/theme/colors';
 import { fonts } from '@/theme/fonts';
+import * as ImagePicker from 'expo-image-picker';
 
 const c = {
   forest: colors.primary,
@@ -25,6 +26,8 @@ const c = {
 
 const fontDisplay = { fontFamily: fonts.display };
 const fontDefault = { fontFamily: fonts.default };
+
+const teaWeight = (weight: number | null | undefined) => `${weight || 0} kg`;
 
 const RECEIVING_OFFICERS = ["K. Abeysekera", "M. Rathnayake", "S. Weerasinghe", "T. Gunasekara"];
 
@@ -196,7 +199,8 @@ export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) =
       }}>
         <DetailRow k="Owner" v={stop.owner} />
         <DetailRow k="Phone" v={stop.phone} />
-        <DetailRow k="Estimated Weight" v={`${stop.estWeight} kg`} />
+        {stop.estNormalWeight > 0 && <DetailRow k="Normal tea" v={teaWeight(stop.estNormalWeight)} />}
+        {stop.estSupperWeight > 0 && <DetailRow k="Supper tea" v={teaWeight(stop.estSupperWeight)} />}
         {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
       </View>
 
@@ -314,7 +318,8 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall }:
         }}>Tea Collection</Text>
         <DetailRow k="Owner" v={stop.owner} />
         <DetailRow k="Phone" v={stop.phone} />
-        <DetailRow k="Estimated weight" v={`${stop.estWeight} kg`} />
+        {stop.estNormalWeight > 0 && <DetailRow k="Normal tea" v={teaWeight(stop.estNormalWeight)} />}
+        {stop.estSupperWeight > 0 && <DetailRow k="Supper tea" v={teaWeight(stop.estSupperWeight)} />}
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -328,10 +333,34 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall }:
 };
 
 export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
-  const [type, setType] = useState("Green");
-  const [weight, setWeight] = useState(stop ? String(stop.estWeight) : "");
+  const [normalWeight, setNormalWeight] = useState("");
+  const [supperWeight, setSupperWeight] = useState("");
+  const [normalPhotoUri, setNormalPhotoUri] = useState<string>();
+  const [supperPhotoUri, setSupperPhotoUri] = useState<string>();
   const [remark, setRemark] = useState('');
   
+  useEffect(() => {
+    if (open && stop) {
+      setNormalWeight(stop.estNormalWeight ? String(stop.estNormalWeight) : "");
+      setSupperWeight(stop.estSupperWeight ? String(stop.estSupperWeight) : "");
+      setNormalPhotoUri(undefined);
+      setSupperPhotoUri(undefined);
+      setRemark('');
+    }
+  }, [open, stop]);
+
+  const addPhoto = async (setPhotoUri: (uri: string) => void) => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  };
+
   if (!stop) return null;
   return (
     <Sheet open={open} onClose={onClose}>
@@ -351,24 +380,31 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
         fontSize: 20,
       }}>Log Tea Collection</Text>
       
-      <Field label="Actual weight (kg)">
-        <Input 
-          value={weight} 
-          onChangeText={setWeight}
+      <Field label="Normal tea weight (kg)">
+        <Input
+          value={normalWeight}
+          onChangeText={setNormalWeight}
           keyboardType="decimal-pad"
-          placeholder="Enter weight in kg"
+          placeholder="Enter Normal tea weight"
         />
       </Field>
       
-      <Field label="Tea type">
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {["Normal", "Supper"].map((t) => (
-            <Chip key={t} active={type === t} onPress={() => setType(t)}>{t}</Chip>
-          ))}
-        </View>
-      </Field>
+      <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={() => addPhoto((uri) => setNormalPhotoUri(uri))}>
+        {normalPhotoUri ? "Normal tea bag photo added" : "Add Normal Tea Bags Photo"}
+      </Btn>
       
-      <Btn variant="ghost" block style={{ marginBottom: 14 }}>Add Photo of Tea Bags</Btn>
+      <Field label="Supper tea weight (kg)">
+        <Input
+          value={supperWeight} 
+          onChangeText={setSupperWeight}
+          keyboardType="decimal-pad"
+          placeholder="Enter Supper tea weight"
+        />
+      </Field>
+
+      <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={() => addPhoto((uri) => setSupperPhotoUri(uri))}>
+        {supperPhotoUri ? "Supper tea bag photo added" : "Add Supper Tea Bags Photo"}
+      </Btn>
       
       <Field label="Remarks (optional)">
         <TextInput 
@@ -408,13 +444,20 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
         <Pill status="waiting" />
       </View>
       
-      <Btn variant="primary" block onPress={() => onSubmit(weight)}>Submit Collection</Btn>
+      <Btn
+        variant="primary"
+        block
+        onPress={() => onSubmit({ normal: normalWeight, supper: supperWeight, normalPhotoUri, supperPhotoUri })}
+      >
+        Submit Collection
+      </Btn>
     </Sheet>
   );
 };
 
-export const ConfirmSheet = ({ open, weight, onClose }: any) => {
-  const w = parseFloat(weight) || 0;
+export const ConfirmSheet = ({ open, weights, onClose }: any) => {
+  const normal = weights?.normal || 0;
+  const supper = weights?.supper || 0;
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
@@ -424,30 +467,10 @@ export const ConfirmSheet = ({ open, weight, onClose }: any) => {
         fontSize: 20,
       }}>Estate Weight Confirmation</Text>
       
-      <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-        <View style={{
-          width: 120,
-          height: 120,
-          borderRadius: 60,
-          borderWidth: 10,
-          borderColor: c.amber,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: 12,
-          backgroundColor: 'transparent',
-        }}>
-          <Text style={{
-            fontFamily: fontDisplay.fontFamily,
-            fontWeight: '700',
-            fontSize: 20,
-            color: c.forestDeep,
-          }}>{w.toFixed(1)} kg</Text>
-          <Text style={{
-            fontFamily: fontDefault.fontFamily,
-            fontSize: 10,
-            color: "#8A9082",
-          }}>reported</Text>
-        </View>
+      <View style={{ paddingVertical: 16 }}>
+        <DetailRow k="Normal tea weight" v={`${normal.toFixed(1)} kg`} />
+        <DetailRow k="Supper tea weight" v={`${supper.toFixed(1)} kg`} />
+        <DetailRow k="Total reported weight" v={`${(normal + supper).toFixed(1)} kg`} />
         
         <Pill status="waiting">Waiting for confirmation…</Pill>
         <Text style={{
@@ -569,7 +592,9 @@ export const FactoryMapSheet = ({ open, stopCount, totalWeight, onClose, onArriv
 };
 
 export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSubmit }: any) => {
-  const total = stops.reduce((sum: number, s: any) => sum + (s.actualWeight || 0), 0);
+  const normalTotal = stops.reduce((sum: number, s: any) => sum + (s.actualNormalWeight || 0), 0);
+  const supperTotal = stops.reduce((sum: number, s: any) => sum + (s.actualSupperWeight || 0), 0);
+  const total = normalTotal + supperTotal;
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
@@ -604,18 +629,26 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
               paddingVertical: 6,
             }}>
               <Text style={{ fontSize: 15, color: c.ink }}>{s.name}</Text>
-              <Text style={{
-                fontFamily: fontDefault.fontFamily,
-                fontWeight: '600',
-                fontSize: 15,
-                color: c.forest,
-              }}>{s.actualWeight} kg</Text>
+              <View>
+                {s.actualNormalWeight > 0 && (
+                  <Text style={{ fontFamily: fontDefault.fontFamily, fontWeight: '600', fontSize: 13, color: c.forest }}>
+                    Normal {s.actualNormalWeight} kg
+                  </Text>
+                )}
+                {s.actualSupperWeight > 0 && (
+                  <Text style={{ fontFamily: fontDefault.fontFamily, fontWeight: '600', fontSize: 13, color: c.forest }}>
+                    Supper {s.actualSupperWeight} kg
+                  </Text>
+                )}
+              </View>
             </View>
           ))}
         </View>
       </Field>
 
       <DetailRow k="Total collection weight" v={`${total} kg`} />
+      <DetailRow k="Normal tea total" v={`${normalTotal} kg`} />
+      <DetailRow k="Supper tea total" v={`${supperTotal} kg`} />
 
       <View style={{ marginTop: 14 }}>
         <Field label="Receiving officer">
