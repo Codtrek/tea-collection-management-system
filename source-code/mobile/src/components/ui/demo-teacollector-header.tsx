@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { fontDisplay, fontMono } from './demo-teacollector-theme';
 import { colors } from '@/theme/colors';
 import { fonts } from '@/theme/fonts';
 
@@ -110,6 +109,7 @@ const styles = StyleSheet.create({
   },
 
   subText: {
+    fontFamily: fonts.default,
     fontSize: 12,
     color: colors.text.secondary,
     marginRight: 10,

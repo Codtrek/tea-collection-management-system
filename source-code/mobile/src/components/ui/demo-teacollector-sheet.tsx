@@ -7,7 +7,7 @@ View,
 StyleSheet
 } from 'react-native';
 
-import {c} from './demo-teacollector-theme';
+import {colors} from '@/theme/colors';
 
 
 
@@ -74,7 +74,7 @@ position:'absolute',
 left:0,
 right:0,
 bottom:0,
-backgroundColor:'#fff',
+backgroundColor:colors.background,
 borderTopLeftRadius:24,
 borderTopRightRadius:24,
 maxHeight:'85%'
@@ -85,7 +85,7 @@ sheetHandle:{
 width:44,
 height:5,
 borderRadius:999,
-backgroundColor:c.line,
+backgroundColor:colors.border.light,
 alignSelf:'center',
 marginTop:10
 },

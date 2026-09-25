@@ -7,9 +7,24 @@ import { Chip } from '@/components/forms';
 import { FormField as Field, FormInput as Input, FormSelect as Select } from '@/components/forms';
 import { Btn } from '@/components/ui/demo-teacollector-button';
 import { Pill } from '@/components/ui/demo-teacollector-pill';
-import { c, fontDisplay, fontMono } from '@/components/ui/demo-teacollector-theme';
 import { STATUS_STYLE } from '@/theme/teacollector-statusStyle';
 import { colors } from '@/theme/colors';
+import { fonts } from '@/theme/fonts';
+
+const c = {
+  forest: colors.primary,
+  forestDeep: colors.text.primary,
+  mist: colors.surface,
+  amber: colors.warning,
+  amberDeep: colors.warning,
+  line: colors.border.light,
+  ink: colors.text.primary,
+  muted: colors.text.muted,
+  sageDeep: colors.text.muted,
+} as const;
+
+const fontDisplay = { fontFamily: fonts.display };
+const fontDefault = { fontFamily: fonts.default };
 
 const RECEIVING_OFFICERS = ["K. Abeysekera", "M. Rathnayake", "S. Weerasinghe", "T. Gunasekara"];
 
@@ -18,7 +33,7 @@ export const FertDetailsSheet = ({ open, request, onClose }: any) => {
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
-        fontFamily: fontMono.fontFamily,
+        fontFamily: fontDefault.fontFamily,
         fontWeight: 'bold',
         textTransform: 'uppercase',
         letterSpacing: 1.8,
@@ -52,7 +67,7 @@ export const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
-        fontFamily: fontMono.fontFamily,
+        fontFamily: fontDefault.fontFamily,
         fontWeight: 'bold',
         textTransform: 'uppercase',
         letterSpacing: 1.8,
@@ -114,7 +129,7 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
-        fontFamily: fontMono.fontFamily,
+        fontFamily: fontDefault.fontFamily,
         fontWeight: 'bold',
         textTransform: 'uppercase',
         letterSpacing: 1.8,
@@ -155,7 +170,7 @@ export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) =
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
-        fontFamily: fontMono.fontFamily,
+        fontFamily: fontDefault.fontFamily,
         fontWeight: 'bold',
         textTransform: 'uppercase',
         letterSpacing: 1.8,
@@ -268,7 +283,7 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall }:
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
-        fontFamily: fontMono.fontFamily,
+        fontFamily: fontDefault.fontFamily,
         fontWeight: 'bold',
         textTransform: 'uppercase',
         letterSpacing: 1.8,
@@ -321,7 +336,7 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
-        fontFamily: fontMono.fontFamily,
+        fontFamily: fontDefault.fontFamily,
         fontWeight: 'bold',
         textTransform: 'uppercase',
         letterSpacing: 1.8,
@@ -428,7 +443,7 @@ export const ConfirmSheet = ({ open, weight, onClose }: any) => {
             color: c.forestDeep,
           }}>{w.toFixed(1)} kg</Text>
           <Text style={{
-            fontFamily: fontMono.fontFamily,
+            fontFamily: fontDefault.fontFamily,
             fontSize: 10,
             color: "#8A9082",
           }}>reported</Text>
@@ -454,7 +469,7 @@ export const FactoryMapSheet = ({ open, stopCount, totalWeight, onClose, onArriv
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
-        fontFamily: fontMono.fontFamily,
+        fontFamily: fontDefault.fontFamily,
         fontWeight: 'bold',
         textTransform: 'uppercase',
         letterSpacing: 1.8,
@@ -558,7 +573,7 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
-        fontFamily: fontMono.fontFamily,
+        fontFamily: fontDefault.fontFamily,
         fontWeight: 'bold',
         textTransform: 'uppercase',
         letterSpacing: 1.8,
@@ -590,7 +605,7 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
             }}>
               <Text style={{ fontSize: 15, color: c.ink }}>{s.name}</Text>
               <Text style={{
-                fontFamily: fontMono.fontFamily,
+                fontFamily: fontDefault.fontFamily,
                 fontWeight: '600',
                 fontSize: 15,
                 color: c.forest,
@@ -634,7 +649,7 @@ export const FactoryWeightSheet = ({ open, collectionWeight, factoryWeight, onCl
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
-        fontFamily: fontMono.fontFamily,
+        fontFamily: fontDefault.fontFamily,
         fontWeight: 'bold',
         textTransform: 'uppercase',
         letterSpacing: 1.8,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { c } from './demo-teacollector-theme';
+
 
 export const Card = ({ children, dark = false, style }: any) => {
   return (

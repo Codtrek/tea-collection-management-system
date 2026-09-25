@@ -12,13 +12,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pill } from "@/components/ui/demo-teacollector-pill";
 import { Btn } from "@/components/ui/demo-teacollector-button";
 
-import {
-  c,
-  fontDisplay,
-  fontMono,
-} from "@/components/ui/demo-teacollector-theme";
-
 import { colors } from "@/theme/colors";
+import { fonts } from "@/theme/fonts";
 
 /* =========================================================
    HOME / STATS CARDS
@@ -544,7 +539,7 @@ const statStyles = StyleSheet.create({
    shadowRadius: 8,
    elevation: 2,
    borderWidth: 1,
-   borderColor: c.line,
+   borderColor: colors.border.light,
    alignSelf: "flex-start",
  },
 
@@ -570,7 +565,7 @@ const statStyles = StyleSheet.create({
  },
 
  statValue: {
-   fontFamily: fontDisplay.fontFamily,
+   fontFamily: fonts.display,
    fontSize: 26,
    fontWeight: "700",
    lineHeight: 30,
@@ -620,22 +615,22 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.display,
     fontWeight: "600",
     fontSize: 16,
-    color: c.ink,
+    color: colors.text.primary,
   },
 
   subtitle: {
     fontSize: 12,
     marginTop: 2,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   timeText: {
     fontSize: 12,
     marginTop: 4,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   /* =======================================================
@@ -649,15 +644,15 @@ const styles = StyleSheet.create({
   },
 
   metaText: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 12,
-    color: c.forest,
+    color: colors.text.primaryGreen,
   },
 
   mutedMetaText: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 12,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   /* =======================================================
@@ -683,13 +678,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1.5,
-    borderColor: c.forestLight,
+    borderColor: colors.border.focused,
   },
 
   continueText: {
     fontWeight: "600",
     fontSize: 13,
-    color: c.forest,
+    color: colors.text.primaryGreen,
   },
 
   /* =======================================================
@@ -713,15 +708,15 @@ const styles = StyleSheet.create({
   },
 
   cancelledText: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 12,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   cancelledNote: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 12,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   /* =======================================================
