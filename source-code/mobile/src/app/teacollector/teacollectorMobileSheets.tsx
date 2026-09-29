@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput } from 'react-native';
+import { View, Text, TextInput, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Sheet } from '@/components/ui/demo-teacollector-sheet';
 import { DetailRow } from '@/components/ui/demo-teacollector-detail-row';
@@ -412,14 +412,14 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
   const [remark, setRemark] = useState('');
   
   useEffect(() => {
-    if (open && stop) {
+    if (stop) {
       setNormalWeight("");
       setSupperWeight("");
       setNormalPhotoUri(undefined);
       setSupperPhotoUri(undefined);
       setRemark('');
     }
-  }, [open, stop]);
+  }, [stop?.id]);
 
   const addPhoto = async (setPhotoUri: (uri: string) => void) => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -549,10 +549,11 @@ type ConfirmSheetProps = {
     estNormalWeight?: number;
     estSupperWeight?: number;
   } | null;
+  onBack: () => void;
   onClose: () => void;
 };
 
-export const ConfirmSheet = ({ open, weights, stop, onClose }: ConfirmSheetProps) => {
+export const ConfirmSheet = ({ open, weights, stop, onBack, onClose }: ConfirmSheetProps) => {
   const normal = weights?.normal || 0;
   const supper = weights?.supper || 0;
   const estateNormal = stop?.estNormalWeight || 0;
@@ -630,7 +631,14 @@ export const ConfirmSheet = ({ open, weights, stop, onClose }: ConfirmSheetProps
         </Text>
       </View>
 
-      <Btn variant="ghost" block style={{ marginTop: 8 }} onPress={onClose}>Continue Collecting</Btn>
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Btn variant="ghost" block onPress={onBack}>Back</Btn>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Btn variant="primary" block onPress={onClose}>Continue Collecting</Btn>
+        </View>
+      </View>
     </Sheet>
   );
 };
@@ -761,36 +769,88 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
       }}>Submit Collection</Text>
 
       <Field label="Tea from these estates">
-        <View style={{
-          borderRadius: 16,
-          padding: 16,
-          backgroundColor: c.mist,
-          borderWidth: 1,
-          borderColor: c.line,
-        }}>
-          {stops.map((s: any) => (
-            <View key={s.id} style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              paddingVertical: 6,
-            }}>
-              <Text style={{ fontSize: 15, color: c.ink }}>{s.name}</Text>
-              <View>
-                {s.actualNormalWeight > 0 && (
-                  <Text style={{ fontFamily: fontDefault.fontFamily, fontWeight: '600', fontSize: 13, color: c.forest }}>
-                    Normal {s.actualNormalWeight} kg
-                  </Text>
-                )}
-                {s.actualSupperWeight > 0 && (
-                  <Text style={{ fontFamily: fontDefault.fontFamily, fontWeight: '600', fontSize: 13, color: c.forest }}>
-                    Supper {s.actualSupperWeight} kg
-                  </Text>
-                )}
-              </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View style={{
+            borderRadius: 16,
+            padding: 12,
+            backgroundColor: c.mist,
+            borderWidth: 1,
+            borderColor: c.line,
+          }}>
+            <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: c.line, paddingBottom: 8 }}>
+              {[
+                { label: "Factory", width: 150 },
+                { label: "Estate", width: 150 },
+                { label: "Estate normal", width: 115 },
+                { label: "Collector normal", width: 125 },
+                { label: "Normal difference", width: 130 },
+                { label: "Estate supper", width: 115 },
+                { label: "Collector supper", width: 125 },
+                { label: "Supper difference", width: 130 },
+              ].map((column) => (
+                <Text
+                  key={column.label}
+                  style={{ width: column.width, paddingHorizontal: 4, fontSize: 12, fontWeight: '700', color: c.forestDeep }}
+                >
+                  {column.label}
+                </Text>
+              ))}
             </View>
-          ))}
-        </View>
+            {stops.map((s: any, index: number) => (
+              <View
+                key={s.id}
+                style={{
+                  flexDirection: 'row',
+                  paddingVertical: 9,
+                  borderBottomWidth: index === stops.length - 1 ? 0 : 1,
+                  borderBottomColor: c.line,
+                }}
+              >
+                {(() => {
+                  const estateNormal = s.estNormalWeight || 0;
+                  const collectorNormal = s.actualNormalWeight || 0;
+                  const normalDifference = Math.round((collectorNormal - estateNormal) * 10) / 10;
+                  const estateSupper = s.estSupperWeight || 0;
+                  const collectorSupper = s.actualSupperWeight || 0;
+                  const supperDifference = Math.round((collectorSupper - estateSupper) * 10) / 10;
+                  const cells = [
+                    { value: "Kotmale MPT Factory", width: 150, color: c.ink },
+                    { value: s.name, width: 150, color: c.ink },
+                    { value: `${estateNormal.toFixed(1)} kg`, width: 115, color: c.forest },
+                    { value: `${collectorNormal.toFixed(1)} kg`, width: 125, color: c.forest },
+                    {
+                      value: `${normalDifference > 0 ? "+" : ""}${normalDifference.toFixed(1)} kg`,
+                      width: 130,
+                      color: normalDifference === 0 ? c.forest : colors.error,
+                    },
+                    { value: `${estateSupper.toFixed(1)} kg`, width: 115, color: c.forest },
+                    { value: `${collectorSupper.toFixed(1)} kg`, width: 125, color: c.forest },
+                    {
+                      value: `${supperDifference > 0 ? "+" : ""}${supperDifference.toFixed(1)} kg`,
+                      width: 130,
+                      color: supperDifference === 0 ? c.forest : colors.error,
+                    },
+                  ];
+
+                  return cells.map((cell, cellIndex) => (
+                  <Text
+                    key={`${s.id}-${cellIndex}`}
+                    style={{
+                      width: cell.width,
+                      paddingHorizontal: 4,
+                      fontSize: 13,
+                      color: cell.color,
+                      fontWeight: cellIndex === 4 || cellIndex === 7 ? '700' : '400',
+                    }}
+                  >
+                    {cell.value}
+                  </Text>
+                  ));
+                })()}
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       </Field>
 
       <DetailRow k="Total collection weight" v={`${total} kg`} />

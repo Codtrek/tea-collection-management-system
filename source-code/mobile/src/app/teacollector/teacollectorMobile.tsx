@@ -450,7 +450,7 @@ export default function TeaCollectorMobile() {
         <ArrivedSheet open={sheet === "arrived"} stop={activeStop} onClose={() => setSheet(null)} onStartCollection={startCollection} onCall={handleCall} onCancelPickup={() => setSheet("cancelPickup")} />
         <CancelPickupSheet open={sheet === "cancelPickup"} onBack={() => setSheet("arrived")} onConfirm={confirmCancelPickup} />
         <CollectSheet open={sheet === "collect"} stop={activeStop} onClose={() => setSheet(null)} onSubmit={submitCollection} />
-        <ConfirmSheet open={sheet === "confirm"} stop={activeStop} weights={collectedWeights} onClose={continueCollecting} />
+        <ConfirmSheet open={sheet === "confirm"} stop={activeStop} weights={collectedWeights} onBack={() => setSheet("collect")} onClose={continueCollecting} />
         
         <FactoryMapSheet
           open={sheet === "map"}
