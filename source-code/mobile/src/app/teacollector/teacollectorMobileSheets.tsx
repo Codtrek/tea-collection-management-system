@@ -30,6 +30,7 @@ const fontDefault = { fontFamily: fonts.default };
 const teaWeight = (weight: number | null | undefined) => `${weight || 0} kg`;
 
 const RECEIVING_OFFICERS = ["K. Abeysekera", "M. Rathnayake", "S. Weerasinghe", "T. Gunasekara"];
+const PICKUP_REASONS = ["Estate not ready", "Road blocked", "Vehicle issue", "Other"];
 
 export const FertDetailsSheet = ({ open, request, onClose }: any) => {
   if (!request) return null;
@@ -237,7 +238,7 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
       }}>Decline pickup</Text>
       <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>Select a reason — this is required.</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {["Estate not ready", "Road blocked", "Vehicle issue", "Other"].map((r) => (
+        {PICKUP_REASONS.map((r) => (
           <Chip
             key={r}
             active={reason === r}
@@ -282,25 +283,94 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
   );
 };
 
-export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall }: any) => {
-  if (!stop) return null;
+export const CancelPickupSheet = ({ open, onBack, onConfirm }: any) => {
+  const [reason, setReason] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      setReason(null);
+      setNote('');
+    }
+  }, [open]);
+
   return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDefault.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>Arrived at estate</Text>
+    <Sheet open={open} onClose={onBack}>
       <Text style={{
         fontFamily: fontDisplay.fontFamily,
         fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
+        marginBottom: 4,
         fontSize: 20,
-      }}>{stop.name}</Text>
+      }}>Cancel pickup</Text>
+      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
+        Select a reason — this is required.
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        {PICKUP_REASONS.map((pickupReason) => (
+          <Chip
+            key={pickupReason}
+            active={reason === pickupReason}
+            onPress={() => setReason(reason === pickupReason ? null : pickupReason)}
+          >
+            {pickupReason}
+          </Chip>
+        ))}
+      </View>
+      <Field label="Add a note (optional)">
+        <TextInput
+          style={{
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderColor: colors.border.light,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            fontSize: 15,
+            height: 64,
+            textAlignVertical: 'top',
+          }}
+          multiline
+          numberOfLines={3}
+          placeholder="Anything the factory should know..."
+          value={note}
+          onChangeText={setNote}
+        />
+      </Field>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Btn variant="danger" block disabled={!reason} onPress={() => reason && onConfirm(reason, note)}>
+            Confirm Cancel
+          </Btn>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Btn variant="ghost" block onPress={onBack}>Back</Btn>
+        </View>
+      </View>
+    </Sheet>
+  );
+};
+
+export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall, onCancelPickup }: any) => {
+  if (!stop) return null;
+  return (
+    <Sheet open={open} onClose={onClose}>
+      <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: 10, marginBottom: 10 }}>
+        <View style={{ flex: 1, minHeight: 52, justifyContent: 'space-between' }}>
+          <Text style={{
+            fontFamily: fontDefault.fontFamily,
+            fontWeight: 'bold',
+            textTransform: 'uppercase',
+            letterSpacing: 1.8,
+            fontSize: 11,
+            color: c.sageDeep,
+          }}>Arrived at estate</Text>
+          <Text style={{
+            fontFamily: fontDisplay.fontFamily,
+            fontWeight: '600',
+            fontSize: 20,
+          }}>{stop.name}</Text>
+        </View>
+        <Btn variant="forest" onPress={onCall} style={{ minWidth: 92, height: 52 }}>📞 Call</Btn>
+      </View>
 
       <View style={{
         borderRadius: 14,
@@ -324,9 +394,11 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall }:
 
       <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
         <View style={{ flex: 1 }}>
+          <Btn variant="danger" block onPress={onCancelPickup}>Cancel Pickup</Btn>
+        </View>
+        <View style={{ flex: 1 }}>
           <Btn variant="primary" block onPress={onStartCollection}>Start Collection</Btn>
         </View>
-        <Btn variant="forest"  onPress={onCall} style={{ minWidth: 92 }}>📞 Call</Btn>
       </View>
     </Sheet>
   );
@@ -341,8 +413,8 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
   
   useEffect(() => {
     if (open && stop) {
-      setNormalWeight(stop.estNormalWeight ? String(stop.estNormalWeight) : "");
-      setSupperWeight(stop.estSupperWeight ? String(stop.estSupperWeight) : "");
+      setNormalWeight("");
+      setSupperWeight("");
       setNormalPhotoUri(undefined);
       setSupperPhotoUri(undefined);
       setRemark('');
@@ -362,6 +434,10 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
   };
 
   if (!stop) return null;
+  const hasNormalTea = (stop.estNormalWeight || 0) > 0;
+  const hasSupperTea = (stop.estSupperWeight || 0) > 0;
+  const showBothTeaTypes = !hasNormalTea && !hasSupperTea;
+
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
@@ -379,32 +455,42 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
         marginBottom: 12,
         fontSize: 20,
       }}>Log Tea Collection</Text>
-      
-      <Field label="Normal tea weight (kg)">
-        <Input
-          value={normalWeight}
-          onChangeText={setNormalWeight}
-          keyboardType="decimal-pad"
-          placeholder="Enter Normal tea weight"
-        />
-      </Field>
-      
-      <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={() => addPhoto((uri) => setNormalPhotoUri(uri))}>
-        {normalPhotoUri ? "Normal tea bag photo added" : "Add Normal Tea Bags Photo"}
-      </Btn>
-      
-      <Field label="Supper tea weight (kg)">
-        <Input
-          value={supperWeight} 
-          onChangeText={setSupperWeight}
-          keyboardType="decimal-pad"
-          placeholder="Enter Supper tea weight"
-        />
-      </Field>
 
-      <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={() => addPhoto((uri) => setSupperPhotoUri(uri))}>
-        {supperPhotoUri ? "Supper tea bag photo added" : "Add Supper Tea Bags Photo"}
-      </Btn>
+      {(hasNormalTea || showBothTeaTypes) && (
+        <>
+          <Field label="Normal tea weight (kg)">
+            <Input
+              value={normalWeight}
+              onChangeText={setNormalWeight}
+              keyboardType="decimal-pad"
+              placeholder="Enter Normal tea weight"
+              placeholderTextColor={c.muted}
+            />
+          </Field>
+
+          <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={() => addPhoto((uri) => setNormalPhotoUri(uri))}>
+            {normalPhotoUri ? "Normal tea bag photo added" : "Add Normal Tea Bags Photo"}
+          </Btn>
+        </>
+      )}
+
+      {(hasSupperTea || showBothTeaTypes) && (
+        <>
+          <Field label="Supper tea weight (kg)">
+            <Input
+              value={supperWeight}
+              onChangeText={setSupperWeight}
+              keyboardType="decimal-pad"
+              placeholder="Enter Supper tea weight"
+              placeholderTextColor={c.muted}
+            />
+          </Field>
+
+          <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={() => addPhoto((uri) => setSupperPhotoUri(uri))}>
+            {supperPhotoUri ? "Supper tea bag photo added" : "Add Supper Tea Bags Photo"}
+          </Btn>
+        </>
+      )}
       
       <Field label="Remarks (optional)">
         <TextInput 
@@ -455,9 +541,28 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
   );
 };
 
-export const ConfirmSheet = ({ open, weights, onClose }: any) => {
+type ConfirmSheetProps = {
+  open: boolean;
+  weights: { normal: number; supper: number };
+  stop?: {
+    name: string;
+    estNormalWeight?: number;
+    estSupperWeight?: number;
+  } | null;
+  onClose: () => void;
+};
+
+export const ConfirmSheet = ({ open, weights, stop, onClose }: ConfirmSheetProps) => {
   const normal = weights?.normal || 0;
   const supper = weights?.supper || 0;
+  const estateNormal = stop?.estNormalWeight || 0;
+  const estateSupper = stop?.estSupperWeight || 0;
+  const weightRows = [
+    { label: "Normal", estate: estateNormal, collector: normal },
+    { label: "Supper", estate: estateSupper, collector: supper },
+    { label: "Total", estate: estateNormal + estateSupper, collector: normal + supper },
+  ];
+
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
@@ -466,12 +571,54 @@ export const ConfirmSheet = ({ open, weights, onClose }: any) => {
         marginBottom: 4,
         fontSize: 20,
       }}>Estate Weight Confirmation</Text>
+      {stop?.name ? (
+        <Text style={{ fontSize: 14, fontWeight: '600', color: c.sageDeep }}>
+          {stop.name}
+        </Text>
+      ) : null}
       
-      <View style={{ paddingVertical: 16 }}>
-        <DetailRow k="Normal tea weight" v={`${normal.toFixed(1)} kg`} />
-        <DetailRow k="Supper tea weight" v={`${supper.toFixed(1)} kg`} />
-        <DetailRow k="Total reported weight" v={`${(normal + supper).toFixed(1)} kg`} />
-        
+      <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 16 }}>
+        {[
+          { key: "estate", title: "Estate measured", field: "estate" as const },
+          { key: "collector", title: "Tea collector", field: "collector" as const },
+        ].map((column) => (
+          <View
+            key={column.key}
+            style={{
+              flex: 1,
+              padding: 12,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: c.line,
+              backgroundColor: c.mist,
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '700', color: c.forestDeep, marginBottom: 10 }}>
+              {column.title}
+            </Text>
+            {weightRows.map((row) => (
+              <View
+                key={row.label}
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingVertical: 5,
+                  borderTopWidth: row.label === "Normal" ? 0 : 1,
+                  borderTopColor: c.line,
+                }}
+              >
+                <Text style={{ fontSize: 12, color: c.muted }}>{row.label}</Text>
+                <Text style={{ fontSize: 12, fontWeight: row.label === "Total" ? '700' : '500', color: c.ink }}>
+                  {row[column.field].toFixed(1)} kg
+                </Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+
+      <View style={{ paddingBottom: 8 }}>
         <Pill status="waiting">Waiting for confirmation…</Pill>
         <Text style={{
           textAlign: 'center',
@@ -482,7 +629,7 @@ export const ConfirmSheet = ({ open, weights, onClose }: any) => {
           Sent to the estate owner. This stop moves to Tea Loaded — you can head to the factory once you've picked up everything on your list.
         </Text>
       </View>
-      
+
       <Btn variant="ghost" block style={{ marginTop: 8 }} onPress={onClose}>Continue Collecting</Btn>
     </Sheet>
   );

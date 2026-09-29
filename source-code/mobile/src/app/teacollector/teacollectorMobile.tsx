@@ -41,6 +41,7 @@ import {
   DeliverFertSheet,
   PickupSheet,
   DeclineSheet,
+  CancelPickupSheet,
   ArrivedSheet,
   CollectSheet,
   ConfirmSheet,
@@ -219,6 +220,21 @@ export default function TeaCollectorMobile() {
       reason,
       note 
     }); 
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
+
+  const confirmCancelPickup = (reason: string, note: string) => {
+    if (!activeStop) {
+      console.warn("No active stop to cancel");
+      return;
+    }
+
+    updateStop(activeStop.id, {
+      status: "cancelled",
+      reason,
+      note,
+    });
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
@@ -431,9 +447,10 @@ export default function TeaCollectorMobile() {
         {/* Tea collection overlays */}
         <PickupSheet open={sheet === "pickup"} stop={activeStop} onClose={() => setSheet(null)} onAccept={acceptPickup} onDecline={goToDecline} />
         <DeclineSheet open={sheet === "decline"} onClose={() => setSheet(null)} onConfirm={confirmDecline} />
-        <ArrivedSheet open={sheet === "arrived"} stop={activeStop} onClose={() => setSheet(null)} onStartCollection={startCollection} onCall={handleCall} />
+        <ArrivedSheet open={sheet === "arrived"} stop={activeStop} onClose={() => setSheet(null)} onStartCollection={startCollection} onCall={handleCall} onCancelPickup={() => setSheet("cancelPickup")} />
+        <CancelPickupSheet open={sheet === "cancelPickup"} onBack={() => setSheet("arrived")} onConfirm={confirmCancelPickup} />
         <CollectSheet open={sheet === "collect"} stop={activeStop} onClose={() => setSheet(null)} onSubmit={submitCollection} />
-        <ConfirmSheet open={sheet === "confirm"} weights={collectedWeights} onClose={continueCollecting} />
+        <ConfirmSheet open={sheet === "confirm"} stop={activeStop} weights={collectedWeights} onClose={continueCollecting} />
         
         <FactoryMapSheet
           open={sheet === "map"}
