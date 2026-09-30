@@ -8,11 +8,11 @@ if [ -z "$BRANCH" ]; then
   exit 1
 fi
 
-cd /root/tea-collection-management-system
+cd /home/harboostuser/tea-collection-management-system
 git fetch origin
 git checkout "$BRANCH"
 git pull origin "$BRANCH"
 
-docker compose -f deploy/docker-compose.demo.yml --env-file deploy/.env.demo up -d --build
+docker compose -f source-code/deploy/docker-compose.demo.yml --env-file source-code/deploy/.env.demo up -d --build
 
-echo "✅ Demo updated to branch '$BRANCH' — live at http://tea-cms.duckdns.org:8010"
+echo "✅ Demo updated to branch '$BRANCH' — live at http://harboost.duckdns.org:8010"
