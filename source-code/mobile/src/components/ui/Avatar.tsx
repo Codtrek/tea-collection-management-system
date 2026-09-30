@@ -1,10 +1,15 @@
-import { Image, StyleSheet, View } from "react-native";
+import {
+  Image,
+  ImageSourcePropType,
+  StyleSheet,
+  View,
+} from "react-native";
 
 import AppText from "./AppText";
 import { colors } from "@/theme/colors";
 
 interface AvatarProps {
-  image?: string;
+  image?: ImageSourcePropType | string;
   name?: string;
   size?: number;
 }
@@ -15,9 +20,14 @@ export default function Avatar({
   size = 40,
 }: AvatarProps) {
   if (image) {
+    const imageSource: ImageSourcePropType =
+      typeof image === "string"
+        ? { uri: image }
+        : image;
+
     return (
       <Image
-        source={{ uri: image }}
+        source={imageSource}
         style={[
           styles.image,
           {
@@ -30,7 +40,10 @@ export default function Avatar({
     );
   }
 
-  const initial = name.length > 0 ? name.charAt(0).toUpperCase() : "?";
+  const initial =
+    name.length > 0
+      ? name.charAt(0).toUpperCase()
+      : "?";
 
   return (
     <View
@@ -43,7 +56,9 @@ export default function Avatar({
         },
       ]}
     >
-      <AppText style={styles.text}>{initial}</AppText>
+      <AppText style={styles.text}>
+        {initial}
+      </AppText>
     </View>
   );
 }
