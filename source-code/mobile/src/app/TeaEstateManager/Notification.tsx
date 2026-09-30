@@ -24,14 +24,14 @@ export default function Notifications() {
     <SafeAreaView style={styles.container}>
       <View style={styles.screen}>
 
+        {/* ================= MAIN CONTENT ================= */}
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
 
-          {/* ================================================= */}
-          {/* HEADER */}
-          {/* ================================================= */}
+          {/* ================= HEADER ================= */}
 
           <View style={styles.header}>
 
@@ -58,13 +58,9 @@ export default function Notifications() {
           </View>
 
 
-          {/* ================================================= */}
-          {/* LOW STOCK ALERT */}
-          {/* ================================================= */}
+          {/* ================= LOW STOCK ALERT ================= */}
 
           <View style={styles.alertCard}>
-
-            {/* Alert Header */}
 
             <View style={styles.alertHeader}>
 
@@ -84,7 +80,7 @@ export default function Notifications() {
             </View>
 
 
-            {/* Fertilizer Information */}
+            {/* Fertilizer information */}
 
             <View style={styles.fertilizerContent}>
 
@@ -128,16 +124,15 @@ export default function Notifications() {
             </View>
 
 
-            {/* Divider */}
-
             <View style={styles.divider} />
 
 
-            {/* Order Details */}
+            {/* Order information */}
 
             <View style={styles.orderDetails}>
 
               <View>
+
                 <AppText
                   variant="caption"
                   style={styles.detailLabel}
@@ -151,10 +146,12 @@ export default function Notifications() {
                 >
                   Oct 12, 2023
                 </AppText>
+
               </View>
 
 
               <View>
+
                 <AppText
                   variant="caption"
                   style={styles.detailLabel}
@@ -168,12 +165,13 @@ export default function Notifications() {
                 >
                   5 days
                 </AppText>
+
               </View>
 
             </View>
 
 
-            {/* Request Fertilizer Button */}
+            {/* Request Fertilizer */}
 
             <Pressable style={styles.requestButton}>
 
@@ -195,9 +193,7 @@ export default function Notifications() {
           </View>
 
 
-          {/* ================================================= */}
-          {/* RECENT ACTIVITY */}
-          {/* ================================================= */}
+          {/* ================= RECENT ACTIVITY ================= */}
 
           <AppText
             variant="caption"
@@ -207,19 +203,20 @@ export default function Notifications() {
           </AppText>
 
 
-          {/* ================================================= */}
-          {/* NOTIFICATION 1 */}
-          {/* ================================================= */}
+          {/* ================= NOTIFICATION 1 ================= */}
 
           <View style={styles.notificationCard}>
 
             <View style={styles.notificationIconBlue}>
+
               <Ionicons
                 name="camera-outline"
                 size={20}
                 color="#5473B5"
               />
+
             </View>
+
 
             <View style={styles.notificationContent}>
 
@@ -253,19 +250,20 @@ export default function Notifications() {
           </View>
 
 
-          {/* ================================================= */}
-          {/* NOTIFICATION 2 */}
-          {/* ================================================= */}
+          {/* ================= NOTIFICATION 2 ================= */}
 
           <View style={styles.notificationCard}>
 
             <View style={styles.notificationIconGreen}>
+
               <Ionicons
                 name="bicycle-outline"
                 size={20}
                 color={colors.success}
               />
+
             </View>
+
 
             <View style={styles.notificationContent}>
 
@@ -299,19 +297,20 @@ export default function Notifications() {
           </View>
 
 
-          {/* ================================================= */}
-          {/* NOTIFICATION 3 */}
-          {/* ================================================= */}
+          {/* ================= NOTIFICATION 3 ================= */}
 
           <View style={styles.notificationCard}>
 
             <View style={styles.notificationIconPurple}>
+
               <Ionicons
                 name="bar-chart-outline"
                 size={20}
                 color="#6879B8"
               />
+
             </View>
+
 
             <View style={styles.notificationContent}>
 
@@ -345,9 +344,7 @@ export default function Notifications() {
           </View>
 
 
-          {/* ================================================= */}
-          {/* NO MORE NOTIFICATIONS */}
-          {/* ================================================= */}
+          {/* ================= NO MORE NOTIFICATIONS ================= */}
 
           <View style={styles.noMoreContainer}>
 
@@ -371,27 +368,25 @@ export default function Notifications() {
           </View>
 
 
-          {/* Bottom spacing */}
-
           <View style={styles.bottomSpace} />
 
         </ScrollView>
 
 
-        {/* ================================================= */}
-        {/* BOTTOM TAB */}
-        {/* ================================================= */}
+        {/* ================= BOTTOM NAVIGATION ================= */}
 
         <View style={styles.bottomTab}>
 
           <EstateManagerBottomTab
             activeTab={activeTab}
             onTabPress={(tab) => {
+
               setActiveTab(tab.key);
 
               if (tab.key === "dashboard") {
-                router.push("/TeaEstateManager");
+                router.back();
               }
+
             }}
           />
 
@@ -426,9 +421,7 @@ const styles = StyleSheet.create({
   },
 
 
-  /* ===================================================== */
-  /* HEADER */
-  /* ===================================================== */
+  /* ================= HEADER ================= */
 
   header: {
     height: 42,
@@ -460,9 +453,7 @@ const styles = StyleSheet.create({
   },
 
 
-  /* ===================================================== */
-  /* LOW STOCK ALERT */
-  /* ===================================================== */
+  /* ================= LOW STOCK ALERT ================= */
 
   alertCard: {
     backgroundColor: colors.background,
@@ -593,9 +584,7 @@ const styles = StyleSheet.create({
   },
 
 
-  /* ===================================================== */
-  /* RECENT ACTIVITY */
-  /* ===================================================== */
+  /* ================= RECENT ACTIVITY ================= */
 
   recentActivityTitle: {
     color: colors.text.tertiary,
@@ -605,9 +594,7 @@ const styles = StyleSheet.create({
   },
 
 
-  /* ===================================================== */
-  /* NOTIFICATION CARDS */
-  /* ===================================================== */
+  /* ================= NOTIFICATION CARDS ================= */
 
   notificationCard: {
     minHeight: 61,
@@ -673,7 +660,7 @@ const styles = StyleSheet.create({
   },
 
 
-  /* Notification icons */
+  /* ================= NOTIFICATION ICONS ================= */
 
   notificationIconBlue: {
     width: 32,
@@ -712,9 +699,7 @@ const styles = StyleSheet.create({
   },
 
 
-  /* ===================================================== */
-  /* NO MORE NOTIFICATIONS */
-  /* ===================================================== */
+  /* ================= NO MORE NOTIFICATIONS ================= */
 
   noMoreContainer: {
     alignItems: "center",
@@ -734,13 +719,12 @@ const styles = StyleSheet.create({
 
   noMoreText: {
     color: colors.text.disabled,
+
     fontSize: 10,
   },
 
 
-  /* ===================================================== */
-  /* BOTTOM TAB */
-  /* ===================================================== */
+  /* ================= BOTTOM NAVIGATION ================= */
 
   bottomSpace: {
     height: spacing.xl * 2,
@@ -753,4 +737,5 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+
 });
