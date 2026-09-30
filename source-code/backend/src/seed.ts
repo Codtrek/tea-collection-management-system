@@ -11,6 +11,7 @@
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { Client } from 'pg';
+import { AGENT_JOB_ROLE } from './employees/employee-roles';
 
 const DEV_PASSWORD = 'Password123!';
 const FACTORY_NAME = 'Nuwara Eliya Tea Factory';
@@ -2647,6 +2648,22 @@ async function seed() {
         [employeeId, factoryId],
       );
       agentIds[a.name] = collectionAgent.rows[0].id;
+
+      // A collection agent IS an employee (job title = AGENT_JOB_ROLE): the HR record is
+      // the source of truth for "who is an agent / are they active", and dispatch links to it.
+      const hrEmployee = await client.query<{ id: number }>(
+        `INSERT INTO employees
+           (user_id, name, nic, contact, role, department, hire_date, employment_type, status, has_login)
+         VALUES ($1, $2, $3, $4, $5, 'Logistics', '2026-01-01', 'Permanent', 'Active', TRUE)
+         ON CONFLICT (nic) DO UPDATE SET
+           user_id = EXCLUDED.user_id, role = EXCLUDED.role, status = 'Active', has_login = TRUE
+         RETURNING id`,
+        [agentUserId, a.name, a.nic, a.phone, AGENT_JOB_ROLE],
+      );
+      await client.query(
+        `UPDATE collection_agents SET hr_employee_id = $2 WHERE id = $1`,
+        [collectionAgent.rows[0].id, hrEmployee.rows[0].id],
+      );
     }
 
     console.log(

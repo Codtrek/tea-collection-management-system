@@ -820,6 +820,14 @@ agent API exists, exercised by unit tests and curl — merge `origin/dev` for th
 - **Web:** `/collections/dispatch` (`features/dispatch/`), Leaflet map lazy-loaded; `dispatch` is a data-driven
   permission module (view / edit = absent+cover+today-only / approve = permanent). `ReceivingOfficer` row exists
   in `role_permissions` with level `none` (the "agent hasn't arrived" flag is deferred).
+- **Agents are employees (2026-10-10).** `Tea Collecting Agent` is an HR job title (`employees/employee-roles.ts`, served by
+  `GET /employees/roles`; the portal has no hardcoded copy). An agent = **Active** employee with that title linked via
+  `collection_agents.hr_employee_id`; `AgentDirectoryService` is driven by employees, so deactivating/re-roling removes
+  them from the board and kills their mobile login. Registering one provisions the login in a single transaction
+  (`AgentProvisioningService`; one-time temp password returned once, `users.must_change_password`, 409 on a taken
+  contact number). Dispatch board: new agents show "Not started"/"Unassigned"; "View history" →
+  `/employees/:id?tab=collections` (`GET /employees/:id/collections`, 90-day default, paginated, "Covering Route X").
+  Migration `2026-10-10-agent-employees.sql`. Portal now has vitest (`npm test`).
 - **Gotchas:** seed re-runs burn serial values, so seeded agent ids are 1, 2, 45–47 (don't hardcode). `expo-server-sdk`
   is ESM-only, loaded lazily in `DispatchNotifier`. Redis isn't installed locally — the fallback is what runs.
   Migration: `source-code/database/migrations/2026-10-09-agent-dispatch.sql` (idempotent; mirrored in `init.sql`).

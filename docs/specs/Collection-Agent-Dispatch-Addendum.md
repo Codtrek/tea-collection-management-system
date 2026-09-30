@@ -186,3 +186,56 @@ collection flow is built.
 ## 10. Out of scope this round
 Background GPS tracking · splitting a route between agents · Receiving Officer portal role · geometry-
 based proximity · mobile screens (API endpoints only) · push delivery on a real device.
+
+---
+
+## 11. Tea Collecting Agent as an Employee role (2026-10-10)
+
+Three changes that join HR to dispatch. Before this, registration (`employees`) and dispatch
+(`collection_agents → factory_employees → users`) were unrelated tables, so a registered agent never
+reached the board.
+
+### 11.1 One source of truth
+- **The role.** `Tea Collecting Agent` is a job title in `backend/src/employees/employee-roles.ts`
+  (`AGENT_JOB_ROLE`, `EMPLOYEE_ROLES`). The registration/edit forms fetch it from `GET /employees/roles`; the DTO
+  validates against it; dispatch decides "who is an agent" from it. The literal is never repeated in code (the
+  migration SQL carries one commented copy).
+- **The link.** `collection_agents.hr_employee_id` (nullable, UNIQUE) points at the HR record.
+  `collection_agents` stays dispatch's identity — route assignments, pings and day status key on it.
+- **Who is an agent** = an **Active** employee with the agent job title, linked to dispatch and holding a login.
+  Suspended/Inactive employees, or anyone whose role changed, are not agents: they leave the board, can't be
+  cover candidates, and their mobile token stops working. There is no separate agent list to maintain.
+
+### 11.2 Registration provisions the agent
+Registering (or changing someone *to*) the agent role creates, in one transaction: a `users` login (phone = the
+contact number, a random one-time password stored only as a bcrypt hash, `must_change_password = true`), the
+`factory_employees` and `collection_agents` rows, and sets `employees.user_id` / `has_login`. The plain password is
+returned **once** on the create/update response (`initialPassword`) and shown to the administrator in a modal.
+- A contact number that already has a login → **409**, and nothing is saved.
+- A failed provision rolls the registration back — never a half-registered agent.
+- First sign-in: `POST /auth/agent/login` returns `mustChangePassword`; every agent call is refused (403) until
+  `POST /auth/agent/change-password` succeeds. A suspended login is refused immediately, even with a valid token.
+- Leaving the role, or deactivating: the open permanent route ends (`valid_to` = yesterday, or CANCELLED if it started
+  today) — the route shows **Unassigned** until an officer reassigns it — covers are cancelled, the login is
+  suspended. History is kept; re-enabling restores the same identity (no new password).
+
+### 11.3 Dispatch board
+- A newly registered agent appears with status **Not started** and route **Unassigned**; they are given a route
+  through the existing Reassign flow (permanent → needs Approve).
+- Row action **View history** → `/employees/:id?tab=collections`.
+
+### 11.4 Employee detail → Collections tab
+`GET /employees/:id/collections` (needs `employees` ≥ view **and** `collection` ≥ view) — deliveries collected by the
+agent: date, route, estate, estate weight, graded total + grade lines once graded, status. Server-side paged
+(0-based `page`, 25 per page, default window **last 90 days**, "View all" widens it) — the Estate Owner tab contract.
+A delivery made under an **accepted** cover of another route is marked **Covering Route X** (a declined cover is not;
+one cancelled after acceptance still is). The tab shows only for agents and only to viewers with both permissions;
+`?tab=collections` opens it directly, and an unavailable tab falls back to Overview. A deactivated agent's history
+stays readable.
+
+### 11.5 Notes
+- Existing agents were migrated to Employee records (`2026-10-10-agent-employees.sql`); every employee is now also in
+  payroll/attendance lists (rates 0 until set).
+- Mobile: the temporary-password screen is not built in this repo (the teammate's app on `origin/dev` has a
+  change-password page to wire to `/auth/agent/change-password`).
+

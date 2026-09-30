@@ -16,6 +16,9 @@ CREATE TABLE users (
     status        VARCHAR(20) NOT NULL DEFAULT 'active'
         CHECK (status IN ('active', 'suspended')),
     last_login_at TIMESTAMP,
+    -- Tea Collecting Agent registration provisions the login with a one-time temporary
+    -- password; the mobile app blocks until it is changed (2026-10-10).
+    must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
     created_at    TIMESTAMP DEFAULT NOW()
 );
 
@@ -547,6 +550,13 @@ CREATE TABLE employees (
     last_updated_on  TIMESTAMP,
     created_at       TIMESTAMP DEFAULT NOW()
 );
+
+-- A Tea Collecting Agent IS an employee (job title = 'Tea Collecting Agent', see
+-- backend/src/employees/employee-roles.ts). collection_agents stays dispatch's identity
+-- (route assignments, pings and day status key on it) and links to the HR record, which is the
+-- source of truth for who is an agent and whether they are active. (2026-10-10)
+ALTER TABLE collection_agents
+    ADD COLUMN hr_employee_id INTEGER UNIQUE REFERENCES employees(id);
 
 -- One row per employee per day; upserted on re-marking. Hours feed payroll
 -- generation (shift-based: Day/Day-OT/Night/Night-OT, per Claude.md).
