@@ -13,12 +13,17 @@ import AppText from "@/components/ui/AppText";
 import Avatar from "@/components/ui/Avatar";
 import EstateManagerBottomTab from "@/components/ui/EstateManagerBottomTab";
 
+import { colors } from "@/theme/colors";
+import { spacing } from "@/theme/spacing";
+import { typography } from "@/theme/typography";
+
 export default function TeaEstateManagerDashboard() {
   const [activeTab, setActiveTab] = useState("dashboard");
 
-  // Temporary dashboard data
+  // Temporary dashboard values
   const collected = 1240;
   const target = 1500;
+
   const progress = collected / target;
   const progressPercentage = (progress * 100).toFixed(1);
 
@@ -26,12 +31,15 @@ export default function TeaEstateManagerDashboard() {
     <SafeAreaView style={styles.container}>
       <View style={styles.screen}>
 
+        {/* ================= MAIN CONTENT ================= */}
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
 
           {/* ================= HEADER ================= */}
+
           <View style={styles.header}>
 
             <View style={styles.profileSection}>
@@ -42,32 +50,47 @@ export default function TeaEstateManagerDashboard() {
               />
 
               <View style={styles.profileText}>
-                <AppText style={styles.welcomeText}>
+
+                <AppText
+                  variant="caption"
+                  style={styles.welcomeText}
+                >
                   Welcome back,
                 </AppText>
 
-                <AppText style={styles.managerName}>
+                <AppText
+                  variant="body"
+                  style={styles.managerName}
+                >
                   Manager Rohan
                 </AppText>
 
-                <AppText style={styles.estateName}>
+                <AppText
+                  variant="caption"
+                  style={styles.estateName}
+                >
                   Nuwara Eliya Highlands
                 </AppText>
+
               </View>
 
             </View>
+
+            {/* Notification */}
 
             <Pressable style={styles.notificationButton}>
               <Ionicons
                 name="notifications-outline"
                 size={23}
-                color="#00875A"
+                color={colors.text.primaryGreen}
               />
             </Pressable>
 
           </View>
 
+
           {/* ================= ESTATE IMAGE ================= */}
+
           <View style={styles.estateImageContainer}>
 
             <Image
@@ -81,26 +104,42 @@ export default function TeaEstateManagerDashboard() {
 
           </View>
 
+
           {/* ================= COLLECTION STATUS ================= */}
-          <AppText style={styles.sectionTitle}>
+
+          <AppText
+            variant="caption"
+            style={styles.sectionTitle}
+          >
             COLLECTION STATUS
           </AppText>
+
+
+          {/* Progress Card */}
 
           <View style={styles.progressCard}>
 
             <View style={styles.progressHeader}>
 
-              <AppText style={styles.dailyProgress}>
+              <AppText
+                variant="bodySmall"
+                style={styles.dailyProgress}
+              >
                 Daily Progress
               </AppText>
 
-              <AppText style={styles.progressPercentage}>
+              <AppText
+                variant="body"
+                style={styles.progressPercentage}
+              >
                 {progressPercentage}%
               </AppText>
 
             </View>
 
+
             {/* Progress Bar */}
+
             <View style={styles.progressBackground}>
 
               <View
@@ -114,71 +153,98 @@ export default function TeaEstateManagerDashboard() {
 
             </View>
 
-            <AppText style={styles.progressText}>
+
+            <AppText
+              variant="caption"
+              style={styles.progressText}
+            >
               {collected.toLocaleString()}kg of{" "}
               {target.toLocaleString()}kg target collected
             </AppText>
 
           </View>
 
+
           {/* ================= DASHBOARD CARDS ================= */}
+
           <View style={styles.cardsRow}>
 
-            {/* Collections */}
+            {/* Collections Card */}
+
             <Pressable
               style={styles.dashboardCard}
-              onPress={() => {
-                setActiveTab("dashboard");
-              }}
+              onPress={() => setActiveTab("dashboard")}
             >
 
               <View style={styles.blueIcon}>
+
                 <Ionicons
                   name="bicycle-outline"
                   size={24}
                   color="#5473B5"
                 />
+
               </View>
 
-              <AppText style={styles.cardTitle}>
+              <AppText
+                variant="bodySmall"
+                style={styles.cardTitle}
+              >
                 Collections
               </AppText>
 
-              <AppText style={styles.cardValue}>
+              <AppText
+                variant="subheading"
+                style={styles.cardValue}
+              >
                 12
               </AppText>
 
-              <AppText style={styles.cardDescription}>
+              <AppText
+                variant="caption"
+                style={styles.cardDescription}
+              >
                 Today's pickups
               </AppText>
 
             </Pressable>
 
-            {/* Requests */}
+
+            {/* Requests Card */}
+
             <Pressable
               style={styles.dashboardCard}
-              onPress={() => {
-                setActiveTab("dashboard");
-              }}
+              onPress={() => setActiveTab("dashboard")}
             >
 
               <View style={styles.greenIcon}>
+
                 <Ionicons
                   name="list-outline"
                   size={24}
-                  color="#00875A"
+                  color={colors.text.primaryGreen}
                 />
+
               </View>
 
-              <AppText style={styles.cardTitle}>
+              <AppText
+                variant="bodySmall"
+                style={styles.cardTitle}
+              >
                 Requests
               </AppText>
 
-              <AppText style={styles.cardValue}>
+              <AppText
+                variant="subheading"
+                style={styles.cardValue}
+              >
                 8
               </AppText>
 
-              <AppText style={styles.cardDescription}>
+              <AppText
+                variant="caption"
+                style={styles.cardDescription}
+              >
                 Pending requests
               </AppText>
 
@@ -186,12 +252,16 @@ export default function TeaEstateManagerDashboard() {
 
           </View>
 
-          {/* Space for bottom navigation */}
+
+          {/* Extra space so content doesn't hide behind bottom tab */}
+
           <View style={styles.bottomSpace} />
 
         </ScrollView>
 
+
         {/* ================= BOTTOM TAB ================= */}
+
         <View style={styles.bottomTab}>
 
           <EstateManagerBottomTab
@@ -208,22 +278,31 @@ export default function TeaEstateManagerDashboard() {
   );
 }
 
+
+/* ========================================================= */
+/* STYLES */
+/* ========================================================= */
+
 const styles = StyleSheet.create({
+
+  /* ================= SCREEN ================= */
+
   container: {
     flex: 1,
-    backgroundColor: "#202222",
+    backgroundColor: colors.black,
   },
 
   screen: {
     flex: 1,
-    backgroundColor: "#F8F8FC",
+    backgroundColor: colors.surface,
   },
 
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 100,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl * 2,
   },
+
 
   /* ================= HEADER ================= */
 
@@ -231,7 +310,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 18,
+
+    marginBottom: spacing.md,
   },
 
   profileSection: {
@@ -240,45 +320,46 @@ const styles = StyleSheet.create({
   },
 
   profileText: {
-    marginLeft: 10,
+    marginLeft: spacing.sm,
   },
 
   welcomeText: {
-    fontSize: 10,
-    color: "#73788A",
+    color: colors.text.tertiary,
   },
 
   managerName: {
-    fontSize: 16,
+    color: colors.text.primaryGreen,
     fontWeight: "700",
-    color: "#00875A",
-    marginTop: 1,
   },
 
   estateName: {
-    fontSize: 10,
-    color: "#73788A",
-    marginTop: 2,
+    color: colors.text.tertiary,
   },
 
   notificationButton: {
     width: 40,
     height: 40,
+
     alignItems: "center",
     justifyContent: "center",
   },
+
 
   /* ================= ESTATE IMAGE ================= */
 
   estateImageContainer: {
     width: "100%",
     height: 150,
-    borderRadius: 8,
+
+    borderRadius: spacing.sm,
     overflow: "hidden",
+
     borderWidth: 1,
-    borderColor: "#E6E6EC",
-    backgroundColor: "#F5F5F8",
-    marginBottom: 20,
+    borderColor: colors.border.light,
+
+    backgroundColor: colors.surface,
+
+    marginBottom: spacing.lg,
   },
 
   estateImage: {
@@ -286,126 +367,155 @@ const styles = StyleSheet.create({
     height: "100%",
   },
 
+
   /* ================= COLLECTION STATUS ================= */
 
   sectionTitle: {
-    fontSize: 10,
+    color: colors.text.tertiary,
     fontWeight: "600",
-    color: "#9A9EAD",
+
     letterSpacing: 0.7,
-    marginBottom: 9,
+
+    marginBottom: spacing.sm,
   },
 
   progressCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.background,
+
     borderWidth: 1,
-    borderColor: "#D8D8D8",
-    borderRadius: 8,
-    padding: 13,
-    marginBottom: 23,
+    borderColor: colors.border.default,
+
+    borderRadius: spacing.sm,
+
+    padding: spacing.sm + 5,
+
+    marginBottom: spacing.lg,
   },
 
   progressHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 9,
+
+    marginBottom: spacing.sm,
   },
 
   dailyProgress: {
-    fontSize: 13,
-    color: "#555A68",
+    color: colors.text.secondary,
   },
 
   progressPercentage: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#00875A",
+    color: colors.success,
+    fontWeight: "700",
   },
+
+
+  /* ================= PROGRESS BAR ================= */
 
   progressBackground: {
     height: 7,
     width: "100%",
+
     backgroundColor: "#E5EBF7",
-    borderRadius: 5,
+
+    borderRadius: spacing.xs,
     overflow: "hidden",
-    marginBottom: 8,
+
+    marginBottom: spacing.xs,
   },
 
   progressFill: {
     height: "100%",
-    backgroundColor: "#4DCE87",
-    borderRadius: 5,
+
+    backgroundColor: colors.primary,
+
+    borderRadius: spacing.xs,
   },
 
   progressText: {
-    fontSize: 10,
-    color: "#73788A",
+    color: colors.text.tertiary,
   },
+
 
   /* ================= DASHBOARD CARDS ================= */
 
   cardsRow: {
     flexDirection: "row",
-    gap: 12,
+
+    gap: spacing.sm,
   },
 
   dashboardCard: {
     flex: 1,
+
     minHeight: 150,
-    backgroundColor: "#F1F4FC",
+
+    backgroundColor: colors.surface,
+
     borderWidth: 1,
-    borderColor: "#D5DAE7",
-    borderRadius: 7,
-    padding: 13,
+    borderColor: colors.border.light,
+
+    borderRadius: spacing.sm,
+
+    padding: spacing.sm + 5,
   },
 
   blueIcon: {
     width: 38,
     height: 38,
-    borderRadius: 9,
+
+    borderRadius: spacing.sm,
+
     backgroundColor: "#DDE6FA",
+
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 10,
+
+    marginBottom: spacing.sm,
   },
 
   greenIcon: {
     width: 38,
     height: 38,
-    borderRadius: 9,
-    backgroundColor: "#CDEFE1",
+
+    borderRadius: spacing.sm,
+
+    backgroundColor: colors.successBackground,
+
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 10,
+
+    marginBottom: spacing.sm,
   },
 
   cardTitle: {
-    fontSize: 12,
-    color: "#5E6270",
+    color: colors.text.secondary,
   },
 
   cardValue: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#202530",
-    marginTop: 3,
+    color: colors.text.primary,
+
+    fontWeight: "700",
+
+    marginTop: spacing.xs,
   },
 
   cardDescription: {
-    fontSize: 9,
-    color: "#8B8F9C",
+    color: colors.text.tertiary,
+
     marginTop: 2,
   },
 
-  /* ================= BOTTOM TAB ================= */
+
+  /* ================= BOTTOM NAVIGATION ================= */
 
   bottomSpace: {
-    height: 80,
+    height: spacing.xl * 2,
   },
 
   bottomTab: {
     position: "absolute",
+
     left: 0,
     right: 0,
     bottom: 0,
