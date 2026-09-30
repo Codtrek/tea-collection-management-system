@@ -8,6 +8,7 @@ import {
   Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
 import Avatar from "@/components/ui/Avatar";
@@ -15,12 +16,13 @@ import EstateManagerBottomTab from "@/components/ui/EstateManagerBottomTab";
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
-import { typography } from "@/theme/typography";
 
 export default function TeaEstateManagerDashboard() {
+  const router = useRouter();
+
   const [activeTab, setActiveTab] = useState("dashboard");
 
-  // Temporary dashboard values
+  // Temporary dashboard data
   const collected = 1240;
   const target = 1500;
 
@@ -76,9 +78,14 @@ export default function TeaEstateManagerDashboard() {
 
             </View>
 
-            {/* Notification */}
+            {/* ================= NOTIFICATION BUTTON ================= */}
 
-            <Pressable style={styles.notificationButton}>
+            <Pressable
+              style={styles.notificationButton}
+              onPress={() =>
+                router.push("/TeaEstateManager/notifications")
+              }
+            >
               <Ionicons
                 name="notifications-outline"
                 size={23}
@@ -115,7 +122,7 @@ export default function TeaEstateManagerDashboard() {
           </AppText>
 
 
-          {/* Progress Card */}
+          {/* ================= PROGRESS CARD ================= */}
 
           <View style={styles.progressCard}>
 
@@ -253,14 +260,14 @@ export default function TeaEstateManagerDashboard() {
           </View>
 
 
-          {/* Extra space so content doesn't hide behind bottom tab */}
+          {/* Space for bottom navigation */}
 
           <View style={styles.bottomSpace} />
 
         </ScrollView>
 
 
-        {/* ================= BOTTOM TAB ================= */}
+        {/* ================= BOTTOM NAVIGATION ================= */}
 
         <View style={styles.bottomTab}>
 
@@ -268,6 +275,13 @@ export default function TeaEstateManagerDashboard() {
             activeTab={activeTab}
             onTabPress={(tab) => {
               setActiveTab(tab.key);
+
+              if (tab.key === "dashboard") {
+                router.push("/TeaEstateManager");
+              }
+
+              // Employees, Photo Evidence and Reports
+              // can be connected to their screens later.
             }}
           />
 
@@ -441,7 +455,6 @@ const styles = StyleSheet.create({
 
   cardsRow: {
     flexDirection: "row",
-
     gap: spacing.sm,
   },
 
@@ -520,4 +533,5 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+
 });
