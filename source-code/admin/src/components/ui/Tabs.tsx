@@ -25,7 +25,7 @@ export function Tabs({ tabs, active, onChange, className }: TabsProps) {
             aria-selected={selected}
             onClick={() => onChange(t.id)}
             className={cn(
-              'relative -mb-px h-10 px-3 text-sm font-medium transition-colors',
+              'relative -mb-px h-10 whitespace-nowrap px-3 text-sm font-medium transition-colors',
               selected ? 'text-primary' : 'text-text-muted hover:text-text',
             )}
           >

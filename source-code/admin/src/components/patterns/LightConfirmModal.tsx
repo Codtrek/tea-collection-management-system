@@ -13,6 +13,8 @@ export interface LightConfirmModalProps {
   /** danger tone for destructive-but-reversible actions (deactivate, discard) */
   tone?: 'default' | 'danger'
   loading?: boolean
+  /** keeps the confirm button disabled until e.g. a required reason is filled in */
+  confirmDisabled?: boolean
   /** optional extra content (e.g. a required reason field) */
   children?: ReactNode
 }
@@ -27,6 +29,7 @@ export function LightConfirmModal({
   confirmLabel = 'Confirm',
   tone = 'default',
   loading,
+  confirmDisabled,
   children,
 }: LightConfirmModalProps) {
   return (
@@ -38,7 +41,7 @@ export function LightConfirmModal({
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
-          <Button variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>
+          <Button variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading} disabled={confirmDisabled}>
             {confirmLabel}
           </Button>
         </>

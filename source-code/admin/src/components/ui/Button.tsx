@@ -31,6 +31,23 @@ const sizes: Record<Size, string> = {
   lg: 'h-11 px-5 text-sm gap-2',
 }
 
+/** Class list for anything that should look like a Button (e.g. a router Link). */
+// eslint-disable-next-line react-refresh/only-export-components
+export function buttonClasses({
+  variant = 'primary',
+  size = 'md',
+  iconOnly,
+  className,
+}: Pick<ButtonProps, 'variant' | 'size' | 'iconOnly' | 'className'> = {}): string {
+  return cn(
+    'inline-flex items-center justify-center rounded-[var(--radius-sm)] font-medium transition-colors duration-[var(--duration-fast)] disabled:cursor-not-allowed',
+    variants[variant],
+    sizes[size],
+    iconOnly && 'aspect-square px-0',
+    className,
+  )
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   { variant = 'primary', size = 'md', loading, iconOnly, className, children, disabled, ...props },
   ref,
@@ -39,13 +56,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       disabled={disabled || loading}
-      className={cn(
-        'inline-flex items-center justify-center rounded-[var(--radius-sm)] font-medium transition-colors duration-[var(--duration-fast)] disabled:cursor-not-allowed',
-        variants[variant],
-        sizes[size],
-        iconOnly && 'aspect-square px-0',
-        className,
-      )}
+      className={buttonClasses({ variant, size, iconOnly, className })}
       {...props}
     >
       {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
