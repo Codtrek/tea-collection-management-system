@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
-import { fontDisplay, fontMono } from '@/components/ui/demo-teacollector-theme';
+import { fonts } from '@/theme/fonts';
 
 export default function DemoTeaCollectorProfile() {
   return (
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.45)',
   },
   avatarText: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily:fonts.default,
     fontSize: 28,
     fontWeight: '700',
     color: colors.primary,
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
   },
   name: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 24,
     fontWeight: '700',
     color: colors.text.inverse,
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   },
   employeeId: {
     marginTop: 8,
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 11,
     color: colors.text.inverse,
     opacity: 0.85,
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     marginTop: 24,
     marginBottom: 10,
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.2,

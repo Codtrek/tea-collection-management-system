@@ -1,15 +1,17 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { c } from '@/components/ui/demo-teacollector-theme';
+import { colors } from '@/theme/colors';
+import { fonts } from '@/theme/fonts';
 
 export const FormField = ({ label, children, style, ...props }: any) => {
   return (
     <View style={[{ marginBottom: 14 }, style]} {...props}>
       <Text style={{
+        fontFamily: fonts.default,
         fontSize: 12,
         fontWeight: '600',
         marginBottom: 6,
-        color: c.muted,
+        color: colors.text.muted,
       }}>{label}</Text>
       {children}
     </View>

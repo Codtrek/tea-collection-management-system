@@ -16,16 +16,13 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { AppBar } from '@/components/ui/demo-teacollector-header';
-import { Chip } from '@/components/forms';
+
 import { DetailRow } from '@/components/ui/demo-teacollector-detail-row';
-import { Pill } from '@/components/ui/demo-teacollector-pill';
-import { Sheet } from '@/components/ui/demo-teacollector-sheet';
-import { Btn } from '@/components/ui/demo-teacollector-button';
-import { Card } from '@/components/ui/demo-teacollector-card';
+
+
 import { FormField as Field, FormInput as Input, FormSelect as Select } from '@/components/forms';
 import DemoTeaCollectorBottomTab from '@/components/layout/demo-teacollector-BottomTab';
-import { FertRequestCard, StopCard } from '@/components/ui/demo-teacollector-cards';
-import { c, fontDisplay, fontMono } from '@/components/ui/demo-teacollector-theme';
+
 import DemoTeaCollectorHome from '@/app/teacollector/demo-teacollector-home';
 import DemoTeaCollectorCollect from '@/app/teacollector/demo-teacollector-collect';
 import DemoTeaCollectorFertilizer from '@/app/teacollector/demo-teacollector-fertilizer';
@@ -44,6 +41,7 @@ import {
   DeliverFertSheet,
   PickupSheet,
   DeclineSheet,
+  CancelPickupSheet,
   ArrivedSheet,
   CollectSheet,
   ConfirmSheet,
@@ -86,13 +84,13 @@ const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minut
 
 // ---------- mock data ----------
 const INITIAL_STOPS = [
-  { id: 1, name: "Ceylon Green Estate", owner: "A. Wickramasinghe", phone: "077 812 4456", gps: "7.2906Â° N, 80.7718Â° E", notes: "Leaves picked this morning, ready by 9 AM", estWeight: 68, dist: 2.4, status: "pending" },
-  { id: 2, name: "Hill Breeze Gardens", owner: "N. Perera", phone: "071 220 9981", gps: "7.1935Â° N, 80.6812Â° E", notes: "Second harvest of the week", estWeight: 54, dist: 4.1, status: "accepted", acceptedAt: "8:20 AM" },
-  { id: 3, name: "Mistvale Tea Farm", owner: "K. Bandara", phone: "076 554 3312", gps: "7.2011Â° N, 80.7020Â° E", notes: "", estWeight: 61, actualWeight: 61, status: "loaded" },
-  { id: 4, name: "Oakridge Estate", owner: "D. Herath", phone: "072 118 2290", gps: "7.2299Â° N, 80.7115Â° E", notes: "", estWeight: 71, actualWeight: 71, status: "loaded" },
-  { id: 5, name: "Green Hollow Estate", owner: "S. Fernando", phone: "075 331 8820", gps: "7.2540Â° N, 80.7301Â° E", notes: "", estWeight: null, status: "cancelled", reason: "Road blocked" },
-  { id: 6, name: "Silverleaf Plantation", owner: "R. Dissanayake", phone: "070 442 7719", gps: "7.2180Â° N, 80.7422Â° E", notes: "New flush, small quantity", estWeight: 40, dist: 6.8, status: "pending" },
-  { id: 7, name: "Windsor Tea Gardens", owner: "P. Jayasuriya", phone: "077 903 4471", gps: "7.1850Â° N, 80.6690Â° E", notes: "", estWeight: 74, actualWeight: 74, status: "delivered" },
+  { id: 1, name: "Ceylon Green Estate", owner: "A. Wickramasinghe", phone: "077 812 4456", gps: "7.2906Â° N, 80.7718Â° E", notes: "Leaves picked this morning, ready by 9 AM", estNormalWeight: 48, estSupperWeight: 20, dist: 2.4, status: "pending" },
+  { id: 2, name: "Hill Breeze Gardens", owner: "N. Perera", phone: "071 220 9981", gps: "7.1935Â° N, 80.6812Â° E", notes: "Second harvest of the week", estNormalWeight: 54, estSupperWeight: 0, dist: 4.1, status: "accepted", acceptedAt: "8:20 AM" },
+  { id: 3, name: "Mistvale Tea Farm", owner: "K. Bandara", phone: "076 554 3312", gps: "7.2011Â° N, 80.7020Â° E", notes: "", estNormalWeight: 41, estSupperWeight: 20, actualNormalWeight: 41, actualSupperWeight: 20, actualWeight: 61, status: "loaded" },
+  { id: 4, name: "Oakridge Estate", owner: "D. Herath", phone: "072 118 2290", gps: "7.2299Â° N, 80.7115Â° E", notes: "", estNormalWeight: 0, estSupperWeight: 71, actualNormalWeight: 0, actualSupperWeight: 71, actualWeight: 71, status: "loaded" },
+  { id: 5, name: "Green Hollow Estate", owner: "S. Fernando", phone: "075 331 8820", gps: "7.2540Â° N, 80.7301Â° E", notes: "", estNormalWeight: 0, estSupperWeight: 0, status: "cancelled", reason: "Road blocked" },
+  { id: 6, name: "Silverleaf Plantation", owner: "R. Dissanayake", phone: "070 442 7719", gps: "7.2180Â° N, 80.7422Â° E", notes: "New flush, small quantity", estNormalWeight: 40, estSupperWeight: 0, dist: 6.8, status: "pending" },
+  { id: 7, name: "Windsor Tea Gardens", owner: "P. Jayasuriya", phone: "077 903 4471", gps: "7.1850Â° N, 80.6690Â° E", notes: "", estNormalWeight: 74, estSupperWeight: 0, actualNormalWeight: 74, actualSupperWeight: 0, actualWeight: 74, status: "delivered" },
 ];
 
 const INITIAL_FERT_REQUESTS = [
@@ -166,7 +164,7 @@ export default function TeaCollectorMobile() {
   const [fertRequests, setFertRequests] = useState(INITIAL_FERT_REQUESTS);
   const [activeStop, setActiveStop] = useState<any>(null);
   const [activeFert, setActiveFert] = useState<any>(null);
-  const [collectedWeight, setCollectedWeight] = useState(0);
+  const [collectedWeights, setCollectedWeights] = useState({ normal: 0, supper: 0 });
   const [factoryWeight, setFactoryWeight] = useState(0);
   const [batchTotal, setBatchTotal] = useState(0);
   const [officer, setOfficer] = useState("");
@@ -226,6 +224,21 @@ export default function TeaCollectorMobile() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
 
+  const confirmCancelPickup = (reason: string, note: string) => {
+    if (!activeStop) {
+      console.warn("No active stop to cancel");
+      return;
+    }
+
+    updateStop(activeStop.id, {
+      status: "cancelled",
+      reason,
+      note,
+    });
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
+
   const handleCall = () => {
     if (!activeStop) {
       Alert.alert('Error', 'No active stop selected');
@@ -242,15 +255,21 @@ export default function TeaCollectorMobile() {
     setSheet("collect");
   };
 
-  const submitCollection = (weight: string) => {
+  const submitCollection = (weights: { normal: string; supper: string; normalPhotoUri?: string; supperPhotoUri?: string }) => {
     if (!activeStop) {
       console.warn("No active stop to submit collection");
       return;
     }
     
-    setCollectedWeight(parseFloat(weight) || 0);
+    const normal = parseFloat(weights.normal) || 0;
+    const supper = parseFloat(weights.supper) || 0;
+    setCollectedWeights({ normal, supper });
     updateStop(activeStop.id, { 
-      actualWeight: parseFloat(weight) || 0 
+      actualNormalWeight: normal,
+      actualSupperWeight: supper,
+      actualWeight: normal + supper,
+      normalPhotoUri: weights.normalPhotoUri,
+      supperPhotoUri: weights.supperPhotoUri,
     });
     setSheet("confirm");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -394,34 +413,16 @@ export default function TeaCollectorMobile() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.forestDeep }}>
+    <View style={{ flex: 1, backgroundColor: colors.success }}>
       
-      {/* Back button */}
-      <TouchableOpacity 
-        onPress={() => router.back()}
-        style={{
-          position: 'absolute',
-          top: Platform.OS === 'ios' ? 50 : 30,
-          left: 16,
-          zIndex: 100,
-          backgroundColor: 'rgba(255,255,255,0.9)',
-          padding: 8,
-          borderRadius: 20,
-          width: 40,
-          height: 40,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Ionicons name="arrow-back" size={24} color={c.forestDeep} />
-      </TouchableOpacity>
+
       
       <View style={{
         flex: 1,
         margin: Platform.OS === 'ios' ? 14 : 0,
         borderRadius: Platform.OS === 'ios' ? 38 : 0,
         overflow: 'hidden',
-        backgroundColor: c.mist,
+       
       }}>
         
         <AppBar
@@ -446,9 +447,10 @@ export default function TeaCollectorMobile() {
         {/* Tea collection overlays */}
         <PickupSheet open={sheet === "pickup"} stop={activeStop} onClose={() => setSheet(null)} onAccept={acceptPickup} onDecline={goToDecline} />
         <DeclineSheet open={sheet === "decline"} onClose={() => setSheet(null)} onConfirm={confirmDecline} />
-        <ArrivedSheet open={sheet === "arrived"} stop={activeStop} onClose={() => setSheet(null)} onStartCollection={startCollection} onCall={handleCall} />
+        <ArrivedSheet open={sheet === "arrived"} stop={activeStop} onClose={() => setSheet(null)} onStartCollection={startCollection} onCall={handleCall} onCancelPickup={() => setSheet("cancelPickup")} />
+        <CancelPickupSheet open={sheet === "cancelPickup"} onBack={() => setSheet("arrived")} onConfirm={confirmCancelPickup} />
         <CollectSheet open={sheet === "collect"} stop={activeStop} onClose={() => setSheet(null)} onSubmit={submitCollection} />
-        <ConfirmSheet open={sheet === "confirm"} weight={collectedWeight} onClose={continueCollecting} />
+        <ConfirmSheet open={sheet === "confirm"} stop={activeStop} weights={collectedWeights} onBack={() => setSheet("collect")} onClose={continueCollecting} />
         
         <FactoryMapSheet
           open={sheet === "map"}

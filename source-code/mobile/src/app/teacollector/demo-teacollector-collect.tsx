@@ -17,10 +17,7 @@ import { Btn } from "@/components/ui/demo-teacollector-button";
 import { Card } from "@/components/ui/demo-teacollector-card";
 import { StopCard } from "@/components/ui/demo-teacollector-cards";
 
-import {
-  fontDisplay,
-  fontMono,
-} from "@/components/ui/demo-teacollector-theme";
+import { fonts } from "@/theme/fonts";
 
 import { colors } from "@/theme/colors";
 
@@ -51,6 +48,15 @@ export default function DemoTeaCollectorCollect({
   const totalLoaded = loaded.reduce(
     (sum: number, s: any) =>
       sum + (s.actualWeight || 0),
+    0
+  );
+
+  const normalLoaded = loaded.reduce(
+    (sum: number, s: any) => sum + (s.actualNormalWeight || 0),
+    0
+  );
+  const supperLoaded = loaded.reduce(
+    (sum: number, s: any) => sum + (s.actualSupperWeight || 0),
     0
   );
 
@@ -138,6 +144,11 @@ export default function DemoTeaCollectorCollect({
               <Text style={styles.loadedTitle}>
                 {loaded.length} stop{loaded.length > 1 ? "s" : ""} loaded · {totalLoaded} kg
               </Text>
+
+              <View style={styles.loadedBreakdown}>
+                <Text style={styles.loadedBreakdownText}>Normal: {normalLoaded} kg</Text>
+                <Text style={styles.loadedBreakdownText}>Supper: {supperLoaded} kg</Text>
+              </View>
 
               <Text style={styles.loadedSubtitle}>
                 Ready whenever you head to Kotmale MPT
@@ -243,7 +254,7 @@ export default function DemoTeaCollectorCollect({
                     </Text>
 
                     <Text style={styles.historySubtitle}>
-                      Today · {s.actualWeight} kg
+                      Today · Normal {s.actualNormalWeight || 0} kg · Supper {s.actualSupperWeight || 0} kg
                     </Text>
                   </View>
 
@@ -369,7 +380,7 @@ const styles = StyleSheet.create({
   },
 
   loadedTitle: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "600",
     fontSize: 15,
     color: colors.text.primary,
@@ -379,6 +390,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
     color: colors.text.secondary,
+  },
+
+  loadedBreakdown: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 6,
+  },
+
+  loadedBreakdownText: {
+    color: colors.text.secondary,
+    fontFamily: fonts.default,
+    fontSize: 12,
+    fontWeight: "600",
   },
 
   factoryButton: {
@@ -394,7 +419,7 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "bold",
     textTransform: "uppercase",
     letterSpacing: 1.8,
@@ -429,7 +454,7 @@ const styles = StyleSheet.create({
   },
 
   historyTitle: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "600",
     fontSize: 16,
     color: colors.text.primary,
@@ -442,7 +467,7 @@ const styles = StyleSheet.create({
   },
 
   earlierTitle: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "bold",
     textTransform: "uppercase",
     letterSpacing: 1.8,
