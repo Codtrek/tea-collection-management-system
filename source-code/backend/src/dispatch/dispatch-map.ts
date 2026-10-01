@@ -129,6 +129,8 @@ export function orderStops<T extends { lat: number; lng: number }>(
 
 export interface PublicBoardAgent {
   agentId: number;
+  /** 'EMP-0012' — the agent's employee record (their history lives on /employees/:id) */
+  employeeId: string;
   name: string;
   routeId: number | null;
   routeName: string | null;
@@ -171,6 +173,23 @@ export interface PublicBoardCoverRequest {
   status: 'PENDING' | 'DECLINED' | 'EXPIRED';
   expiresAt: string | null;
   requestedBy: string;
+}
+
+/** One row of an agent's collection history (Employee detail → Collections tab). */
+export interface PublicAgentHistoryRow {
+  id: string;
+  date: string;
+  route: string;
+  /** set when this agent was COVERING this route that day (the route isn't their own) */
+  coveringRoute: string | null;
+  estateName: string;
+  /** what the agent weighed at the estate */
+  estateWeightKg: number;
+  /** graded total once graded, else the estate weight */
+  weightKg: number;
+  graded: boolean;
+  gradeLines: { grade: 'Super' | 'Normal'; weightKg: number }[];
+  status: string;
 }
 
 export interface PublicMissedCheckin {

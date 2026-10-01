@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -12,8 +13,11 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AgentHistoryService } from '../dispatch/agent-history.service';
+import { DispatchAccessService } from '../dispatch/dispatch-access.service';
 import type { JwtPayload } from '../auth/jwt-payload.interface';
 import { UsersService } from '../users/users.service';
+import { AGENT_JOB_ROLE, EMPLOYEE_ROLES } from './employee-roles';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { DecideAdvanceDto } from './dto/decide-advance.dto';
 import { GeneratePayrollDto } from './dto/generate-payroll.dto';
@@ -21,11 +25,12 @@ import { MarkAttendanceDto } from './dto/mark-attendance.dto';
 import { ProcessPayrollDto } from './dto/process-payroll.dto';
 import { RequestAdvanceDto } from './dto/request-advance.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
-import type {
-  PublicAdvance,
-  PublicAttendance,
-  PublicEmployee,
-  PublicPayrollRow,
+import {
+  parseEmployeeId,
+  type PublicAdvance,
+  type PublicAttendance,
+  type PublicEmployee,
+  type PublicPayrollRow,
 } from './employee-map';
 import { type Actor, EmployeesService } from './employees.service';
 
@@ -37,6 +42,8 @@ export class EmployeesController {
   constructor(
     private readonly employeesService: EmployeesService,
     private readonly usersService: UsersService,
+    private readonly agentHistory: AgentHistoryService,
+    private readonly access: DispatchAccessService,
   ) {}
 
   // Static segments (attendance/advances/payroll) are registered before the
@@ -120,6 +127,12 @@ export class EmployeesController {
     );
   }
 
+  /** Single source for the role dropdown — and which title makes someone a collection agent. */
+  @Get('roles')
+  roles(): { roles: string[]; agentRole: string } {
+    return { roles: [...EMPLOYEE_ROLES], agentRole: AGENT_JOB_ROLE };
+  }
+
   @Get()
   findAll(): Promise<PublicEmployee[]> {
     return this.employeesService.findAll();
@@ -136,6 +149,44 @@ export class EmployeesController {
   @Get(':id')
   findOne(@Param('id') id: string): Promise<PublicEmployee> {
     return this.employeesService.findById(id);
+  }
+
+  /**
+   * A collection agent's history (Employee detail → Collections tab): collected deliveries with
+   * grade lines, plus "Covering Route X" where they covered. Paginated, last 90 days by default.
+   * Needs BOTH employee and collection access.
+   */
+  @Get(':id/collections')
+  async collections(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    await this.access.require(
+      req.user.role,
+      'view',
+      'view employees',
+      'employees',
+    );
+    await this.access.require(
+      req.user.role,
+      'view',
+      'view collections',
+      'collection',
+    );
+    const employeeId = parseEmployeeId(id);
+    if (!Number.isInteger(employeeId)) {
+      throw new NotFoundException(`No employee with ID “${id}”.`);
+    }
+    return this.agentHistory.history(employeeId, {
+      from,
+      to,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Put(':id')

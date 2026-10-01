@@ -7,7 +7,8 @@ import type { SignOptions } from 'jsonwebtoken';
 import { RolePermissionEntity } from '../admin/role-permission.entity';
 import { CollectionAgentEntity } from '../dispatch/collection-agent.entity';
 import { AgentDirectoryService } from '../dispatch/agent-directory.service';
-import { FactoryEmployee } from '../users/factory-employee.entity';
+import { EmployeeEntity } from '../employees/employee.entity';
+import { User } from '../users/user.entity';
 import { UsersModule } from '../users/users.module';
 import { AgentJwtStrategy } from './agent-jwt.strategy';
 import { AuthController } from './auth.controller';
@@ -22,7 +23,8 @@ import { JwtStrategy } from './jwt.strategy';
     TypeOrmModule.forFeature([
       RolePermissionEntity,
       CollectionAgentEntity,
-      FactoryEmployee,
+      EmployeeEntity,
+      User,
     ]),
     PassportModule,
     JwtModule.registerAsync({

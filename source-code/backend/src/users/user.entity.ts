@@ -34,6 +34,10 @@ export class User {
   @Column({ default: 'active' })
   status: 'active' | 'suspended';
 
+  /** A login provisioned by registration starts with a one-time temporary password; mobile blocks until it is changed. */
+  @Column({ name: 'must_change_password', default: false })
+  must_change_password: boolean;
+
   /** Stamped on each successful login; shown as "last login" in Users & Roles. */
   @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
   last_login_at: Date | null;

@@ -153,6 +153,7 @@ export class DispatchService {
       const own = ownRoute.get(agent.agentId) ?? null;
       boardAgents.push({
         agentId: agent.agentId,
+        employeeId: agent.employeeId,
         name: agent.name,
         routeId: own,
         routeName: own ? (routeName.get(own) ?? null) : null,

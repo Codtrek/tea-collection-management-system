@@ -28,9 +28,20 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { id } });
   }
 
+  /** Sets a new password and clears the temporary-password flag. */
+  async setPassword(userId: number, passwordHash: string): Promise<void> {
+    await this.usersRepository.update(
+      { id: userId },
+      { password_hash: passwordHash, must_change_password: false },
+    );
+  }
+
   /** Stamp a successful login so ADM-02 can show a real "last login". */
   async markLogin(userId: number): Promise<void> {
-    await this.usersRepository.update({ id: userId }, { last_login_at: new Date() });
+    await this.usersRepository.update(
+      { id: userId },
+      { last_login_at: new Date() },
+    );
   }
 
   /**

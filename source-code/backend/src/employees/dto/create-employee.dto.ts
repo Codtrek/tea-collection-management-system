@@ -1,3 +1,4 @@
+import { EMPLOYEE_ROLES } from '../employee-roles';
 import {
   IsBoolean,
   IsDateString,
@@ -35,8 +36,9 @@ export class CreateEmployeeDto {
   @MinLength(1)
   address: string;
 
-  @IsString()
-  @MinLength(1)
+  @IsIn(EMPLOYEE_ROLES as string[], {
+    message: 'Choose a valid role / position',
+  })
   role: string;
 
   @IsString()

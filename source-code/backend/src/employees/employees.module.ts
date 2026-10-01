@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditModule } from '../audit/audit.module';
+import { DispatchModule } from '../dispatch/dispatch.module';
 import { UsersModule } from '../users/users.module';
 import { EmployeeAttendanceEntity } from './employee-attendance.entity';
 import { EmployeeEntity } from './employee.entity';
@@ -19,6 +20,8 @@ import { SalaryAdvanceEntity } from './salary-advance.entity';
     ]),
     UsersModule,
     AuditModule,
+    // agent provisioning (registering a Tea Collecting Agent) + their collection history
+    DispatchModule,
   ],
   controllers: [EmployeesController],
   providers: [EmployeesService],

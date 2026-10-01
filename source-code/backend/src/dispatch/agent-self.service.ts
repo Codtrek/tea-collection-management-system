@@ -80,6 +80,17 @@ export class AgentSelfService {
     const agent = await this.directory.byUserId(userId);
     if (!agent)
       throw new ForbiddenException('This account is not a collection agent.');
+    // Enforced on EVERY agent call (not just at sign-in), so a deactivated agent's token stops
+    // working at once and a still-temporary password blocks everything until it is changed.
+    const cred = await this.directory.credentials(userId);
+    if (!cred || cred.status === 'suspended') {
+      throw new ForbiddenException(
+        'This login has been suspended. Contact your factory.',
+      );
+    }
+    if (cred.mustChangePassword) {
+      throw new ForbiddenException('Change your temporary password first.');
+    }
     return agent;
   }
 

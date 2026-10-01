@@ -12,6 +12,10 @@ export class CollectionAgentEntity {
   @Column({ name: 'factory_id' })
   factoryId: number;
 
+  /** The HR record this agent IS. Employees are the source of truth for who is an agent and whether they are active. */
+  @Column({ name: 'hr_employee_id', type: 'int', nullable: true })
+  hrEmployeeId: number | null;
+
   @Column({ name: 'is_available', default: true })
   isAvailable: boolean;
 }

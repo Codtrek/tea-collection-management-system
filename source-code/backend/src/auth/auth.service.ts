@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -37,6 +41,8 @@ export interface LoginResult {
 export interface AgentLoginResult {
   accessToken: string;
   agent: { id: number; name: string; phone: string };
+  /** true while the one-time temporary password is still in use — the app must force a change */
+  mustChangePassword: boolean;
 }
 
 @Injectable()
@@ -110,7 +116,34 @@ export class AuthService {
     return {
       accessToken: this.jwtService.sign(payload),
       agent: { id: agent.agentId, name: agent.name, phone: user.phone },
+      mustChangePassword: user.must_change_password,
     };
+  }
+
+  /** First sign-in: swap the one-time temporary password for the agent's own. */
+  async changeAgentPassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.usersService.findById(userId);
+    if (!user || user.role !== 'collection_agent') {
+      throw new UnauthorizedException(
+        'This account is not a collection agent.',
+      );
+    }
+    if (!(await bcrypt.compare(currentPassword, user.password_hash))) {
+      throw new UnauthorizedException('The current password is incorrect.');
+    }
+    if (currentPassword === newPassword) {
+      throw new ConflictException(
+        'Choose a new password different from the current one.',
+      );
+    }
+    await this.usersService.setPassword(
+      userId,
+      await bcrypt.hash(newPassword, 10),
+    );
   }
 
   async me(userId: number): Promise<PublicUser> {

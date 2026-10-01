@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
+import { AgentProvisioningService } from '../dispatch/agent-provisioning.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { GeneratePayrollDto } from './dto/generate-payroll.dto';
 import {
@@ -28,6 +29,7 @@ import {
   type PublicPayrollRow,
 } from './employee-map';
 import { EmployeeEntity } from './employee.entity';
+import { isAgentRole } from './employee-roles';
 import { PayrollRunEntity } from './payroll-run.entity';
 import { SalaryAdvanceEntity } from './salary-advance.entity';
 
@@ -48,6 +50,7 @@ export class EmployeesService {
     @InjectRepository(PayrollRunEntity)
     private readonly payrollRepo: Repository<PayrollRunEntity>,
     private readonly audit: AuditService,
+    private readonly agentProvisioning: AgentProvisioningService,
   ) {}
 
   async findAll(): Promise<PublicEmployee[]> {
@@ -74,10 +77,14 @@ export class EmployeesService {
       );
     }
 
-    // Employee self-service login is out of scope for this admin-portal
-    // slice (see Claude.md) — `hasLogin` is stored as a flag only; this
-    // module never provisions a `users` row itself, unlike Estates'
-    // owner-registration flow.
+    // Employee self-service login is out of scope for the portal (see Claude.md) —
+    // `hasLogin` is just a flag, EXCEPT for Tea Collecting Agents: registering one provisions
+    // their mobile login and puts them on the dispatch board (see AgentProvisioningService).
+    const becomesAgent = isAgentRole(dto.role);
+    if (becomesAgent) {
+      // fail BEFORE saving if the contact number already has a login
+      await this.agentProvisioning.assertContactFree(dto.contact);
+    }
     const employee = this.employeeRepo.create({
       userId: null,
       name: dto.name,
@@ -103,14 +110,27 @@ export class EmployeesService {
     });
 
     const saved = await this.employeeRepo.save(employee);
+    let initialPassword: string | null = null;
+    if (becomesAgent) {
+      try {
+        ({ initialPassword } = await this.agentProvisioning.provision(saved));
+      } catch (err) {
+        // never leave a registered-but-unprovisioned agent behind
+        await this.employeeRepo.delete({ id: saved.id });
+        throw err;
+      }
+    }
     await this.audit.record(actor, {
       action: 'Registered employee',
       module: 'Employee',
       record: formatEmployeeId(saved.id),
       recordHref: `/employees/${formatEmployeeId(saved.id)}`,
-      details: `${dto.name} — ${dto.role}`,
+      details: `${dto.name} — ${dto.role}${becomesAgent ? ' (mobile login created, on the dispatch board)' : ''}`,
     });
-    return this.toPublic(saved);
+    return {
+      ...this.toPublic(saved),
+      ...(initialPassword ? { initialPassword } : {}),
+    };
   }
 
   /** EMP-04 — Administrator only, same as create. */
@@ -123,6 +143,12 @@ export class EmployeesService {
     this.assertAge18(dto.dob);
     this.assertHireDateNotFuture(dto.hireDate);
     const employee = await this.findEntity(id);
+
+    const wasAgent = isAgentRole(employee.role) && employee.status === 'Active';
+    const becomesAgent = isAgentRole(dto.role);
+    if (!wasAgent && becomesAgent && employee.userId === null) {
+      await this.agentProvisioning.assertContactFree(dto.contact);
+    }
 
     employee.name = dto.name;
     employee.nic = dto.nic;
@@ -146,28 +172,56 @@ export class EmployeesService {
     employee.lastUpdatedOn = new Date();
 
     const saved = await this.employeeRepo.save(employee);
+
+    // The role decides dispatch membership: becoming an agent provisions/re-enables their
+    // identity; leaving the role frees their route and suspends the mobile login.
+    let initialPassword: string | null = null;
+    let details: string | undefined;
+    if (becomesAgent && saved.status === 'Active') {
+      if (!wasAgent) {
+        ({ initialPassword } = await this.agentProvisioning.provision(saved));
+        details = 'Now a Tea Collecting Agent — on the dispatch board';
+      } else {
+        await this.agentProvisioning.syncContact(saved);
+      }
+    } else if (wasAgent) {
+      const freed = await this.agentProvisioning.deprovision(saved);
+      details = `No longer a Tea Collecting Agent — removed from dispatch${freed.length ? `, ${freed.length} route(s) now unassigned` : ''}`;
+    }
     await this.audit.record(actor, {
       action: 'Updated employee details',
       module: 'Employee',
       record: formatEmployeeId(saved.id),
       recordHref: `/employees/${formatEmployeeId(saved.id)}`,
+      details,
     });
-    return this.toPublic(saved);
+    return {
+      ...this.toPublic(saved),
+      ...(initialPassword ? { initialPassword } : {}),
+    };
   }
 
   /** Administrator only (portal: `employees: 'approve'`). */
   async deactivate(id: string, actor: Actor): Promise<PublicEmployee> {
     this.assertIsAdmin(actor);
     const employee = await this.findEntity(id);
+    const wasAgent = isAgentRole(employee.role);
     employee.status = 'Inactive';
     employee.lastUpdatedBy = actor.name;
     employee.lastUpdatedOn = new Date();
     const saved = await this.employeeRepo.save(employee);
+    // an inactive agent leaves the dispatch board, loses their route and can't sign in
+    const freed = wasAgent
+      ? await this.agentProvisioning.deprovision(saved)
+      : [];
     await this.audit.record(actor, {
       action: 'Deactivated employee',
       module: 'Employee',
       record: formatEmployeeId(saved.id),
       recordHref: `/employees/${formatEmployeeId(saved.id)}`,
+      details: wasAgent
+        ? `Agent removed from dispatch${freed.length ? `; ${freed.length} route(s) now unassigned` : ''}`
+        : undefined,
     });
     return this.toPublic(saved);
   }

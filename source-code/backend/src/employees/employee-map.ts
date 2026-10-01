@@ -55,6 +55,11 @@ export interface PublicEmployee {
   lastUpdatedOn?: string;
   /** Additive — shift-based pay rates (Rs./hour), the input to payroll generation. */
   rates?: ShiftHours;
+  /**
+   * Tea Collecting Agents only, and ONLY on the create/update response that provisioned the
+   * mobile login: the one-time temporary password. Never stored in plain text, never returned again.
+   */
+  initialPassword?: string;
 }
 
 export interface PublicAdvance {

@@ -6,12 +6,17 @@ import { SystemSettingEntity } from '../admin/system-setting.entity';
 import { AuditModule } from '../audit/audit.module';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { DeliveryGradeLineEntity } from '../collections/delivery-grade-line.entity';
+import { EmployeeEntity } from '../employees/employee.entity';
 import { EstateEntity } from '../estates/estate.entity';
 import { RouteEntity } from '../estates/route.entity';
 import { FactoryEmployee } from '../users/factory-employee.entity';
+import { Factory } from '../users/factory.entity';
+import { User } from '../users/user.entity';
 import { UsersModule } from '../users/users.module';
 import { AgentDayStatusEntity } from './agent-day-status.entity';
 import { AgentDirectoryService } from './agent-directory.service';
+import { AgentHistoryService } from './agent-history.service';
+import { AgentProvisioningService } from './agent-provisioning.service';
 import { AgentLocationPingEntity } from './agent-location-ping.entity';
 import { AgentSelfService } from './agent-self.service';
 import { CandidateRankingService } from './candidate-ranking.service';
@@ -43,6 +48,9 @@ import { RouteResolverService } from './route-resolver.service';
       NotificationEntity,
       CollectionAgentEntity,
       FactoryEmployee,
+      Factory,
+      User,
+      EmployeeEntity,
       RouteEntity,
       EstateEntity,
       CollectionRecordEntity,
@@ -59,6 +67,8 @@ import { RouteResolverService } from './route-resolver.service';
     RouteLoadService,
     CandidateRankingService,
     AgentDirectoryService,
+    AgentHistoryService,
+    AgentProvisioningService,
     DispatchNotifier,
     DispatchAccessService,
     DispatchSettingsService,
@@ -70,6 +80,9 @@ import { RouteResolverService } from './route-resolver.service';
   exports: [
     RouteResolverService,
     AgentDirectoryService,
+    AgentHistoryService,
+    AgentProvisioningService,
+    DispatchAccessService,
     DispatchNotifier,
     RouteLoadService,
   ],
