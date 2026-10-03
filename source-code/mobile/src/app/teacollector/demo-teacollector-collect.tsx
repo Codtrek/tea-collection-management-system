@@ -295,14 +295,24 @@ export default function DemoTeaCollectorCollect({
       =================================================== */}
 
       {filter !== "history" && (
-        <Btn
-          variant="secondary"
-          block
-          style={styles.registerButton}
-          onPress={() => setSheet("register")}
-        >
-          + Register New Estate
-        </Btn>
+        <>
+          <Btn
+            variant="primary"
+            block
+            style={styles.registerButton}
+            onPress={() => setSheet("manualRequest")}
+          >
+            + Create Manual Collection Request
+          </Btn>
+          <Btn
+            variant="secondary"
+            block
+            style={styles.registerButton}
+            onPress={() => setSheet("register")}
+          >
+            + Register New Estate
+          </Btn>
+        </>
       )}
     </ScrollView>
     </View>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, ScrollView } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Sheet } from '@/components/ui/demo-teacollector-sheet';
 import { DetailRow } from '@/components/ui/demo-teacollector-detail-row';
@@ -929,6 +929,265 @@ export const RegisterSheet = ({ open, onClose }: any) => {
       <Field label="BR number (optional)"><Input placeholder="Business registration no." /></Field>
       
       <Btn variant="primary" block onPress={onClose}>Submit for Factory Approval</Btn>
+    </Sheet>
+  );
+};
+
+type RegisteredEstate = {
+  id: number;
+  name: string;
+  owner: string;
+  phone: string;
+  gps?: string;
+};
+
+type ManualRequestValues = {
+  estate: RegisteredEstate;
+  estimatedWeight: number;
+  pickupDate: Date;
+  reason: string;
+};
+
+const dateAtMidnight = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const formatRequestDate = (date: Date) =>
+  date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+export const ManualCollectionRequestSheet = ({
+  open,
+  estates,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  estates: RegisteredEstate[];
+  onClose: () => void;
+  onSubmit: (values: ManualRequestValues) => void;
+}) => {
+  const [selectedEstate, setSelectedEstate] = useState<RegisteredEstate | null>(null);
+  const [estateListOpen, setEstateListOpen] = useState(false);
+  const [estimatedWeight, setEstimatedWeight] = useState('');
+  const [pickupDate, setPickupDate] = useState<Date | null>(null);
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const tomorrow = dateAtMidnight(new Date());
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return new Date(tomorrow.getFullYear(), tomorrow.getMonth(), 1);
+  });
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  const today = dateAtMidnight(new Date());
+  const firstWeekday = (new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate();
+  const calendarCells: (number | null)[] = [
+    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+  ];
+  const earliestDate = new Date(today);
+  earliestDate.setDate(earliestDate.getDate() + 1);
+  const previousMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
+  const previousMonthDisabled = previousMonth < new Date(earliestDate.getFullYear(), earliestDate.getMonth(), 1);
+
+  const createRequest = () => {
+    const weight = Number(estimatedWeight);
+    if (!selectedEstate || !Number.isFinite(weight) || weight <= 0 || !pickupDate || pickupDate <= today || !reason.trim()) {
+      setError('Select an owner, enter a valid weight, choose a future date, and provide a reason.');
+      return;
+    }
+
+    onSubmit({ estate: selectedEstate, estimatedWeight: weight, pickupDate, reason: reason.trim() });
+    setSelectedEstate(null);
+    setEstateListOpen(false);
+    setEstimatedWeight('');
+    setPickupDate(null);
+    setReason('');
+    setError('');
+  };
+
+  return (
+    <Sheet open={open} onClose={onClose}>
+      <Text style={{
+        fontFamily: fontDisplay.fontFamily,
+        fontWeight: '600',
+        marginBottom: 4,
+        fontSize: 20,
+      }}>Create Manual Collection Request</Text>
+      <Text style={{ fontSize: 14, marginBottom: 16, color: c.muted }}>
+        Record a collection arranged by phone with an estate owner.
+      </Text>
+
+      <Field label="Tea estate owner">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Choose a registered tea estate owner"
+          onPress={() => setEstateListOpen((isOpen) => !isOpen)}
+          style={{
+            minHeight: 46,
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderColor: c.line,
+            backgroundColor: colors.background,
+            paddingHorizontal: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Text style={{ fontSize: 15, color: selectedEstate ? c.ink : c.muted }}>
+            {selectedEstate ? `${selectedEstate.owner} · ${selectedEstate.name}` : 'Select registered owner'}
+          </Text>
+          <Ionicons name={estateListOpen ? 'chevron-up' : 'chevron-down'} size={18} color={c.muted} />
+        </Pressable>
+        {estateListOpen && (
+          <View style={{
+            marginTop: 6,
+            borderWidth: 1,
+            borderColor: c.line,
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}>
+            {estates.map((estate, index) => (
+              <Pressable
+                key={estate.id}
+                onPress={() => {
+                  setSelectedEstate(estate);
+                  setEstateListOpen(false);
+                  setError('');
+                }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderBottomWidth: index === estates.length - 1 ? 0 : 1,
+                  borderBottomColor: c.line,
+                  backgroundColor: colors.background,
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: c.ink }}>{estate.owner}</Text>
+                <Text style={{ fontSize: 12, color: c.muted }}>{estate.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </Field>
+
+      <Field label="Estimated tea weight (kg)">
+        <Input
+          value={estimatedWeight}
+          onChangeText={setEstimatedWeight}
+          keyboardType="decimal-pad"
+          placeholder="Weight reported by the owner"
+          placeholderTextColor={c.muted}
+        />
+      </Field>
+
+      <Field label="Collection date (future dates only)">
+        <Btn variant="secondary" block onPress={() => setCalendarOpen((isOpen) => !isOpen)}>
+          {pickupDate ? formatRequestDate(pickupDate) : 'Choose a future date'}
+        </Btn>
+        {calendarOpen && (
+          <View style={{
+            marginTop: 8,
+            padding: 12,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: c.line,
+            backgroundColor: colors.background,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Previous month"
+                disabled={previousMonthDisabled}
+                onPress={() => setVisibleMonth(previousMonth)}
+                style={{ padding: 6, opacity: previousMonthDisabled ? 0.35 : 1 }}
+              >
+                <Ionicons name="chevron-back" size={18} color={c.ink} />
+              </Pressable>
+              <Text style={{ fontWeight: '700', color: c.ink }}>
+                {visibleMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Next month"
+                onPress={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+                style={{ padding: 6 }}
+              >
+                <Ionicons name="chevron-forward" size={18} color={c.ink} />
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: 'row' }}>
+              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, index) => (
+                <Text key={`${day}-${index}`} style={{ flex: 1, textAlign: 'center', paddingVertical: 6, color: c.muted, fontSize: 12 }}>
+                  {day}
+                </Text>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {calendarCells.map((day, index) => {
+                if (day === null) {
+                  return <View key={`empty-${index}`} style={{ width: '14.2857%', height: 38 }} />;
+                }
+                const date = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
+                const disabled = date <= today;
+                const selected = pickupDate?.getTime() === date.getTime();
+                return (
+                  <Pressable
+                    key={day}
+                    accessibilityRole="button"
+                    accessibilityLabel={formatRequestDate(date)}
+                    accessibilityState={{ disabled, selected }}
+                    disabled={disabled}
+                    onPress={() => {
+                      setPickupDate(date);
+                      setCalendarOpen(false);
+                      setError('');
+                    }}
+                    style={{
+                      width: '14.2857%',
+                      height: 38,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 19,
+                      backgroundColor: selected ? c.forest : 'transparent',
+                      opacity: disabled ? 0.35 : 1,
+                    }}
+                  >
+                    <Text style={{ color: selected ? colors.white : c.ink, fontWeight: selected ? '700' : '400' }}>
+                      {day}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+      </Field>
+
+      <Field label="Reason for creating this request">
+        <TextInput
+          value={reason}
+          onChangeText={setReason}
+          placeholder="Why was the request made by phone?"
+          placeholderTextColor={c.muted}
+          multiline
+          textAlignVertical="top"
+          style={{
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderColor: c.line,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            fontSize: 15,
+            minHeight: 76,
+            color: c.ink,
+          }}
+        />
+      </Field>
+
+      {error ? <Text style={{ color: colors.error, fontSize: 13, marginBottom: 12 }}>{error}</Text> : null}
+      <Btn variant="primary" block onPress={createRequest}>Create Request</Btn>
+      <Btn variant="ghost" block style={{ marginTop: 8 }} onPress={onClose}>Cancel</Btn>
     </Sheet>
   );
 };
