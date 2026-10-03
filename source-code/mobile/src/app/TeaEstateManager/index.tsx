@@ -179,7 +179,7 @@ export default function TeaEstateManagerDashboard() {
 
             <Pressable
               style={styles.dashboardCard}
-              onPress={() => setActiveTab("dashboard")}
+                onPress={() => router.push("./DailyPluckingDetails")}
             >
 
               <View style={styles.blueIcon}>
