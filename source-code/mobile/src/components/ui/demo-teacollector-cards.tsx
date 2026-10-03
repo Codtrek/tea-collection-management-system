@@ -381,11 +381,8 @@ export const StopCard = ({
             {/* Estimated weight + distance */}
 
             <View style={styles.metaRow}>
-              {stop.estNormalWeight > 0 && (
-                <Text style={styles.metaText}>Normal ~{stop.estNormalWeight} kg</Text>
-              )}
-              {stop.estSupperWeight > 0 && (
-                <Text style={styles.metaText}>Supper ~{stop.estSupperWeight} kg</Text>
+              {stop.estimatedWeight > 0 && (
+                <Text style={styles.metaText}>~{stop.estimatedWeight} kg estimated</Text>
               )}
 
               {stop.dist != null && (
@@ -418,11 +415,8 @@ export const StopCard = ({
             {/* Keep existing accepted information */}
 
             <View style={styles.metaRow}>
-              {stop.estNormalWeight > 0 && (
-                <Text style={styles.metaText}>Normal ~{stop.estNormalWeight} kg</Text>
-              )}
-              {stop.estSupperWeight > 0 && (
-                <Text style={styles.metaText}>Supper ~{stop.estSupperWeight} kg</Text>
+              {stop.estimatedWeight > 0 && (
+                <Text style={styles.metaText}>~{stop.estimatedWeight} kg estimated</Text>
               )}
 
               {stop.dist != null && (
@@ -446,12 +440,7 @@ export const StopCard = ({
 
         {isLoaded && (
           <View style={styles.weightBreakdown}>
-            {stop.actualNormalWeight > 0 && (
-              <Text style={styles.metaText}>Normal {stop.actualNormalWeight} kg</Text>
-            )}
-            {stop.actualSupperWeight > 0 && (
-              <Text style={styles.metaText}>Supper {stop.actualSupperWeight} kg</Text>
-            )}
+            <Text style={styles.metaText}>{stop.actualWeight || 0} kg collected</Text>
           </View>
         )}
 
@@ -461,12 +450,7 @@ export const StopCard = ({
 
         {isDelivered && (
           <View style={styles.weightBreakdown}>
-            {stop.actualNormalWeight > 0 && (
-              <Text style={styles.mutedMetaText}>Normal {stop.actualNormalWeight} kg delivered</Text>
-            )}
-            {stop.actualSupperWeight > 0 && (
-              <Text style={styles.mutedMetaText}>Supper {stop.actualSupperWeight} kg delivered</Text>
-            )}
+            <Text style={styles.mutedMetaText}>{stop.actualWeight || 0} kg delivered</Text>
           </View>
         )}
 

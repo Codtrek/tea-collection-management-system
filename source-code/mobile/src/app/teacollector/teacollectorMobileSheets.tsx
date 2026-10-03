@@ -200,8 +200,7 @@ export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) =
       }}>
         <DetailRow k="Owner" v={stop.owner} />
         <DetailRow k="Phone" v={stop.phone} />
-        {stop.estNormalWeight > 0 && <DetailRow k="Normal tea" v={teaWeight(stop.estNormalWeight)} />}
-        {stop.estSupperWeight > 0 && <DetailRow k="Supper tea" v={teaWeight(stop.estSupperWeight)} />}
+        <DetailRow k="Estate-reported weight" v={teaWeight(stop.estimatedWeight)} />
         {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
       </View>
 
@@ -388,8 +387,7 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall, o
         }}>Tea Collection</Text>
         <DetailRow k="Owner" v={stop.owner} />
         <DetailRow k="Phone" v={stop.phone} />
-        {stop.estNormalWeight > 0 && <DetailRow k="Normal tea" v={teaWeight(stop.estNormalWeight)} />}
-        {stop.estSupperWeight > 0 && <DetailRow k="Supper tea" v={teaWeight(stop.estSupperWeight)} />}
+        <DetailRow k="Estate-reported weight" v={teaWeight(stop.estimatedWeight)} />
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -405,23 +403,19 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall, o
 };
 
 export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
-  const [normalWeight, setNormalWeight] = useState("");
-  const [supperWeight, setSupperWeight] = useState("");
-  const [normalPhotoUri, setNormalPhotoUri] = useState<string>();
-  const [supperPhotoUri, setSupperPhotoUri] = useState<string>();
+  const [weight, setWeight] = useState("");
+  const [photoUri, setPhotoUri] = useState<string>();
   const [remark, setRemark] = useState('');
   
   useEffect(() => {
     if (stop) {
-      setNormalWeight("");
-      setSupperWeight("");
-      setNormalPhotoUri(undefined);
-      setSupperPhotoUri(undefined);
+      setWeight("");
+      setPhotoUri(undefined);
       setRemark('');
     }
   }, [stop?.id]);
 
-  const addPhoto = async (setPhotoUri: (uri: string) => void) => {
+  const addPhoto = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) return;
     const result = await ImagePicker.launchCameraAsync({
@@ -434,9 +428,6 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
   };
 
   if (!stop) return null;
-  const hasNormalTea = (stop.estNormalWeight || 0) > 0;
-  const hasSupperTea = (stop.estSupperWeight || 0) > 0;
-  const showBothTeaTypes = !hasNormalTea && !hasSupperTea;
 
   return (
     <Sheet open={open} onClose={onClose}>
@@ -456,41 +447,19 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
         fontSize: 20,
       }}>Log Tea Collection</Text>
 
-      {(hasNormalTea || showBothTeaTypes) && (
-        <>
-          <Field label="Normal tea weight (kg)">
-            <Input
-              value={normalWeight}
-              onChangeText={setNormalWeight}
-              keyboardType="decimal-pad"
-              placeholder="Enter Normal tea weight"
-              placeholderTextColor={c.muted}
-            />
-          </Field>
+      <Field label="Total tea weight (kg)">
+        <Input
+          value={weight}
+          onChangeText={setWeight}
+          keyboardType="decimal-pad"
+          placeholder="Enter the full measured weight"
+          placeholderTextColor={c.muted}
+        />
+      </Field>
 
-          <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={() => addPhoto((uri) => setNormalPhotoUri(uri))}>
-            {normalPhotoUri ? "Normal tea bag photo added" : "Add Normal Tea Bags Photo"}
-          </Btn>
-        </>
-      )}
-
-      {(hasSupperTea || showBothTeaTypes) && (
-        <>
-          <Field label="Supper tea weight (kg)">
-            <Input
-              value={supperWeight}
-              onChangeText={setSupperWeight}
-              keyboardType="decimal-pad"
-              placeholder="Enter Supper tea weight"
-              placeholderTextColor={c.muted}
-            />
-          </Field>
-
-          <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={() => addPhoto((uri) => setSupperPhotoUri(uri))}>
-            {supperPhotoUri ? "Supper tea bag photo added" : "Add Supper Tea Bags Photo"}
-          </Btn>
-        </>
-      )}
+      <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={addPhoto}>
+        {photoUri ? "Tea weight photo added" : "Add Tea Weight Photo"}
+      </Btn>
       
       <Field label="Remarks (optional)">
         <TextInput 
@@ -533,7 +502,7 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
       <Btn
         variant="primary"
         block
-        onPress={() => onSubmit({ normal: normalWeight, supper: supperWeight, normalPhotoUri, supperPhotoUri })}
+        onPress={() => onSubmit({ weight, photoUri })}
       >
         Submit Collection
       </Btn>
@@ -543,27 +512,16 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
 
 type ConfirmSheetProps = {
   open: boolean;
-  weights: { normal: number; supper: number };
+  weight: number;
   stop?: {
     name: string;
-    estNormalWeight?: number;
-    estSupperWeight?: number;
+    estimatedWeight?: number;
   } | null;
   onBack: () => void;
   onClose: () => void;
 };
 
-export const ConfirmSheet = ({ open, weights, stop, onBack, onClose }: ConfirmSheetProps) => {
-  const normal = weights?.normal || 0;
-  const supper = weights?.supper || 0;
-  const estateNormal = stop?.estNormalWeight || 0;
-  const estateSupper = stop?.estSupperWeight || 0;
-  const weightRows = [
-    { label: "Normal", estate: estateNormal, collector: normal },
-    { label: "Supper", estate: estateSupper, collector: supper },
-    { label: "Total", estate: estateNormal + estateSupper, collector: normal + supper },
-  ];
-
+export const ConfirmSheet = ({ open, weight, stop, onBack, onClose }: ConfirmSheetProps) => {
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
@@ -580,11 +538,11 @@ export const ConfirmSheet = ({ open, weights, stop, onBack, onClose }: ConfirmSh
       
       <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 16 }}>
         {[
-          { key: "estate", title: "Estate measured", field: "estate" as const },
-          { key: "collector", title: "Tea collector", field: "collector" as const },
-        ].map((column) => (
+          { title: "Estate-reported", value: stop?.estimatedWeight || 0 },
+          { title: "Collector measured", value: weight || 0 },
+        ].map((item) => (
           <View
-            key={column.key}
+            key={item.title}
             style={{
               flex: 1,
               padding: 12,
@@ -595,26 +553,11 @@ export const ConfirmSheet = ({ open, weights, stop, onBack, onClose }: ConfirmSh
             }}
           >
             <Text style={{ fontSize: 12, fontWeight: '700', color: c.forestDeep, marginBottom: 10 }}>
-              {column.title}
+              {item.title}
             </Text>
-            {weightRows.map((row) => (
-              <View
-                key={row.label}
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  paddingVertical: 5,
-                  borderTopWidth: row.label === "Normal" ? 0 : 1,
-                  borderTopColor: c.line,
-                }}
-              >
-                <Text style={{ fontSize: 12, color: c.muted }}>{row.label}</Text>
-                <Text style={{ fontSize: 12, fontWeight: row.label === "Total" ? '700' : '500', color: c.ink }}>
-                  {row[column.field].toFixed(1)} kg
-                </Text>
-              </View>
-            ))}
+            <Text style={{ fontSize: 16, fontWeight: '700', color: c.ink }}>
+              {item.value.toFixed(1)} kg
+            </Text>
           </View>
         ))}
       </View>
@@ -747,9 +690,8 @@ export const FactoryMapSheet = ({ open, stopCount, totalWeight, onClose, onArriv
 };
 
 export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSubmit }: any) => {
-  const normalTotal = stops.reduce((sum: number, s: any) => sum + (s.actualNormalWeight || 0), 0);
-  const supperTotal = stops.reduce((sum: number, s: any) => sum + (s.actualSupperWeight || 0), 0);
-  const total = normalTotal + supperTotal;
+  const estimatedTotal = stops.reduce((sum: number, s: any) => sum + (s.estimatedWeight || 0), 0);
+  const total = stops.reduce((sum: number, s: any) => sum + (s.actualWeight || 0), 0);
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
@@ -781,12 +723,9 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
               {[
                 { label: "Factory", width: 150 },
                 { label: "Estate", width: 150 },
-                { label: "Estate normal", width: 115 },
-                { label: "Collector normal", width: 125 },
-                { label: "Normal difference", width: 130 },
-                { label: "Estate supper", width: 115 },
-                { label: "Collector supper", width: 125 },
-                { label: "Supper difference", width: 130 },
+                { label: "Estate-reported weight", width: 150 },
+                { label: "Collector-measured weight", width: 175 },
+                { label: "Difference", width: 120 },
               ].map((column) => (
                 <Text
                   key={column.label}
@@ -807,28 +746,18 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
                 }}
               >
                 {(() => {
-                  const estateNormal = s.estNormalWeight || 0;
-                  const collectorNormal = s.actualNormalWeight || 0;
-                  const normalDifference = Math.round((collectorNormal - estateNormal) * 10) / 10;
-                  const estateSupper = s.estSupperWeight || 0;
-                  const collectorSupper = s.actualSupperWeight || 0;
-                  const supperDifference = Math.round((collectorSupper - estateSupper) * 10) / 10;
+                  const estimatedWeight = s.estimatedWeight || 0;
+                  const actualWeight = s.actualWeight || 0;
+                  const difference = Math.round((actualWeight - estimatedWeight) * 10) / 10;
                   const cells = [
                     { value: "Kotmale MPT Factory", width: 150, color: c.ink },
                     { value: s.name, width: 150, color: c.ink },
-                    { value: `${estateNormal.toFixed(1)} kg`, width: 115, color: c.forest },
-                    { value: `${collectorNormal.toFixed(1)} kg`, width: 125, color: c.forest },
+                    { value: `${estimatedWeight.toFixed(1)} kg`, width: 150, color: c.forest },
+                    { value: `${actualWeight.toFixed(1)} kg`, width: 175, color: c.forest },
                     {
-                      value: `${normalDifference > 0 ? "+" : ""}${normalDifference.toFixed(1)} kg`,
-                      width: 130,
-                      color: normalDifference === 0 ? c.forest : colors.error,
-                    },
-                    { value: `${estateSupper.toFixed(1)} kg`, width: 115, color: c.forest },
-                    { value: `${collectorSupper.toFixed(1)} kg`, width: 125, color: c.forest },
-                    {
-                      value: `${supperDifference > 0 ? "+" : ""}${supperDifference.toFixed(1)} kg`,
-                      width: 130,
-                      color: supperDifference === 0 ? c.forest : colors.error,
+                      value: `${difference > 0 ? "+" : ""}${difference.toFixed(1)} kg`,
+                      width: 120,
+                      color: difference === 0 ? c.forest : colors.error,
                     },
                   ];
 
@@ -840,7 +769,7 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
                       paddingHorizontal: 4,
                       fontSize: 13,
                       color: cell.color,
-                      fontWeight: cellIndex === 4 || cellIndex === 7 ? '700' : '400',
+                      fontWeight: cellIndex === 4 ? '700' : '400',
                     }}
                   >
                     {cell.value}
@@ -854,8 +783,7 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
       </Field>
 
       <DetailRow k="Total collection weight" v={`${total} kg`} />
-      <DetailRow k="Normal tea total" v={`${normalTotal} kg`} />
-      <DetailRow k="Supper tea total" v={`${supperTotal} kg`} />
+      <DetailRow k="Estate-reported total" v={`${estimatedTotal} kg`} />
 
       <View style={{ marginTop: 14 }}>
         <Field label="Receiving officer">
