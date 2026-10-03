@@ -66,21 +66,6 @@ export default function EstateOwnerHome() {
           </View>
 
           <SectionHeader
-            title="My Estates"
-            count={registeredEstates.length}
-            onViewAll={() => {}}
-          />
-          <View style={styles.list}>
-            {registeredEstates.map((estate) => (
-              <EstateListItem
-                key={estate.id}
-                estate={estate}
-                onPress={() => {}}
-              />
-            ))}
-          </View>
-
-          <SectionHeader
             title="Pending Requests"
             count={pendingRequests.length}
             onViewAll={() => {}}
