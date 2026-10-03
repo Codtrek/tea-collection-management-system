@@ -26,7 +26,7 @@ export default function TeaEstateManagerDashboard() {
      ===================================================== */
 
   const openNotifications = () => {
-    router.push("./notifications");
+    router.push("./Notification");
   };
 
   const openDailyPluckingDetails = () => {
@@ -34,7 +34,7 @@ export default function TeaEstateManagerDashboard() {
   };
 
   const openFertilizerStock = () => {
-    router.push("./fertilizer-stock");
+    router.push("./FertilizerStock");
   };
 
   /* =====================================================
