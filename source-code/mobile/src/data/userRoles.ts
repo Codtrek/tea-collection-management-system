@@ -13,7 +13,7 @@ export const userRoles: UserRole[] = [
     description: 'Oversee and coordinate the daily operations of the tea estate.',
     route: '../estatemanager'
     description: 'Oversee and coordinate the daily operations of the tea estateS.',
-    route: '../estatemanager/index'
+    route: '../estatemanager'
   },
   {
     id: '3',
