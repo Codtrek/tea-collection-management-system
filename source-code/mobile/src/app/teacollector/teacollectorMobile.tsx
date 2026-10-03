@@ -50,6 +50,7 @@ import {
   FactoryWeightSheet,
   MismatchSheet,
   RegisterSheet,
+  ManualCollectionRequestSheet,
 } from './teacollectorMobileSheets';
 const TITLES: Record<string, any> = {
   home: {
@@ -83,6 +84,25 @@ const TITLES: Record<string, any> = {
 const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 // ---------- mock data ----------
+type CollectionStop = {
+  id: number;
+  name: string;
+  owner: string;
+  phone: string;
+  gps?: string;
+  notes?: string;
+  estimatedWeight: number;
+  actualWeight?: number;
+  dist?: number;
+  status: string;
+  acceptedAt?: string;
+  reason?: string;
+  requestDate?: string;
+  requestReason?: string;
+  manualRequest?: boolean;
+  mismatch?: boolean;
+};
+
 const INITIAL_STOPS = [
   { id: 1, name: "Ceylon Green Estate", owner: "A. Wickramasinghe", phone: "077 812 4456", gps: "7.2906Â° N, 80.7718Â° E", notes: "Leaves picked this morning, ready by 9 AM", estimatedWeight: 68, dist: 2.4, status: "pending" },
   { id: 2, name: "Hill Breeze Gardens", owner: "N. Perera", phone: "071 220 9981", gps: "7.1935Â° N, 80.6812Â° E", notes: "Second harvest of the week", estimatedWeight: 54, dist: 4.1, status: "accepted", acceptedAt: "8:20 AM" },
@@ -160,7 +180,7 @@ export default function TeaCollectorMobile() {
   const router = useRouter();
   const [tab, setTab] = useState("home");
   const [filter, setFilter] = useState<RequestFilter>("all");
-  const [stops, setStops] = useState(INITIAL_STOPS);
+  const [stops, setStops] = useState<CollectionStop[]>(INITIAL_STOPS);
   const [fertRequests, setFertRequests] = useState(INITIAL_FERT_REQUESTS);
   const [activeStop, setActiveStop] = useState<any>(null);
   const [activeFert, setActiveFert] = useState<any>(null);
@@ -312,6 +332,43 @@ export default function TeaCollectorMobile() {
     setOfficer("");
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
+
+  const createManualCollectionRequest = ({
+    estate,
+    estimatedWeight,
+    pickupDate,
+    reason,
+  }: {
+    estate: {
+      id: number;
+      name: string;
+      owner: string;
+      phone: string;
+      gps?: string;
+    };
+    estimatedWeight: number;
+    pickupDate: Date;
+    reason: string;
+  }) => {
+    setStops((previousStops) => [
+      ...previousStops,
+      {
+        id: Date.now(),
+        name: estate.name,
+        owner: estate.owner,
+        phone: estate.phone,
+        gps: estate.gps,
+        notes: reason,
+        estimatedWeight,
+        requestDate: pickupDate.toISOString(),
+        requestReason: reason,
+        manualRequest: true,
+        status: "pending",
+      },
+    ]);
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   // Fertilizer handlers
@@ -472,6 +529,12 @@ export default function TeaCollectorMobile() {
           onReportMismatch={goToMismatch}
         />
         <MismatchSheet open={sheet === "mismatch"} onClose={() => setSheet(null)} onSubmit={submitMismatch} />
+        <ManualCollectionRequestSheet
+          open={sheet === "manualRequest"}
+          estates={INITIAL_STOPS}
+          onClose={() => setSheet(null)}
+          onSubmit={createManualCollectionRequest}
+        />
 
         {/* Fertilizer overlays */}
         <FertDetailsSheet open={sheet === "fertDetails"} request={activeFert} onClose={() => setSheet(null)} />
