@@ -50,7 +50,7 @@ export default function TeaEstateManagerDashboard() {
 
     switch (tab.key) {
       case "dashboard":
-        router.push("/estatemanager");
+        router.push("/estatemanager/FertilizerStock");
         break;
 
       case "employees":
