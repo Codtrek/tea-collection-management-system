@@ -1,6 +1,7 @@
 import React from 'react';
 import { TextInput } from 'react-native';
-import { c, fontMono } from '@/components/ui/demo-teacollector-theme';
+import { colors } from '@/theme/colors';
+import { fonts } from '@/theme/fonts';
 
 export const FormInput = (props: any) => {
   const { style, ...rest } = props;
@@ -11,13 +12,13 @@ export const FormInput = (props: any) => {
       style={[{
         borderRadius: 14,
         borderWidth: 1.5,
-        borderColor: c.line,
-        backgroundColor: '#fff',
+        borderColor: colors.border.default,
+        backgroundColor: colors.background,
         paddingHorizontal: 12,
         paddingVertical: 10,
         fontSize: 15,
-        fontFamily: fontMono.fontFamily,
-        color: c.ink,
+        fontFamily: fonts.default,
+        color: colors.text.primary,
       }, style]}
     />
   );

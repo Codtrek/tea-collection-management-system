@@ -15,6 +15,7 @@ export const colors = {
     placeholder: "#9CA3AF",
     disabled: "#D1D5DB",
     inverse: "#FFFFFF",
+    muted: "#6B7263",
   },
 
   // Borders
