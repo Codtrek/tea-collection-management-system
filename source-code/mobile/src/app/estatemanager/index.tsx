@@ -26,7 +26,7 @@ export default function TeaEstateManagerDashboard() {
   // -----------------------------
 
   const openNotifications = () => {
-    router.push("/estatemanager/notifications");
+    router.push("/estatemanager/Notification");
   };
 
   const openDailyPluckingDetails = () => {
@@ -34,7 +34,7 @@ export default function TeaEstateManagerDashboard() {
   };
 
   const openFertilizerStock = () => {
-    router.push("/estatemanager/fertilizer-stock");
+    router.push("/estatemanager/FertilizerStock");
   };
 
   // -----------------------------
@@ -54,15 +54,15 @@ export default function TeaEstateManagerDashboard() {
         break;
 
       case "employees":
-        router.push("/estatemanager/employees");
+        router.push("/estatemanager/Employees");
         break;
 
       case "photoEvidence":
-        router.push("/estatemanager/photo-evidence");
+        router.push("/estatemanager/PhotoEvidence");
         break;
 
       case "reports":
-        router.push("/estatemanager/reports");
+        router.push("/estatemanager/Reports");
         break;
 
       default:
