@@ -51,6 +51,7 @@ import {
   MismatchSheet,
   RegisterSheet,
   ManualCollectionRequestSheet,
+  BatchCancelRequestsSheet,
 } from './teacollectorMobileSheets';
 const TITLES: Record<string, any> = {
   home: {
@@ -184,6 +185,8 @@ export default function TeaCollectorMobile() {
   const [fertRequests, setFertRequests] = useState(INITIAL_FERT_REQUESTS);
   const [activeStop, setActiveStop] = useState<any>(null);
   const [activeFert, setActiveFert] = useState<any>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<number[]>([]);
   const [collectedWeight, setCollectedWeight] = useState(0);
   const [factoryWeight, setFactoryWeight] = useState(0);
   const [batchTotal, setBatchTotal] = useState(0);
@@ -193,6 +196,50 @@ export default function TeaCollectorMobile() {
   const updateStop = (id: number, patch: any) => setStops((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const updateMany = (ids: number[], patch: any) => setStops((prev) => prev.map((s) => (ids.includes(s.id) ? { ...s, ...patch } : s)));
   const updateFert = (id: number, patch: any) => setFertRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const toggleRequestSelection = (stop: CollectionStop) => {
+    if (stop.status !== "pending" && stop.status !== "accepted") return;
+    setSelectedRequestIds((selectedIds) =>
+      selectedIds.includes(stop.id)
+        ? selectedIds.filter((id) => id !== stop.id)
+        : [...selectedIds, stop.id],
+    );
+  };
+
+  const startRequestSelection = () => {
+    setSelectedRequestIds([]);
+    setSelectionMode(true);
+  };
+  const startSelectionWithRequest = (stop: CollectionStop) => {
+  if (stop.status !== "pending" && stop.status !== "accepted") return;
+
+  setSelectedRequestIds([stop.id]);
+  setSelectionMode(true);
+};
+
+  const finishRequestSelection = () => {
+    setSelectedRequestIds([]);
+    setSelectionMode(false);
+  };
+
+  const cancelSelectedRequests = (reason: string, note: string) => {
+    if (selectedRequestIds.length === 0) {
+      console.warn("No pickup requests selected for cancellation");
+      return;
+    }
+
+    const selectedIds = new Set(selectedRequestIds);
+    setStops((previousStops) =>
+      previousStops.map((stop) =>
+        selectedIds.has(stop.id) && (stop.status === "pending" || stop.status === "accepted")
+          ? { ...stop, status: "cancelled", reason, note }
+          : stop,
+      ),
+    );
+    finishRequestSelection();
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
 
   // Tea collection handlers - with null checks
   const openPickupDetails = (stop: any) => { 
@@ -445,6 +492,13 @@ export default function TeaCollectorMobile() {
             onGoToEstate={goToEstate}
             setSheet={setSheet}
             history={HISTORY}
+            selectionMode={selectionMode}
+            selectedRequestIds={selectedRequestIds}
+            onToggleRequestSelection={toggleRequestSelection}
+            onStartSelectionWithRequest={startSelectionWithRequest}
+            onStartRequestSelection={startRequestSelection}
+            onCancelRequestSelection={finishRequestSelection}
+            onCancelSelectedRequests={() => setSheet("cancelSelectedRequests")}
           />
         );
       case "fert":
@@ -502,6 +556,12 @@ export default function TeaCollectorMobile() {
         <DeclineSheet open={sheet === "decline"} onClose={() => setSheet(null)} onConfirm={confirmDecline} />
         <ArrivedSheet open={sheet === "arrived"} stop={activeStop} onClose={() => setSheet(null)} onStartCollection={startCollection} onCall={handleCall} onCancelPickup={() => setSheet("cancelPickup")} />
         <CancelPickupSheet open={sheet === "cancelPickup"} onBack={() => setSheet("arrived")} onConfirm={confirmCancelPickup} />
+        <BatchCancelRequestsSheet
+          open={sheet === "cancelSelectedRequests"}
+          requestCount={selectedRequestIds.length}
+          onClose={() => setSheet(null)}
+          onConfirm={cancelSelectedRequests}
+        />
         <CollectSheet open={sheet === "collect"} stop={activeStop} onClose={() => setSheet(null)} onSubmit={submitCollection} />
         <ConfirmSheet open={sheet === "confirm"} stop={activeStop} weight={collectedWeight} onBack={() => setSheet("collect")} onClose={continueCollecting} />
         

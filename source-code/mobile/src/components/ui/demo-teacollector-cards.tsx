@@ -271,6 +271,11 @@ interface StopCardProps {
    */
   onArrivedDetails?: (stop: any) => void;
 
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (stop: any) => void;
+  onStartSelection?: (stop: any) => void;
+
   /*
    * NEW:
    * Accepted -> navigate to particular tea estate
@@ -283,6 +288,10 @@ export const StopCard = ({
   onViewDetails,
   onArrivedDetails,
   onGoToEstate,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onStartSelection,
 }: StopCardProps) => {
   const isPending = stop.status === "pending";
   const isAccepted = stop.status === "accepted";
@@ -291,7 +300,7 @@ export const StopCard = ({
   const isCancelled = stop.status === "cancelled";
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, selected && styles.selectedCard]}>
       {/* =================================================
           MAIN CARD CONTENT
 
@@ -306,19 +315,36 @@ export const StopCard = ({
           onArrivedDetails.
       ================================================== */}
 
-      <TouchableOpacity
-        disabled={!isPending && !isAccepted}
-        activeOpacity={0.85}
-        onPress={() => {
-          if (isPending) {
-            onViewDetails?.(stop);
-          }
+        <TouchableOpacity
+          disabled={!isPending && !isAccepted}
+          activeOpacity={0.85}
+          onLongPress={() => {
+            if (!isPending && !isAccepted) return;
 
-          if (isAccepted) {
-            onArrivedDetails?.(stop);
-          }
-        }}
-      >
+            if (!selectionMode) {
+              onStartSelection?.(stop);
+            } else {
+              onToggleSelect?.(stop);
+            }
+          }}
+          onPress={() => {
+
+            if (selectionMode) {
+                  if (isPending || isAccepted) {
+                    onToggleSelect?.(stop);
+                }
+                return;
+            }
+
+            if (isPending) {
+              onViewDetails?.(stop);
+            }
+
+            if (isAccepted) {
+              onArrivedDetails?.(stop);
+            }
+          }}
+        >
         {/* =================================================
             HEADER
         ================================================== */}
@@ -370,13 +396,18 @@ export const StopCard = ({
                 : stop.status
             }
           />
+          {selectionMode && (isPending || isAccepted) && (
+            <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorSelected]}>
+              {selected && <Ionicons name="checkmark" size={15} color={colors.white} />}
+            </View>
+          )}
         </View>
 
         {/* =================================================
             PENDING REQUEST
         ================================================== */}
 
-        {isPending && (
+        {isPending && !selectionMode && (
           <>
             {/* Estimated weight + distance */}
 
@@ -410,7 +441,7 @@ export const StopCard = ({
             ACCEPTED REQUEST
         ================================================== */}
 
-        {isAccepted && (
+        {isAccepted && !selectionMode && (
           <>
             {/* Keep existing accepted information */}
 
@@ -586,6 +617,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border.light,
+  },
+
+  selectedCard: {
+    backgroundColor: colors.successBackground,
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+
+  selectionIndicator: {
+    width: 24,
+    height: 24,
+    marginLeft: 8,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.border.focused,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background,
+  },
+
+  selectionIndicatorSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
 
   /* =======================================================

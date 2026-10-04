@@ -348,6 +348,72 @@ export const CancelPickupSheet = ({ open, onBack, onConfirm }: any) => {
   );
 };
 
+export const BatchCancelRequestsSheet = ({ open, requestCount, onClose, onConfirm }: any) => {
+  const [reason, setReason] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      setReason(null);
+      setNote('');
+    }
+  }, [open]);
+
+  return (
+    <Sheet open={open} onClose={onClose}>
+      <Text style={{
+        fontFamily: fontDisplay.fontFamily,
+        fontWeight: '600',
+        marginBottom: 4,
+        fontSize: 20,
+      }}>Cancel selected requests</Text>
+      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
+        This will cancel {requestCount} selected pickup request{requestCount === 1 ? '' : 's'}. Select a reason.
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        {PICKUP_REASONS.map((pickupReason) => (
+          <Chip
+            key={pickupReason}
+            active={reason === pickupReason}
+            onPress={() => setReason(reason === pickupReason ? null : pickupReason)}
+          >
+            {pickupReason}
+          </Chip>
+        ))}
+      </View>
+      <Field label="Add a note (optional)">
+        <TextInput
+          style={{
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderColor: colors.border.light,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            fontSize: 15,
+            height: 64,
+            textAlignVertical: 'top',
+          }}
+          multiline
+          numberOfLines={3}
+          placeholder="Anything the factory or owners should know..."
+          value={note}
+          onChangeText={setNote}
+        />
+      </Field>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Btn variant="danger" block disabled={!reason} onPress={() => reason && onConfirm(reason, note)}>
+            Confirm Cancel
+          </Btn>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Btn variant="ghost" block onPress={onClose}>Back</Btn>
+        </View>
+      </View>
+    </Sheet>
+  );
+};
+
 export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall, onCancelPickup }: any) => {
   if (!stop) return null;
   return (
