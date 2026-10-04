@@ -271,6 +271,11 @@ interface StopCardProps {
    */
   onArrivedDetails?: (stop: any) => void;
 
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (stop: any) => void;
+  onStartSelection?: (stop: any) => void;
+
   /*
    * NEW:
    * Accepted -> navigate to particular tea estate
@@ -283,6 +288,10 @@ export const StopCard = ({
   onViewDetails,
   onArrivedDetails,
   onGoToEstate,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onStartSelection,
 }: StopCardProps) => {
   const isPending = stop.status === "pending";
   const isAccepted = stop.status === "accepted";
@@ -291,7 +300,7 @@ export const StopCard = ({
   const isCancelled = stop.status === "cancelled";
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, selected && styles.selectedCard]}>
       {/* =================================================
           MAIN CARD CONTENT
 
@@ -306,19 +315,36 @@ export const StopCard = ({
           onArrivedDetails.
       ================================================== */}
 
-      <TouchableOpacity
-        disabled={!isPending && !isAccepted}
-        activeOpacity={0.85}
-        onPress={() => {
-          if (isPending) {
-            onViewDetails?.(stop);
-          }
+        <TouchableOpacity
+          disabled={!isPending && !isAccepted}
+          activeOpacity={0.85}
+          onLongPress={() => {
+            if (!isPending && !isAccepted) return;
 
-          if (isAccepted) {
-            onArrivedDetails?.(stop);
-          }
-        }}
-      >
+            if (!selectionMode) {
+              onStartSelection?.(stop);
+            } else {
+              onToggleSelect?.(stop);
+            }
+          }}
+          onPress={() => {
+
+            if (selectionMode) {
+                  if (isPending || isAccepted) {
+                    onToggleSelect?.(stop);
+                }
+                return;
+            }
+
+            if (isPending) {
+              onViewDetails?.(stop);
+            }
+
+            if (isAccepted) {
+              onArrivedDetails?.(stop);
+            }
+          }}
+        >
         {/* =================================================
             HEADER
         ================================================== */}
@@ -370,22 +396,24 @@ export const StopCard = ({
                 : stop.status
             }
           />
+          {selectionMode && (isPending || isAccepted) && (
+            <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorSelected]}>
+              {selected && <Ionicons name="checkmark" size={15} color={colors.white} />}
+            </View>
+          )}
         </View>
 
         {/* =================================================
             PENDING REQUEST
         ================================================== */}
 
-        {isPending && (
+        {isPending && !selectionMode && (
           <>
             {/* Estimated weight + distance */}
 
             <View style={styles.metaRow}>
-              {stop.estNormalWeight > 0 && (
-                <Text style={styles.metaText}>Normal ~{stop.estNormalWeight} kg</Text>
-              )}
-              {stop.estSupperWeight > 0 && (
-                <Text style={styles.metaText}>Supper ~{stop.estSupperWeight} kg</Text>
+              {stop.estimatedWeight > 0 && (
+                <Text style={styles.metaText}>~{stop.estimatedWeight} kg estimated</Text>
               )}
 
               {stop.dist != null && (
@@ -413,16 +441,13 @@ export const StopCard = ({
             ACCEPTED REQUEST
         ================================================== */}
 
-        {isAccepted && (
+        {isAccepted && !selectionMode && (
           <>
             {/* Keep existing accepted information */}
 
             <View style={styles.metaRow}>
-              {stop.estNormalWeight > 0 && (
-                <Text style={styles.metaText}>Normal ~{stop.estNormalWeight} kg</Text>
-              )}
-              {stop.estSupperWeight > 0 && (
-                <Text style={styles.metaText}>Supper ~{stop.estSupperWeight} kg</Text>
+              {stop.estimatedWeight > 0 && (
+                <Text style={styles.metaText}>~{stop.estimatedWeight} kg estimated</Text>
               )}
 
               {stop.dist != null && (
@@ -446,12 +471,7 @@ export const StopCard = ({
 
         {isLoaded && (
           <View style={styles.weightBreakdown}>
-            {stop.actualNormalWeight > 0 && (
-              <Text style={styles.metaText}>Normal {stop.actualNormalWeight} kg</Text>
-            )}
-            {stop.actualSupperWeight > 0 && (
-              <Text style={styles.metaText}>Supper {stop.actualSupperWeight} kg</Text>
-            )}
+            <Text style={styles.metaText}>{stop.actualWeight || 0} kg collected</Text>
           </View>
         )}
 
@@ -461,12 +481,7 @@ export const StopCard = ({
 
         {isDelivered && (
           <View style={styles.weightBreakdown}>
-            {stop.actualNormalWeight > 0 && (
-              <Text style={styles.mutedMetaText}>Normal {stop.actualNormalWeight} kg delivered</Text>
-            )}
-            {stop.actualSupperWeight > 0 && (
-              <Text style={styles.mutedMetaText}>Supper {stop.actualSupperWeight} kg delivered</Text>
-            )}
+            <Text style={styles.mutedMetaText}>{stop.actualWeight || 0} kg delivered</Text>
           </View>
         )}
 
@@ -602,6 +617,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border.light,
+  },
+
+  selectedCard: {
+    backgroundColor: colors.successBackground,
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+
+  selectionIndicator: {
+    width: 24,
+    height: 24,
+    marginLeft: 8,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.border.focused,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background,
+  },
+
+  selectionIndicatorSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
 
   /* =======================================================
