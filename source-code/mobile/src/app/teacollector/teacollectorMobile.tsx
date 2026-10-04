@@ -50,6 +50,8 @@ import {
   FactoryWeightSheet,
   MismatchSheet,
   RegisterSheet,
+  ManualCollectionRequestSheet,
+  BatchCancelRequestsSheet,
 } from './teacollectorMobileSheets';
 const TITLES: Record<string, any> = {
   home: {
@@ -83,14 +85,33 @@ const TITLES: Record<string, any> = {
 const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 // ---------- mock data ----------
+type CollectionStop = {
+  id: number;
+  name: string;
+  owner: string;
+  phone: string;
+  gps?: string;
+  notes?: string;
+  estimatedWeight: number;
+  actualWeight?: number;
+  dist?: number;
+  status: string;
+  acceptedAt?: string;
+  reason?: string;
+  requestDate?: string;
+  requestReason?: string;
+  manualRequest?: boolean;
+  mismatch?: boolean;
+};
+
 const INITIAL_STOPS = [
-  { id: 1, name: "Ceylon Green Estate", owner: "A. Wickramasinghe", phone: "077 812 4456", gps: "7.2906Â° N, 80.7718Â° E", notes: "Leaves picked this morning, ready by 9 AM", estNormalWeight: 48, estSupperWeight: 20, dist: 2.4, status: "pending" },
-  { id: 2, name: "Hill Breeze Gardens", owner: "N. Perera", phone: "071 220 9981", gps: "7.1935Â° N, 80.6812Â° E", notes: "Second harvest of the week", estNormalWeight: 54, estSupperWeight: 0, dist: 4.1, status: "accepted", acceptedAt: "8:20 AM" },
-  { id: 3, name: "Mistvale Tea Farm", owner: "K. Bandara", phone: "076 554 3312", gps: "7.2011Â° N, 80.7020Â° E", notes: "", estNormalWeight: 41, estSupperWeight: 20, actualNormalWeight: 41, actualSupperWeight: 20, actualWeight: 61, status: "loaded" },
-  { id: 4, name: "Oakridge Estate", owner: "D. Herath", phone: "072 118 2290", gps: "7.2299Â° N, 80.7115Â° E", notes: "", estNormalWeight: 0, estSupperWeight: 71, actualNormalWeight: 0, actualSupperWeight: 71, actualWeight: 71, status: "loaded" },
-  { id: 5, name: "Green Hollow Estate", owner: "S. Fernando", phone: "075 331 8820", gps: "7.2540Â° N, 80.7301Â° E", notes: "", estNormalWeight: 0, estSupperWeight: 0, status: "cancelled", reason: "Road blocked" },
-  { id: 6, name: "Silverleaf Plantation", owner: "R. Dissanayake", phone: "070 442 7719", gps: "7.2180Â° N, 80.7422Â° E", notes: "New flush, small quantity", estNormalWeight: 40, estSupperWeight: 0, dist: 6.8, status: "pending" },
-  { id: 7, name: "Windsor Tea Gardens", owner: "P. Jayasuriya", phone: "077 903 4471", gps: "7.1850Â° N, 80.6690Â° E", notes: "", estNormalWeight: 74, estSupperWeight: 0, actualNormalWeight: 74, actualSupperWeight: 0, actualWeight: 74, status: "delivered" },
+  { id: 1, name: "Ceylon Green Estate", owner: "A. Wickramasinghe", phone: "077 812 4456", gps: "7.2906Â° N, 80.7718Â° E", notes: "Leaves picked this morning, ready by 9 AM", estimatedWeight: 68, dist: 2.4, status: "pending" },
+  { id: 2, name: "Hill Breeze Gardens", owner: "N. Perera", phone: "071 220 9981", gps: "7.1935Â° N, 80.6812Â° E", notes: "Second harvest of the week", estimatedWeight: 54, dist: 4.1, status: "accepted", acceptedAt: "8:20 AM" },
+  { id: 3, name: "Mistvale Tea Farm", owner: "K. Bandara", phone: "076 554 3312", gps: "7.2011Â° N, 80.7020Â° E", notes: "", estimatedWeight: 61, actualWeight: 61, status: "loaded" },
+  { id: 4, name: "Oakridge Estate", owner: "D. Herath", phone: "072 118 2290", gps: "7.2299Â° N, 80.7115Â° E", notes: "", estimatedWeight: 71, actualWeight: 71, status: "loaded" },
+  { id: 5, name: "Green Hollow Estate", owner: "S. Fernando", phone: "075 331 8820", gps: "7.2540Â° N, 80.7301Â° E", notes: "", estimatedWeight: 0, status: "cancelled", reason: "Road blocked" },
+  { id: 6, name: "Silverleaf Plantation", owner: "R. Dissanayake", phone: "070 442 7719", gps: "7.2180Â° N, 80.7422Â° E", notes: "New flush, small quantity", estimatedWeight: 40, dist: 6.8, status: "pending" },
+  { id: 7, name: "Windsor Tea Gardens", owner: "P. Jayasuriya", phone: "077 903 4471", gps: "7.1850Â° N, 80.6690Â° E", notes: "", estimatedWeight: 74, actualWeight: 74, status: "delivered" },
 ];
 
 const INITIAL_FERT_REQUESTS = [
@@ -160,11 +181,13 @@ export default function TeaCollectorMobile() {
   const router = useRouter();
   const [tab, setTab] = useState("home");
   const [filter, setFilter] = useState<RequestFilter>("all");
-  const [stops, setStops] = useState(INITIAL_STOPS);
+  const [stops, setStops] = useState<CollectionStop[]>(INITIAL_STOPS);
   const [fertRequests, setFertRequests] = useState(INITIAL_FERT_REQUESTS);
   const [activeStop, setActiveStop] = useState<any>(null);
   const [activeFert, setActiveFert] = useState<any>(null);
-  const [collectedWeights, setCollectedWeights] = useState({ normal: 0, supper: 0 });
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<number[]>([]);
+  const [collectedWeight, setCollectedWeight] = useState(0);
   const [factoryWeight, setFactoryWeight] = useState(0);
   const [batchTotal, setBatchTotal] = useState(0);
   const [officer, setOfficer] = useState("");
@@ -173,6 +196,50 @@ export default function TeaCollectorMobile() {
   const updateStop = (id: number, patch: any) => setStops((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const updateMany = (ids: number[], patch: any) => setStops((prev) => prev.map((s) => (ids.includes(s.id) ? { ...s, ...patch } : s)));
   const updateFert = (id: number, patch: any) => setFertRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const toggleRequestSelection = (stop: CollectionStop) => {
+    if (stop.status !== "pending" && stop.status !== "accepted") return;
+    setSelectedRequestIds((selectedIds) =>
+      selectedIds.includes(stop.id)
+        ? selectedIds.filter((id) => id !== stop.id)
+        : [...selectedIds, stop.id],
+    );
+  };
+
+  const startRequestSelection = () => {
+    setSelectedRequestIds([]);
+    setSelectionMode(true);
+  };
+  const startSelectionWithRequest = (stop: CollectionStop) => {
+  if (stop.status !== "pending" && stop.status !== "accepted") return;
+
+  setSelectedRequestIds([stop.id]);
+  setSelectionMode(true);
+};
+
+  const finishRequestSelection = () => {
+    setSelectedRequestIds([]);
+    setSelectionMode(false);
+  };
+
+  const cancelSelectedRequests = (reason: string, note: string) => {
+    if (selectedRequestIds.length === 0) {
+      console.warn("No pickup requests selected for cancellation");
+      return;
+    }
+
+    const selectedIds = new Set(selectedRequestIds);
+    setStops((previousStops) =>
+      previousStops.map((stop) =>
+        selectedIds.has(stop.id) && (stop.status === "pending" || stop.status === "accepted")
+          ? { ...stop, status: "cancelled", reason, note }
+          : stop,
+      ),
+    );
+    finishRequestSelection();
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
 
   // Tea collection handlers - with null checks
   const openPickupDetails = (stop: any) => { 
@@ -255,21 +322,17 @@ export default function TeaCollectorMobile() {
     setSheet("collect");
   };
 
-  const submitCollection = (weights: { normal: string; supper: string; normalPhotoUri?: string; supperPhotoUri?: string }) => {
+  const submitCollection = (collection: { weight: string; photoUri?: string }) => {
     if (!activeStop) {
       console.warn("No active stop to submit collection");
       return;
     }
     
-    const normal = parseFloat(weights.normal) || 0;
-    const supper = parseFloat(weights.supper) || 0;
-    setCollectedWeights({ normal, supper });
+    const weight = parseFloat(collection.weight) || 0;
+    setCollectedWeight(weight);
     updateStop(activeStop.id, { 
-      actualNormalWeight: normal,
-      actualSupperWeight: supper,
-      actualWeight: normal + supper,
-      normalPhotoUri: weights.normalPhotoUri,
-      supperPhotoUri: weights.supperPhotoUri,
+      actualWeight: weight,
+      photoUri: collection.photoUri,
     });
     setSheet("confirm");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -316,6 +379,43 @@ export default function TeaCollectorMobile() {
     setOfficer("");
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
+
+  const createManualCollectionRequest = ({
+    estate,
+    estimatedWeight,
+    pickupDate,
+    reason,
+  }: {
+    estate: {
+      id: number;
+      name: string;
+      owner: string;
+      phone: string;
+      gps?: string;
+    };
+    estimatedWeight: number;
+    pickupDate: Date;
+    reason: string;
+  }) => {
+    setStops((previousStops) => [
+      ...previousStops,
+      {
+        id: Date.now(),
+        name: estate.name,
+        owner: estate.owner,
+        phone: estate.phone,
+        gps: estate.gps,
+        notes: reason,
+        estimatedWeight,
+        requestDate: pickupDate.toISOString(),
+        requestReason: reason,
+        manualRequest: true,
+        status: "pending",
+      },
+    ]);
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   // Fertilizer handlers
@@ -392,6 +492,13 @@ export default function TeaCollectorMobile() {
             onGoToEstate={goToEstate}
             setSheet={setSheet}
             history={HISTORY}
+            selectionMode={selectionMode}
+            selectedRequestIds={selectedRequestIds}
+            onToggleRequestSelection={toggleRequestSelection}
+            onStartSelectionWithRequest={startSelectionWithRequest}
+            onStartRequestSelection={startRequestSelection}
+            onCancelRequestSelection={finishRequestSelection}
+            onCancelSelectedRequests={() => setSheet("cancelSelectedRequests")}
           />
         );
       case "fert":
@@ -449,8 +556,14 @@ export default function TeaCollectorMobile() {
         <DeclineSheet open={sheet === "decline"} onClose={() => setSheet(null)} onConfirm={confirmDecline} />
         <ArrivedSheet open={sheet === "arrived"} stop={activeStop} onClose={() => setSheet(null)} onStartCollection={startCollection} onCall={handleCall} onCancelPickup={() => setSheet("cancelPickup")} />
         <CancelPickupSheet open={sheet === "cancelPickup"} onBack={() => setSheet("arrived")} onConfirm={confirmCancelPickup} />
+        <BatchCancelRequestsSheet
+          open={sheet === "cancelSelectedRequests"}
+          requestCount={selectedRequestIds.length}
+          onClose={() => setSheet(null)}
+          onConfirm={cancelSelectedRequests}
+        />
         <CollectSheet open={sheet === "collect"} stop={activeStop} onClose={() => setSheet(null)} onSubmit={submitCollection} />
-        <ConfirmSheet open={sheet === "confirm"} stop={activeStop} weights={collectedWeights} onBack={() => setSheet("collect")} onClose={continueCollecting} />
+        <ConfirmSheet open={sheet === "confirm"} stop={activeStop} weight={collectedWeight} onBack={() => setSheet("collect")} onClose={continueCollecting} />
         
         <FactoryMapSheet
           open={sheet === "map"}
@@ -476,6 +589,12 @@ export default function TeaCollectorMobile() {
           onReportMismatch={goToMismatch}
         />
         <MismatchSheet open={sheet === "mismatch"} onClose={() => setSheet(null)} onSubmit={submitMismatch} />
+        <ManualCollectionRequestSheet
+          open={sheet === "manualRequest"}
+          estates={INITIAL_STOPS}
+          onClose={() => setSheet(null)}
+          onSubmit={createManualCollectionRequest}
+        />
 
         {/* Fertilizer overlays */}
         <FertDetailsSheet open={sheet === "fertDetails"} request={activeFert} onClose={() => setSheet(null)} />
