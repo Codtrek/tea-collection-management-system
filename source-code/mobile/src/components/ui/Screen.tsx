@@ -58,8 +58,8 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    paddingHorizontal: 20,
     backgroundColor: "#FFFFFF",
+    paddingHorizontal: 20,
     alignSelf: "center",
     maxWidth: Platform.OS === 'web' ? 393 : '100%',
   },
