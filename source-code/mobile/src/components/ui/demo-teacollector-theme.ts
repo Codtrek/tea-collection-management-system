@@ -19,14 +19,3 @@ export const c = {
 
 export const fontDisplay = { fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif' };
 export const fontMono = { fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace' };
-
-export const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
-  pending: { bg: "#FBEFD8", fg: c.amberDeep, label: "Pending" },
-  accepted: { bg: "#E3EEE0", fg: c.sageDeep, label: "Accepted" },
-  loaded: { bg: "#DCEAE1", fg: c.forest, label: "Loaded" },
-  delivered: { bg: "#D8E8DD", fg: c.forestDeep, label: "Delivered" },
-  cancelled: { bg: "#F5E1DC", fg: c.rust, label: "Cancelled" },
-  waiting: { bg: "#FBEFD8", fg: c.amberDeep, label: "Waiting" },
-  mismatch: { bg: "#F5E1DC", fg: c.rust, label: "Mismatch reported" },
-  confirmed: { bg: "#E3EEE0", fg: c.sageDeep, label: "Confirmed" },
-};

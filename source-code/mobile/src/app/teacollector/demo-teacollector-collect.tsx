@@ -17,10 +17,7 @@ import { Btn } from "@/components/ui/demo-teacollector-button";
 import { Card } from "@/components/ui/demo-teacollector-card";
 import { StopCard } from "@/components/ui/demo-teacollector-cards";
 
-import {
-  fontDisplay,
-  fontMono,
-} from "@/components/ui/demo-teacollector-theme";
+import { fonts } from "@/theme/fonts";
 
 import { colors } from "@/theme/colors";
 
@@ -34,6 +31,12 @@ export default function DemoTeaCollectorCollect({
   onGoToEstate,
   setSheet,
   history,
+  selectionMode,
+  selectedRequestIds,
+  onToggleRequestSelection,
+  onStartSelectionWithRequest,
+  onCancelRequestSelection,
+  onCancelSelectedRequests,
 }: any) {
   /*
    * ========================================================
@@ -100,21 +103,52 @@ export default function DemoTeaCollectorCollect({
   const deliveredToday = stops.filter(
     (s: any) => s.status === "delivered"
   );
+  const visibleSelectableRequests = stops.filter(
+    (stop: any) =>
+      (stop.status === "pending" || stop.status === "accepted") &&
+      (filter === "all" || filter === stop.status)
+  );
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.container}>
       {/* ===================================================
           FILTER TABS
       =================================================== */}
-
+    <View style={styles.stickyFilter}>
       <RequestFilterTabs
         filter={filter}
         setFilter={setFilter}
       />
+      </View>
+    <ScrollView
+      
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
+
+      {filter !== "history" && (
+        <View style={styles.selectionActions}>
+          {selectionMode && (
+            <>
+              <Text style={styles.selectionCount}>
+                {selectedRequestIds.length} request{selectedRequestIds.length === 1 ? "" : "s"} selected
+              </Text>
+              <View style={styles.selectionButtons}>
+                <Btn variant="ghost" small onPress={onCancelRequestSelection}>Done</Btn>
+                <Btn
+                  variant="danger"
+                  small
+                  disabled={selectedRequestIds.length === 0}
+                  onPress={onCancelSelectedRequests}
+                >
+                  Cancel selected
+                </Btn>
+              </View>
+             </>
+          )} 
+            
+        </View>
+      )}
 
       {/* ===================================================
           LOADED / FACTORY
@@ -143,7 +177,7 @@ export default function DemoTeaCollectorCollect({
           </View>
 
           <Btn
-            variant="primary"
+            variant="forest"
             block
             style={styles.factoryButton}
             onPress={onGoToFactory}
@@ -173,6 +207,10 @@ export default function DemoTeaCollectorCollect({
                     onViewDetails={onViewDetails}
                     onArrivedDetails={onArrivedDetails}
                     onGoToEstate={onGoToEstate}
+                    selectionMode={selectionMode}
+                    selected={selectedRequestIds.includes(s.id)}
+                    onToggleSelect={onToggleRequestSelection}
+                    onStartSelection={onStartSelectionWithRequest}
                   />
                 ))}
               </View>
@@ -201,6 +239,10 @@ export default function DemoTeaCollectorCollect({
                     onViewDetails={onViewDetails}
                     onArrivedDetails={onArrivedDetails}
                     onGoToEstate={onGoToEstate}
+                    selectionMode={selectionMode}
+                    selected={selectedRequestIds.includes(s.id)}
+                    onToggleSelect={onToggleRequestSelection}
+                    onStartSelection={onStartSelectionWithRequest}
                   />
                 ))}
               </View>
@@ -240,7 +282,7 @@ export default function DemoTeaCollectorCollect({
                     </Text>
 
                     <Text style={styles.historySubtitle}>
-                      Today · {s.actualWeight} kg
+                      Today · {s.actualWeight || 0} kg
                     </Text>
                   </View>
 
@@ -295,16 +337,27 @@ export default function DemoTeaCollectorCollect({
       =================================================== */}
 
       {filter !== "history" && (
-        <Btn
-          variant="secondary"
-          block
-          style={styles.registerButton}
-          onPress={() => setSheet("register")}
-        >
-          + Register New Estate
-        </Btn>
+        <>
+          <Btn
+            variant="primary"
+            block
+            style={styles.registerButton}
+            onPress={() => setSheet("manualRequest")}
+          >
+            + Create Manual Collection Request
+          </Btn>
+          <Btn
+            variant="secondary"
+            block
+            style={styles.registerButton}
+            onPress={() => setSheet("register")}
+          >
+            + Register New Estate
+          </Btn>
+        </>
       )}
     </ScrollView>
+    </View>
   );
 }
 
@@ -324,7 +377,33 @@ const styles = StyleSheet.create({
 
   contentContainer: {
     paddingHorizontal: 20,
+    
     paddingBottom: 100,
+  },
+    stickyFilter: {
+    backgroundColor: colors.background,
+    paddingTop: 20,
+    paddingBottom: 10,
+    zIndex: 10,
+  },
+
+  selectionActions: {
+    marginBottom: 14,
+  },
+
+  selectionCount: {
+    color: colors.text.primary,
+    fontFamily: fonts.default,
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+
+  selectionButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
   },
 
   /* =======================================================
@@ -358,7 +437,7 @@ const styles = StyleSheet.create({
   },
 
   loadedTitle: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "600",
     fontSize: 15,
     color: colors.text.primary,
@@ -383,7 +462,7 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "bold",
     textTransform: "uppercase",
     letterSpacing: 1.8,
@@ -418,7 +497,7 @@ const styles = StyleSheet.create({
   },
 
   historyTitle: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "600",
     fontSize: 16,
     color: colors.text.primary,
@@ -431,7 +510,7 @@ const styles = StyleSheet.create({
   },
 
   earlierTitle: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "bold",
     textTransform: "uppercase",
     letterSpacing: 1.8,

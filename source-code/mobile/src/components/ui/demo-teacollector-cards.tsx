@@ -12,13 +12,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pill } from "@/components/ui/demo-teacollector-pill";
 import { Btn } from "@/components/ui/demo-teacollector-button";
 
-import {
-  c,
-  fontDisplay,
-  fontMono,
-} from "@/components/ui/demo-teacollector-theme";
-
 import { colors } from "@/theme/colors";
+import { fonts } from "@/theme/fonts";
 
 /* =========================================================
    HOME / STATS CARDS
@@ -57,7 +52,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   const textColor =
     variant === "primary" || variant === "success" || variant === "warning"
       ? colors.white
-      : c.ink;
+      : colors.primary;
 
   return (
     <TouchableOpacity
@@ -88,7 +83,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           <Text
             style={[
               statStyles.statValue,
-              { color: variant === "muted" ? c.ink : colors.white },
+              { color: variant === "muted" ? colors.text.muted : colors.white },
             ]}
             numberOfLines={1}
           >
@@ -98,7 +93,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           <Text
             style={[
               statStyles.statTitle,
-              { color: variant === "muted" ? c.muted : colors.white },
+              { color: variant === "muted" ?  colors.text.muted : colors.white },
             ]}
             numberOfLines={1}
           >
@@ -106,7 +101,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           </Text>
 
           {subtitle ? (
-            <Text style={[statStyles.statSubtitle, { color: c.muted }]}>
+            <Text style={[statStyles.statSubtitle, { color: colors.text.muted }]}>
               {subtitle}
             </Text>
           ) : null}
@@ -276,6 +271,11 @@ interface StopCardProps {
    */
   onArrivedDetails?: (stop: any) => void;
 
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (stop: any) => void;
+  onStartSelection?: (stop: any) => void;
+
   /*
    * NEW:
    * Accepted -> navigate to particular tea estate
@@ -288,6 +288,10 @@ export const StopCard = ({
   onViewDetails,
   onArrivedDetails,
   onGoToEstate,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onStartSelection,
 }: StopCardProps) => {
   const isPending = stop.status === "pending";
   const isAccepted = stop.status === "accepted";
@@ -296,7 +300,7 @@ export const StopCard = ({
   const isCancelled = stop.status === "cancelled";
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, selected && styles.selectedCard]}>
       {/* =================================================
           MAIN CARD CONTENT
 
@@ -311,19 +315,36 @@ export const StopCard = ({
           onArrivedDetails.
       ================================================== */}
 
-      <TouchableOpacity
-        disabled={!isPending && !isAccepted}
-        activeOpacity={0.85}
-        onPress={() => {
-          if (isPending) {
-            onViewDetails?.(stop);
-          }
+        <TouchableOpacity
+          disabled={!isPending && !isAccepted}
+          activeOpacity={0.85}
+          onLongPress={() => {
+            if (!isPending && !isAccepted) return;
 
-          if (isAccepted) {
-            onArrivedDetails?.(stop);
-          }
-        }}
-      >
+            if (!selectionMode) {
+              onStartSelection?.(stop);
+            } else {
+              onToggleSelect?.(stop);
+            }
+          }}
+          onPress={() => {
+
+            if (selectionMode) {
+                  if (isPending || isAccepted) {
+                    onToggleSelect?.(stop);
+                }
+                return;
+            }
+
+            if (isPending) {
+              onViewDetails?.(stop);
+            }
+
+            if (isAccepted) {
+              onArrivedDetails?.(stop);
+            }
+          }}
+        >
         {/* =================================================
             HEADER
         ================================================== */}
@@ -351,8 +372,6 @@ export const StopCard = ({
             {/* Status Information */}
 
             <Text style={styles.timeText}>
-              {isCancelled &&
-                `Reason: ${stop.reason || "Cancelled"}`}
 
               {isPending &&
                 `Owner: ${stop.owner || "Estate Owner"}`}
@@ -377,21 +396,24 @@ export const StopCard = ({
                 : stop.status
             }
           />
+          {selectionMode && (isPending || isAccepted) && (
+            <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorSelected]}>
+              {selected && <Ionicons name="checkmark" size={15} color={colors.white} />}
+            </View>
+          )}
         </View>
 
         {/* =================================================
             PENDING REQUEST
         ================================================== */}
 
-        {isPending && (
+        {isPending && !selectionMode && (
           <>
             {/* Estimated weight + distance */}
 
             <View style={styles.metaRow}>
-              {stop.estWeight != null && (
-                <Text style={styles.metaText}>
-                  ~{stop.estWeight} kg
-                </Text>
+              {stop.estimatedWeight > 0 && (
+                <Text style={styles.metaText}>~{stop.estimatedWeight} kg estimated</Text>
               )}
 
               {stop.dist != null && (
@@ -419,15 +441,13 @@ export const StopCard = ({
             ACCEPTED REQUEST
         ================================================== */}
 
-        {isAccepted && (
+        {isAccepted && !selectionMode && (
           <>
             {/* Keep existing accepted information */}
 
             <View style={styles.metaRow}>
-              {stop.estWeight != null && (
-                <Text style={styles.metaText}>
-                  ~{stop.estWeight} kg
-                </Text>
+              {stop.estimatedWeight > 0 && (
+                <Text style={styles.metaText}>~{stop.estimatedWeight} kg estimated</Text>
               )}
 
               {stop.dist != null && (
@@ -450,12 +470,8 @@ export const StopCard = ({
         ================================================== */}
 
         {isLoaded && (
-          <View style={styles.metaRow}>
-            {stop.actualWeight != null && (
-              <Text style={styles.metaText}>
-                {stop.actualWeight} kg
-              </Text>
-            )}
+          <View style={styles.weightBreakdown}>
+            <Text style={styles.metaText}>{stop.actualWeight || 0} kg collected</Text>
           </View>
         )}
 
@@ -464,19 +480,27 @@ export const StopCard = ({
         ================================================== */}
 
         {isDelivered && (
-          <View style={styles.metaRow}>
-            {stop.actualWeight != null && (
-              <Text style={styles.mutedMetaText}>
-                {stop.actualWeight} kg delivered
-              </Text>
-            )}
+          <View style={styles.weightBreakdown}>
+            <Text style={styles.mutedMetaText}>{stop.actualWeight || 0} kg delivered</Text>
           </View>
         )}
 
         {/* =================================================
             CANCELLED
         ================================================== */}
+        {isCancelled && (
+          <View style={styles.cancelledContainer}>
+            <Text style={styles.cancelledText}>
+              Reason: {stop.reason || "Cancelled"}
+            </Text>
 
+            {Boolean(stop.note?.trim()) && (
+              <Text style={styles.cancelledNote}>
+                Note: {stop.note}
+              </Text>
+            )}
+          </View>
+        )}
       </TouchableOpacity>
 
       {/* =================================================
@@ -534,7 +558,7 @@ const statStyles = StyleSheet.create({
    shadowRadius: 8,
    elevation: 2,
    borderWidth: 1,
-   borderColor: c.line,
+   borderColor: colors.border.light,
    alignSelf: "flex-start",
  },
 
@@ -560,7 +584,7 @@ const statStyles = StyleSheet.create({
  },
 
  statValue: {
-   fontFamily: fontDisplay.fontFamily,
+   fontFamily: fonts.display,
    fontSize: 26,
    fontWeight: "700",
    lineHeight: 30,
@@ -595,6 +619,29 @@ const styles = StyleSheet.create({
     borderColor: colors.border.light,
   },
 
+  selectedCard: {
+    backgroundColor: colors.successBackground,
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+
+  selectionIndicator: {
+    width: 24,
+    height: 24,
+    marginLeft: 8,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.border.focused,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background,
+  },
+
+  selectionIndicatorSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+
   /* =======================================================
      HEADER
   ======================================================= */
@@ -610,22 +657,22 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.display,
     fontWeight: "600",
     fontSize: 16,
-    color: c.ink,
+    color: colors.text.primary,
   },
 
   subtitle: {
     fontSize: 12,
     marginTop: 2,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   timeText: {
     fontSize: 12,
     marginTop: 4,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   /* =======================================================
@@ -638,16 +685,23 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+  weightBreakdown: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 14,
+    marginTop: 10,
+  },
+
   metaText: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 12,
-    color: c.forest,
+    color: colors.text.primaryGreen,
   },
 
   mutedMetaText: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 12,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   /* =======================================================
@@ -673,13 +727,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1.5,
-    borderColor: c.forestLight,
+    borderColor: colors.border.focused,
   },
 
   continueText: {
     fontWeight: "600",
     fontSize: 13,
-    color: c.forest,
+    color: colors.text.primaryGreen,
   },
 
   /* =======================================================
@@ -696,19 +750,22 @@ const styles = StyleSheet.create({
   ======================================================= */
 
   cancelledContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginTop: 14,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: colors.errorBackground,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 4,
+    marginTop: 10,
   },
 
   cancelledText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.error,
+    fontFamily: fonts.default,
+    fontSize: 12,
+    color: colors.text.muted,
+  },
+
+  cancelledNote: {
+    fontFamily: fonts.default,
+    fontSize: 12,
+    color: colors.text.muted,
   },
 
   /* =======================================================
@@ -725,5 +782,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-
-

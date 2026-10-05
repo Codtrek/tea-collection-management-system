@@ -8,10 +8,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { FertRequestCard } from "@/components/ui/demo-teacollector-cards";
-import {
-  fontMono,
-} from "@/components/ui/demo-teacollector-theme";
 import { colors } from "@/theme/colors";
+import { fonts } from "@/theme/fonts";
 
 export default function DemoTeaCollectorFertilizer({
   requests,
@@ -101,6 +99,7 @@ const styles = StyleSheet.create({
 
   contentContainer: {
     paddingHorizontal: 20,
+    paddingTop: 20,
     paddingBottom: 100,
   },
 
@@ -109,7 +108,7 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontWeight: "bold",
     textTransform: "uppercase",
     letterSpacing: 1.8,

@@ -2,12 +2,10 @@ import React from 'react';
 import { ScrollView, View, Text, TouchableOpacity, Dimensions, ImageBackground } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Btn } from '@/components/ui/demo-teacollector-button';
-import { Card } from '@/components/ui/demo-teacollector-card';
 import { HomeStatsRow } from '@/components/ui/demo-teacollector-cards';
-import { c, fontDisplay, fontMono } from '@/components/ui/demo-teacollector-theme';
+import { fonts } from '@/theme/fonts';
 import { colors } from '@/theme/colors';
-import HStack from '@/components/layout/Hstack';
-import VStack from '@/components/layout/Vstack';
+
 import heroImage from '@/assets/images/tea-collector-home-bg.jpg';
 
 const { width } = Dimensions.get('window');
@@ -32,7 +30,7 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
                 Today's collection
               </Text>
               <Text style={{
-                fontFamily: fontDisplay.fontFamily,
+                fontFamily: fonts.display,
                 fontWeight: '700',
                 marginTop: 8,
                 fontSize: 28,
@@ -42,7 +40,7 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
                 Collection Tasks
               </Text>
               <Text style={{
-                fontFamily: fontMono.fontFamily,
+                fontFamily: fonts.default,
                 fontSize: 13,
                 color: '#DCEAE1',
                 marginTop: 14,
@@ -50,22 +48,6 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
               }}>
                 7 pickup requests · Factory: Kotmale MPT
               </Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <View style={{
-                borderRadius: 18,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                backgroundColor: '#EFE6C8',
-              }}>
-                <Text style={{
-                  fontFamily: fontMono.fontFamily,
-                  fontWeight: 'bold',
-                  textTransform: 'uppercase',
-                  fontSize: 10,
-                  color: c.amberDeep,
-                }}>In progress</Text>
-              </View>
             </View>
           </View>
 
@@ -78,7 +60,7 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
               backgroundColor: 'rgba(255,255,255,0.08)',
             }}>
               <Text style={{
-                fontFamily: fontDisplay.fontFamily,
+                fontFamily:fonts.default,
                 fontWeight: '700',
                 fontSize: 24,
                 color: '#fff',
@@ -101,7 +83,7 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
               backgroundColor: 'rgba(255,255,255,0.08)',
             }}>
               <Text style={{
-                fontFamily: fontDisplay.fontFamily,
+                fontFamily:fonts.default,
                 fontWeight: '700',
                 fontSize: 24,
                 color: '#fff',
@@ -125,11 +107,13 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
               imageStyle={{ resizeMode: 'cover' }}
             >
               <Btn
-                variant="secondary"
+                variant="forest"
                 block
                 onPress={() => setTab('collect')}
-                style={{ backgroundColor: 'rgba(255,255,255,0.9)', borderColor: 'rgba(255,255,255,0.2)' }}
-                textStyle={{ color: colors.primary }}
+                style= {{
+                  borderEndWidth: 1.5,
+                  borderColor: "#3F8F5F",
+                }}
               >
                 View Today's Stops
               </Btn>
@@ -152,7 +136,7 @@ export default function DemoTeaCollectorHome({ setTab, setSheet, fertRequests }:
         id: 'loaded',
         value: '2',
         title: 'Loaded, awaiting factory',
-        variant: 'success',
+        variant: 'primary',
         iconName: 'cube-outline',
       },
       {
