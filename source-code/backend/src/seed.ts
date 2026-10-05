@@ -30,6 +30,12 @@ const SEED_USERS = [
     name: 'R. Jayasuriya',
     nic: '198812345603',
   },
+  {
+    phone: '0788157139',
+    role: 'estate_owner',
+    name: 'Sandaru',
+    nic: '200311910230'
+  }
 ] as const;
 
 async function seed() {
@@ -61,6 +67,31 @@ async function seed() {
         [seedUser.phone, passwordHash, seedUser.role],
       );
       const userId = user.rows[0].id;
+
+      if (seedUser.role === 'estate_owner') {
+        const estateOwner = await client.query<{ id: number }>(
+          `INSERT INTO tea_estate_owners (user_id, name)
+           VALUES ($1, $2)
+           ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name
+           RETURNING id`,
+          [userId, seedUser.name],
+        );
+        const estateOwnerId = estateOwner.rows[0].id;
+
+        await client.query(
+          `INSERT INTO estates (owner_id, name, location)
+           SELECT $1, $2, $3
+           WHERE NOT EXISTS (
+             SELECT 1 FROM estates WHERE owner_id = $1
+           )`,
+          [estateOwnerId, 'Sandaru Tea Estate', 'Nuwara Eliya'],
+        );
+
+        console.log(
+          `Seeded ${seedUser.role} — phone: ${seedUser.phone}, password: ${DEV_PASSWORD}`,
+        );
+        continue;
+      }
 
       await client.query(
         `INSERT INTO factory_employees (user_id, factory_id, name, nic, role)
