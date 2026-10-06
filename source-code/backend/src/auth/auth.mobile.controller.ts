@@ -2,7 +2,6 @@ import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import {
   AuthService,
-  type EstateOwnerPublicUser,
   type LoginResult,
   type PublicUser
 } from './auth.service';
@@ -23,7 +22,7 @@ export class AuthMobileController {
   @Get('me')
   me(
     @Req() req: Request & { user: JwtPayload },
-  ): Promise<PublicUser | EstateOwnerPublicUser> {
+  ): Promise<PublicUser> {
     return this.authService.me(Number(req.user.sub));
   }
 }
