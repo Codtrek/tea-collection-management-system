@@ -34,8 +34,14 @@ const SEED_USERS = [
     phone: '0788157139',
     role: 'estate_owner',
     name: 'Sandaru',
-    nic: '200311910230'
-  }
+    nic: '200311910230',
+  },
+  {
+    phone: '0788157140',
+    role: 'estate_manager',
+    name: 'K. Perera',
+    nic: '199511910231',
+  },
 ] as const;
 
 async function seed() {
@@ -85,6 +91,36 @@ async function seed() {
              SELECT 1 FROM estates WHERE owner_id = $1
            )`,
           [estateOwnerId, 'Sandaru Tea Estate', 'Nuwara Eliya'],
+        );
+
+        console.log(
+          `Seeded ${seedUser.role} — phone: ${seedUser.phone}, password: ${DEV_PASSWORD}`,
+        );
+        continue;
+      }
+
+      if (seedUser.role === 'estate_manager') {
+        const employee = await client.query<{ id: number }>(
+          `INSERT INTO estate_employees (user_id, estate_id, name, date_of_birth, nic, role)
+           SELECT $1, e.id, $2, $3, $4, 'manager'
+           FROM estates e
+           ORDER BY e.id
+           LIMIT 1
+           ON CONFLICT (user_id) DO UPDATE SET
+             estate_id = EXCLUDED.estate_id,
+             name = EXCLUDED.name,
+             nic = EXCLUDED.nic,
+             role = EXCLUDED.role
+           RETURNING id`,
+          [userId, seedUser.name, '1995-05-01', seedUser.nic],
+        );
+        const employeeId = employee.rows[0].id;
+
+        await client.query(
+          `INSERT INTO tea_estate_managers (employee_id, estate_id)
+           SELECT $1, estate_id FROM estate_employees WHERE id = $1
+           ON CONFLICT (employee_id) DO UPDATE SET estate_id = EXCLUDED.estate_id`,
+          [employeeId],
         );
 
         console.log(
