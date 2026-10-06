@@ -11,20 +11,13 @@ export interface PublicUser {
   name: string;
   role: AppRole;
   phone: string;
-  factory: string;
-}
-
-export interface EstateOwnerPublicUser {
-  id: string;
-  name: string;
-  role: AppRole;
-  phone: string;
-  estate: string;
+  factory?: string;
+  estate?: string;
 }
 
 export interface LoginResult {
   accessToken: string;
-  user: PublicUser | EstateOwnerPublicUser;
+  user: PublicUser;
 }
 
 @Injectable()
@@ -60,6 +53,22 @@ export class AuthService {
           user: estateOwnerPublicUser,
         };
       }
+      case 'estate_manager': {
+        const publicUser = await this.buildEstateManagerPublicUser(
+          user.id,
+          user.phone,
+          user.role
+        );
+        const payload: JwtPayload = {
+          sub: String(user.id),
+          role: publicUser.role
+        }; 
+        return {
+          accessToken: this.jwtService.sign(payload),
+          user: publicUser
+        };
+          
+      }
       default: {
         const publicUser = await this.buildPublicUser(
           user.id,
@@ -79,7 +88,7 @@ export class AuthService {
 
   }
 
-  async me(userId: number): Promise<PublicUser | EstateOwnerPublicUser> {
+  async me(userId: number): Promise<PublicUser> {
     const user = await this.usersService.findById(userId);
     if (!user) {
       throw new UnauthorizedException('Account no longer exists.');
@@ -87,14 +96,37 @@ export class AuthService {
     if (user.role === 'estate_owner') {
       return this.buildEstateOwnerPublicUser(user.id, user.phone, user.role);
     }
+    else if (user.role === 'estate_manager') {
+      return this.buildEstateManagerPublicUser(user.id, user.phone , user.role );
+    }
     return this.buildPublicUser(user.id, user.phone, user.role);
   }
-
+  private async buildEstateManagerPublicUser(
+    id: number,
+    phone: string,
+    dbRole: DbRole,
+  ): Promise<PublicUser> {
+    const role = toAppRole(dbRole);
+    const profile = await this.usersService.getEstateManagerProfile(id);
+    
+    if (!profile) {
+      throw new UnauthorizedException(
+        'No Estate Owner profile found for this account.',
+      );
+    }
+      return {
+        id: String(id),
+        name: profile.name,
+        role,
+        phone,
+        estate: profile.estate,
+      };
+  }
   private async buildEstateOwnerPublicUser(
     id: number,
     phone: string,
     dbRole: DbRole,
-  ): Promise<EstateOwnerPublicUser> {
+  ): Promise<PublicUser> {
     const role = toAppRole(dbRole);
     const profile = await this.usersService.getEstateOwnerProfile(id);
 
