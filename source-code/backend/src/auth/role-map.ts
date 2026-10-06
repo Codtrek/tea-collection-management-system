@@ -2,13 +2,14 @@ import { UnauthorizedException } from '@nestjs/common';
 import type { DbRole } from '../users/user.entity';
 
 /** Roles the factory web portal's permission model (`AppRole`) is built around. */
-export type AppRole = 'Administrator' | 'Officer' | 'Manager' | 'Estate Owner';
+export type AppRole = 'Administrator' | 'Officer' | 'Manager' | 'Estate Owner' | 'Estate Manager';
 
 const DB_TO_APP_ROLE: Partial<Record<DbRole, AppRole>> = {
   factory_admin: 'Administrator',
   factory_officer: 'Officer',
   factory_manager: 'Manager',
-  estate_owner: 'Estate Owner'
+  estate_owner: 'Estate Owner',
+  estate_manager: 'Estate Manager'
 };
 
 /**

@@ -1,19 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, TreeRepositoryNotSupportedError } from 'typeorm';
 import { FactoryEmployee } from './factory-employee.entity';
 import { EstateOwner } from './estate-owner.entity';
+import { EstateManager } from './estate-manager.entity';
 import { User } from './user.entity';
 
 export interface UserProfile {
   name: string;
-  factory: string;
+  factory?: string;
+  estate?: string;
 }
 
-export interface EstateOwnerProfile {
-  name: string;
-  estate: string;
-}
 
 @Injectable()
 export class UsersService {
@@ -24,6 +22,8 @@ export class UsersService {
     private readonly factoryEmployeesRepository: Repository<FactoryEmployee>,
     @InjectRepository(EstateOwner)
     private readonly estateOwnersRepository: Repository<EstateOwner>,
+    @InjectRepository(EstateManager)
+    private readonly estateManagersRepository: Repository<EstateManager>
   ) {}
 
   findByPhone(phone: string): Promise<User | null> {
@@ -44,7 +44,7 @@ export class UsersService {
     return { name: employee.name, factory: employee.factory.name };
   }
 
-  async getEstateOwnerProfile(userId: number): Promise<EstateOwnerProfile | null> {
+  async getEstateOwnerProfile(userId: number): Promise<UserProfile | null> {
     const estateOwner = await this.estateOwnersRepository.findOne({
       where: { user_id: userId },
       relations: { estate: true },
@@ -54,4 +54,16 @@ export class UsersService {
     if (!estate) return null;
     return { name: estateOwner.name, estate: estate.name };
   }
+  
+  async getEstateManagerProfile(userId: number): Promise<UserProfile | null> {
+    const estateManager = await this.estateManagersRepository.findOne({
+      where: { user_id: userId },
+      relations: { estate: true },
+    });
+    if (!estateManager) return null;
+    const estate = estateManager.estate[0];
+    if (!estate) return null;
+    return { name: estateManager.name, estate: estate.name };
+  }
+
 }
