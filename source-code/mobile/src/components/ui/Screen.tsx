@@ -62,5 +62,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignSelf: "center",
     maxWidth: Platform.OS === 'web' ? 393 : '100%',
+    paddingTop: 20,
   },
 });

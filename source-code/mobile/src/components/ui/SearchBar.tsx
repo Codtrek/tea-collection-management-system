@@ -1,7 +1,6 @@
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import AppInput from "./AppInput";
 import { colors } from "@/theme/colors";
 
 interface SearchBarProps {
@@ -20,14 +19,16 @@ export default function SearchBar({
       <Ionicons
         name="search"
         size={20}
-        color={colors.text.secondary}
+        color={colors.primary}
         style={styles.icon}
       />
 
-      <AppInput
+      <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
+        placeholderTextColor={colors.text.placeholder}
+        underlineColorAndroid="transparent"
         style={styles.input}
       />
     </View>
@@ -38,24 +39,27 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-
+    width: "100%",
+    minHeight: 50,
     borderWidth: 1,
     borderColor: colors.border.default,
-    borderRadius: 14,
-
-    backgroundColor: colors.white,
-
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    // backgroundColor: colors.surface,
+    paddingHorizontal: 14,
+    marginBottom: 16,
   },
 
   icon: {
-    marginRight: 8,
+    marginRight: 10,
   },
 
   input: {
     flex: 1,
-    borderWidth: 0,
-    backgroundColor: "transparent",
-    minHeight: 48,
+    minWidth: 0,
+    height: 48,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    color: colors.text.primary,
+    fontSize: 16,
   },
 });

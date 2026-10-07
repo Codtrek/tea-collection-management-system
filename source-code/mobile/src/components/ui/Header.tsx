@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.primary,
-    marginTop: 10,
+    // marginTop: 10,
   },
 
   left: {
