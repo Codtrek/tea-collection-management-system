@@ -1,6 +1,9 @@
 export const colors = {
   // Brand
   primary: "#53CF81",
+  brandDark: "#1B8B4E",
+  brandSurface: "#EDF8F1",
+  brandBorder: "#CAEBD5",
 
   // Backgrounds
   background: "#FFFFFF",

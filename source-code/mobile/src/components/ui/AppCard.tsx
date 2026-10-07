@@ -4,10 +4,10 @@ import { AppText, Screen } from '@/components/ui'
 import { typography, colors, spacing } from '@/theme' 
 
 
-export default function AppCard() {
+export default function AppCard({ children }: { children: React.ReactNode }) {
     return (
         <View style={[styles.cardContainer]}>
-            
+            {children}
         </View>
     )
 }

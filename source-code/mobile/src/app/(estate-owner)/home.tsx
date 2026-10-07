@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
 
 import { Screen, Header, EstateOwnerBottomTab } from "@/components/ui";
 import type { BottomTabItem } from "@/components/ui/BottomTab";
@@ -21,14 +21,15 @@ import {
 import { spacing } from "@/theme";
 
 export default function EstateOwnerHome() {
-  const [activeTab, setActiveTab] = useState("home");
+  // const router = useRouter();
 
-  const handleTabPress = (tab: BottomTabItem) => {
-    setActiveTab(tab.key);
-
-    // Later you can navigate here if needed
-    // router.push(...)
-  };
+  // const handleTabPress = (tab: BottomTabItem) => {
+  //   if (tab.key === "home") {
+  //     router.navigate("/(estate-owner)/home");
+  //   } else if (tab.key === "estates") {
+  //     router.navigate("/(estate-owner)/estates");
+  //   }
+  // };
 
   return (
     <>
@@ -81,11 +82,7 @@ export default function EstateOwnerHome() {
           </View>
         </ScrollView>
 
-        <EstateOwnerBottomTab
-          activeTab={activeTab}
-          onTabPress={handleTabPress}
-          style={styles.bottomTab}
-        />
+        
       </Screen>
     </>
   );
@@ -103,16 +100,11 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    paddingBottom: spacing.lg,
+    // paddingBottom: spacing.lg,
   },
 
   list: {
     gap: spacing.sm,
   },
 
-  bottomTab: {
-    width: "100%",
-    marginTop: spacing.sm,
-    alignSelf: "stretch",
-  },
 });
