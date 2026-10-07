@@ -4,7 +4,9 @@ import type { AuditService } from '../../audit/audit.service';
 import type { CollectionRecordEntity } from '../../collections/collection-record.entity';
 import type { EstateEntity } from '../../estates/estate.entity';
 import type { RouteEntity } from '../../estates/route.entity';
-import type { FactoryEmployee } from '../../users/factory-employee.entity';
+import type { EmployeeEntity } from '../../employees/employee.entity';
+import { AGENT_JOB_ROLE } from '../../employees/employee-roles';
+import type { User } from '../../users/user.entity';
 import type { AgentDayStatusEntity } from '../agent-day-status.entity';
 import { AgentDirectoryService } from '../agent-directory.service';
 import type { AgentLocationPingEntity } from '../agent-location-ping.entity';
@@ -52,7 +54,8 @@ export function buildHarness() {
   const records = new FakeRepository<CollectionRecordEntity>();
   const neighbours = new FakeRepository<RouteNeighbourEntity>(null);
   const agentRows = new FakeRepository<CollectionAgentEntity>();
-  const employeeRows = new FakeRepository<FactoryEmployee>();
+  const employeeRows = new FakeRepository<EmployeeEntity>();
+  const userRows = new FakeRepository<User>();
 
   [1, 2, 3, 4].forEach((id) =>
     routes.seed({ id, factoryId: 1, name: `Route ${id}` }),
@@ -66,19 +69,33 @@ export function buildHarness() {
   ];
   names.forEach((name, i) => {
     const id = i + 1;
+    // An agent IS an employee (Active, agent job title) with a login; the agent row links to it.
     employeeRows.seed({
       id,
-      user_id: 10 + id,
-      factory_id: 1,
+      userId: 10 + id,
       name,
-    } as FactoryEmployee);
-    agentRows.seed({ id, employeeId: id, factoryId: 1, isAvailable: true });
+      role: AGENT_JOB_ROLE,
+      status: 'Active',
+    } as EmployeeEntity);
+    userRows.seed({
+      id: 10 + id,
+      status: 'active',
+      must_change_password: false,
+    } as User);
+    agentRows.seed({
+      id,
+      employeeId: id,
+      factoryId: 1,
+      hrEmployeeId: id,
+      isAvailable: true,
+    });
   });
 
   const cast = <T>(r: unknown) => r as Repository<T & object>;
   const directory = new AgentDirectoryService(
     cast<CollectionAgentEntity>(agentRows),
-    cast<FactoryEmployee>(employeeRows),
+    cast<EmployeeEntity>(employeeRows),
+    cast<User>(userRows),
   );
   const resolver = new RouteResolverService(
     cast<RouteAssignmentEntity>(assignments),
@@ -140,6 +157,9 @@ export function buildHarness() {
 
   let recSeq = 0;
   const h = {
+    employeeRows,
+    userRows,
+    agentRows,
     assignments,
     dayStatus,
     pings,
@@ -274,6 +294,36 @@ export function buildHarness() {
         markedBy: null,
         shiftStartedAt: start,
         shiftEndedAt: end,
+      });
+    },
+    /** Patch the agent's EMPLOYEE record (status / job title) — what decides dispatch membership. */
+    setEmployee(agentId: number, patch: Partial<EmployeeEntity>) {
+      Object.assign(employeeRows.rows.find((r) => r.id === agentId)!, patch);
+    },
+    /** Patch the agent's login (suspended / must change password). */
+    setLogin(agentId: number, patch: Partial<User>) {
+      Object.assign(userRows.rows.find((r) => r.id === 10 + agentId)!, patch);
+    },
+    /** What registering a new Tea Collecting Agent leaves behind: employee + login + agent link. */
+    registerAgent(id: number, name: string) {
+      employeeRows.seed({
+        id,
+        userId: 10 + id,
+        name,
+        role: AGENT_JOB_ROLE,
+        status: 'Active',
+      } as EmployeeEntity);
+      userRows.seed({
+        id: 10 + id,
+        status: 'active',
+        must_change_password: true,
+      } as User);
+      agentRows.seed({
+        id,
+        employeeId: id,
+        factoryId: 1,
+        hrEmployeeId: id,
+        isAvailable: true,
       });
     },
     setAvailable(agentId: number, isAvailable: boolean) {

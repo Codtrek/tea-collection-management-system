@@ -162,3 +162,35 @@ describe('AgentSelfService — absence, stops', () => {
     expect(owner.stops).toEqual([]);
   });
 });
+
+describe('AgentSelfService — login state is enforced on every call', () => {
+  it('blocks the agent API while the one-time temporary password is still in use', async () => {
+    const h = buildHarness();
+    h.setLogin(1, { must_change_password: true });
+    await expect(h.self.startShift(h.uid(1), NOW)).rejects.toThrow(
+      /temporary password/i,
+    );
+    await expect(h.self.myCoverRequests(h.uid(1), NOW)).rejects.toThrow(
+      ForbiddenException,
+    );
+    h.setLogin(1, { must_change_password: false }); // after the change
+    await expect(h.self.startShift(h.uid(1), NOW)).resolves.toBeDefined();
+  });
+
+  it('a suspended login stops working immediately, even with a still-valid token', async () => {
+    const h = buildHarness();
+    await h.self.startShift(h.uid(2), NOW);
+    h.setLogin(2, { status: 'suspended' });
+    await expect(
+      h.self.ingestPings(h.uid(2), [ping(NOW)], NOW),
+    ).rejects.toThrow(/suspended/);
+  });
+
+  it('a deactivated agent can no longer use the agent API', async () => {
+    const h = buildHarness();
+    h.setEmployee(3, { status: 'Inactive' });
+    await expect(h.self.startShift(h.uid(3), NOW)).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+});

@@ -1,4 +1,5 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
+import { AGENT_JOB_ROLE } from './employee-roles';
 import type { Repository } from 'typeorm';
 import type { EmployeeAttendanceEntity } from './employee-attendance.entity';
 import type { EmployeeEntity } from './employee.entity';
@@ -34,6 +35,15 @@ class FakeRepository<T extends { id: string | number }> {
   save(record: T): Promise<T> {
     this.store.set(record.id, record);
     return Promise.resolve(record);
+  }
+
+  delete({ id }: { id: string | number }): Promise<void> {
+    this.store.delete(id);
+    return Promise.resolve();
+  }
+
+  get size(): number {
+    return this.store.size;
   }
 }
 
@@ -153,6 +163,12 @@ describe('EmployeesService', () => {
   let advanceRepo: FakeRepository<SalaryAdvanceEntity>;
   let payrollRepo: FakeRepository<PayrollRunEntity>;
   let service: EmployeesService;
+  let provisioning: {
+    assertContactFree: jest.Mock;
+    provision: jest.Mock;
+    deprovision: jest.Mock;
+    syncContact: jest.Mock;
+  };
 
   const admin: Actor = { name: 'A. Bandara', role: 'Administrator' };
   const officer: Actor = { name: 'S. Fernando', role: 'Officer' };
@@ -163,14 +179,111 @@ describe('EmployeesService', () => {
     attendanceRepo = new FakeRepository();
     advanceRepo = new FakeRepository();
     payrollRepo = new FakeRepository();
+    provisioning = {
+      assertContactFree: jest.fn().mockResolvedValue(undefined),
+      provision: jest
+        .fn()
+        .mockResolvedValue({ initialPassword: 'Temp-pass-1' }),
+      deprovision: jest.fn().mockResolvedValue([]),
+      syncContact: jest.fn().mockResolvedValue(undefined),
+    };
 
     service = new EmployeesService(
       employeeRepo as unknown as Repository<EmployeeEntity>,
       attendanceRepo as unknown as Repository<EmployeeAttendanceEntity>,
       advanceRepo as unknown as Repository<SalaryAdvanceEntity>,
       payrollRepo as unknown as Repository<PayrollRunEntity>,
-      { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
+      {
+        record: jest.fn().mockResolvedValue(undefined),
+      } as unknown as import('../audit/audit.service').AuditService,
+      provisioning as unknown as import('../dispatch/agent-provisioning.service').AgentProvisioningService,
     );
+  });
+
+  describe('Tea Collecting Agent role → dispatch', () => {
+    const agentDto: CreateEmployeeDto = {
+      ...validEmployeeDto,
+      name: 'P. Fernando',
+      nic: '199312345706',
+      contact: '0777000016',
+      role: AGENT_JOB_ROLE,
+    };
+
+    it('registering an agent provisions their mobile login and returns the one-time password', async () => {
+      const result = await service.create(agentDto, admin);
+      expect(provisioning.assertContactFree).toHaveBeenCalledWith('0777000016');
+      expect(provisioning.provision).toHaveBeenCalledTimes(1);
+      expect(result.role).toBe(AGENT_JOB_ROLE);
+      expect(result.initialPassword).toBe('Temp-pass-1');
+    });
+
+    it('does not provision (or return a password) for any other role', async () => {
+      const result = await service.create(validEmployeeDto, admin);
+      expect(provisioning.provision).not.toHaveBeenCalled();
+      expect(result.initialPassword).toBeUndefined();
+    });
+
+    it('refuses a contact number that already has a login — and saves nothing', async () => {
+      provisioning.assertContactFree.mockRejectedValue(
+        new ConflictException('already has a login'),
+      );
+      await expect(service.create(agentDto, admin)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(employeeRepo.size).toBe(0);
+    });
+
+    it('rolls the registration back if provisioning fails part-way', async () => {
+      provisioning.provision.mockRejectedValue(new Error('db down'));
+      await expect(service.create(agentDto, admin)).rejects.toThrow('db down');
+      expect(employeeRepo.size).toBe(0);
+    });
+
+    it('deactivating an agent removes them from dispatch (frees routes, suspends login)', async () => {
+      employeeRepo.seed(makeEmployee({ role: AGENT_JOB_ROLE }));
+      provisioning.deprovision.mockResolvedValue([5]);
+      await service.deactivate('EMP-0001', admin);
+      expect(provisioning.deprovision).toHaveBeenCalledTimes(1);
+    });
+
+    it('deactivating a non-agent never touches dispatch', async () => {
+      employeeRepo.seed(makeEmployee({ role: 'Driver' }));
+      await service.deactivate('EMP-0001', admin);
+      expect(provisioning.deprovision).not.toHaveBeenCalled();
+    });
+
+    it('changing an existing employee INTO the agent role provisions them', async () => {
+      employeeRepo.seed(makeEmployee({ role: 'Driver' }));
+      const result = await service.update(
+        'EMP-0001',
+        { ...validEmployeeDto, role: AGENT_JOB_ROLE },
+        admin,
+      );
+      expect(provisioning.provision).toHaveBeenCalledTimes(1);
+      expect(result.initialPassword).toBe('Temp-pass-1');
+    });
+
+    it('changing an agent AWAY from the role deprovisions them', async () => {
+      employeeRepo.seed(makeEmployee({ role: AGENT_JOB_ROLE }));
+      await service.update(
+        'EMP-0001',
+        { ...validEmployeeDto, role: 'Driver' },
+        admin,
+      );
+      expect(provisioning.deprovision).toHaveBeenCalledTimes(1);
+      expect(provisioning.provision).not.toHaveBeenCalled();
+    });
+
+    it('editing an agent who stays an agent keeps their login in step with the contact number', async () => {
+      employeeRepo.seed(makeEmployee({ role: AGENT_JOB_ROLE }));
+      await service.update(
+        'EMP-0001',
+        { ...validEmployeeDto, role: AGENT_JOB_ROLE },
+        admin,
+      );
+      expect(provisioning.syncContact).toHaveBeenCalledTimes(1);
+      expect(provisioning.provision).not.toHaveBeenCalled();
+    });
   });
 
   describe('roster — Administrator only', () => {

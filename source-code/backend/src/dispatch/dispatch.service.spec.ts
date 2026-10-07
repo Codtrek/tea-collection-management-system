@@ -465,3 +465,66 @@ describe('estate-first exception entry helper', () => {
     );
   });
 });
+
+describe('agents come from employees (registration → dispatch board)', () => {
+  it('a newly registered agent appears on the board: Not started, Unassigned (no route)', async () => {
+    const h = scenario();
+    h.registerAgent(6, 'P. Fernando');
+    const board = await h.dispatch.board(NOW);
+    const agent = board.agents.find((a) => a.name === 'P. Fernando')!;
+    expect(agent).toMatchObject({
+      employeeId: 'EMP-0006',
+      status: 'Not started',
+      routeId: null,
+      routeName: null,
+      coveringRouteId: null,
+      stopsTotal: 0,
+    });
+  });
+
+  it('an Inactive or Suspended employee does not appear', async () => {
+    const h = scenario();
+    h.setEmployee(2, { status: 'Inactive' });
+    h.setEmployee(3, { status: 'Suspended' });
+    const ids = (await h.dispatch.board(NOW)).agents.map((a) => a.agentId);
+    expect(ids).toEqual([1, 4, 5]);
+  });
+
+  it('an unassigned agent can be given a route through the existing reassign flow', async () => {
+    const h = scenario();
+    h.registerAgent(6, 'P. Fernando');
+    await h.dispatch.reassign(
+      2,
+      { agentId: 5, scope: 'permanent' },
+      officer,
+      NOW,
+    ); // frees nothing relevant
+    const a = await h.dispatch.reassign(
+      2,
+      { agentId: 6, scope: 'permanent' },
+      officer,
+      NOW,
+    );
+    expect(a).toMatchObject({
+      agentId: 6,
+      type: 'PERMANENT',
+      status: 'ACTIVE',
+    });
+    const board = await h.dispatch.board(NOW);
+    expect(board.agents.find((x) => x.agentId === 6)).toMatchObject({
+      routeId: 2,
+      routeName: 'Route 2',
+    });
+  });
+
+  it('a deactivated agent is no longer a cover candidate or reassign target', async () => {
+    const h = scenario();
+    h.setEmployee(2, { status: 'Inactive' });
+    expect(
+      (await h.dispatch.candidates(1, NOW)).map((c) => c.agentId),
+    ).not.toContain(2);
+    await expect(
+      h.dispatch.reassign(3, { agentId: 2, scope: 'today' }, officer, NOW),
+    ).rejects.toThrow(NotFoundException);
+  });
+});
