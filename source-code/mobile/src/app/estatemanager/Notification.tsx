@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import {
-  SafeAreaView,
   View,
   StyleSheet,
   ScrollView,
   Pressable,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -18,26 +18,41 @@ import { spacing } from "@/theme/spacing";
 export default function Notifications() {
   const router = useRouter();
 
+  const insets = useSafeAreaInsets();
+
   const [activeTab, setActiveTab] = useState("dashboard");
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+      edges={["top", "left", "right"]}
+    >
       <View style={styles.screen}>
 
-        {/* ================= MAIN CONTENT ================= */}
+        {/* ====================================================
+            MAIN CONTENT
+            ==================================================== */}
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom: 90 + insets.bottom,
+            },
+          ]}
         >
 
-          {/* ================= HEADER ================= */}
+          {/* ==================================================
+              HEADER
+              ================================================== */}
 
           <View style={styles.header}>
 
             <Pressable
               style={styles.backButton}
               onPress={() => router.back()}
+              hitSlop={8}
             >
               <Ionicons
                 name="chevron-back"
@@ -58,9 +73,13 @@ export default function Notifications() {
           </View>
 
 
-          {/* ================= LOW STOCK ALERT ================= */}
+          {/* ==================================================
+              LOW STOCK ALERT
+              ================================================== */}
 
           <View style={styles.alertCard}>
+
+            {/* Alert header */}
 
             <View style={styles.alertHeader}>
 
@@ -123,6 +142,8 @@ export default function Notifications() {
 
             </View>
 
+
+            {/* Divider */}
 
             <View style={styles.divider} />
 
@@ -193,7 +214,9 @@ export default function Notifications() {
           </View>
 
 
-          {/* ================= RECENT ACTIVITY ================= */}
+          {/* ==================================================
+              RECENT ACTIVITY
+              ================================================== */}
 
           <AppText
             variant="caption"
@@ -203,7 +226,9 @@ export default function Notifications() {
           </AppText>
 
 
-          {/* ================= NOTIFICATION 1 ================= */}
+          {/* ==================================================
+              NOTIFICATION 1
+              ================================================== */}
 
           <View style={styles.notificationCard}>
 
@@ -250,7 +275,9 @@ export default function Notifications() {
           </View>
 
 
-          {/* ================= NOTIFICATION 2 ================= */}
+          {/* ==================================================
+              NOTIFICATION 2
+              ================================================== */}
 
           <View style={styles.notificationCard}>
 
@@ -297,7 +324,9 @@ export default function Notifications() {
           </View>
 
 
-          {/* ================= NOTIFICATION 3 ================= */}
+          {/* ==================================================
+              NOTIFICATION 3
+              ================================================== */}
 
           <View style={styles.notificationCard}>
 
@@ -344,7 +373,9 @@ export default function Notifications() {
           </View>
 
 
-          {/* ================= NO MORE NOTIFICATIONS ================= */}
+          {/* ==================================================
+              NO MORE NOTIFICATIONS
+              ================================================== */}
 
           <View style={styles.noMoreContainer}>
 
@@ -367,29 +398,31 @@ export default function Notifications() {
 
           </View>
 
-
-          <View style={styles.bottomSpace} />
-
         </ScrollView>
 
 
-        {/* ================= BOTTOM NAVIGATION ================= */}
+        {/* ====================================================
+            BOTTOM NAVIGATION
+            ==================================================== */}
 
-        <View style={styles.bottomTab}>
-
+        <View
+          style={[
+            styles.bottomTab,
+            {
+              paddingBottom: insets.bottom,
+            },
+          ]}
+        >
           <EstateManagerBottomTab
             activeTab={activeTab}
             onTabPress={(tab) => {
-
               setActiveTab(tab.key);
 
               if (tab.key === "dashboard") {
                 router.back();
               }
-
             }}
           />
-
         </View>
 
       </View>
@@ -398,15 +431,19 @@ export default function Notifications() {
 }
 
 
-/* ========================================================= */
-/* STYLES */
-/* ========================================================= */
+/* ============================================================
+   STYLES
+   ============================================================ */
 
 const styles = StyleSheet.create({
 
+  /* ============================================================
+     SCREEN
+     ============================================================ */
+
   container: {
     flex: 1,
-    backgroundColor: colors.black,
+    backgroundColor: colors.surface,
   },
 
   screen: {
@@ -417,11 +454,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xl * 2,
   },
 
 
-  /* ================= HEADER ================= */
+  /* ============================================================
+     HEADER
+     ============================================================ */
 
   header: {
     height: 42,
@@ -453,7 +491,9 @@ const styles = StyleSheet.create({
   },
 
 
-  /* ================= LOW STOCK ALERT ================= */
+  /* ============================================================
+     LOW STOCK ALERT
+     ============================================================ */
 
   alertCard: {
     backgroundColor: colors.background,
@@ -488,6 +528,7 @@ const styles = StyleSheet.create({
 
   fertilizerContent: {
     flexDirection: "row",
+
     justifyContent: "space-between",
     alignItems: "center",
 
@@ -501,6 +542,7 @@ const styles = StyleSheet.create({
 
   inventoryLabel: {
     fontSize: 9,
+
     color: colors.text.secondary,
 
     marginBottom: 2,
@@ -508,6 +550,7 @@ const styles = StyleSheet.create({
 
   fertilizerName: {
     color: colors.text.primary,
+
     fontWeight: "500",
   },
 
@@ -517,11 +560,13 @@ const styles = StyleSheet.create({
 
   stockValue: {
     color: colors.error,
+
     fontWeight: "600",
   },
 
   remainingText: {
     color: colors.text.tertiary,
+
     fontSize: 9,
   },
 
@@ -546,18 +591,23 @@ const styles = StyleSheet.create({
 
   detailLabel: {
     color: colors.text.tertiary,
+
     fontSize: 9,
   },
 
   detailValue: {
     color: colors.text.primary,
+
     fontSize: 9,
+
     fontWeight: "500",
   },
 
   depletionValue: {
     color: colors.error,
+
     fontSize: 9,
+
     fontWeight: "500",
   },
 
@@ -578,13 +628,16 @@ const styles = StyleSheet.create({
 
   requestButtonText: {
     color: colors.white,
+
     fontWeight: "600",
 
     marginLeft: spacing.xs,
   },
 
 
-  /* ================= RECENT ACTIVITY ================= */
+  /* ============================================================
+     RECENT ACTIVITY
+     ============================================================ */
 
   recentActivityTitle: {
     color: colors.text.tertiary,
@@ -594,7 +647,9 @@ const styles = StyleSheet.create({
   },
 
 
-  /* ================= NOTIFICATION CARDS ================= */
+  /* ============================================================
+     NOTIFICATION CARDS
+     ============================================================ */
 
   notificationCard: {
     minHeight: 61,
@@ -611,10 +666,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
 
     shadowColor: colors.black,
+
     shadowOffset: {
       width: 0,
       height: 1,
     },
+
     shadowOpacity: 0.04,
     shadowRadius: 2,
 
@@ -638,6 +695,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
 
     fontSize: 12,
+
     fontWeight: "500",
   },
 
@@ -660,7 +718,9 @@ const styles = StyleSheet.create({
   },
 
 
-  /* ================= NOTIFICATION ICONS ================= */
+  /* ============================================================
+     NOTIFICATION ICONS
+     ============================================================ */
 
   notificationIconBlue: {
     width: 32,
@@ -699,7 +759,9 @@ const styles = StyleSheet.create({
   },
 
 
-  /* ================= NO MORE NOTIFICATIONS ================= */
+  /* ============================================================
+     NO MORE NOTIFICATIONS
+     ============================================================ */
 
   noMoreContainer: {
     alignItems: "center",
@@ -724,11 +786,9 @@ const styles = StyleSheet.create({
   },
 
 
-  /* ================= BOTTOM NAVIGATION ================= */
-
-  bottomSpace: {
-    height: spacing.xl * 2,
-  },
+  /* ============================================================
+     BOTTOM NAVIGATION
+     ============================================================ */
 
   bottomTab: {
     position: "absolute",

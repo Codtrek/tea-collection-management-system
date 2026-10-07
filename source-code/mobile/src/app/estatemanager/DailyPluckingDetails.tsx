@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import {
-  SafeAreaView,
   View,
   StyleSheet,
   ScrollView,
   Pressable,
 } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -41,18 +44,27 @@ const pluckingRecords: PluckingRecord[] = [
 
 export default function DailyPlucking() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState("dashboard");
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+      edges={["top", "left", "right"]}
+    >
       <View style={styles.screen}>
 
         {/* ================= MAIN CONTENT ================= */}
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom: 100 + insets.bottom,
+            },
+          ]}
         >
 
           {/* ================= HEADER ================= */}
@@ -64,6 +76,7 @@ export default function DailyPlucking() {
             <Pressable
               style={styles.backButton}
               onPress={() => router.back()}
+              hitSlop={8}
             >
               <Ionicons
                 name="arrow-back"
@@ -83,7 +96,10 @@ export default function DailyPlucking() {
 
             <Pressable
               style={styles.headerNotification}
-              onPress={() => router.push("./notifications")}
+              onPress={() =>
+                router.push("/estatemanager/Notification")
+              }
+              hitSlop={8}
             >
               <Ionicons
                 name="notifications-outline"
@@ -189,7 +205,12 @@ export default function DailyPlucking() {
           {/* ================= ADD BUTTON ================= */}
 
           <Pressable
-            style={styles.addButton}
+            style={[
+              styles.addButton,
+              {
+                bottom: 65 + insets.bottom,
+              },
+            ]}
             onPress={() => {
               // Add daily plucking record later
             }}
@@ -211,7 +232,14 @@ export default function DailyPlucking() {
 
         {/* ================= BOTTOM TAB ================= */}
 
-        <View style={styles.bottomTab}>
+        <View
+          style={[
+            styles.bottomTab,
+            {
+              paddingBottom: insets.bottom,
+            },
+          ]}
+        >
 
           <EstateManagerBottomTab
             activeTab={activeTab}
@@ -244,7 +272,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: colors.black,
+    backgroundColor: colors.surface,
   },
 
   screen: {
@@ -255,7 +283,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.xl * 2,
   },
 
 
@@ -406,7 +433,6 @@ const styles = StyleSheet.create({
     position: "absolute",
 
     right: spacing.xs,
-    bottom: 58,
 
     width: 39,
     height: 39,
@@ -421,16 +447,18 @@ const styles = StyleSheet.create({
     elevation: 4,
 
     shadowColor: colors.black,
+
     shadowOffset: {
       width: 0,
       height: 2,
     },
+
     shadowOpacity: 0.2,
     shadowRadius: 3,
   },
 
 
-  /* ================= BOTTOM TAB ================= */
+  /* ================= BOTTOM ================= */
 
   bottomSpace: {
     height: spacing.xl * 2,
