@@ -18,7 +18,7 @@ import {
   registeredEstates,
   todayLabel,
 } from "@/data/estateOwnerHome";
-import { spacing } from "@/theme";
+import { colors, spacing } from "@/theme";
 
 export default function EstateOwnerHome() {
   // const router = useRouter();
@@ -43,21 +43,34 @@ export default function EstateOwnerHome() {
         }}
       /> */}
 
-      <GeneralHeader
-        title="Home"
-        description="Welcome Back!"
-        notificationCount={3}
-        onNotificationPress={() => {
-          // TODO: navigate to notifications once the route exists
-        }}
-      />
+      <Screen 
+        // style={styles.container}
+        header={
+          <GeneralHeader
+            title="Home"
+            description="Welcome Back!"
+            notificationCount={3}
+            onNotificationPress={() => {
+              // TODO: navigate to notifications once the route exists
+            }}
+          />
+        }
+        scroll={true}
+        >
+        {/* <GeneralHeader
+          title="Home"
+          description="Welcome Back!"
+          notificationCount={3}
+          onNotificationPress={() => {
+            // TODO: navigate to notifications once the route exists
+          }}
+        /> */}
 
-      <Screen style={styles.container}>
-        <ScrollView
+        {/* <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-        >
+        > */}
           <MonthSummaryCard summary={monthlySummary} />
 
           <SectionHeader
@@ -89,8 +102,8 @@ export default function EstateOwnerHome() {
               />
             ))}
           </View>
-        </ScrollView>
-
+        {/* </ScrollView> */}
+              
         
       </Screen>
     </>
@@ -101,6 +114,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: "100%",
+    backgroundColor: colors.white,
   },
 
   scroll: {

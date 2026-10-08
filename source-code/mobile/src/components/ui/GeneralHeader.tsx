@@ -69,8 +69,8 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary,
         paddingHorizontal: spacing.md,
         paddingTop: 40,
-        borderRadius: 20,
-
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
     },
     subContainer: {
         flexDirection: "row",

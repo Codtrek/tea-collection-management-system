@@ -1,3 +1,4 @@
+import { colors } from "@/theme";
 import {
   View,
   StyleSheet,
@@ -23,49 +24,61 @@ export default function Screen({
 }: ScreenProps) {
   if (scroll) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
         {header}
-        <ScrollView
-          contentContainerStyle={[
-            styles.container,
-            style,
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          {children}
-        </ScrollView>
-      </SafeAreaView>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[
+              styles.scrollContainer,
+              style,
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.container}>
       {header}
       <View
         {...props}
         style={[
-          styles.container,
+          styles.content,
           style,
         ]}
       >
         {children}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    justifyContent: "center",
-  },
-
   container: {
+    backgroundColor: colors.white,
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    width: "100%",
+  },
+  scrollView: {
+    flex: 1,
+    width: "100%",
+  },
+  scrollContainer: {
     paddingHorizontal: 20,
+    backgroundColor: "#FFFFFF",
     alignSelf: "center",
     maxWidth: Platform.OS === 'web' ? 393 : '100%',
     width: "100%",
+  },
+  content:{
+    flex: 1,
+    paddingHorizontal: 20,
+    backgroundColor: colors.white,
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 393 : undefined,
   },
 });
