@@ -178,13 +178,6 @@ export default function Employees() {
               <View style={styles.profileText}>
 
                 <AppText
-                  variant="caption"
-                  style={styles.welcomeText}
-                >
-                  Welcome back,
-                </AppText>
-
-                <AppText
                   variant="body"
                   style={styles.managerName}
                 >

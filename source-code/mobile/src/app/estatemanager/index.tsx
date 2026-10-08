@@ -5,7 +5,10 @@ import {
   ScrollView,
   Pressable,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -18,28 +21,29 @@ import { spacing } from "@/theme/spacing";
 
 export default function TeaEstateManagerDashboard() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState("dashboard");
 
-  // ============================================================
-  // DASHBOARD NAVIGATION
-  // ============================================================
+  /* =====================================================
+     EXISTING DASHBOARD NAVIGATION
+     ===================================================== */
 
   const openNotifications = () => {
-    router.push("/estatemanager/Notification");
-  };
+  router.push("/estatemanager/Notification");
+};
 
-  const openDailyPluckingDetails = () => {
-    router.push("/estatemanager/DailyPluckingDetails");
-  };
+const openDailyPluckingDetails = () => {
+  router.push("/estatemanager/DailyPluckingDetails");
+};
 
-  const openFertilizerStock = () => {
-    router.push("/estatemanager/FertilizerStock");
-  };
+const openFertilizerStock = () => {
+  router.push("/estatemanager/FertilizerStock");
+};
 
-  // ============================================================
-  // BOTTOM TAB NAVIGATION
-  // ============================================================
+  /* =====================================================
+     EXISTING BOTTOM TAB NAVIGATION
+     ===================================================== */
 
   const handleTabPress = (tab: {
     key: string;
@@ -76,62 +80,38 @@ export default function TeaEstateManagerDashboard() {
       edges={["top", "left", "right"]}
     >
       <View style={styles.screen}>
-
-        {/* ======================================================
-            MAIN CONTENT
-            ====================================================== */}
-
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom: 90 + insets.bottom,
+            },
+          ]}
         >
-
-          {/* ====================================================
-              HEADER
-              ==================================================== */}
-
+          {/* ================= HEADER ================= */}
           <View style={styles.header}>
-
             <View style={styles.profileSection}>
-
-              <Avatar
-                name="Rohan"
-                size={42}
-              />
+              <Avatar name="Rohan" size={42} />
 
               <View style={styles.profileText}>
-
-                <AppText
-                  variant="caption"
-                  style={styles.welcomeText}
-                >
+                <AppText variant="caption" style={styles.welcomeText}>
                   Welcome back,
                 </AppText>
 
-                <AppText
-                  variant="body"
-                  style={styles.managerName}
-                >
+                <AppText variant="body" style={styles.managerName}>
                   Manager Rohan
                 </AppText>
 
-                <AppText
-                  variant="caption"
-                  style={styles.estateName}
-                >
+                <AppText variant="caption" style={styles.estateName}>
                   Nuwara Eliya Highlands
                 </AppText>
-
               </View>
-
             </View>
-
-            {/* NOTIFICATION */}
 
             <Pressable
               style={styles.notificationButton}
               onPress={openNotifications}
-              hitSlop={8}
             >
               <Ionicons
                 name="notifications-outline"
@@ -139,71 +119,33 @@ export default function TeaEstateManagerDashboard() {
                 color={colors.text.primaryGreen}
               />
             </Pressable>
-
           </View>
 
-
-          {/* ====================================================
-              ESTATE BANNER
-              ==================================================== */}
-
+          {/* ================= ESTATE BANNER ================= */}
           <View style={styles.estateBanner}>
+            <View style={styles.bannerPlaceholder}>
+              <View style={styles.bannerIconContainer}>
+                <Ionicons
+                  name="leaf-outline"
+                  size={30}
+                  color={colors.primary}
+                />
+              </View>
 
-            <View style={styles.bannerIconContainer}>
-
-              <Ionicons
-                name="leaf-outline"
-                size={32}
-                color={colors.primary}
-              />
-
-            </View>
-
-            <View style={styles.bannerTextContainer}>
-
-              <AppText
-                variant="subheading"
-                style={styles.bannerTitle}
-              >
+              <AppText variant="bodySmall" style={styles.bannerTitle}>
                 Tea Estate Highlands
               </AppText>
-
-              <AppText
-                variant="caption"
-                style={styles.bannerSubtitle}
-              >
-                Nuwara Eliya
-              </AppText>
-
             </View>
-
           </View>
 
-
-          {/* ====================================================
-              COLLECTION STATUS
-              ==================================================== */}
-
-          <AppText
-            variant="caption"
-            style={styles.sectionLabel}
-          >
+          {/* ================= COLLECTION STATUS ================= */}
+          <AppText variant="caption" style={styles.sectionLabel}>
             COLLECTION STATUS
           </AppText>
 
-
-          {/* ====================================================
-              DAILY PROGRESS
-              ==================================================== */}
-
           <View style={styles.progressCard}>
-
             <View style={styles.progressHeader}>
-
-              <AppText
-                variant="body"
-                style={styles.progressTitle}
-              >
+              <AppText variant="body" style={styles.progressTitle}>
                 Daily Progress
               </AppText>
 
@@ -213,7 +155,6 @@ export default function TeaEstateManagerDashboard() {
               >
                 82.7%
               </AppText>
-
             </View>
 
             <View style={styles.progressTrack}>
@@ -224,249 +165,88 @@ export default function TeaEstateManagerDashboard() {
               variant="caption"
               style={styles.progressDescription}
             >
-              1,240 kg of 1,500 kg target collected
+              1,240.5kg of 1,500kg target collected
             </AppText>
-
           </View>
 
-
-          {/* ====================================================
-              ACTION CARDS
-              ==================================================== */}
-
+          {/* ================= QUICK ACTION CARDS ================= */}
           <View style={styles.cardsRow}>
-
             {/* FERTILIZER STOCK */}
-
             <Pressable
               style={styles.dashboardCard}
               onPress={openFertilizerStock}
             >
-
               <View style={styles.cardIconBlue}>
-
                 <Ionicons
-                  name="flask-outline"
-                  size={25}
+                  name="bicycle-outline"
+                  size={24}
                   color="#5872A8"
                 />
-
               </View>
 
-              <AppText
-                variant="bodySmall"
-                style={styles.cardTitle}
-              >
+              <AppText variant="bodySmall" style={styles.cardTitle}>
                 Fertilizer Stock
               </AppText>
 
-              <AppText
-                variant="caption"
-                style={styles.cardSubtitle}
-              >
+              <AppText variant="caption" style={styles.cardSubtitle}>
                 85% Available
               </AppText>
-
             </Pressable>
 
-
             {/* DAILY TEA PLUCKING */}
-
             <Pressable
               style={styles.dashboardCardGreen}
               onPress={openDailyPluckingDetails}
             >
-
               <View style={styles.cardIconGreen}>
-
                 <Ionicons
                   name="list-outline"
-                  size={25}
+                  size={24}
                   color={colors.success}
                 />
-
               </View>
 
-              <AppText
-                variant="bodySmall"
-                style={styles.cardTitle}
-              >
+              <AppText variant="bodySmall" style={styles.cardTitle}>
                 Daily Tea Plucking
               </AppText>
 
-              <AppText
-                variant="caption"
-                style={styles.cardSubtitle}
-              >
+              <AppText variant="caption" style={styles.cardSubtitle}>
                 1/3 Completed
               </AppText>
-
             </Pressable>
-
           </View>
 
-
-          {/* ====================================================
-              TODAY'S SUMMARY
-              ==================================================== */}
-
-          <AppText
-            variant="caption"
-            style={styles.sectionLabel}
-          >
-            TODAY'S SUMMARY
-          </AppText>
-
-
-          <View style={styles.summaryCard}>
-
-            {/* EMPLOYEES */}
-
-            <View style={styles.summaryItem}>
-
-              <View style={styles.summaryIcon}>
-
-                <Ionicons
-                  name="people-outline"
-                  size={19}
-                  color={colors.primary}
-                />
-
-              </View>
-
-              <View style={styles.summaryText}>
-
-                <AppText
-                  variant="caption"
-                  style={styles.summaryLabel}
-                >
-                  Employees
-                </AppText>
-
-                <AppText
-                  variant="bodySmall"
-                  style={styles.summaryValue}
-                >
-                  24
-                </AppText>
-
-              </View>
-
-            </View>
-
-
-            <View style={styles.verticalDivider} />
-
-
-            {/* TEA PLUCKED */}
-
-            <View style={styles.summaryItem}>
-
-              <View style={styles.summaryIcon}>
-
-                <Ionicons
-                  name="leaf-outline"
-                  size={19}
-                  color={colors.primary}
-                />
-
-              </View>
-
-              <View style={styles.summaryText}>
-
-                <AppText
-                  variant="caption"
-                  style={styles.summaryLabel}
-                >
-                  Tea Plucked
-                </AppText>
-
-                <AppText
-                  variant="bodySmall"
-                  style={styles.summaryValue}
-                >
-                  1,240 kg
-                </AppText>
-
-              </View>
-
-            </View>
-
-
-            <View style={styles.verticalDivider} />
-
-
-            {/* FERTILIZER */}
-
-            <View style={styles.summaryItem}>
-
-              <View style={styles.summaryIcon}>
-
-                <Ionicons
-                  name="flask-outline"
-                  size={19}
-                  color={colors.primary}
-                />
-
-              </View>
-
-              <View style={styles.summaryText}>
-
-                <AppText
-                  variant="caption"
-                  style={styles.summaryLabel}
-                >
-                  Fertilizer
-                </AppText>
-
-                <AppText
-                  variant="bodySmall"
-                  style={styles.summaryValue}
-                >
-                  4,820 kg
-                </AppText>
-
-              </View>
-
-            </View>
-
-          </View>
-
+          {/* Space for fixed bottom navigation */}
+          <View style={styles.bottomSpace} />
         </ScrollView>
 
-
-        {/* ======================================================
-            BOTTOM NAVIGATION
-            ====================================================== */}
-
-        <View style={styles.bottomTabContainer}>
-
+        {/* ================= BOTTOM TAB ================= */}
+        <View
+          style={[
+            styles.bottomTabContainer,
+            {
+              paddingBottom: insets.bottom,
+            },
+          ]}
+        >
           <EstateManagerBottomTab
             activeTab={activeTab}
             onTabPress={handleTabPress}
           />
-
         </View>
-
       </View>
     </SafeAreaView>
   );
 }
 
-
-/* ==============================================================
+/* ============================================================
    STYLES
-   ============================================================== */
+   ============================================================ */
 
 const styles = StyleSheet.create({
-
-  /* ============================================================
-     SCREEN
-     ============================================================ */
-
   container: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.black,
   },
 
   screen: {
@@ -477,16 +257,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-
-    // Important:
-    // Leaves enough room for the absolute bottom navigation.
-    paddingBottom: 100,
   },
 
-
-  /* ============================================================
-     HEADER
-     ============================================================ */
+  /* ================= HEADER ================= */
 
   header: {
     flexDirection: "row",
@@ -527,94 +300,66 @@ const styles = StyleSheet.create({
   notificationButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 20,
   },
 
-
-  /* ============================================================
-     ESTATE BANNER
-     ============================================================ */
+  /* ================= ESTATE BANNER ================= */
 
   estateBanner: {
     width: "100%",
     height: 148,
-
     backgroundColor: colors.background,
-
     borderWidth: 1,
     borderColor: colors.border.light,
     borderRadius: 8,
-
-    flexDirection: "row",
-    alignItems: "center",
-
-    paddingHorizontal: spacing.md,
-
-    marginBottom: spacing.lg,
-
     overflow: "hidden",
+    marginBottom: spacing.lg,
+  },
+
+  bannerPlaceholder: {
+    flex: 1,
+    padding: spacing.sm,
+    justifyContent: "flex-start",
+    alignItems: "flex-start",
   },
 
   bannerIconContainer: {
-    width: 64,
-    height: 64,
-
-    borderRadius: 32,
-
+    width: 40,
+    height: 40,
+    borderRadius: 8,
     backgroundColor: colors.successBackground,
-
     alignItems: "center",
     justifyContent: "center",
-  },
-
-  bannerTextContainer: {
-    marginLeft: spacing.md,
+    marginBottom: spacing.xs,
   },
 
   bannerTitle: {
     color: colors.text.primary,
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: "600",
   },
 
-  bannerSubtitle: {
-    color: colors.text.secondary,
-    fontSize: 10,
-    marginTop: spacing.xs,
-  },
-
-
-  /* ============================================================
-     SECTION LABEL
-     ============================================================ */
+  /* ================= SECTION LABEL ================= */
 
   sectionLabel: {
     color: colors.text.tertiary,
     fontSize: 10,
     lineHeight: 14,
-
     fontWeight: "600",
     letterSpacing: 0.8,
-
     marginBottom: spacing.sm,
   },
 
-
-  /* ============================================================
-     PROGRESS
-     ============================================================ */
+  /* ================= PROGRESS CARD ================= */
 
   progressCard: {
     backgroundColor: colors.background,
-
     borderWidth: 1,
     borderColor: colors.border.default,
     borderRadius: 8,
-
     padding: spacing.md,
-
     marginBottom: spacing.lg,
   },
 
@@ -622,7 +367,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-
     marginBottom: spacing.sm,
   },
 
@@ -641,22 +385,16 @@ const styles = StyleSheet.create({
   progressTrack: {
     width: "100%",
     height: 7,
-
     backgroundColor: "#E5E7EB",
-
     borderRadius: 5,
-
     overflow: "hidden",
-
     marginBottom: spacing.sm,
   },
 
   progressFill: {
     width: "82.7%",
     height: "100%",
-
     backgroundColor: colors.primary,
-
     borderRadius: 5,
   },
 
@@ -665,175 +403,80 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
 
-
-  /* ============================================================
-     ACTION CARDS
-     ============================================================ */
+  /* ================= QUICK ACTION CARDS ================= */
 
   cardsRow: {
     flexDirection: "row",
-
     gap: spacing.md,
-
     marginBottom: spacing.lg,
   },
 
   dashboardCard: {
     flex: 1,
-
-    minHeight: 130,
-
+    minHeight: 132,
     backgroundColor: "#F1F5FF",
-
     borderWidth: 1,
     borderColor: "#D5DDEA",
     borderRadius: 8,
-
     padding: spacing.md,
+    justifyContent: "flex-start",
   },
 
   dashboardCardGreen: {
     flex: 1,
-
-    minHeight: 130,
-
+    minHeight: 132,
     backgroundColor: "#EDF9F3",
-
     borderWidth: 1,
     borderColor: "#D1E8DC",
     borderRadius: 8,
-
     padding: spacing.md,
+    justifyContent: "flex-start",
   },
 
   cardIconBlue: {
     width: 40,
     height: 40,
-
     borderRadius: 10,
-
     backgroundColor: "#DCE5FA",
-
     alignItems: "center",
     justifyContent: "center",
-
     marginBottom: spacing.sm,
   },
 
   cardIconGreen: {
     width: 40,
     height: 40,
-
     borderRadius: 10,
-
     backgroundColor: colors.successBackground,
-
     alignItems: "center",
     justifyContent: "center",
-
     marginBottom: spacing.sm,
   },
 
   cardTitle: {
     color: colors.text.primary,
-
-    fontSize: 13,
-    lineHeight: 17,
-
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: "600",
   },
 
   cardSubtitle: {
     color: colors.text.secondary,
-
     fontSize: 9,
-
     marginTop: spacing.xs,
   },
 
+  /* ================= BOTTOM NAVIGATION ================= */
 
-  /* ============================================================
-     SUMMARY
-     ============================================================ */
-
-  summaryCard: {
-    width: "100%",
-    minHeight: 72,
-
-    backgroundColor: colors.background,
-
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 8,
-
-    flexDirection: "row",
-    alignItems: "center",
-
-    paddingHorizontal: spacing.sm,
+  bottomSpace: {
+    height: 80,
   },
-
-  summaryItem: {
-    flex: 1,
-
-    flexDirection: "row",
-    alignItems: "center",
-
-    paddingHorizontal: spacing.xs,
-  },
-
-  summaryIcon: {
-    width: 34,
-    height: 34,
-
-    borderRadius: 17,
-
-    backgroundColor: colors.successBackground,
-
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  summaryText: {
-    flex: 1,
-    marginLeft: spacing.xs,
-  },
-
-  summaryLabel: {
-    color: colors.text.secondary,
-
-    fontSize: 8,
-    lineHeight: 12,
-  },
-
-  summaryValue: {
-    color: colors.text.primary,
-
-    fontSize: 10,
-    lineHeight: 14,
-
-    fontWeight: "700",
-
-    marginTop: 1,
-  },
-
-  verticalDivider: {
-    width: 1,
-    height: 35,
-
-    backgroundColor: colors.border.light,
-  },
-
-
-  /* ============================================================
-     BOTTOM NAVIGATION
-     ============================================================ */
 
   bottomTabContainer: {
     position: "absolute",
-
     left: 0,
     right: 0,
     bottom: 0,
+    backgroundColor: colors.white,
   },
-
 });
