@@ -19,7 +19,7 @@ const TONES: Record<PillTone, { backgroundColor: string; color: string }> = {
   success: { backgroundColor: colors.successBackground, color: colors.success },
   warning: { backgroundColor: colors.warningBackground, color: colors.warning },
   error: { backgroundColor: colors.errorBackground, color: colors.error },
-  primary: { backgroundColor: colors.primary, color: colors.white },
+  primary: { backgroundColor: colors.brandDark, color: colors.white },
   neutral: { backgroundColor: colors.surface, color: colors.text.secondary },
 };
 

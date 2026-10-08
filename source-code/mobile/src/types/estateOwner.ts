@@ -46,11 +46,11 @@ export interface MonthlySummary {
   revenue: number;
 }
 
-type RequestStatus = "Pending" | "Accepted" | "On the way" | "Completed";
+export type RequestStatus = "Pending" | "Accepted" | "On the way" | "Completed";
 
-type RequestCategory = "collection" | "fertiliser";
+export type RequestCategory = "collection" | "fertiliser";
 
-interface RequestItem {
+export interface RequestItem {
   id: string;
   category: RequestCategory;
   estate: string;

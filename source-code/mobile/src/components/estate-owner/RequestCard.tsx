@@ -1,17 +1,20 @@
-import { Pressable, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { AppText } from "@/components/ui";
-import { colors } from "@/theme/colors";
+import AppText from "@/components/ui/AppText";
+import { colors, spacing } from "@/theme";
+import type { RequestItem, RequestStatus } from "@/types/estateOwner";
+import StatusPill, { type PillTone } from "./StatusPill";
 
-function RequestStatusPill({ status }: { status: RequestStatus }) {
-  const tone = statusColors[status];
+const STATUS_TONES: Record<RequestStatus, PillTone> = {
+  Pending: "warning",
+  Accepted: "success",
+  "On the way": "primary",
+  Completed: "neutral",
+};
 
+export function RequestStatusPill({ status }: { status: RequestStatus }) {
   return (
-    <View style={[styles.statusPill, { backgroundColor: tone.background }]}>
-      <AppText style={[styles.statusText, { color: tone.foreground }]}>
-        {status}
-      </AppText>
-    </View>
+    <StatusPill label={status} tone={STATUS_TONES[status]} />
   );
 }
 
@@ -80,21 +83,74 @@ export default function RequestCard({
   );
 }
 
-function DetailRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.detailRow}>
-      <AppText variant="bodySmall" style={styles.detailLabel}>
-        {label}
-      </AppText>
-      <AppText variant="bodySmall" style={styles.detailValue}>
-        {value}
-      </AppText>
-    </View>
-  );
-}
+const styles = StyleSheet.create({
+  requestCard: {
+    padding: spacing.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    backgroundColor: colors.white,
+  },
+  pressed: {
+    opacity: 0.75,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  estateTitle: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  categoryIcon: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: colors.brandSurface,
+  },
+  fertiliserIcon: {
+    backgroundColor: "#F0FDF4",
+  },
+  estateText: {
+    flex: 1,
+  },
+  estateName: {
+    color: colors.text.primary,
+  },
+  requestAbout: {
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  cardBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  cardMeta: {
+    minWidth: 80,
+  },
+  managerMeta: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  metaLabel: {
+    color: colors.text.tertiary,
+  },
+  amount: {
+    color: colors.text.primary,
+    marginTop: 2,
+  },
+  managerName: {
+    color: colors.text.primary,
+    marginTop: 2,
+  },
+});
