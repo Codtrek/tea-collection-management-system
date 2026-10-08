@@ -10,6 +10,8 @@ export type FreshnessLevel = 'fresh' | 'recent' | 'stale' | 'none'
 
 export interface BoardAgent {
   agentId: number
+  /** 'EMP-0012' — the agent's employee record; their history lives on /employees/:id */
+  employeeId: string
   name: string
   routeId: number | null
   routeName: string | null

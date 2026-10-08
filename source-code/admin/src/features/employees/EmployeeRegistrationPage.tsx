@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Upload } from 'lucide-react'
+import { Radar, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -13,7 +13,10 @@ import { Toggle } from '@/components/ui/Toggle'
 import { MultiStepWizard } from '@/components/patterns/MultiStepWizard'
 import { useToast } from '@/components/ui/Toast'
 import * as employeesService from '@/services/employees'
-import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS, ROLES } from './schema'
+import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS } from './schema'
+import { InitialPasswordModal } from './InitialPasswordModal'
+import { useEmployeeRoles } from './useEmployeeRoles'
+import type { Employee } from './types'
 import { formatDate } from '@/lib/format'
 
 const STEPS = [
@@ -64,12 +67,19 @@ export function EmployeeRegistrationPage() {
     if (ok) setStep((s) => Math.min(STEPS.length - 1, s + 1))
   }
 
+  const { roles, agentRole } = useEmployeeRoles()
+  const isAgent = !!agentRole && values.role === agentRole
+  // a newly provisioned agent's one-time temporary password — shown before leaving this page
+  const [provisioned, setProvisioned] = useState<Employee | null>(null)
+
   const createMutation = useMutation({
     mutationFn: (data: EmployeeForm) => employeesService.create(data),
     onSuccess: (employee) => {
       toast('Employee registered')
       void queryClient.invalidateQueries({ queryKey: ['employees'] })
-      navigate(`/employees/${employee.id}`)
+      void queryClient.invalidateQueries({ queryKey: ['dispatch'] })
+      if (employee.initialPassword) setProvisioned(employee)
+      else navigate(`/employees/${employee.id}`)
     },
     onError: (err) => toast(err instanceof Error ? err.message : 'Could not register this employee', 'danger'),
   })
@@ -103,11 +113,22 @@ export function EmployeeRegistrationPage() {
             {step === 1 && (
               <div className="flex flex-col gap-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Select label="Role / position" placeholder="Select role" error={errors.role?.message} options={ROLES.map((r) => ({ value: r, label: r }))} {...register('role')} />
+                  <Select label="Role / position" placeholder="Select role" error={errors.role?.message} options={roles.map((r) => ({ value: r, label: r }))} {...register('role')} />
                   <Select label="Department" placeholder="Select department" error={errors.department?.message} options={DEPARTMENTS.map((d) => ({ value: d, label: d }))} {...register('department')} />
                   <Input label="Hire date" type="date" error={errors.hireDate?.message} {...register('hireDate')} />
                   <Select label="Employment type" options={['Permanent', 'Contract', 'Casual'].map((t) => ({ value: t, label: t }))} {...register('employmentType')} />
                 </div>
+
+                {isAgent && (
+                  <p className="flex items-start gap-2 rounded-[var(--radius-md)] border border-border bg-surface-sunken p-3.5 text-sm text-text-muted">
+                    <Radar className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                    <span>
+                      Registering a <strong className="text-text">{agentRole}</strong> adds them to <strong className="text-text">Agent Dispatch</strong> (no
+                      route yet — assign one there) and creates their <strong className="text-text">mobile login</strong>: the contact number plus a
+                      one-time temporary password shown once after you register.
+                    </span>
+                  </p>
+                )}
 
                 {/* Feeds payroll generation (shift-based Day/Day-OT/Night/Night-OT pay). */}
                 <div>
@@ -148,9 +169,13 @@ export function EmployeeRegistrationPage() {
                 <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-border p-4">
                   <div>
                     <p className="text-sm font-medium text-text">System login access</p>
-                    <p className="text-xs text-text-muted">Non-workflow roles (operators, drivers) are HR records only and don't get login (§3.2.2).</p>
+                    <p className="text-xs text-text-muted">
+                      {isAgent
+                        ? `${agentRole}s always get a mobile login — it is created on registration.`
+                        : "Non-workflow roles (operators, drivers) are HR records only and don't get login (§3.2.2)."}
+                    </p>
                   </div>
-                  <Toggle checked={values.hasLogin ?? false} onChange={(v) => setValue('hasLogin', v)} />
+                  <Toggle checked={isAgent || (values.hasLogin ?? false)} onChange={(v) => !isAgent && setValue('hasLogin', v)} />
                 </div>
               </div>
             )}
@@ -169,7 +194,7 @@ export function EmployeeRegistrationPage() {
                   ]}
                 />
                 <ReviewGroup title="Bank" rows={[['Bank', values.bank], ['Branch', values.branch], ['Account', values.account]]} />
-                <ReviewGroup title="Permissions" rows={[['System login', values.hasLogin ? 'Enabled' : 'Disabled']]} />
+                <ReviewGroup title="Permissions" rows={[['System login', isAgent ? 'Mobile login — created on registration' : values.hasLogin ? 'Enabled' : 'Disabled']]} />
               </div>
             )}
 
@@ -195,6 +220,15 @@ export function EmployeeRegistrationPage() {
           </form>
         </Card>
       </MultiStepWizard>
+
+      {provisioned?.initialPassword && (
+        <InitialPasswordModal
+          name={provisioned.name}
+          phone={provisioned.contact}
+          password={provisioned.initialPassword}
+          onDone={() => navigate(`/employees/${provisioned.id}`)}
+        />
+      )}
     </div>
   )
 }

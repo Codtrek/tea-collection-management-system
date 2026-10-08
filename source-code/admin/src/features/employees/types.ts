@@ -27,6 +27,34 @@ export interface Employee {
   lastUpdatedOn?: string
   /** Additive — shift-based pay rates (Rs./hour), the input to payroll generation. */
   rates?: ShiftBreakdown
+  /**
+   * Only on the create/update response that provisioned a Tea Collecting Agent's mobile login:
+   * the one-time temporary password. Show it once; it is never returned again.
+   */
+  initialPassword?: string
+}
+
+/** From GET /employees/roles — the single source for the role dropdown. */
+export interface EmployeeRoles {
+  roles: string[]
+  /** the job title that makes someone a collection agent (shown on the dispatch board) */
+  agentRole: string
+}
+
+/** One row of a Tea Collecting Agent's collection history (mirrors the backend's PublicAgentHistoryRow). */
+export interface AgentHistoryRow {
+  id: string
+  date: string
+  route: string
+  /** set when the agent was COVERING this route that day */
+  coveringRoute: string | null
+  estateName: string
+  estateWeightKg: number
+  /** graded total once graded, else the estate weight */
+  weightKg: number
+  graded: boolean
+  gradeLines: Array<{ grade: 'Super' | 'Normal'; weightKg: number }>
+  status: string
 }
 
 export type AdvanceStatus = 'Pending' | 'Approved' | 'Rejected'

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, UserX, CalendarPlus, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -14,7 +14,10 @@ import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as employeesService from '@/services/employees'
+import { AgentCollectionsTab } from './AgentCollectionsTab'
 import { netPay } from './calc'
+import { COLLECTIONS_TAB, resolveEmployeeTab } from './links'
+import { useEmployeeRoles } from './useEmployeeRoles'
 import type { AttendanceRecord, PayrollRow } from './types'
 import { formatCurrency, formatDate, initials, maskAccount } from '@/lib/format'
 
@@ -38,6 +41,10 @@ export function EmployeeDetailPage() {
   const { can, level } = useAuth()
   const queryClient = useQueryClient()
   const [deactivating, setDeactivating] = useState(false)
+  // `?tab=collections` (the dispatch board's "View history") opens that tab directly. Derived from
+  // the URL on every render, not seeded once, so a same-page navigation still switches the tab.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { agentRole } = useEmployeeRoles()
 
   // Administrator sees bank unmasked; Officer/Manager see it masked (§13 field-level sensitivity).
   const unmask = level('employees') === 'approve'
@@ -134,6 +141,9 @@ export function EmployeeDetailPage() {
     </div>
   )
 
+  const isAgent = !!agentRole && employee.role === agentRole
+  const canSeeCollections = can('employees', 'view') && can('collection', 'view')
+
   const tabs = [
     {
       id: 'overview',
@@ -175,6 +185,11 @@ export function EmployeeDetailPage() {
         </div>
       ),
     },
+    // Collection history exists only for Tea Collecting Agents, and only for viewers who may see
+    // both employees and collection data (the server enforces the same rule).
+    ...(isAgent && canSeeCollections
+      ? [{ id: COLLECTIONS_TAB, label: 'Collections', content: <AgentCollectionsTab employeeId={employee.id} /> }]
+      : []),
     {
       id: 'bank',
       label: 'Bank Details',
@@ -223,7 +238,15 @@ export function EmployeeDetailPage() {
   return (
     <div>
       <PageHeader title={employee.name} breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Employees', to: '/employees' }, { label: employee.name }]} />
-      <DetailPageWithTabs header={header} tabs={tabs} />
+      <DetailPageWithTabs
+        header={header}
+        tabs={tabs}
+        activeTab={resolveEmployeeTab(
+          searchParams.get('tab'),
+          tabs.map((t) => t.id),
+        )}
+        onTabChange={(tab) => setSearchParams(tab === 'overview' ? {} : { tab }, { replace: true })}
+      />
 
       <LightConfirmModal
         open={deactivating}

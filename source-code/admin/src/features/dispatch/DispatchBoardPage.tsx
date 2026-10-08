@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeftRight, ListChecks, Loader2, MapPin, RefreshCw, UserCheck, UserX, Users } from 'lucide-react'
+import { ArrowLeftRight, History, ListChecks, Loader2, MapPin, RefreshCw, UserCheck, UserX, Users } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, RowAction } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
@@ -11,6 +12,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as collectionsService from '@/services/collections'
 import * as dispatchService from '@/services/dispatch'
+import { agentHistoryHref } from '@/features/employees/links'
 import { agentColumns } from './board-columns'
 import { CoverModal } from './CoverModal'
 import { ReassignRouteModal } from './ReassignRouteModal'
@@ -43,6 +45,9 @@ export function DispatchBoardPage() {
   const { can } = useAuth()
   const canEdit = can('dispatch', 'edit')
   const canApprove = can('dispatch', 'approve')
+  const navigate = useNavigate()
+  // an agent's history lives on their Employee page, which needs both employee and collection access
+  const canSeeHistory = can('employees', 'view') && can('collection', 'view')
 
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
@@ -186,6 +191,9 @@ export function DispatchBoardPage() {
               actions={(a) => (
                 <>
                   <RowAction icon={<ListChecks className="size-4" />} label="View today’s stops" onClick={() => setDialog({ kind: 'stops', agent: a })} />
+                  {canSeeHistory && (
+                    <RowAction icon={<History className="size-4" />} label="View history" onClick={() => navigate(agentHistoryHref(a.employeeId))} />
+                  )}
                   {canEdit && (
                     <RowAction
                       icon={<ArrowLeftRight className="size-4" />}

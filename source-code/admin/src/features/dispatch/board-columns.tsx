@@ -24,7 +24,7 @@ export function agentColumns(): Column<BoardAgent>[] {
       header: 'Route',
       render: (a) => (
         <div className="flex flex-col items-start gap-1">
-          <span>{a.routeName ?? <span className="text-text-muted">No route</span>}</span>
+          <span>{a.routeName ?? <span className="text-text-muted">Unassigned</span>}</span>
           {a.coveringRouteName && <StatusBadge tone="warning">Covering {a.coveringRouteName}</StatusBadge>}
         </div>
       ),

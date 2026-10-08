@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,7 +13,9 @@ import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as employeesService from '@/services/employees'
 import type { Employee } from './types'
-import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS, ROLES } from './schema'
+import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS } from './schema'
+import { InitialPasswordModal } from './InitialPasswordModal'
+import { useEmployeeRoles } from './useEmployeeRoles'
 
 /* EMP-04 — same fields/validation as EMP-02 but a single scrollable form. */
 export function EmployeeEditPage() {
@@ -29,7 +32,11 @@ export function EmployeeEditPage() {
     enabled: !!id,
   })
 
-  if (isPending) {
+  // The role <select> is uncontrolled: if its options arrived AFTER the form mounted, the saved
+  // role would render blank. Hold the form until the server's role list is in.
+  const { isPending: rolesPending } = useEmployeeRoles()
+
+  if (isPending || rolesPending) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
@@ -92,13 +99,23 @@ function EditForm({ employee }: { employee: Employee }) {
     },
   })
 
+  const { roles } = useEmployeeRoles()
+  // set when this edit turned the employee INTO a collection agent (one-time mobile password)
+  const [provisioned, setProvisioned] = useState<{ name: string; phone: string; password: string } | null>(null)
+
   const updateMutation = useMutation({
     mutationFn: (data: EmployeeForm) => employeesService.update(employee.id, data),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast('Employee updated')
       void queryClient.invalidateQueries({ queryKey: ['employee', employee.id] })
       void queryClient.invalidateQueries({ queryKey: ['employees'] })
-      navigate(`/employees/${employee.id}`)
+      // role changes add/remove the person on the dispatch board
+      void queryClient.invalidateQueries({ queryKey: ['dispatch'] })
+      if (updated.initialPassword) {
+        setProvisioned({ name: updated.name, phone: updated.contact, password: updated.initialPassword })
+      } else {
+        navigate(`/employees/${employee.id}`)
+      }
     },
     onError: (err) => toast(err instanceof Error ? err.message : 'Could not update this employee', 'danger'),
   })
@@ -108,56 +125,67 @@ function EditForm({ employee }: { employee: Employee }) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
-      <Card>
-        <CardHeader><CardTitle>Personal</CardTitle></CardHeader>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input label="Full name" error={errors.name?.message} {...register('name')} />
-          <Input label="NIC number" error={errors.nic?.message} {...register('nic')} />
-          <Input label="Date of birth" type="date" error={errors.dob?.message} {...register('dob')} />
-          <Input label="Contact number" error={errors.contact?.message} {...register('contact')} />
-          <div className="sm:col-span-2"><Input label="Address" error={errors.address?.message} {...register('address')} /></div>
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Employment</CardTitle></CardHeader>
-        <div className="flex flex-col gap-4">
+    <>
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+        <Card>
+          <CardHeader><CardTitle>Personal</CardTitle></CardHeader>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Role" error={errors.role?.message} options={ROLES.map((r) => ({ value: r, label: r }))} {...register('role')} />
-            <Select label="Department" error={errors.department?.message} options={DEPARTMENTS.map((d) => ({ value: d, label: d }))} {...register('department')} />
-            <Input label="Hire date" type="date" error={errors.hireDate?.message} {...register('hireDate')} />
-            <Select label="Employment type" options={['Permanent', 'Contract', 'Casual'].map((t) => ({ value: t, label: t }))} {...register('employmentType')} />
+            <Input label="Full name" error={errors.name?.message} {...register('name')} />
+            <Input label="NIC number" error={errors.nic?.message} {...register('nic')} />
+            <Input label="Date of birth" type="date" error={errors.dob?.message} {...register('dob')} />
+            <Input label="Contact number" error={errors.contact?.message} {...register('contact')} />
+            <div className="sm:col-span-2"><Input label="Address" error={errors.address?.message} {...register('address')} /></div>
           </div>
-          <div>
-            <p className="mb-2 text-sm font-medium text-text">Pay rates (Rs. / hour)</p>
-            <div className="grid gap-4 sm:grid-cols-4">
-              <Input label="Day" type="number" step="0.01" error={errors.dayRate?.message} {...register('dayRate', { valueAsNumber: true })} />
-              <Input label="Day OT" type="number" step="0.01" error={errors.dayOtRate?.message} {...register('dayOtRate', { valueAsNumber: true })} />
-              <Input label="Night" type="number" step="0.01" error={errors.nightRate?.message} {...register('nightRate', { valueAsNumber: true })} />
-              <Input label="Night OT" type="number" step="0.01" error={errors.nightOtRate?.message} {...register('nightOtRate', { valueAsNumber: true })} />
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Employment</CardTitle></CardHeader>
+          <div className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Select label="Role" error={errors.role?.message} options={roles.map((r) => ({ value: r, label: r }))} {...register('role')} />
+              <Select label="Department" error={errors.department?.message} options={DEPARTMENTS.map((d) => ({ value: d, label: d }))} {...register('department')} />
+              <Input label="Hire date" type="date" error={errors.hireDate?.message} {...register('hireDate')} />
+              <Select label="Employment type" options={['Permanent', 'Contract', 'Casual'].map((t) => ({ value: t, label: t }))} {...register('employmentType')} />
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-medium text-text">Pay rates (Rs. / hour)</p>
+              <div className="grid gap-4 sm:grid-cols-4">
+                <Input label="Day" type="number" step="0.01" error={errors.dayRate?.message} {...register('dayRate', { valueAsNumber: true })} />
+                <Input label="Day OT" type="number" step="0.01" error={errors.dayOtRate?.message} {...register('dayOtRate', { valueAsNumber: true })} />
+                <Input label="Night" type="number" step="0.01" error={errors.nightRate?.message} {...register('nightRate', { valueAsNumber: true })} />
+                <Input label="Night OT" type="number" step="0.01" error={errors.nightOtRate?.message} {...register('nightOtRate', { valueAsNumber: true })} />
+              </div>
             </div>
           </div>
-        </div>
-      </Card>
+        </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Bank Details</CardTitle></CardHeader>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select label="Bank" error={errors.bank?.message} options={BANKS.map((b) => ({ value: b, label: b }))} {...register('bank')} />
-          <Select label="Branch" error={errors.branch?.message} options={BRANCHES.map((b) => ({ value: b, label: b }))} {...register('branch')} />
-          <Input label="Account number" error={errors.account?.message} {...register('account')} />
-        </div>
-      </Card>
+        <Card>
+          <CardHeader><CardTitle>Bank Details</CardTitle></CardHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select label="Bank" error={errors.bank?.message} options={BANKS.map((b) => ({ value: b, label: b }))} {...register('bank')} />
+            <Select label="Branch" error={errors.branch?.message} options={BRANCHES.map((b) => ({ value: b, label: b }))} {...register('branch')} />
+            <Input label="Account number" error={errors.account?.message} {...register('account')} />
+          </div>
+        </Card>
 
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="secondary" onClick={() => navigate(`/employees/${employee.id}`)} disabled={updateMutation.isPending}>
-          Cancel
-        </Button>
-        <Button type="submit" loading={updateMutation.isPending}>
-          Save Changes
-        </Button>
-      </div>
-    </form>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={() => navigate(`/employees/${employee.id}`)} disabled={updateMutation.isPending}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={updateMutation.isPending}>
+            Save Changes
+          </Button>
+        </div>
+      </form>
+
+      {provisioned && (
+        <InitialPasswordModal
+          name={provisioned.name}
+          phone={provisioned.phone}
+          password={provisioned.password}
+          onDone={() => navigate(`/employees/${employee.id}`)}
+        />
+      )}
+    </>
   )
 }

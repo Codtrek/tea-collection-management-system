@@ -1,9 +1,12 @@
 import { apiFetch } from '@/lib/api'
+import type { PaginatedResult } from '@/features/estates/types'
 import type {
+  AgentHistoryRow,
   Advance,
   AttendanceRecord,
   AttendanceStatus,
   Employee,
+  EmployeeRoles,
   PayrollRow,
 } from '@/features/employees/types'
 
@@ -53,6 +56,27 @@ export function list(): Promise<Employee[]> {
 
 export function getById(id: string): Promise<Employee> {
   return apiFetch<Employee>(`/employees/${id}`)
+}
+
+/** Job titles + which one makes someone a collection agent — the form's single source of roles. */
+export function getRoles(): Promise<EmployeeRoles> {
+  return apiFetch<EmployeeRoles>('/employees/roles')
+}
+
+export interface AgentHistoryQuery {
+  from?: string
+  to?: string
+  /** 0-based */
+  page?: number
+  limit?: number
+}
+
+/** A collection agent's history (Employee detail → Collections tab): paginated, last 90 days by default. */
+export function getCollections(id: string, q: AgentHistoryQuery = {}): Promise<PaginatedResult<AgentHistoryRow>> {
+  const params = new URLSearchParams()
+  for (const [k, v] of Object.entries(q)) if (v !== undefined) params.set(k, String(v))
+  const qs = params.toString()
+  return apiFetch<PaginatedResult<AgentHistoryRow>>(`/employees/${id}/collections${qs ? `?${qs}` : ''}`)
 }
 
 export function create(input: EmployeeInput): Promise<Employee> {

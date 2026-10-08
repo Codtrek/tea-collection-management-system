@@ -53,4 +53,3 @@ export type EmployeeForm = z.infer<typeof employeeSchema>
 export const BANKS = ['Bank of Ceylon', "People's Bank", 'Commercial Bank', 'Hatton National Bank', 'Sampath Bank']
 export const BRANCHES = ['Nuwara Eliya', 'Kandy', 'Hatton', 'Colombo']
 export const DEPARTMENTS = ['Operations', 'Factory Floor', 'Logistics', 'Management', 'Administration']
-export const ROLES = ['Factory Officer', 'Factory Manager', 'Machine Operator', 'Driver', 'Receiving Officer']
