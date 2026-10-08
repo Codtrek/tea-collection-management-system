@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
-import { Screen, Header, EstateOwnerBottomTab } from "@/components/ui";
+import { Screen, Header, EstateOwnerBottomTab, GeneralHeader } from "@/components/ui";
 import type { BottomTabItem } from "@/components/ui/BottomTab";
 import {
   MonthSummaryCard,
@@ -33,10 +33,19 @@ export default function EstateOwnerHome() {
 
   return (
     <>
-      <Header
+      {/* <Header
         username={ownerName}
         greeting="Good morning,"
         date={todayLabel}
+        notificationCount={3}
+        onNotificationPress={() => {
+          // TODO: navigate to notifications once the route exists
+        }}
+      /> */}
+
+      <GeneralHeader
+        title="Home"
+        description="Welcome Back!"
         notificationCount={3}
         onNotificationPress={() => {
           // TODO: navigate to notifications once the route exists

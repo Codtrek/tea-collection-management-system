@@ -11,17 +11,20 @@ import {SafeAreaView} from "react-native-safe-area-context";
 interface ScreenProps extends ViewProps {
   children: React.ReactNode;
   scroll?: boolean;
+  header?: React.ReactNode;
 }
 
 export default function Screen({
   children,
   scroll = false,
+  header,
   style,
   ...props
 }: ScreenProps) {
   if (scroll) {
     return (
       <SafeAreaView style={styles.safeArea}>
+        {header}
         <ScrollView
           contentContainerStyle={[
             styles.container,
@@ -37,6 +40,7 @@ export default function Screen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {header}
       <View
         {...props}
         style={[
@@ -62,6 +66,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignSelf: "center",
     maxWidth: Platform.OS === 'web' ? 393 : '100%',
-    paddingTop: 20,
+    width: "100%",
   },
 });
