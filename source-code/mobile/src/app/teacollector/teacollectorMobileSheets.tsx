@@ -10,6 +10,7 @@ import { Pill } from '@/components/ui/demo-teacollector-pill';
 import { STATUS_STYLE } from '@/theme/teacollector-statusStyle';
 import { colors } from '@/theme/colors';
 import { fonts } from '@/theme/fonts';
+import ConfirmationWarning from '@/components/ui/demo-teacollector-confirmationWarning';
 import * as ImagePicker from 'expo-image-picker';
 
 const c = {
@@ -219,198 +220,242 @@ export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) =
 export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [showWarning, setShowWarning] = useState(false);
 
   useEffect(() => {
     if (open) {
       setReason(null);
       setNote('');
+      setShowWarning(false);
     }
   }, [open]);
 
   return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Decline pickup</Text>
-      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>Select a reason — this is required.</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {PICKUP_REASONS.map((r) => (
-          <Chip
-            key={r}
-            active={reason === r}
-            onPress={() => setReason(reason === r ? null : r)}
-          >
-            {r}
-          </Chip>
-        ))}
-      </View>
-      <Field label="Add a note (optional)">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: colors.border.light,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Anything the factory should know..."
-          value={note}
-          onChangeText={setNote}
-        />
-      </Field>
-      <Btn
-        variant="primary"
-        block
-        disabled={!reason}
-        onPress={() => {
-          if (reason) {
-            onConfirm(reason, note);
-          }
+    <>
+      <Sheet open={open && !showWarning} onClose={onClose}>
+        <Text style={{
+          fontFamily: fontDisplay.fontFamily,
+          fontWeight: '600',
+          marginBottom: 4,
+          fontSize: 20,
+        }}>Decline pickup</Text>
+        <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>Select a reason — this is required.</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {PICKUP_REASONS.map((r) => (
+            <Chip
+              key={r}
+              active={reason === r}
+              onPress={() => setReason(reason === r ? null : r)}
+            >
+              {r}
+            </Chip>
+          ))}
+        </View>
+        <Field label="Add a note (optional)">
+          <TextInput
+            style={{
+              borderRadius: 14,
+              borderWidth: 1.5,
+              borderColor: colors.border.light,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 15,
+              height: 64,
+              textAlignVertical: 'top',
+            }}
+            multiline
+            numberOfLines={3}
+            placeholder="Anything the factory should know..."
+            value={note}
+            onChangeText={setNote}
+          />
+        </Field>
+        <Btn
+          variant="primary"
+          block
+          disabled={!reason}
+          onPress={() => setShowWarning(true)}
+        >
+          Confirm Decline
+        </Btn>
+      </Sheet>
+      <ConfirmationWarning
+        visible={showWarning}
+        title="Decline this pickup?"
+        message="This request will be declined and the estate owner will need to submit another request."
+        confirmLabel="Decline pickup"
+        onCancel={() => setShowWarning(false)}
+        onConfirm={() => {
+          if (!reason) return;
+          setShowWarning(false);
+          onConfirm(reason, note);
         }}
-      >
-        Confirm Decline
-      </Btn>
-    </Sheet>
+      />
+    </>
   );
 };
 
 export const CancelPickupSheet = ({ open, onBack, onConfirm }: any) => {
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [showWarning, setShowWarning] = useState(false);
 
   useEffect(() => {
     if (open) {
       setReason(null);
       setNote('');
+      setShowWarning(false);
     }
   }, [open]);
 
   return (
-    <Sheet open={open} onClose={onBack}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Cancel pickup</Text>
-      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
-        Select a reason — this is required.
-      </Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        {PICKUP_REASONS.map((pickupReason) => (
-          <Chip
-            key={pickupReason}
-            active={reason === pickupReason}
-            onPress={() => setReason(reason === pickupReason ? null : pickupReason)}
-          >
-            {pickupReason}
-          </Chip>
-        ))}
-      </View>
-      <Field label="Add a note (optional)">
-        <TextInput
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: colors.border.light,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Anything the factory should know..."
-          value={note}
-          onChangeText={setNote}
-        />
-      </Field>
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="danger" block disabled={!reason} onPress={() => reason && onConfirm(reason, note)}>
-            Confirm Cancel
-          </Btn>
+    <>
+      <Sheet open={open && !showWarning} onClose={onBack}>
+        <Text style={{
+          fontFamily: fontDisplay.fontFamily,
+          fontWeight: '600',
+          marginBottom: 4,
+          fontSize: 20,
+        }}>Cancel pickup</Text>
+        <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
+          Select a reason — this is required.
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {PICKUP_REASONS.map((pickupReason) => (
+            <Chip
+              key={pickupReason}
+              active={reason === pickupReason}
+              onPress={() => setReason(reason === pickupReason ? null : pickupReason)}
+            >
+              {pickupReason}
+            </Chip>
+          ))}
         </View>
-        <View style={{ flex: 1 }}>
-          <Btn variant="ghost" block onPress={onBack}>Back</Btn>
+        <Field label="Add a note (optional)">
+          <TextInput
+            style={{
+              borderRadius: 14,
+              borderWidth: 1.5,
+              borderColor: colors.border.light,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 15,
+              height: 64,
+              textAlignVertical: 'top',
+            }}
+            multiline
+            numberOfLines={3}
+            placeholder="Anything the factory should know..."
+            value={note}
+            onChangeText={setNote}
+          />
+        </Field>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Btn variant="danger" block disabled={!reason} onPress={() => setShowWarning(true)}>
+              Confirm Cancel
+            </Btn>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Btn variant="ghost" block onPress={onBack}>Back</Btn>
+          </View>
         </View>
-      </View>
-    </Sheet>
+      </Sheet>
+      <ConfirmationWarning
+        visible={showWarning}
+        title="Cancel this pickup?"
+        message="This pickup request will be cancelled. This action cannot be undone."
+        confirmLabel="Cancel pickup"
+        onCancel={() => setShowWarning(false)}
+        onConfirm={() => {
+          if (!reason) return;
+          setShowWarning(false);
+          onConfirm(reason, note);
+        }}
+      />
+    </>
   );
 };
 
 export const BatchCancelRequestsSheet = ({ open, requestCount, onClose, onConfirm }: any) => {
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [showWarning, setShowWarning] = useState(false);
 
   useEffect(() => {
     if (open) {
       setReason(null);
       setNote('');
+      setShowWarning(false);
     }
   }, [open]);
 
   return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Cancel selected requests</Text>
-      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
-        This will cancel {requestCount} selected pickup request{requestCount === 1 ? '' : 's'}. Select a reason.
-      </Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        {PICKUP_REASONS.map((pickupReason) => (
-          <Chip
-            key={pickupReason}
-            active={reason === pickupReason}
-            onPress={() => setReason(reason === pickupReason ? null : pickupReason)}
-          >
-            {pickupReason}
-          </Chip>
-        ))}
-      </View>
-      <Field label="Add a note (optional)">
-        <TextInput
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: colors.border.light,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Anything the factory or owners should know..."
-          value={note}
-          onChangeText={setNote}
-        />
-      </Field>
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="danger" block disabled={!reason} onPress={() => reason && onConfirm(reason, note)}>
-            Confirm Cancel
-          </Btn>
+    <>
+      <Sheet open={open && !showWarning} onClose={onClose}>
+        <Text style={{
+          fontFamily: fontDisplay.fontFamily,
+          fontWeight: '600',
+          marginBottom: 4,
+          fontSize: 20,
+        }}>Cancel selected requests</Text>
+        <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
+          This will cancel {requestCount} selected pickup request{requestCount === 1 ? '' : 's'}. Select a reason.
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {PICKUP_REASONS.map((pickupReason) => (
+            <Chip
+              key={pickupReason}
+              active={reason === pickupReason}
+              onPress={() => setReason(reason === pickupReason ? null : pickupReason)}
+            >
+              {pickupReason}
+            </Chip>
+          ))}
         </View>
-        <View style={{ flex: 1 }}>
-          <Btn variant="ghost" block onPress={onClose}>Back</Btn>
+        <Field label="Add a note (optional)">
+          <TextInput
+            style={{
+              borderRadius: 14,
+              borderWidth: 1.5,
+              borderColor: colors.border.light,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 15,
+              height: 64,
+              textAlignVertical: 'top',
+            }}
+            multiline
+            numberOfLines={3}
+            placeholder="Anything the factory or owners should know..."
+            value={note}
+            onChangeText={setNote}
+          />
+        </Field>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Btn variant="danger" block disabled={!reason} onPress={() => setShowWarning(true)}>
+              Confirm Cancel
+            </Btn>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Btn variant="ghost" block onPress={onClose}>Back</Btn>
+          </View>
         </View>
-      </View>
-    </Sheet>
+      </Sheet>
+      <ConfirmationWarning
+        visible={showWarning}
+        title={`Cancel ${requestCount} request${requestCount === 1 ? '' : 's'}?`}
+        message="These pickup requests will be cancelled. This action cannot be undone."
+        confirmLabel="Cancel requests"
+        onCancel={() => setShowWarning(false)}
+        onConfirm={() => {
+          if (!reason) return;
+          setShowWarning(false);
+          onConfirm(reason, note);
+        }}
+      />
+    </>
   );
 };
 
