@@ -16,6 +16,7 @@ interface ConfirmationWarningProps {
   title: string;
   message: string;
   confirmLabel: string;
+  intent?: 'warning' | 'success';
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -25,9 +26,12 @@ export default function ConfirmationWarning({
   title,
   message,
   confirmLabel,
+  intent = 'warning',
   onCancel,
   onConfirm,
 }: ConfirmationWarningProps) {
+  const isSuccess = intent === 'success';
+
   return (
     <Modal
       transparent
@@ -46,8 +50,12 @@ export default function ConfirmationWarning({
           accessibilityRole="alert"
           style={styles.dialog}
         >
-          <View style={styles.iconContainer}>
-            <Ionicons name="warning-outline" size={28} color={colors.warning} />
+          <View style={[styles.iconContainer, isSuccess && styles.successIconContainer]}>
+            <Ionicons
+              name={isSuccess ? 'checkmark-circle-outline' : 'warning-outline'}
+              size={28}
+              color={isSuccess ? colors.success : colors.warning}
+            />
           </View>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
@@ -56,7 +64,13 @@ export default function ConfirmationWarning({
               <Btn variant="ghost" block onPress={onCancel}>Go back</Btn>
             </View>
             <View style={styles.action}>
-              <Btn variant="danger" block onPress={onConfirm}>{confirmLabel}</Btn>
+              <Btn
+                variant={isSuccess ? 'primary' : 'danger'}
+                block
+                onPress={onConfirm}
+              >
+                {confirmLabel}
+              </Btn>
             </View>
           </View>
         </View>
@@ -96,6 +110,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 28,
     backgroundColor: colors.warningBackground,
+  },
+  successIconContainer: {
+    backgroundColor: colors.successBackground,
   },
   title: {
     color: colors.text.primary,

@@ -171,49 +171,67 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
 };
 
 export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) => {
+  const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
+
   if (!stop) return null;
   return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDefault.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>Pickup request</Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>{stop.name}</Text>
+    <>
+      <Sheet open={open && !showAcceptConfirmation} onClose={onClose}>
+        <Text style={{
+          fontFamily: fontDefault.fontFamily,
+          fontWeight: 'bold',
+          textTransform: 'uppercase',
+          letterSpacing: 1.8,
+          fontSize: 11,
+          color: c.sageDeep,
+        }}>Pickup request</Text>
+        <Text style={{
+          fontFamily: fontDisplay.fontFamily,
+          fontWeight: '600',
+          marginTop: 2,
+          marginBottom: 12,
+          fontSize: 20,
+        }}>{stop.name}</Text>
 
-      <View style={{
-        backgroundColor: colors.surface,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.border.light,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        marginBottom: 16,
-      }}>
-        <DetailRow k="Owner" v={stop.owner} />
-        <DetailRow k="Phone" v={stop.phone} />
-        <DetailRow k="Estate-reported weight" v={teaWeight(stop.estimatedWeight)} />
-        {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
-      </View>
+        <View style={{
+          backgroundColor: colors.surface,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: colors.border.light,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          marginBottom: 16,
+        }}>
+          <DetailRow k="Owner" v={stop.owner} />
+          <DetailRow k="Phone" v={stop.phone} />
+          <DetailRow k="Estate-reported weight" v={teaWeight(stop.estimatedWeight)} />
+          {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
+        </View>
 
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="danger" block onPress={onDecline}>Decline</Btn>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Btn variant="danger" block onPress={onDecline}>Decline</Btn>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Btn variant="primary" block onPress={() => setShowAcceptConfirmation(true)}>
+              Accept Pickup
+            </Btn>
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Btn variant="primary" block onPress={onAccept}>Accept Pickup</Btn>
-        </View>
-      </View>
-    </Sheet>
+      </Sheet>
+      <ConfirmationWarning
+        visible={showAcceptConfirmation}
+        title="Accept this pickup?"
+        message={`You are confirming the pickup request from ${stop.name}.`}
+        confirmLabel="Accept pickup"
+        intent="success"
+        onCancel={() => setShowAcceptConfirmation(false)}
+        onConfirm={() => {
+          setShowAcceptConfirmation(false);
+          onAccept();
+        }}
+      />
+    </>
   );
 };
 
