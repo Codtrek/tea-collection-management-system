@@ -204,6 +204,9 @@ export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) =
         }}>
           <DetailRow k="Owner" v={stop.owner} />
           <DetailRow k="Phone" v={stop.phone} />
+          {(stop.location || stop.address) && (
+            <DetailRow k="Location" v={stop.location || stop.address} />
+          )}
           <DetailRow k="Estate-reported weight" v={teaWeight(stop.estimatedWeight)} />
           {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
         </View>
@@ -516,6 +519,9 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall, o
         }}>Tea Collection</Text>
         <DetailRow k="Owner" v={stop.owner} />
         <DetailRow k="Phone" v={stop.phone} />
+        {(stop.location || stop.address) && (
+          <DetailRow k="Location" v={stop.location || stop.address} />
+        )}
         <DetailRow k="Estate-reported weight" v={teaWeight(stop.estimatedWeight)} />
       </View>
 
@@ -692,14 +698,12 @@ export const ConfirmSheet = ({ open, weight, stop, onBack, onClose }: ConfirmShe
       </View>
 
       <View style={{ paddingBottom: 8 }}>
-        <Pill status="waiting">Waiting for confirmation…</Pill>
         <Text style={{
           textAlign: 'center',
           fontSize: 15,
-          marginTop: 10,
           color: c.muted,
         }}>
-          Sent to the estate owner. This stop moves to Tea Loaded — you can head to the factory once you've picked up everything on your list.
+          This stop moves to Tea Loaded — you can head to the factory once you've picked up everything on your list.
         </Text>
       </View>
 
@@ -1067,6 +1071,7 @@ type RegisteredEstate = {
   name: string;
   owner: string;
   phone: string;
+  location: string;
   gps?: string;
 };
 

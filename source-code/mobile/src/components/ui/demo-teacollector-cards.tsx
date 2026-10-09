@@ -353,19 +353,24 @@ export const StopCard = ({
           {/* Estate Information */}
 
           <View style={styles.mainInfo}>
-            <Text style={styles.title}>
-              {stop.name || "Tea Estate"}
-            </Text>
-
-            {stop.address && (
-              <Text style={styles.subtitle}>
-                {stop.address}
+            <View style={styles.estateNameRow}>
+              <Text style={styles.title}>
+                {stop.name || "Tea Estate"}
               </Text>
-            )}
+              {stop.manualRequest && (
+                <View
+                  accessible
+                  accessibilityLabel="Manually created request"
+                  style={styles.manualBadge}
+                >
+                  <Text style={styles.manualBadgeText}>M</Text>
+                </View>
+              )}
+            </View>
 
-            {stop.location && (
+            {(stop.location || stop.address) && (
               <Text style={styles.subtitle}>
-                {stop.location}
+                {stop.location || stop.address}
               </Text>
             )}
 
@@ -650,6 +655,30 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
+  },
+
+  estateNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  manualBadge: {
+    width: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 9,
+    backgroundColor: colors.successBackground,
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+
+  manualBadgeText: {
+    color: colors.success,
+    fontFamily: fonts.default,
+    fontSize: 11,
+    fontWeight: "700",
   },
 
   mainInfo: {
