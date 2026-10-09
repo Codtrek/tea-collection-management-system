@@ -5,7 +5,10 @@ import {
   ScrollView,
   Pressable,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -17,7 +20,6 @@ import { spacing } from "@/theme/spacing";
 
 export default function Notifications() {
   const router = useRouter();
-
   const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -521,7 +523,6 @@ const styles = StyleSheet.create({
 
   alertTitle: {
     color: colors.error,
-    fontWeight: "600",
 
     marginLeft: spacing.sm,
   },
@@ -541,8 +542,6 @@ const styles = StyleSheet.create({
   },
 
   inventoryLabel: {
-    fontSize: 9,
-
     color: colors.text.secondary,
 
     marginBottom: 2,
@@ -550,8 +549,6 @@ const styles = StyleSheet.create({
 
   fertilizerName: {
     color: colors.text.primary,
-
-    fontWeight: "500",
   },
 
   stockAmount: {
@@ -560,14 +557,10 @@ const styles = StyleSheet.create({
 
   stockValue: {
     color: colors.error,
-
-    fontWeight: "600",
   },
 
   remainingText: {
     color: colors.text.tertiary,
-
-    fontSize: 9,
   },
 
   divider: {
@@ -591,24 +584,14 @@ const styles = StyleSheet.create({
 
   detailLabel: {
     color: colors.text.tertiary,
-
-    fontSize: 9,
   },
 
   detailValue: {
     color: colors.text.primary,
-
-    fontSize: 9,
-
-    fontWeight: "500",
   },
 
   depletionValue: {
     color: colors.error,
-
-    fontSize: 9,
-
-    fontWeight: "500",
   },
 
   requestButton: {
@@ -628,8 +611,6 @@ const styles = StyleSheet.create({
 
   requestButtonText: {
     color: colors.white,
-
-    fontWeight: "600",
 
     marginLeft: spacing.xs,
   },
@@ -693,26 +674,16 @@ const styles = StyleSheet.create({
     flex: 1,
 
     color: colors.text.primary,
-
-    fontSize: 12,
-
-    fontWeight: "500",
   },
 
   timeText: {
     color: colors.text.tertiary,
-
-    fontSize: 8,
 
     marginLeft: spacing.xs,
   },
 
   notificationDescription: {
     color: colors.text.secondary,
-
-    fontSize: 10,
-
-    lineHeight: 14,
 
     marginTop: 2,
   },
@@ -781,8 +752,6 @@ const styles = StyleSheet.create({
 
   noMoreText: {
     color: colors.text.disabled,
-
-    fontSize: 10,
   },
 
 

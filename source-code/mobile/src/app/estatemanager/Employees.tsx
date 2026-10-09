@@ -161,7 +161,6 @@ export default function Employees() {
 
           {/* =================================================
               HEADER
-              Same structure as Estate Manager dashboard
               ================================================= */}
 
           <View style={styles.header}>
@@ -415,14 +414,11 @@ export default function Employees() {
             ================================================= */}
 
         <Pressable
-          style={({ pressed }) => [
-            styles.addButton,
-            {
-              bottom: 65 + insets.bottom,
-            },
-            pressed && styles.addButtonPressed,
-          ]}
-        >
+         style={styles.addButton}
+          onPress={() =>
+         router.push("/estatemanager/EmployeeRegistration")
+  }
+>
           <Ionicons
             name="add"
             size={28}
@@ -457,7 +453,6 @@ export default function Employees() {
 
 /* ============================================================
    STYLES
-   Matched to the existing Estate Manager dashboard
    ============================================================ */
 
 const styles = StyleSheet.create({
@@ -484,7 +479,6 @@ const styles = StyleSheet.create({
 
   /* ==========================================================
      HEADER
-     Same measurements as index.tsx
      ========================================================== */
 
   header: {
@@ -504,23 +498,12 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
 
-  welcomeText: {
-    color: colors.text.secondary,
-    fontSize: 10,
-    lineHeight: 14,
-  },
-
   managerName: {
     color: colors.text.primaryGreen,
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "700",
   },
 
   estateName: {
     color: colors.text.secondary,
-    fontSize: 9,
-    lineHeight: 13,
   },
 
   notificationButton: {
@@ -542,9 +525,6 @@ const styles = StyleSheet.create({
 
   pageTitle: {
     color: colors.text.primary,
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "600",
   },
 
 
@@ -593,7 +573,6 @@ const styles = StyleSheet.create({
 
   sortText: {
     color: colors.text.secondary,
-    fontSize: 9,
     marginLeft: 3,
   },
 
@@ -645,15 +624,10 @@ const styles = StyleSheet.create({
 
   employeeName: {
     color: colors.text.primary,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "600",
   },
 
   joinedText: {
     color: colors.text.secondary,
-    fontSize: 8,
-    lineHeight: 12,
     marginTop: 1,
   },
 
@@ -705,7 +679,6 @@ const styles = StyleSheet.create({
 
   emptyTitle: {
     color: colors.text.primary,
-    fontWeight: "600",
   },
 
   emptyDescription: {
@@ -756,4 +729,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: colors.surface,
   },
+
 });

@@ -120,7 +120,6 @@ export default function PhotoEvidence() {
       edges={["top", "left", "right"]}
     >
       <View style={styles.screen}>
-
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
@@ -130,23 +129,19 @@ export default function PhotoEvidence() {
             },
           ]}
         >
-
           {/* =================================================
               HEADER
               Same style as Estate Manager dashboard
               ================================================= */}
 
           <View style={styles.header}>
-
             <View style={styles.profileSection}>
-
               <Avatar
                 name="Rohan"
                 size={42}
               />
 
               <View style={styles.profileText}>
-
                 <AppText
                   variant="body"
                   style={styles.managerName}
@@ -160,9 +155,7 @@ export default function PhotoEvidence() {
                 >
                   Nuwara Eliya Highlands
                 </AppText>
-
               </View>
-
             </View>
 
             <Pressable
@@ -175,16 +168,13 @@ export default function PhotoEvidence() {
                 color={colors.text.primaryGreen}
               />
             </Pressable>
-
           </View>
-
 
           {/* =================================================
               PAGE TITLE
               ================================================= */}
 
           <View style={styles.pageTitleRow}>
-
             <Ionicons
               name="images-outline"
               size={20}
@@ -197,16 +187,13 @@ export default function PhotoEvidence() {
             >
               Photo Evidence
             </AppText>
-
           </View>
-
 
           {/* =================================================
               CAPTURE EVIDENCE CARD
               ================================================= */}
 
           <View style={styles.captureCard}>
-
             <Pressable
               style={({ pressed }) => [
                 styles.cameraButton,
@@ -234,16 +221,13 @@ export default function PhotoEvidence() {
             >
               Tap to add a geo-tagged field photo
             </AppText>
-
           </View>
-
 
           {/* =================================================
               RECENT UPLOADS
               ================================================= */}
 
           <View style={styles.uploadHeader}>
-
             <AppText
               variant="caption"
               style={styles.sectionTitle}
@@ -257,18 +241,14 @@ export default function PhotoEvidence() {
             >
               Sort: Newest
             </AppText>
-
           </View>
-
 
           {/* =================================================
               EVIDENCE CARDS
               ================================================= */}
 
           <View style={styles.evidenceList}>
-
             {evidenceItems.map((item, index) => (
-
               <Pressable
                 key={item.id}
                 style={({ pressed }) => [
@@ -276,11 +256,9 @@ export default function PhotoEvidence() {
                   pressed && styles.evidenceCardPressed,
                 ]}
               >
-
                 {/* IMAGE PLACEHOLDER */}
 
                 <View style={styles.imageContainer}>
-
                   <Image
                     source={{
                       uri:
@@ -294,23 +272,18 @@ export default function PhotoEvidence() {
                     }}
                     style={styles.evidenceImage}
                   />
-
                 </View>
-
 
                 {/* DETAILS */}
 
                 <View style={styles.evidenceDetails}>
-
                   <View style={styles.categoryContainer}>
-
                     <AppText
                       variant="caption"
                       style={styles.categoryText}
                     >
                       {item.category}
                     </AppText>
-
                   </View>
 
                   <AppText
@@ -322,7 +295,6 @@ export default function PhotoEvidence() {
                   </AppText>
 
                   <View style={styles.dateRow}>
-
                     <Ionicons
                       name="time-outline"
                       size={10}
@@ -335,11 +307,8 @@ export default function PhotoEvidence() {
                     >
                       {item.date} · {item.time}
                     </AppText>
-
                   </View>
-
                 </View>
-
 
                 {/* MORE BUTTON */}
 
@@ -353,15 +322,10 @@ export default function PhotoEvidence() {
                     color={colors.text.secondary}
                   />
                 </Pressable>
-
               </Pressable>
-
             ))}
-
           </View>
-
         </ScrollView>
-
 
         {/* =================================================
             BOTTOM TAB
@@ -380,19 +344,16 @@ export default function PhotoEvidence() {
             onTabPress={handleTabPress}
           />
         </View>
-
       </View>
     </SafeAreaView>
   );
 }
-
 
 /* ============================================================
    STYLES
    ============================================================ */
 
 const styles = StyleSheet.create({
-
   /* ==========================================================
      SCREEN
      ========================================================== */
@@ -412,10 +373,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
 
-
   /* ==========================================================
      HEADER
-     Copied from the existing Estate Manager visual system
      ========================================================== */
 
   header: {
@@ -435,23 +394,12 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
 
-  welcomeText: {
-    color: colors.text.secondary,
-    fontSize: 10,
-    lineHeight: 14,
-  },
-
   managerName: {
     color: colors.text.primaryGreen,
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "700",
   },
 
   estateName: {
     color: colors.text.secondary,
-    fontSize: 9,
-    lineHeight: 13,
   },
 
   notificationButton: {
@@ -461,7 +409,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 20,
   },
-
 
   /* ==========================================================
      PAGE TITLE
@@ -475,11 +422,8 @@ const styles = StyleSheet.create({
 
   pageTitle: {
     color: colors.text.primary,
-    fontSize: 15,
-    fontWeight: "600",
     marginLeft: spacing.xs,
   },
-
 
   /* ==========================================================
      CAPTURE CARD
@@ -511,19 +455,13 @@ const styles = StyleSheet.create({
 
   captureTitle: {
     color: colors.text.primary,
-    fontSize: 10,
-    lineHeight: 14,
-    fontWeight: "500",
     marginTop: spacing.sm,
   },
 
   captureDescription: {
     color: colors.text.secondary,
-    fontSize: 9,
-    lineHeight: 13,
     marginTop: spacing.xs,
   },
-
 
   /* ==========================================================
      UPLOAD HEADER
@@ -538,16 +476,11 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     color: colors.primary,
-    fontSize: 10,
-    lineHeight: 14,
-    fontWeight: "600",
   },
 
   sortText: {
     color: colors.text.secondary,
-    fontSize: 9,
   },
-
 
   /* ==========================================================
      EVIDENCE LIST
@@ -602,16 +535,10 @@ const styles = StyleSheet.create({
 
   categoryText: {
     color: colors.primary,
-    fontSize: 8,
-    lineHeight: 10,
-    fontWeight: "600",
   },
 
   evidenceTitle: {
     color: colors.text.primary,
-    fontSize: 10,
-    lineHeight: 14,
-    fontWeight: "600",
   },
 
   dateRow: {
@@ -622,8 +549,6 @@ const styles = StyleSheet.create({
 
   dateText: {
     color: colors.text.secondary,
-    fontSize: 8,
-    lineHeight: 11,
     marginLeft: 3,
   },
 
@@ -633,7 +558,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
 
   /* ==========================================================
      BOTTOM TAB

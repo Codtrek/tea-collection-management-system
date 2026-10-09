@@ -30,16 +30,16 @@ export default function TeaEstateManagerDashboard() {
      ===================================================== */
 
   const openNotifications = () => {
-  router.push("/estatemanager/Notification");
-};
+    router.push("/estatemanager/Notification");
+  };
 
-const openDailyPluckingDetails = () => {
-  router.push("/estatemanager/DailyPluckingDetails");
-};
+  const openDailyPluckingDetails = () => {
+    router.push("/estatemanager/DailyPluckingDetails");
+  };
 
-const openFertilizerStock = () => {
-  router.push("/estatemanager/FertilizerStock");
-};
+  const openFertilizerStock = () => {
+    router.push("/estatemanager/FertilizerStock");
+  };
 
   /* =====================================================
      EXISTING BOTTOM TAB NAVIGATION
@@ -280,21 +280,14 @@ const styles = StyleSheet.create({
 
   welcomeText: {
     color: colors.text.secondary,
-    fontSize: 10,
-    lineHeight: 14,
   },
 
   managerName: {
     color: colors.text.primaryGreen,
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "700",
   },
 
   estateName: {
     color: colors.text.secondary,
-    fontSize: 9,
-    lineHeight: 13,
   },
 
   notificationButton: {
@@ -337,17 +330,12 @@ const styles = StyleSheet.create({
 
   bannerTitle: {
     color: colors.text.primary,
-    fontSize: 12,
-    fontWeight: "600",
   },
 
   /* ================= SECTION LABEL ================= */
 
   sectionLabel: {
     color: colors.text.tertiary,
-    fontSize: 10,
-    lineHeight: 14,
-    fontWeight: "600",
     letterSpacing: 0.8,
     marginBottom: spacing.sm,
   },
@@ -372,14 +360,10 @@ const styles = StyleSheet.create({
 
   progressTitle: {
     color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: "500",
   },
 
   progressPercentage: {
     color: colors.success,
-    fontSize: 16,
-    fontWeight: "700",
   },
 
   progressTrack: {
@@ -400,7 +384,6 @@ const styles = StyleSheet.create({
 
   progressDescription: {
     color: colors.text.secondary,
-    fontSize: 10,
   },
 
   /* ================= QUICK ACTION CARDS ================= */
@@ -455,14 +438,10 @@ const styles = StyleSheet.create({
 
   cardTitle: {
     color: colors.text.primary,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "600",
   },
 
   cardSubtitle: {
     color: colors.text.secondary,
-    fontSize: 9,
     marginTop: spacing.xs,
   },
 

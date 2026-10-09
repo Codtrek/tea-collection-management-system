@@ -54,7 +54,6 @@ export default function DailyPlucking() {
       edges={["top", "left", "right"]}
     >
       <View style={styles.screen}>
-
         {/* ================= MAIN CONTENT ================= */}
 
         <ScrollView
@@ -66,11 +65,9 @@ export default function DailyPlucking() {
             },
           ]}
         >
-
           {/* ================= HEADER ================= */}
 
           <View style={styles.header}>
-
             {/* Back button */}
 
             <Pressable
@@ -107,9 +104,7 @@ export default function DailyPlucking() {
                 color={colors.text.primary}
               />
             </Pressable>
-
           </View>
-
 
           {/* ================= MONTH ================= */}
 
@@ -121,7 +116,6 @@ export default function DailyPlucking() {
           </AppText>
 
           <Pressable style={styles.monthSelector}>
-
             <AppText
               variant="bodySmall"
               style={styles.monthText}
@@ -134,9 +128,7 @@ export default function DailyPlucking() {
               size={17}
               color={colors.text.secondary}
             />
-
           </Pressable>
-
 
           {/* ================= RECORDS TITLE ================= */}
 
@@ -147,13 +139,10 @@ export default function DailyPlucking() {
             AUGUST RECORDS
           </AppText>
 
-
           {/* ================= RECORD LIST ================= */}
 
           <View style={styles.recordsContainer}>
-
             {pluckingRecords.map((record, index) => (
-
               <Pressable
                 key={record.date}
                 style={[
@@ -162,19 +151,15 @@ export default function DailyPlucking() {
                     styles.lastRecordRow,
                 ]}
               >
-
                 {/* Calendar icon */}
 
                 <View style={styles.calendarContainer}>
-
                   <Ionicons
                     name="calendar-outline"
                     size={18}
                     color={colors.success}
                   />
-
                 </View>
-
 
                 {/* Date */}
 
@@ -185,7 +170,6 @@ export default function DailyPlucking() {
                   {record.date}
                 </AppText>
 
-
                 {/* Weight */}
 
                 <AppText
@@ -194,13 +178,9 @@ export default function DailyPlucking() {
                 >
                   {record.weight}
                 </AppText>
-
               </Pressable>
-
             ))}
-
           </View>
-
 
           {/* ================= ADD BUTTON ================= */}
 
@@ -222,13 +202,10 @@ export default function DailyPlucking() {
             />
           </Pressable>
 
-
           {/* Space for bottom tab */}
 
           <View style={styles.bottomSpace} />
-
         </ScrollView>
-
 
         {/* ================= BOTTOM TAB ================= */}
 
@@ -240,34 +217,27 @@ export default function DailyPlucking() {
             },
           ]}
         >
-
           <EstateManagerBottomTab
             activeTab={activeTab}
             onTabPress={(tab) => {
-
               setActiveTab(tab.key);
 
               if (tab.key === "dashboard") {
                 router.back();
               }
-
             }}
           />
-
         </View>
-
       </View>
     </SafeAreaView>
   );
 }
-
 
 /* ========================================================= */
 /* STYLES */
 /* ========================================================= */
 
 const styles = StyleSheet.create({
-
   /* ================= SCREEN ================= */
 
   container: {
@@ -285,110 +255,79 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
 
-
   /* ================= HEADER ================= */
 
   header: {
     height: 42,
-
     flexDirection: "row",
     alignItems: "center",
-
     marginBottom: spacing.lg,
   },
 
   backButton: {
     width: 36,
     height: 36,
-
     alignItems: "center",
     justifyContent: "center",
   },
 
   headerTitle: {
     flex: 1,
-
     color: colors.text.primaryGreen,
-
     marginLeft: spacing.xs,
   },
 
   headerNotification: {
     width: 36,
     height: 36,
-
     alignItems: "center",
     justifyContent: "center",
   },
-
 
   /* ================= MONTH ================= */
 
   fieldLabel: {
     color: colors.text.secondary,
-
-    fontSize: 9,
-    fontWeight: "500",
-
     marginBottom: spacing.xs,
   },
 
   monthSelector: {
     height: 38,
-
     backgroundColor: colors.background,
-
     borderWidth: 1,
     borderColor: colors.border.light,
-
     borderRadius: 5,
-
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-
     paddingHorizontal: spacing.sm,
-
     marginBottom: spacing.lg,
   },
 
   monthText: {
     color: colors.text.primary,
-
-    fontSize: 11,
   },
-
 
   /* ================= RECORDS ================= */
 
   recordsTitle: {
     color: colors.text.secondary,
-
-    fontSize: 9,
-    fontWeight: "500",
-
     marginBottom: spacing.sm,
   },
 
   recordsContainer: {
     backgroundColor: colors.background,
-
     borderWidth: 1,
     borderColor: colors.border.light,
-
     borderRadius: 6,
-
     overflow: "hidden",
   },
 
   recordRow: {
     height: 48,
-
     flexDirection: "row",
     alignItems: "center",
-
     paddingHorizontal: spacing.sm,
-
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
   },
@@ -400,63 +339,42 @@ const styles = StyleSheet.create({
   calendarContainer: {
     width: 27,
     height: 27,
-
     borderRadius: 7,
-
     backgroundColor: "#EAF4FF",
-
     alignItems: "center",
     justifyContent: "center",
-
     marginRight: spacing.sm,
   },
 
   recordDate: {
     flex: 1,
-
     color: colors.text.primary,
-
-    fontSize: 11,
   },
 
   recordWeight: {
     color: colors.primary,
-
-    fontSize: 13,
-    fontWeight: "700",
   },
-
 
   /* ================= ADD BUTTON ================= */
 
   addButton: {
     position: "absolute",
-
     right: spacing.xs,
-
     width: 39,
     height: 39,
-
     borderRadius: 9,
-
     backgroundColor: "#00834B",
-
     alignItems: "center",
     justifyContent: "center",
-
     elevation: 4,
-
     shadowColor: colors.black,
-
     shadowOffset: {
       width: 0,
       height: 2,
     },
-
     shadowOpacity: 0.2,
     shadowRadius: 3,
   },
-
 
   /* ================= BOTTOM ================= */
 
@@ -466,10 +384,8 @@ const styles = StyleSheet.create({
 
   bottomTab: {
     position: "absolute",
-
     left: 0,
     right: 0,
     bottom: 0,
   },
-
 });
