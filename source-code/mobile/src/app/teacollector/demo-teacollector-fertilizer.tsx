@@ -39,6 +39,13 @@ export default function DemoTeaCollectorFertilizer({
         (r: any) => r.status === "delivered"
       ),
     },
+    {
+      key: "closed",
+      label: "Declined or Cancelled",
+      items: requests.filter(
+        (r: any) => r.status === "declined" || r.status === "cancelled"
+      ),
+    },
   ];
 
   return (

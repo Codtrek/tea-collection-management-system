@@ -177,6 +177,18 @@ export const FertRequestCard = ({
       action: null,
       handler: null,
     },
+
+    declined: {
+      label: "Declined",
+      action: null,
+      handler: null,
+    },
+
+    cancelled: {
+      label: "Cancelled",
+      action: null,
+      handler: null,
+    },
   };
 
   const currentStatus = statusMap[request.status];
@@ -208,6 +220,11 @@ export const FertRequestCard = ({
             {request.status === "delivered" &&
               `Delivered at ${request.deliveredAt}`}
           </Text>
+
+          {(request.status === "declined" || request.status === "cancelled") &&
+            request.reason && (
+              <Text style={styles.reasonText}>Reason: {request.reason}</Text>
+            )}
         </View>
 
         <Pill status={request.status} />
@@ -702,6 +719,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     color: colors.text.muted,
+  },
+
+  reasonText: {
+    fontSize: 12,
+    marginTop: 4,
+    color: colors.error,
   },
 
   /* =======================================================

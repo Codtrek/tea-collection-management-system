@@ -292,6 +292,54 @@ export default function TeaCollectorMobile() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
 
+  const goToFertilizerDecline = () => {
+    if (!activeFert) {
+      console.warn("No active fertilizer request to decline");
+      return;
+    }
+    setSheet("fertDecline");
+  };
+
+  const confirmFertilizerDecline = (reason: string, note: string) => {
+    if (!activeFert) {
+      console.warn("No active fertilizer request to decline");
+      return;
+    }
+
+    updateFert(activeFert.id, {
+      status: "declined",
+      declinedAt: nowTime(),
+      reason,
+      note,
+    });
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
+
+  const goToFertilizerCancel = () => {
+    if (!activeFert) {
+      console.warn("No active fertilizer request to cancel");
+      return;
+    }
+    setSheet("fertCancel");
+  };
+
+  const confirmFertilizerCancel = (reason: string, note: string) => {
+    if (!activeFert) {
+      console.warn("No active fertilizer request to cancel");
+      return;
+    }
+
+    updateFert(activeFert.id, {
+      status: "cancelled",
+      cancelledAt: nowTime(),
+      reason,
+      note,
+    });
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
+
   const confirmCancelPickup = (reason: string, note: string) => {
     if (!activeStop) {
       console.warn("No active stop to cancel");
@@ -558,15 +606,28 @@ export default function TeaCollectorMobile() {
         {/* Tea collection overlays */}
         <PickupSheet open={sheet === "pickup"} stop={activeStop} onClose={() => setSheet(null)} onAccept={acceptPickup} onDecline={goToDecline} />
         <DeclineSheet open={sheet === "decline"} onClose={() => setSheet(null)} onConfirm={confirmDecline} />
+        <DeclineSheet
+          open={sheet === "fertDecline"}
+          onClose={() => setSheet("fertDetails")}
+          onConfirm={confirmFertilizerDecline}
+          requestLabel="fertilizer request"
+          confirmationMessage="This fertilizer request will be declined and the estate owner will be notified."
+        />
         <ArrivedSheet open={sheet === "arrived"} stop={activeStop} onClose={() => setSheet(null)} onStartCollection={startCollection} onCall={handleCall} onCancelPickup={() => setSheet("cancelPickup")} />
         <CancelPickupSheet open={sheet === "cancelPickup"} onBack={() => setSheet("arrived")} onConfirm={confirmCancelPickup} />
+        <CancelPickupSheet
+          open={sheet === "fertCancel"}
+          onBack={() => setSheet("fertDetails")}
+          onConfirm={confirmFertilizerCancel}
+          requestLabel="fertilizer delivery"
+        />
         <BatchCancelRequestsSheet
           open={sheet === "cancelSelectedRequests"}
           requestCount={selectedRequestIds.length}
           onClose={() => setSheet(null)}
           onConfirm={cancelSelectedRequests}
         />
-        <CollectSheet open={sheet === "collect"} stop={activeStop} onClose={() => setSheet(null)} onSubmit={submitCollection} />
+        <CollectSheet open={sheet === "collect"} stop={activeStop} onClose={() => setSheet(null)} onBack={() => setSheet("arrived")} onSubmit={submitCollection} />
         <ConfirmSheet open={sheet === "confirm"} stop={activeStop} weight={collectedWeight} onBack={() => setSheet("collect")} onClose={continueCollecting} />
         
         <FactoryMapSheet
@@ -582,6 +643,7 @@ export default function TeaCollectorMobile() {
           officer={officer}
           setOfficer={setOfficer}
           onClose={() => setSheet(null)}
+          onBack={() => setSheet("map")}
           onSubmit={submitToFactory}
         />
         <FactoryWeightSheet
@@ -601,7 +663,15 @@ export default function TeaCollectorMobile() {
         />
 
         {/* Fertilizer overlays */}
-        <FertDetailsSheet open={sheet === "fertDetails"} request={activeFert} onClose={() => setSheet(null)} />
+        <FertDetailsSheet
+          open={sheet === "fertDetails"}
+          request={activeFert}
+          onClose={() => setSheet(null)}
+          onLoad={() => loadFertilizer(activeFert)}
+          onDecline={goToFertilizerDecline}
+          onDeliver={() => deliverFertilizer(activeFert)}
+          onCancel={goToFertilizerCancel}
+        />
         <LoadFertSheet 
           open={sheet === "fertLoad"} 
           request={activeFert} 

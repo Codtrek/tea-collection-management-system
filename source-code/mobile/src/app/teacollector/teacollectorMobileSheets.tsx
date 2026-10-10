@@ -33,7 +33,15 @@ const teaWeight = (weight: number | null | undefined) => `${weight || 0} kg`;
 const RECEIVING_OFFICERS = ["K. Abeysekera", "M. Rathnayake", "S. Weerasinghe", "T. Gunasekara"];
 const PICKUP_REASONS = ["Estate not ready", "Road blocked", "Vehicle issue", "Other"];
 
-export const FertDetailsSheet = ({ open, request, onClose }: any) => {
+export const FertDetailsSheet = ({
+  open,
+  request,
+  onClose,
+  onLoad,
+  onDecline,
+  onDeliver,
+  onCancel,
+}: any) => {
   if (!request) return null;
   return (
     <Sheet open={open} onClose={onClose}>
@@ -59,9 +67,30 @@ export const FertDetailsSheet = ({ open, request, onClose }: any) => {
       <DetailRow k="Fertilizer Type" v={request.fertilizerType} />
       <DetailRow k="Quantity" v={`${request.quantity} kg`} />
       <DetailRow k="Requested" v={request.requestedAt} />
-      <DetailRow k="Status" v={STATUS_STYLE[request.status].label} />
-      {request.notes && <DetailRow k="Notes" v={request.notes} />}
-      <Btn variant="ghost" block style={{ marginTop: 16 }} onPress={onClose}>Close</Btn>
+      {request.notes && <DetailRow k="Notes by Estate Owner" v={request.notes} />}
+      <DetailRow k="Status" v={STATUS_STYLE[request.status]?.label || request.status} />
+      {request.reason && <DetailRow k="Reason" v={request.reason} />}
+      {request.note && <DetailRow k="Additional Note" v={request.note} />}
+      {request.status === "confirmed" && (
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+          <View style={{ flex: 1 }}>
+            <Btn variant="primary" block onPress={onLoad}>Load Fertilizer</Btn>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Btn variant="danger" block onPress={onDecline}>Decline Request</Btn>
+          </View>
+        </View>
+      )}
+      {request.status === "loaded" && (
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+          <View style={{ flex: 1 }}>
+            <Btn variant="primary" block onPress={onDeliver}>Deliver</Btn>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Btn variant="danger" block onPress={onCancel}>Cancel</Btn>
+          </View>
+        </View>
+      )}
     </Sheet>
   );
 };
@@ -238,10 +267,17 @@ export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) =
   );
 };
 
-export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
+export const DeclineSheet = ({
+  open,
+  onClose,
+  onConfirm,
+  requestLabel = "pickup",
+  confirmationMessage = "This request will be declined and the estate owner will need to submit another request.",
+}: any) => {
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [showWarning, setShowWarning] = useState(false);
+  const actionLabel = requestLabel === "pickup" ? "Decline pickup" : "Decline request";
 
   useEffect(() => {
     if (open) {
@@ -259,7 +295,7 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
           fontWeight: '600',
           marginBottom: 4,
           fontSize: 20,
-        }}>Decline pickup</Text>
+        }}>Decline {requestLabel}</Text>
         <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>Select a reason — this is required.</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {PICKUP_REASONS.map((r) => (
@@ -302,9 +338,9 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
       </Sheet>
       <ConfirmationWarning
         visible={showWarning}
-        title="Decline this pickup?"
-        message="This request will be declined and the estate owner will need to submit another request."
-        confirmLabel="Decline pickup"
+        title={`Decline this ${requestLabel}?`}
+        message={confirmationMessage}
+        confirmLabel={actionLabel}
         onCancel={() => setShowWarning(false)}
         onConfirm={() => {
           if (!reason) return;
@@ -316,10 +352,11 @@ export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
   );
 };
 
-export const CancelPickupSheet = ({ open, onBack, onConfirm }: any) => {
+export const CancelPickupSheet = ({ open, onBack, onConfirm, requestLabel = "pickup" }: any) => {
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [showWarning, setShowWarning] = useState(false);
+  const actionLabel = requestLabel === "pickup" ? "Cancel pickup" : "Cancel delivery";
 
   useEffect(() => {
     if (open) {
@@ -337,7 +374,7 @@ export const CancelPickupSheet = ({ open, onBack, onConfirm }: any) => {
           fontWeight: '600',
           marginBottom: 4,
           fontSize: 20,
-        }}>Cancel pickup</Text>
+        }}>Cancel {requestLabel}</Text>
         <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
           Select a reason — this is required.
         </Text>
@@ -384,9 +421,9 @@ export const CancelPickupSheet = ({ open, onBack, onConfirm }: any) => {
       </Sheet>
       <ConfirmationWarning
         visible={showWarning}
-        title="Cancel this pickup?"
-        message="This pickup request will be cancelled. This action cannot be undone."
-        confirmLabel="Cancel pickup"
+        title={`Cancel this ${requestLabel}?`}
+        message={`This ${requestLabel} will be cancelled. This action cannot be undone.`}
+        confirmLabel={actionLabel}
         onCancel={() => setShowWarning(false)}
         onConfirm={() => {
           if (!reason) return;
@@ -537,7 +574,7 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall, o
   );
 };
 
-export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
+export const CollectSheet = ({ open, stop, onClose, onBack, onSubmit }: any) => {
   const [weight, setWeight] = useState("");
   const [photoUri, setPhotoUri] = useState<string>();
   const [remark, setRemark] = useState('');
@@ -634,13 +671,20 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
         <Pill status="waiting" />
       </View>
       
-      <Btn
-        variant="primary"
-        block
-        onPress={() => onSubmit({ weight, photoUri })}
-      >
-        Submit Collection
-      </Btn>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Btn variant="ghost" block onPress={onBack}>Back</Btn>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Btn
+            variant="primary"
+            block
+            onPress={() => onSubmit({ weight, photoUri })}
+          >
+            Submit Collection
+          </Btn>
+        </View>
+      </View>
     </Sheet>
   );
 };
@@ -822,7 +866,7 @@ export const FactoryMapSheet = ({ open, stopCount, totalWeight, onClose, onArriv
   );
 };
 
-export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSubmit }: any) => {
+export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onBack, onSubmit }: any) => {
   const estimatedTotal = stops.reduce((sum: number, s: any) => sum + (s.estimatedWeight || 0), 0);
   const total = stops.reduce((sum: number, s: any) => sum + (s.actualWeight || 0), 0);
   return (
@@ -929,9 +973,16 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
         </Field>
       </View>
 
-      <Btn variant="primary" block style={{ marginTop: 8 }} disabled={!officer} onPress={() => onSubmit(total)}>
-        Submit to Factory
-      </Btn>
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Btn variant="ghost" block onPress={onBack}>Back</Btn>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Btn variant="primary" block disabled={!officer} onPress={() => onSubmit(total)}>
+            Submit to Factory
+          </Btn>
+        </View>
+      </View>
       {!officer && (
         <Text style={{
           fontSize: 12,
