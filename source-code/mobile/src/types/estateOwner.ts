@@ -45,3 +45,19 @@ export interface MonthlySummary {
   totalWeightKg: number;
   revenue: number;
 }
+
+type RequestStatus = "Pending" | "Accepted" | "On the way" | "Completed";
+
+type RequestCategory = "collection" | "fertiliser";
+
+interface RequestItem {
+  id: string;
+  category: RequestCategory;
+  estate: string;
+  about: string;
+  amount: string;
+  manager: string;
+  managerContact: string;
+  requestedAt: string;
+  status: RequestStatus;
+}

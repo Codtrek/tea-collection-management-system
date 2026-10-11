@@ -6,15 +6,18 @@ import { EstateOwnerBottomTab } from "@/components/ui";
 import type { BottomTabItem } from "@/components/ui/BottomTab";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { spacing } from "@/theme/spacing";
-
 export default function EstateOwnerLayout() {
     const pathname = usePathname();
-    const activeTab = pathname.endsWith("/estates") ? "estates" : "home";
+    const activeTab = pathname.endsWith("/estates")
+        ? "estates"
+        : pathname.endsWith("/requests")
+            ? "requests"
+            : "home";
 
     useEffect(() => {
         router.prefetch("/(estate-owner)/home");
         router.prefetch("/(estate-owner)/estates");
+        router.prefetch("/(estate-owner)/requests");
     }, []);
 
     const handleTabPress = (tab: BottomTabItem) => {
@@ -22,6 +25,8 @@ export default function EstateOwnerLayout() {
             router.replace("/(estate-owner)/home");
         }else if (tab.key === "estates") {
             router.replace("/(estate-owner)/estates");
+        } else if (tab.key === "requests") {
+            router.replace("/(estate-owner)/requests");
         }
     };
 
