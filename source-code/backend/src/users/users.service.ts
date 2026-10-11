@@ -1,6 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, TreeRepositoryNotSupportedError } from 'typeorm';
+import { Repository } from 'typeorm';
 import { FactoryEmployee } from './factory-employee.entity';
 import { EstateOwner } from './estate-owner.entity';
 import { EstateManager } from './estate-manager.entity';
@@ -12,7 +12,6 @@ export interface UserProfile {
   estate?: string;
 }
 
-
 @Injectable()
 export class UsersService {
   constructor(
@@ -23,7 +22,7 @@ export class UsersService {
     @InjectRepository(EstateOwner)
     private readonly estateOwnersRepository: Repository<EstateOwner>,
     @InjectRepository(EstateManager)
-    private readonly estateManagersRepository: Repository<EstateManager>
+    private readonly estateManagersRepository: Repository<EstateManager>,
   ) {}
 
   findByPhone(phone: string): Promise<User | null> {
@@ -54,16 +53,18 @@ export class UsersService {
     if (!estate) return null;
     return { name: estateOwner.name, estate: estate.name };
   }
-  
   async getEstateManagerProfile(userId: number): Promise<UserProfile | null> {
-    const estateManager = await this.estateManagersRepository.findOne({
-      where: { user_id: userId },
-      relations: { estate: true },
-    });
+    const estateManager = await this.estateManagersRepository
+      .createQueryBuilder('estateManager')
+      .leftJoinAndSelect('estateManager.employee', 'employee')
+      .leftJoinAndSelect('estateManager.estate', 'estate')
+      .where('employee.user_id = :userId', { userId })
+      .getOne();
     if (!estateManager) return null;
-    const estate = estateManager.estate[0];
-    if (!estate) return null;
-    return { name: estateManager.name, estate: estate.name };
+    if (!estateManager.employee || !estateManager.estate) return null;
+    return {
+      name: estateManager.employee.name,
+      estate: estateManager.estate.name,
+    };
   }
-
 }
