@@ -26,3 +26,20 @@ export async function login(
     }),
   });
 }
+
+export async function register(
+  name: string,
+  phoneNumber: number,
+  NIC: string,
+  password: string,
+  confirmPassword: string
+) {
+  console.log({
+      name,
+      phoneNumber,
+      NIC,
+      password,
+      confirmPassword,
+    } );
+    return true;
+}
