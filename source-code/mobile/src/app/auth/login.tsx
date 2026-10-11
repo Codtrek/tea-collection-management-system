@@ -64,8 +64,17 @@ export default function LogInScreen() {
       router.replace("/(estate-owner)/home");
       return;
     }
+    switch(result.user.role) {
+      case "Estate Owner" :
+        router.replace("/(estate-owner)/home");
+        return;
+      case "Estate Manager" :
+        router.replace("/estate-manager");
+        return;
+      default :
+        setError("This account does not have a mobile dashboard yet.");
+    }
 
-    setError("This account does not have a mobile dashboard yet.");
   } catch (error) {
     setError(
       error instanceof Error
@@ -98,7 +107,6 @@ export default function LogInScreen() {
           label="Phone Number"
           placeholder="Enter your phone number"
           keyboardType="numeric"
-          autoCapitalize="none"
           value={phoneNumber}
           onChangeText={setPhoneNumber}
         />
