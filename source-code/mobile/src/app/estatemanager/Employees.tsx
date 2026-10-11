@@ -73,10 +73,7 @@ export default function Employees() {
   const [activeTab, setActiveTab] = useState("employees");
   const [searchText, setSearchText] = useState("");
 
-  /* =====================================================
-     SEARCH + ALPHABETICAL SORT
-     ===================================================== */
-
+  // Search employees and sort alphabetically.
   const filteredEmployees = useMemo(() => {
     const search = searchText.trim().toLowerCase();
 
@@ -92,18 +89,12 @@ export default function Employees() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [searchText]);
 
-  /* =====================================================
-     NOTIFICATIONS
-     ===================================================== */
-
+  // Open notifications.
   const openNotifications = () => {
     router.push("/estatemanager/Notification");
   };
 
-  /* =====================================================
-     BOTTOM TAB NAVIGATION
-     ===================================================== */
-
+  // Bottom tab navigation.
   const handleTabPress = (tab: {
     key: string;
     label: string;
@@ -133,21 +124,12 @@ export default function Employees() {
     }
   };
 
-  /* =====================================================
-     RENDER
-     ===================================================== */
-
   return (
     <SafeAreaView
       style={styles.container}
       edges={["top", "left", "right"]}
     >
       <View style={styles.screen}>
-
-        {/* =================================================
-            MAIN CONTENT
-            ================================================= */}
-
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -158,24 +140,13 @@ export default function Employees() {
             },
           ]}
         >
-
-          {/* =================================================
-              HEADER
-              ================================================= */}
+          {/* HEADER */}
 
           <View style={styles.header}>
-
-            {/* PROFILE */}
-
             <View style={styles.profileSection}>
-
-              <Avatar
-                name="Rohan"
-                size={42}
-              />
+              <Avatar name="Rohan" size={42} />
 
               <View style={styles.profileText}>
-
                 <AppText
                   variant="body"
                   style={styles.managerName}
@@ -189,17 +160,13 @@ export default function Employees() {
                 >
                   Nuwara Eliya Highlands
                 </AppText>
-
               </View>
-
             </View>
-
-
-            {/* NOTIFICATION */}
 
             <Pressable
               style={styles.notificationButton}
               onPress={openNotifications}
+              hitSlop={8}
             >
               <Ionicons
                 name="notifications-outline"
@@ -207,32 +174,22 @@ export default function Employees() {
                 color={colors.text.primaryGreen}
               />
             </Pressable>
-
           </View>
 
-
-          {/* =================================================
-              PAGE TITLE
-              ================================================= */}
+          {/* PAGE TITLE */}
 
           <View style={styles.titleRow}>
-
             <AppText
               variant="subheading"
               style={styles.pageTitle}
             >
               Employee Directory
             </AppText>
-
           </View>
 
-
-          {/* =================================================
-              SEARCH BAR
-              ================================================= */}
+          {/* SEARCH BAR */}
 
           <View style={styles.searchContainer}>
-
             <Ionicons
               name="search-outline"
               size={16}
@@ -262,18 +219,12 @@ export default function Employees() {
                 />
               </Pressable>
             )}
-
           </View>
 
-
-          {/* =================================================
-              SORT ROW
-              ================================================= */}
+          {/* SORT ROW */}
 
           <View style={styles.sortRow}>
-
             <View style={styles.sortLeft}>
-
               <Ionicons
                 name="swap-vertical-outline"
                 size={13}
@@ -286,22 +237,15 @@ export default function Employees() {
               >
                 Sort by: Alphabetical (A-Z)
               </AppText>
-
             </View>
 
             <View style={styles.sortIndicator} />
-
           </View>
 
-
-          {/* =================================================
-              EMPLOYEE LIST
-              ================================================= */}
+          {/* EMPLOYEE LIST */}
 
           <View style={styles.employeeList}>
-
             {filteredEmployees.map((employee) => (
-
               <Pressable
                 key={employee.id}
                 style={({ pressed }) => [
@@ -312,19 +256,12 @@ export default function Employees() {
                   pressed && styles.employeeCardPressed,
                 ]}
               >
-
-                {/* AVATAR */}
-
                 <Avatar
                   name={employee.name}
                   size={40}
                 />
 
-
-                {/* EMPLOYEE DETAILS */}
-
                 <View style={styles.employeeInfo}>
-
                   <AppText
                     variant="bodySmall"
                     style={styles.employeeName}
@@ -338,11 +275,7 @@ export default function Employees() {
                   >
                     Joined {employee.joinedDate}
                   </AppText>
-
                 </View>
-
-
-                {/* STATUS */}
 
                 <View
                   style={[
@@ -362,28 +295,19 @@ export default function Employees() {
                     }
                   />
                 </View>
-
               </Pressable>
-
             ))}
 
-
-            {/* =================================================
-                EMPTY SEARCH RESULT
-                ================================================= */}
+            {/* EMPTY SEARCH RESULT */}
 
             {filteredEmployees.length === 0 && (
-
               <View style={styles.emptyState}>
-
                 <View style={styles.emptyIcon}>
-
                   <Ionicons
                     name="people-outline"
                     size={28}
                     color={colors.text.secondary}
                   />
-
                 </View>
 
                 <AppText
@@ -399,26 +323,26 @@ export default function Employees() {
                 >
                   Try searching with another name.
                 </AppText>
-
               </View>
-
             )}
-
           </View>
-
         </ScrollView>
 
-
-        {/* =================================================
-            ADD EMPLOYEE BUTTON
-            ================================================= */}
+        {/* FLOATING ADD EMPLOYEE BUTTON */}
 
         <Pressable
-         style={styles.addButton}
+          style={[
+            styles.addButton,
+            {
+              bottom: 100 + insets.bottom,
+            },
+          ]}
           onPress={() =>
-         router.push("/estatemanager/EmployeeRegistration")
-  }
->
+            router.push("/estatemanager/EmployeeRegistration")
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Add employee"
+        >
           <Ionicons
             name="add"
             size={28}
@@ -426,10 +350,7 @@ export default function Employees() {
           />
         </Pressable>
 
-
-        {/* =================================================
-            BOTTOM NAVIGATION
-            ================================================= */}
+        {/* BOTTOM NAVIGATION */}
 
         <View
           style={[
@@ -444,23 +365,12 @@ export default function Employees() {
             onTabPress={handleTabPress}
           />
         </View>
-
       </View>
     </SafeAreaView>
   );
 }
 
-
-/* ============================================================
-   STYLES
-   ============================================================ */
-
 const styles = StyleSheet.create({
-
-  /* ==========================================================
-     SCREEN
-     ========================================================== */
-
   container: {
     flex: 1,
     backgroundColor: colors.black,
@@ -476,10 +386,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
 
-
-  /* ==========================================================
-     HEADER
-     ========================================================== */
+  // HEADER
 
   header: {
     flexDirection: "row",
@@ -514,10 +421,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
 
-
-  /* ==========================================================
-     TITLE
-     ========================================================== */
+  // TITLE
 
   titleRow: {
     marginBottom: spacing.sm,
@@ -527,10 +431,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
 
-
-  /* ==========================================================
-     SEARCH
-     ========================================================== */
+  // SEARCH
 
   searchContainer: {
     width: "100%",
@@ -553,10 +454,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
 
-
-  /* ==========================================================
-     SORT
-     ========================================================== */
+  // SORT
 
   sortRow: {
     height: 25,
@@ -583,10 +481,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border.light,
   },
 
-
-  /* ==========================================================
-     EMPLOYEE CARDS
-     ========================================================== */
+  // EMPLOYEE CARDS
 
   employeeList: {
     width: "100%",
@@ -631,10 +526,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-
-  /* ==========================================================
-     STATUS ICON
-     ========================================================== */
+  // STATUS ICON
 
   statusContainer: {
     width: 28,
@@ -652,10 +544,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FCEDEF",
   },
 
-
-  /* ==========================================================
-     EMPTY STATE
-     ========================================================== */
+  // EMPTY STATE
 
   emptyState: {
     backgroundColor: colors.background,
@@ -686,41 +575,28 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
 
-
-  /* ==========================================================
-     FLOATING ADD BUTTON
-     ========================================================== */
+  // FLOATING ADD BUTTON
 
   addButton: {
     position: "absolute",
     right: spacing.md,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.text.primaryGreen,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
-
+    elevation: 5,
+    shadowColor: colors.black,
     shadowOffset: {
       width: 0,
       height: 2,
     },
-
-    shadowOpacity: 0.18,
-    shadowRadius: 3,
-
-    elevation: 5,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
 
-  addButtonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.94 }],
-  },
-
-
-  /* ==========================================================
-     BOTTOM NAVIGATION
-     ========================================================== */
+  // BOTTOM NAVIGATION
 
   bottomTabContainer: {
     position: "absolute",
@@ -729,5 +605,4 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: colors.surface,
   },
-
 });

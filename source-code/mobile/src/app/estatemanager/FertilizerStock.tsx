@@ -379,9 +379,9 @@ export default function FertilizerStock() {
 
           <Pressable
             style={styles.purchaseButton}
-            onPress={() => {
+            onPress={() => router.push("/estatemanager/FertilizerRequest")
               // Connect to purchase request page later
-            }}
+            }
           >
             <Ionicons
               name="cart-outline"
