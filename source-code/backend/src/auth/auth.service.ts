@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import type { DbRole } from '../users/user.entity';
@@ -57,17 +61,16 @@ export class AuthService {
         const publicUser = await this.buildEstateManagerPublicUser(
           user.id,
           user.phone,
-          user.role
+          user.role,
         );
         const payload: JwtPayload = {
           sub: String(user.id),
-          role: publicUser.role
-        }; 
+          role: publicUser.role,
+        };
         return {
           accessToken: this.jwtService.sign(payload),
-          user: publicUser
+          user: publicUser,
         };
-          
       }
       default: {
         const publicUser = await this.buildPublicUser(
@@ -85,7 +88,49 @@ export class AuthService {
         };
       }
     }
+  }
 
+  async register(
+    name: string,
+    phone: string,
+    nic: string,
+    password: string,
+  ): Promise<LoginResult> {
+    const [existingPhone, existingNic] = await Promise.all([
+      this.usersService.findByPhone(phone),
+      this.usersService.findByNic(nic),
+    ]);
+    if (existingPhone) {
+      throw new ConflictException(
+        'An account already exists for this phone number.',
+      );
+    }
+    if (existingNic) {
+      throw new ConflictException('An account already exists for this NIC.');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await this.usersService.createEstateOwner(
+      name,
+      phone,
+      nic,
+      passwordHash,
+    );
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: String(user.id),
+      role: 'Estate Owner',
+    });
+
+    return {
+      accessToken,
+      user: {
+        id: String(user.id),
+        name,
+        role: 'Estate Owner',
+        phone: user.phone,
+      },
+    };
   }
 
   async me(userId: number): Promise<PublicUser> {
@@ -95,9 +140,8 @@ export class AuthService {
     }
     if (user.role === 'estate_owner') {
       return this.buildEstateOwnerPublicUser(user.id, user.phone, user.role);
-    }
-    else if (user.role === 'estate_manager') {
-      return this.buildEstateManagerPublicUser(user.id, user.phone , user.role );
+    } else if (user.role === 'estate_manager') {
+      return this.buildEstateManagerPublicUser(user.id, user.phone, user.role);
     }
     return this.buildPublicUser(user.id, user.phone, user.role);
   }
@@ -108,19 +152,19 @@ export class AuthService {
   ): Promise<PublicUser> {
     const role = toAppRole(dbRole);
     const profile = await this.usersService.getEstateManagerProfile(id);
-    
+
     if (!profile) {
       throw new UnauthorizedException(
         'No Estate Owner profile found for this account.',
       );
     }
-      return {
-        id: String(id),
-        name: profile.name,
-        role,
-        phone,
-        estate: profile.estate,
-      };
+    return {
+      id: String(id),
+      name: profile.name,
+      role,
+      phone,
+      estate: profile.estate,
+    };
   }
   private async buildEstateOwnerPublicUser(
     id: number,
@@ -136,13 +180,13 @@ export class AuthService {
       );
     }
     return {
-        id: String(id),
-        name: profile.name,
-        role,
-        phone,
-        estate: profile.estate,
-      };
-  }    
+      id: String(id),
+      name: profile.name,
+      role,
+      phone,
+      estate: profile.estate,
+    };
+  }
 
   private async buildPublicUser(
     id: number,
@@ -156,13 +200,12 @@ export class AuthService {
         'No employee profile found for this account.',
       );
     }
-      return {
-        id: String(id),
-        name: profile.name,
-        role,
-        phone,
-        factory: profile.factory,
-      };
+    return {
+      id: String(id),
+      name: profile.name,
+      role,
+      phone,
+      factory: profile.factory,
+    };
   }
-  
 }
