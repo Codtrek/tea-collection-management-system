@@ -1,20 +1,17 @@
-import React, { useState } from "react";
+
+import React from "react";
 import {
   View,
   StyleSheet,
   ScrollView,
   Pressable,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
 import Avatar from "@/components/ui/Avatar";
-import EstateManagerBottomTab from "@/components/ui/EstateManagerBottomTab";
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -23,12 +20,7 @@ export default function TeaEstateManagerDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [activeTab, setActiveTab] = useState("dashboard");
-
-  /* =====================================================
-     EXISTING DASHBOARD NAVIGATION
-     ===================================================== */
-
+  // Existing dashboard navigation
   const openNotifications = () => {
     router.push("/estatemanager/Notification");
   };
@@ -39,39 +31,6 @@ export default function TeaEstateManagerDashboard() {
 
   const openFertilizerStock = () => {
     router.push("/estatemanager/FertilizerStock");
-  };
-
-  /* =====================================================
-     EXISTING BOTTOM TAB NAVIGATION
-     ===================================================== */
-
-  const handleTabPress = (tab: {
-    key: string;
-    label: string;
-    icon: keyof typeof Ionicons.glyphMap;
-  }) => {
-    setActiveTab(tab.key);
-
-    switch (tab.key) {
-      case "dashboard":
-        router.push("/estatemanager");
-        break;
-
-      case "employees":
-        router.push("/estatemanager/Employees");
-        break;
-
-      case "photoEvidence":
-        router.push("/estatemanager/PhotoEvidence");
-        break;
-
-      case "reports":
-        router.push("/estatemanager/Reports");
-        break;
-
-      default:
-        break;
-    }
   };
 
   return (
@@ -85,7 +44,7 @@ export default function TeaEstateManagerDashboard() {
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: 90 + insets.bottom,
+              paddingBottom: 24 + insets.bottom,
             },
           ]}
         >
@@ -95,15 +54,24 @@ export default function TeaEstateManagerDashboard() {
               <Avatar name="Rohan" size={42} />
 
               <View style={styles.profileText}>
-                <AppText variant="caption" style={styles.welcomeText}>
+                <AppText
+                  variant="caption"
+                  style={styles.welcomeText}
+                >
                   Welcome back,
                 </AppText>
 
-                <AppText variant="body" style={styles.managerName}>
+                <AppText
+                  variant="body"
+                  style={styles.managerName}
+                >
                   Manager Rohan
                 </AppText>
 
-                <AppText variant="caption" style={styles.estateName}>
+                <AppText
+                  variant="caption"
+                  style={styles.estateName}
+                >
                   Nuwara Eliya Highlands
                 </AppText>
               </View>
@@ -112,6 +80,8 @@ export default function TeaEstateManagerDashboard() {
             <Pressable
               style={styles.notificationButton}
               onPress={openNotifications}
+              accessibilityRole="button"
+              accessibilityLabel="Open notifications"
             >
               <Ionicons
                 name="notifications-outline"
@@ -132,20 +102,29 @@ export default function TeaEstateManagerDashboard() {
                 />
               </View>
 
-              <AppText variant="bodySmall" style={styles.bannerTitle}>
+              <AppText
+                variant="bodySmall"
+                style={styles.bannerTitle}
+              >
                 Tea Estate Highlands
               </AppText>
             </View>
           </View>
 
           {/* ================= COLLECTION STATUS ================= */}
-          <AppText variant="caption" style={styles.sectionLabel}>
+          <AppText
+            variant="caption"
+            style={styles.sectionLabel}
+          >
             COLLECTION STATUS
           </AppText>
 
           <View style={styles.progressCard}>
             <View style={styles.progressHeader}>
-              <AppText variant="body" style={styles.progressTitle}>
+              <AppText
+                variant="body"
+                style={styles.progressTitle}
+              >
                 Daily Progress
               </AppText>
 
@@ -175,6 +154,7 @@ export default function TeaEstateManagerDashboard() {
             <Pressable
               style={styles.dashboardCard}
               onPress={openFertilizerStock}
+              accessibilityRole="button"
             >
               <View style={styles.cardIconBlue}>
                 <Ionicons
@@ -184,11 +164,17 @@ export default function TeaEstateManagerDashboard() {
                 />
               </View>
 
-              <AppText variant="bodySmall" style={styles.cardTitle}>
+              <AppText
+                variant="bodySmall"
+                style={styles.cardTitle}
+              >
                 Fertilizer Stock
               </AppText>
 
-              <AppText variant="caption" style={styles.cardSubtitle}>
+              <AppText
+                variant="caption"
+                style={styles.cardSubtitle}
+              >
                 85% Available
               </AppText>
             </Pressable>
@@ -197,6 +183,7 @@ export default function TeaEstateManagerDashboard() {
             <Pressable
               style={styles.dashboardCardGreen}
               onPress={openDailyPluckingDetails}
+              accessibilityRole="button"
             >
               <View style={styles.cardIconGreen}>
                 <Ionicons
@@ -206,34 +193,22 @@ export default function TeaEstateManagerDashboard() {
                 />
               </View>
 
-              <AppText variant="bodySmall" style={styles.cardTitle}>
+              <AppText
+                variant="bodySmall"
+                style={styles.cardTitle}
+              >
                 Daily Tea Plucking
               </AppText>
 
-              <AppText variant="caption" style={styles.cardSubtitle}>
+              <AppText
+                variant="caption"
+                style={styles.cardSubtitle}
+              >
                 1/3 Completed
               </AppText>
             </Pressable>
           </View>
-
-          {/* Space for fixed bottom navigation */}
-          <View style={styles.bottomSpace} />
         </ScrollView>
-
-        {/* ================= BOTTOM TAB ================= */}
-        <View
-          style={[
-            styles.bottomTabContainer,
-            {
-              paddingBottom: insets.bottom,
-            },
-          ]}
-        >
-          <EstateManagerBottomTab
-            activeTab={activeTab}
-            onTabPress={handleTabPress}
-          />
-        </View>
       </View>
     </SafeAreaView>
   );
@@ -246,7 +221,7 @@ export default function TeaEstateManagerDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.black,
+    backgroundColor: colors.surface,
   },
 
   screen: {
@@ -259,8 +234,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
 
-  /* ================= HEADER ================= */
-
+  /* HEADER */
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -298,8 +272,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
 
-  /* ================= ESTATE BANNER ================= */
-
+  /* ESTATE BANNER */
   estateBanner: {
     width: "100%",
     height: 148,
@@ -332,16 +305,14 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
 
-  /* ================= SECTION LABEL ================= */
-
+  /* SECTION LABEL */
   sectionLabel: {
     color: colors.text.tertiary,
     letterSpacing: 0.8,
     marginBottom: spacing.sm,
   },
 
-  /* ================= PROGRESS CARD ================= */
-
+  /* PROGRESS CARD */
   progressCard: {
     backgroundColor: colors.background,
     borderWidth: 1,
@@ -386,8 +357,7 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
 
-  /* ================= QUICK ACTION CARDS ================= */
-
+  /* QUICK ACTION CARDS */
   cardsRow: {
     flexDirection: "row",
     gap: spacing.md,
@@ -443,19 +413,5 @@ const styles = StyleSheet.create({
   cardSubtitle: {
     color: colors.text.secondary,
     marginTop: spacing.xs,
-  },
-
-  /* ================= BOTTOM NAVIGATION ================= */
-
-  bottomSpace: {
-    height: 80,
-  },
-
-  bottomTabContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.white,
   },
 });

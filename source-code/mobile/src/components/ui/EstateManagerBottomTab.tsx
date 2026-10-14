@@ -37,6 +37,11 @@ const tabs: BottomTabItem[] = [
     label: "Reports",
     icon: "bar-chart-outline",
   },
+  {
+    key: "profile",
+    label: "Profile",
+    icon: "person-circle-outline",  
+  },
 ];
 
 interface Props {
