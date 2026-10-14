@@ -177,6 +177,18 @@ export const FertRequestCard = ({
       action: null,
       handler: null,
     },
+
+    declined: {
+      label: "Declined",
+      action: null,
+      handler: null,
+    },
+
+    cancelled: {
+      label: "Cancelled",
+      action: null,
+      handler: null,
+    },
   };
 
   const currentStatus = statusMap[request.status];
@@ -208,6 +220,11 @@ export const FertRequestCard = ({
             {request.status === "delivered" &&
               `Delivered at ${request.deliveredAt}`}
           </Text>
+
+          {(request.status === "declined" || request.status === "cancelled") &&
+            request.reason && (
+              <Text style={styles.reasonText}>Reason: {request.reason}</Text>
+            )}
         </View>
 
         <Pill status={request.status} />
@@ -353,19 +370,24 @@ export const StopCard = ({
           {/* Estate Information */}
 
           <View style={styles.mainInfo}>
-            <Text style={styles.title}>
-              {stop.name || "Tea Estate"}
-            </Text>
-
-            {stop.address && (
-              <Text style={styles.subtitle}>
-                {stop.address}
+            <View style={styles.estateNameRow}>
+              <Text style={styles.title}>
+                {stop.name || "Tea Estate"}
               </Text>
-            )}
+              {stop.manualRequest && (
+                <View
+                  accessible
+                  accessibilityLabel="Manually created request"
+                  style={styles.manualBadge}
+                >
+                  <Text style={styles.manualBadgeText}>M</Text>
+                </View>
+              )}
+            </View>
 
-            {stop.location && (
+            {(stop.location || stop.address) && (
               <Text style={styles.subtitle}>
-                {stop.location}
+                {stop.location || stop.address}
               </Text>
             )}
 
@@ -652,6 +674,30 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
+  estateNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  manualBadge: {
+    width: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 9,
+    backgroundColor: colors.successBackground,
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+
+  manualBadgeText: {
+    color: colors.success,
+    fontFamily: fonts.default,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
   mainInfo: {
     flex: 1,
   },
@@ -673,6 +719,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     color: colors.text.muted,
+  },
+
+  reasonText: {
+    fontSize: 12,
+    marginTop: 4,
+    color: colors.error,
   },
 
   /* =======================================================

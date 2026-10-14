@@ -90,6 +90,7 @@ type CollectionStop = {
   name: string;
   owner: string;
   phone: string;
+  location: string;
   gps?: string;
   notes?: string;
   estimatedWeight: number;
@@ -105,13 +106,13 @@ type CollectionStop = {
 };
 
 const INITIAL_STOPS = [
-  { id: 1, name: "Ceylon Green Estate", owner: "A. Wickramasinghe", phone: "077 812 4456", gps: "7.2906Â° N, 80.7718Â° E", notes: "Leaves picked this morning, ready by 9 AM", estimatedWeight: 68, dist: 2.4, status: "pending" },
-  { id: 2, name: "Hill Breeze Gardens", owner: "N. Perera", phone: "071 220 9981", gps: "7.1935Â° N, 80.6812Â° E", notes: "Second harvest of the week", estimatedWeight: 54, dist: 4.1, status: "accepted", acceptedAt: "8:20 AM" },
-  { id: 3, name: "Mistvale Tea Farm", owner: "K. Bandara", phone: "076 554 3312", gps: "7.2011Â° N, 80.7020Â° E", notes: "", estimatedWeight: 61, actualWeight: 61, status: "loaded" },
-  { id: 4, name: "Oakridge Estate", owner: "D. Herath", phone: "072 118 2290", gps: "7.2299Â° N, 80.7115Â° E", notes: "", estimatedWeight: 71, actualWeight: 71, status: "loaded" },
-  { id: 5, name: "Green Hollow Estate", owner: "S. Fernando", phone: "075 331 8820", gps: "7.2540Â° N, 80.7301Â° E", notes: "", estimatedWeight: 0, status: "cancelled", reason: "Road blocked" },
-  { id: 6, name: "Silverleaf Plantation", owner: "R. Dissanayake", phone: "070 442 7719", gps: "7.2180Â° N, 80.7422Â° E", notes: "New flush, small quantity", estimatedWeight: 40, dist: 6.8, status: "pending" },
-  { id: 7, name: "Windsor Tea Gardens", owner: "P. Jayasuriya", phone: "077 903 4471", gps: "7.1850Â° N, 80.6690Â° E", notes: "", estimatedWeight: 74, actualWeight: 74, status: "delivered" },
+  { id: 1, name: "Ceylon Green Estate", owner: "A. Wickramasinghe", phone: "077 812 4456", location: "Ramboda, Nuwara Eliya", gps: "7.2906Â° N, 80.7718Â° E", notes: "Leaves picked this morning, ready by 9 AM", estimatedWeight: 68, dist: 2.4, status: "pending" },
+  { id: 2, name: "Hill Breeze Gardens", owner: "N. Perera", phone: "071 220 9981", location: "Kotmale, Nuwara Eliya", gps: "7.1935Â° N, 80.6812Â° E", notes: "Second harvest of the week", estimatedWeight: 54, dist: 4.1, status: "accepted", acceptedAt: "8:20 AM" },
+  { id: 3, name: "Mistvale Tea Farm", owner: "K. Bandara", phone: "076 554 3312", location: "Pussellawa, Nuwara Eliya", gps: "7.2011Â° N, 80.7020Â° E", notes: "", estimatedWeight: 61, actualWeight: 61, status: "loaded" },
+  { id: 4, name: "Oakridge Estate", owner: "D. Herath", phone: "072 118 2290", location: "Nawalapitiya, Kandy", gps: "7.2299Â° N, 80.7115Â° E", notes: "", estimatedWeight: 71, actualWeight: 71, status: "loaded" },
+  { id: 5, name: "Green Hollow Estate", owner: "S. Fernando", phone: "075 331 8820", location: "Ginigathhena, Nuwara Eliya", gps: "7.2540Â° N, 80.7301Â° E", notes: "", estimatedWeight: 0, status: "cancelled", reason: "Road blocked" },
+  { id: 6, name: "Silverleaf Plantation", owner: "R. Dissanayake", phone: "070 442 7719", location: "Talawakelle, Nuwara Eliya", gps: "7.2180Â° N, 80.7422Â° E", notes: "New flush, small quantity", estimatedWeight: 40, dist: 6.8, status: "pending" },
+  { id: 7, name: "Windsor Tea Gardens", owner: "P. Jayasuriya", phone: "077 903 4471", location: "Hatton, Nuwara Eliya", gps: "7.1850Â° N, 80.6690Â° E", notes: "", estimatedWeight: 74, actualWeight: 74, status: "delivered" },
 ];
 
 const INITIAL_FERT_REQUESTS = [
@@ -291,6 +292,54 @@ export default function TeaCollectorMobile() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
 
+  const goToFertilizerDecline = () => {
+    if (!activeFert) {
+      console.warn("No active fertilizer request to decline");
+      return;
+    }
+    setSheet("fertDecline");
+  };
+
+  const confirmFertilizerDecline = (reason: string, note: string) => {
+    if (!activeFert) {
+      console.warn("No active fertilizer request to decline");
+      return;
+    }
+
+    updateFert(activeFert.id, {
+      status: "declined",
+      declinedAt: nowTime(),
+      reason,
+      note,
+    });
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
+
+  const goToFertilizerCancel = () => {
+    if (!activeFert) {
+      console.warn("No active fertilizer request to cancel");
+      return;
+    }
+    setSheet("fertCancel");
+  };
+
+  const confirmFertilizerCancel = (reason: string, note: string) => {
+    if (!activeFert) {
+      console.warn("No active fertilizer request to cancel");
+      return;
+    }
+
+    updateFert(activeFert.id, {
+      status: "cancelled",
+      cancelledAt: nowTime(),
+      reason,
+      note,
+    });
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
+
   const confirmCancelPickup = (reason: string, note: string) => {
     if (!activeStop) {
       console.warn("No active stop to cancel");
@@ -392,6 +441,7 @@ export default function TeaCollectorMobile() {
       name: string;
       owner: string;
       phone: string;
+      location: string;
       gps?: string;
     };
     estimatedWeight: number;
@@ -405,13 +455,15 @@ export default function TeaCollectorMobile() {
         name: estate.name,
         owner: estate.owner,
         phone: estate.phone,
+        location: estate.location,
         gps: estate.gps,
         notes: reason,
         estimatedWeight,
         requestDate: pickupDate.toISOString(),
         requestReason: reason,
         manualRequest: true,
-        status: "pending",
+        status: "accepted",
+        acceptedAt: nowTime(),
       },
     ]);
     setSheet(null);
@@ -554,15 +606,28 @@ export default function TeaCollectorMobile() {
         {/* Tea collection overlays */}
         <PickupSheet open={sheet === "pickup"} stop={activeStop} onClose={() => setSheet(null)} onAccept={acceptPickup} onDecline={goToDecline} />
         <DeclineSheet open={sheet === "decline"} onClose={() => setSheet(null)} onConfirm={confirmDecline} />
+        <DeclineSheet
+          open={sheet === "fertDecline"}
+          onClose={() => setSheet("fertDetails")}
+          onConfirm={confirmFertilizerDecline}
+          requestLabel="fertilizer request"
+          confirmationMessage="This fertilizer request will be declined and the estate owner will be notified."
+        />
         <ArrivedSheet open={sheet === "arrived"} stop={activeStop} onClose={() => setSheet(null)} onStartCollection={startCollection} onCall={handleCall} onCancelPickup={() => setSheet("cancelPickup")} />
         <CancelPickupSheet open={sheet === "cancelPickup"} onBack={() => setSheet("arrived")} onConfirm={confirmCancelPickup} />
+        <CancelPickupSheet
+          open={sheet === "fertCancel"}
+          onBack={() => setSheet("fertDetails")}
+          onConfirm={confirmFertilizerCancel}
+          requestLabel="fertilizer delivery"
+        />
         <BatchCancelRequestsSheet
           open={sheet === "cancelSelectedRequests"}
           requestCount={selectedRequestIds.length}
           onClose={() => setSheet(null)}
           onConfirm={cancelSelectedRequests}
         />
-        <CollectSheet open={sheet === "collect"} stop={activeStop} onClose={() => setSheet(null)} onSubmit={submitCollection} />
+        <CollectSheet open={sheet === "collect"} stop={activeStop} onClose={() => setSheet(null)} onBack={() => setSheet("arrived")} onSubmit={submitCollection} />
         <ConfirmSheet open={sheet === "confirm"} stop={activeStop} weight={collectedWeight} onBack={() => setSheet("collect")} onClose={continueCollecting} />
         
         <FactoryMapSheet
@@ -578,6 +643,7 @@ export default function TeaCollectorMobile() {
           officer={officer}
           setOfficer={setOfficer}
           onClose={() => setSheet(null)}
+          onBack={() => setSheet("map")}
           onSubmit={submitToFactory}
         />
         <FactoryWeightSheet
@@ -597,7 +663,15 @@ export default function TeaCollectorMobile() {
         />
 
         {/* Fertilizer overlays */}
-        <FertDetailsSheet open={sheet === "fertDetails"} request={activeFert} onClose={() => setSheet(null)} />
+        <FertDetailsSheet
+          open={sheet === "fertDetails"}
+          request={activeFert}
+          onClose={() => setSheet(null)}
+          onLoad={() => loadFertilizer(activeFert)}
+          onDecline={goToFertilizerDecline}
+          onDeliver={() => deliverFertilizer(activeFert)}
+          onCancel={goToFertilizerCancel}
+        />
         <LoadFertSheet 
           open={sheet === "fertLoad"} 
           request={activeFert} 
