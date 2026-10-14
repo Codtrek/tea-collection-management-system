@@ -29,17 +29,20 @@ export async function login(
 
 export async function register(
   name: string,
-  phoneNumber: number,
-  NIC: string,
+  phoneNumber: string,
+  nic: string,
   password: string,
   confirmPassword: string
 ) {
-  console.log({
+
+  return apiRequest<LoginResult>("/auth/mobile/register", {
+    method: "POST",
+    body: JSON.stringify({
       name,
       phoneNumber,
-      NIC,
+      nic,
       password,
-      confirmPassword,
-    } );
-    return true;
+      confirmPassword
+    }),
+  });
 }
