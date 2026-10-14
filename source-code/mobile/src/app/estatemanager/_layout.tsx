@@ -41,7 +41,6 @@ export default function EstateManagerLayout() {
 
   return (
     <View style={styles.container}>
-      {/* Page content takes the available space above the tab */}
       <View style={styles.pageContent}>
         <Stack
           screenOptions={{
@@ -54,7 +53,6 @@ export default function EstateManagerLayout() {
         />
       </View>
 
-      {/* Bottom navigation stays in its own layout area */}
       <View
         style={[
           styles.bottomTabContainer,

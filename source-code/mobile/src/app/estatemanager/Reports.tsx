@@ -13,7 +13,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
-import EstateManagerBottomTab from "@/components/ui/EstateManagerBottomTab";
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -511,10 +510,6 @@ export default function Reports() {
             },
           ]}
         >
-          <EstateManagerBottomTab
-            activeTab={activeTab}
-            onTabPress={handleTabPress}
-          />
         </View>
       </View>
     </SafeAreaView>

@@ -35,8 +35,6 @@ import AppText from "@/components/ui/AppText";
 
 import Avatar from "@/components/ui/Avatar";
 
-import EstateManagerBottomTab from "@/components/ui/EstateManagerBottomTab";
-
 
 
 import { colors } from "@/theme/colors";
@@ -725,13 +723,7 @@ export default function PhotoEvidence() {
 
         >
 
-          <EstateManagerBottomTab
-
-            activeTab={activeTab}
-
-            onTabPress={handleTabPress}
-
-          />
+          
 
         </View>
 
