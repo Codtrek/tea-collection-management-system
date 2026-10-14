@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState  } from "react";
 import { StyleSheet, View, Platform } from "react-native";
-
-import { Link } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import { Link , useRouter} from "expo-router";
 
 import {
   Screen,
@@ -16,6 +16,7 @@ import { spacing } from "@/theme/spacing";
 import { register } from "../services/api/auth.api";
 
 export default function SignUpScreen() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [NIC, setNIC] = useState("");
@@ -24,25 +25,27 @@ export default function SignUpScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  //this function won't be necessary when running on mobile
+    async function persistSession(accessToken: string, user: object) {
+      const serializedUser = JSON.stringify(user);
+      if (Platform.OS === "web") {
+        localStorage.setItem("accessToken", accessToken);
+        localStorage.setItem("user", serializedUser);
+        return;
+      }
+  
+      await SecureStore.setItemAsync("accessToken", accessToken);
+      await SecureStore.setItemAsync("user", serializedUser);
+    }
   async function handleRegister() {
     // Clear previous error
     setError("");
 
-    console.log({
-      name,
-      phoneNumber,
-      NIC,
-      password,
-      confirmPassword,
-    });
-
-    // Required fields
     if (!phoneNumber || !name || !NIC || !password || !confirmPassword) {
       setError("Please complete all required fields.");
       return;
     }
 
-    // Phone number validation
     if (phoneNumber.length !== 10) {
       setError("Enter a valid phone number.");
       return;
@@ -79,7 +82,7 @@ export default function SignUpScreen() {
         confirmPassword
       );
 
-      console.log("Registration successful:", result);
+      router.replace("/(estate-owner)/home");
 
       // TODO:
       // Navigate to login or show success message
@@ -112,6 +115,7 @@ export default function SignUpScreen() {
         <AppInput
           label="Full Name"
           placeholder="Eg: Kasun Perera"
+          maxLength={32}
           value={name}
           onChangeText={setName}
         />

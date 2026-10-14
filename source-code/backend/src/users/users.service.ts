@@ -33,6 +33,36 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { id } });
   }
 
+  findByNic(nic: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { nic } });
+  }
+
+  async createEstateOwner(
+    name: string,
+    phone: string,
+    nic: string,
+    password_hash: string,
+  ): Promise<User> {
+    return this.usersRepository.manager.transaction(async (manager) => {
+      const user = manager.create(User, {
+        name,
+        phone,
+        nic,
+        password_hash,
+        role: 'estate_owner',
+      });
+      const savedUser = await manager.save(user);
+
+      await manager.save(EstateOwner, {
+        user_id: savedUser.id,
+        name,
+        contact: phone,
+        nic,
+      });
+
+      return savedUser;
+    });
+  }
   /** Name + factory affiliation for a factory-side user (Administrator/Officer/Manager). */
   async getProfile(userId: number): Promise<UserProfile | null> {
     const employee = await this.factoryEmployeesRepository.findOne({
