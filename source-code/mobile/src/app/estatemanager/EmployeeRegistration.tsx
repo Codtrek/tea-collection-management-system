@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import {
   View,
@@ -5,6 +6,8 @@ import {
   ScrollView,
   Pressable,
   TextInput,
+  Image,
+  Alert,
 } from "react-native";
 import {
   SafeAreaView,
@@ -12,6 +15,7 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 
 import AppText from "@/components/ui/AppText";
 
@@ -25,6 +29,7 @@ export default function NewEmployeeRegistration() {
   const [employeeName, setEmployeeName] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [age, setAge] = useState(32);
+  const [employeePhoto, setEmployeePhoto] = useState<string | null>(null);
 
   const handleClose = () => {
     router.back();
@@ -36,6 +41,7 @@ export default function NewEmployeeRegistration() {
 
   const handleRegister = () => {
     // Employee registration logic can be connected later.
+    // The captured photo is currently stored in component state only.
     router.back();
   };
 
@@ -45,6 +51,48 @@ export default function NewEmployeeRegistration() {
 
   const increaseAge = () => {
     setAge((current) => current + 1);
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const permission =
+        await ImagePicker.requestCameraPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert(
+          "Camera Permission Required",
+          "Please allow Harboost to access your camera to take an employee photo.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Try Again",
+              onPress: () => {
+                void handleTakePhoto();
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setEmployeePhoto(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error("Unable to open camera:", error);
+
+      Alert.alert(
+        "Camera Error",
+        "Unable to open the camera. Please close and reopen the app, then try again."
+      );
+    }
   };
 
   return (
@@ -118,13 +166,30 @@ export default function NewEmployeeRegistration() {
           {/* ================= PHOTO ================= */}
 
           <View style={styles.photoCard}>
-            <Pressable style={styles.photoButton}>
+            <Pressable
+              style={styles.photoButton}
+              onPress={handleTakePhoto}
+              accessibilityRole="button"
+              accessibilityLabel={
+                employeePhoto
+                  ? "Retake employee photo"
+                  : "Take employee photo"
+              }
+            >
               <View style={styles.cameraContainer}>
-                <Ionicons
-                  name="camera-outline"
-                  size={24}
-                  color={colors.text.secondary}
-                />
+                {employeePhoto ? (
+                  <Image
+                    source={{ uri: employeePhoto }}
+                    style={styles.employeePhotoPreview}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Ionicons
+                    name="camera-outline"
+                    size={24}
+                    color={colors.text.secondary}
+                  />
+                )}
 
                 <View style={styles.addBadge}>
                   <Ionicons
@@ -139,7 +204,7 @@ export default function NewEmployeeRegistration() {
                 variant="caption"
                 style={styles.photoText}
               >
-                Tap photo
+                {employeePhoto ? "Retake photo" : "Tap photo"}
               </AppText>
             </Pressable>
 
@@ -202,6 +267,7 @@ export default function NewEmployeeRegistration() {
                   placeholder="e.g. Kamalanathan Perera"
                   placeholderTextColor={colors.text.tertiary}
                   style={styles.input}
+                  autoCapitalize="words"
                 />
               </View>
             </View>
@@ -281,6 +347,8 @@ export default function NewEmployeeRegistration() {
                 <Pressable
                   style={styles.ageButton}
                   onPress={decreaseAge}
+                  accessibilityRole="button"
+                  accessibilityLabel="Decrease age"
                 >
                   <Ionicons
                     name="remove"
@@ -292,6 +360,8 @@ export default function NewEmployeeRegistration() {
                 <Pressable
                   style={styles.ageButton}
                   onPress={increaseAge}
+                  accessibilityRole="button"
+                  accessibilityLabel="Increase age"
                 >
                   <Ionicons
                     name="add"
@@ -452,6 +522,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
+    overflow: "visible",
+  },
+
+  employeePhotoPreview: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 9,
   },
 
   addBadge: {
