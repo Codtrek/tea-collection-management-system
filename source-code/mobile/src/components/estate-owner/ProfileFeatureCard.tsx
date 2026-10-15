@@ -1,14 +1,15 @@
 import {Pressable, View, StyleSheet, Image} from "react-native";
 import { AppText, AppCard} from "@/components/ui";
+import { Ionicons } from "@expo/vector-icons";
 
 interface ProfileFeatureCardProps{
-    imageSource?: string,
+    iconName?: React.ComponentProps<typeof Ionicons>["name"],
     feature: string,
     featurePressed?: () => void,
 }
 
 export default function ProfileFeatureCard({
-    imageSource,
+    iconName,
     feature,
     featurePressed,
 }: ProfileFeatureCardProps) {
@@ -16,8 +17,10 @@ export default function ProfileFeatureCard({
         <>
             <Pressable>
                 <AppCard>
-                    <Image source={{uri: imageSource }}/>
-                    <AppText>{feature}</AppText>
+                    <View style={styles.content}>
+                        <Ionicons name={iconName} size={18}/>
+                        <AppText>{feature}</AppText>
+                    </View>
                 </AppCard>
             </Pressable>
         </>
@@ -28,5 +31,7 @@ const styles = StyleSheet.create ({
     content: {
         width: "100%",
         flexDirection: "row",
+        alignItems: "center",
+        gap: 20,
     },
 });

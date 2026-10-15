@@ -1,7 +1,8 @@
-import { View, ViewStyle, StyleSheet, Pressable } from 'react-native'
+import { View, ViewStyle, StyleSheet, Pressable, ViewProps } from 'react-native'
 import { useRouter } from 'expo-router'
 import { AppText, Screen } from '@/components/ui'
 import { typography, colors, spacing } from '@/theme' 
+
 
 
 export default function AppCard({ children }: { children: React.ReactNode }) {
