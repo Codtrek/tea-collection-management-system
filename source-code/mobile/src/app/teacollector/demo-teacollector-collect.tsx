@@ -154,7 +154,7 @@ export default function DemoTeaCollectorCollect({
           LOADED / FACTORY
       =================================================== */}
 
-      {filter !== "history" && loaded.length > 0 && (
+      {filter !== "history" && (
         <Card style={styles.loadedCard}>
           <View style={styles.loadedHeader}>
             <View style={styles.factoryIconContainer}>
@@ -167,11 +167,15 @@ export default function DemoTeaCollectorCollect({
 
             <View style={styles.loadedTextContainer}>
               <Text style={styles.loadedTitle}>
-                {loaded.length} stop{loaded.length > 1 ? "s" : ""} loaded · {totalLoaded} kg
+                {loaded.length > 0
+                  ? `${loaded.length} stop${loaded.length > 1 ? "s" : ""} loaded · ${totalLoaded} kg`
+                  : "No tea currently loaded"}
               </Text>
 
               <Text style={styles.loadedSubtitle}>
-                Ready whenever you head to Kotmale MPT
+                {loaded.length > 0
+                  ? "Ready whenever you head to Kotmale MPT"
+                  : "Load a tea request to prepare a factory delivery"}
               </Text>
             </View>
           </View>
@@ -179,6 +183,7 @@ export default function DemoTeaCollectorCollect({
           <Btn
             variant="forest"
             block
+            disabled={loaded.length === 0}
             style={styles.factoryButton}
             onPress={onGoToFactory}
           >
@@ -283,7 +288,13 @@ export default function DemoTeaCollectorCollect({
 
                     <Text style={styles.historySubtitle}>
                       Today · {s.actualWeight || 0} kg
+                      {s.receivingOfficer ? ` · Received by ${s.receivingOfficer}` : ""}
                     </Text>
+                    {s.collectionNote?.trim() && (
+                      <Text style={styles.historySubtitle}>
+                        Note: {s.collectionNote.trim()}
+                      </Text>
+                    )}
                   </View>
 
                   <Pill

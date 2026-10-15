@@ -402,7 +402,9 @@ export const StopCard = ({
                 `Accepted at ${stop.acceptedAt || "—"}`}
 
               {isLoaded &&
-                "Awaiting factory drop-off"}
+                (stop.collectionNote?.trim()
+                  ? `Note: ${stop.collectionNote.trim()}`
+                  : "")}
 
               {isDelivered &&
                 "✓ Completed"}
@@ -492,7 +494,7 @@ export const StopCard = ({
         ================================================== */}
 
         {isLoaded && (
-          <View style={styles.weightBreakdown}>
+          <View style={styles.loadedDetails}>
             <Text style={styles.metaText}>{stop.actualWeight || 0} kg collected</Text>
           </View>
         )}
@@ -741,6 +743,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 14,
+    marginTop: 10,
+  },
+
+  loadedDetails: {
+    gap: 4,
     marginTop: 10,
   },
 

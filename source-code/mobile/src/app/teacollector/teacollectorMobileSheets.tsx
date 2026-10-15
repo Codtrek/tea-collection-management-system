@@ -679,7 +679,7 @@ export const CollectSheet = ({ open, stop, onClose, onBack, onSubmit }: any) => 
           <Btn
             variant="primary"
             block
-            onPress={() => onSubmit({ weight, photoUri })}
+            onPress={() => onSubmit({ weight, photoUri, remark })}
           >
             Submit Collection
           </Btn>
@@ -991,104 +991,6 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onBac
           color: c.muted,
         }}>Select a receiving officer to continue</Text>
       )}
-    </Sheet>
-  );
-};
-
-export const FactoryWeightSheet = ({ open, collectionWeight, factoryWeight, onClose, onApprove, onReportMismatch }: any) => {
-  const diff = factoryWeight - collectionWeight;
-  const matches = diff === 0;
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDefault.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>Kotmale MPT Factory</Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>Factory Weight Received</Text>
-      <DetailRow k="Your collection weight" v={`${collectionWeight} kg`} />
-      <DetailRow k="Factory recorded weight" v={`${factoryWeight} kg`} />
-      <DetailRow k="Difference" v={`${diff > 0 ? "+" : ""}${diff} kg`} />
-      {!matches && (
-        <View style={{
-          borderRadius: 14,
-          paddingHorizontal: 14,
-          paddingVertical: 12,
-          marginTop: 12,
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-          gap: 10,
-          backgroundColor: "#FBEFD8",
-        }}>
-          <Ionicons name="alert-circle-outline" size={16} color={c.amberDeep} style={{ marginTop: 2 }} />
-          <Text style={{
-            fontSize: 12,
-            color: c.amberDeep,
-            flex: 1,
-          }}>
-            The factory's figure differs from what you recorded. Approve it if this looks right, or report it for review.
-          </Text>
-        </View>
-      )}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="danger" block onPress={onReportMismatch}>Report Mismatch</Btn>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Btn variant="primary" block onPress={onApprove}>Approve Weight</Btn>
-        </View>
-      </View>
-    </Sheet>
-  );
-};
-
-export const MismatchSheet = ({ open, onClose, onSubmit }: any) => {
-  const [reason, setReason] = useState<string | null>(null);
-  const [explanation, setExplanation] = useState('');
-  
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Report Weight Mismatch</Text>
-      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>What do you think caused the difference?</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {["Scale calibration", "Moisture loss in transit", "Miscount at estate", "Other"].map((r) => (
-          <Chip key={r} active={reason === r} onPress={() => setReason(r)}>{r}</Chip>
-        ))}
-      </View>
-      <Field label="Explanation">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: c.line,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 80,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={4}
-          placeholder="Add any detail for the receiving officer..."
-          value={explanation}
-          onChangeText={setExplanation}
-        />
-      </Field>
-      <Btn variant="primary" block onPress={() => onSubmit(reason || "Other")}>Submit for Review</Btn>
     </Sheet>
   );
 };
