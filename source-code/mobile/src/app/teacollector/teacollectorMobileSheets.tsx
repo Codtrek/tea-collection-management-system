@@ -37,61 +37,90 @@ export const FertDetailsSheet = ({
   open,
   request,
   onClose,
+  onAccept,
   onLoad,
-  onDecline,
   onDeliver,
   onCancel,
 }: any) => {
+  const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
+
   if (!request) return null;
   return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDefault.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>
-        Fertilizer Request
-      </Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>{request.estateName}</Text>
-      <DetailRow k="Owner" v={request.owner} />
-      <DetailRow k="Phone" v={request.phone} />
-      <DetailRow k="Fertilizer Type" v={request.fertilizerType} />
-      <DetailRow k="Quantity" v={`${request.quantity} kg`} />
-      <DetailRow k="Requested" v={request.requestedAt} />
-      {request.notes && <DetailRow k="Notes by Estate Owner" v={request.notes} />}
-      <DetailRow k="Status" v={STATUS_STYLE[request.status]?.label || request.status} />
-      {request.reason && <DetailRow k="Reason" v={request.reason} />}
-      {request.note && <DetailRow k="Additional Note" v={request.note} />}
-      {request.status === "confirmed" && (
-        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-          <View style={{ flex: 1 }}>
-            <Btn variant="primary" block onPress={onLoad}>Load Fertilizer</Btn>
+    <>
+      <Sheet open={open && !showAcceptConfirmation} onClose={onClose}>
+        <Text style={{
+          fontFamily: fontDefault.fontFamily,
+          fontWeight: 'bold',
+          textTransform: 'uppercase',
+          letterSpacing: 1.8,
+          fontSize: 11,
+          color: c.sageDeep,
+        }}>
+          Fertilizer Request {STATUS_STYLE[request.status]?.label || request.status}
+        </Text>
+        <Text style={{
+          fontFamily: fontDisplay.fontFamily,
+          fontWeight: '600',
+          marginTop: 2,
+          marginBottom: 12,
+          fontSize: 20,
+        }}>{request.estateName}</Text>
+        <DetailRow k="Owner" v={request.owner} />
+        <DetailRow k="Phone" v={request.phone} />
+        <DetailRow k="Fertilizer Type" v={request.fertilizerType} />
+        <DetailRow k="Quantity" v={`${request.quantity} kg`} />
+        <DetailRow k="Requested" v={request.requestedAt} />
+        {request.notes && <DetailRow k="Notes by Estate Owner" v={request.notes} />}
+        <DetailRow k="Status" v={STATUS_STYLE[request.status]?.label || request.status} />
+        {request.reason && <DetailRow k="Reason" v={request.reason} />}
+        {request.note && <DetailRow k="Additional Note" v={request.note} />}
+        {request.status === "pending" && (
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Btn variant="danger" block onPress={onCancel}>Cancel Request</Btn>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Btn variant="primary" block onPress={() => setShowAcceptConfirmation(true)}>
+                Accept Request
+              </Btn>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Btn variant="danger" block onPress={onDecline}>Decline Request</Btn>
+        )}
+        {request.status === "confirmed" && (
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Btn variant="danger" block onPress={onCancel}>Cancel Request</Btn>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Btn variant="primary" block onPress={onLoad}>Load Fertilizer</Btn>
+            </View>
           </View>
-        </View>
-      )}
-      {request.status === "loaded" && (
-        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-          <View style={{ flex: 1 }}>
-            <Btn variant="primary" block onPress={onDeliver}>Deliver</Btn>
+        )}
+        {request.status === "loaded" && (
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Btn variant="danger" block onPress={onCancel}>Cancel</Btn>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Btn variant="primary" block onPress={onDeliver}>Deliver</Btn>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Btn variant="danger" block onPress={onCancel}>Cancel</Btn>
-          </View>
-        </View>
-      )}
-    </Sheet>
+        )}
+      </Sheet>
+      <ConfirmationWarning
+        visible={showAcceptConfirmation}
+        title="Accept this fertilizer request?"
+        message={`You are confirming the fertilizer request from ${request.estateName || "this estate"}.`}
+        confirmLabel="Accept request"
+        intent="success"
+        onCancel={() => setShowAcceptConfirmation(false)}
+        onConfirm={() => {
+          setShowAcceptConfirmation(false);
+          onClose();
+          onAccept?.();
+        }}
+      />
+    </>
   );
 };
 
@@ -356,7 +385,11 @@ export const CancelPickupSheet = ({ open, onBack, onConfirm, requestLabel = "pic
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [showWarning, setShowWarning] = useState(false);
-  const actionLabel = requestLabel === "pickup" ? "Cancel pickup" : "Cancel delivery";
+  const actionLabel = requestLabel === "pickup"
+    ? "Cancel pickup"
+    : requestLabel === "fertilizer request"
+      ? "Cancel request"
+      : "Cancel delivery";
 
   useEffect(() => {
     if (open) {

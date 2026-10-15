@@ -641,7 +641,7 @@ export default function TeaCollectorMobile() {
           open={sheet === "fertCancel"}
           onBack={() => setSheet("fertDetails")}
           onConfirm={confirmFertilizerCancel}
-          requestLabel="fertilizer delivery"
+          requestLabel={activeFert?.status === "confirmed" ? "fertilizer request" : "fertilizer delivery"}
         />
         <BatchCancelRequestsSheet
           open={sheet === "cancelSelectedRequests"}
@@ -680,8 +680,8 @@ export default function TeaCollectorMobile() {
           open={sheet === "fertDetails"}
           request={activeFert}
           onClose={() => setSheet(null)}
+          onAccept={() => acceptFertilizer(activeFert)}
           onLoad={() => loadFertilizer(activeFert)}
-          onDecline={goToFertilizerDecline}
           onDeliver={() => deliverFertilizer(activeFert)}
           onCancel={goToFertilizerCancel}
         />

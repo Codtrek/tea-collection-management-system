@@ -211,7 +211,13 @@ export const FertRequestCard = ({
           HEADER
       ========================= */}
 
-      <View style={styles.header}>
+      <TouchableOpacity
+        style={styles.header}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${request.estateName || "tea estate"} fertilizer request details`}
+        onPress={() => onViewDetails?.(request)}
+      >
         <View style={styles.mainInfo}>
           <Text style={styles.title}>
             {request.estateName || "Tea Estate"}
@@ -243,7 +249,7 @@ export const FertRequestCard = ({
         </View>
 
         <Pill status={request.status} />
-      </View>
+      </TouchableOpacity>
 
       {/* =========================
           BUTTONS
