@@ -26,7 +26,7 @@ export default function GeneralHeader({
             <View style={styles.subContainer}>
                 <View>
                     <View>
-                        <AppText variant="subheading" style={styles.title}>
+                        <AppText variant="subHeading" style={styles.title}>
                             {title}
                         </AppText>
                     </View>

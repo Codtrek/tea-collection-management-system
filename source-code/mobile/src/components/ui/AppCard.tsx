@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
         marginVertical: spacing.sm,
     },
     cardTitle: {
-        ...typography.subheading,
+        ...typography.subHeading,
         color: colors.primary,
         marginBottom: spacing.sm,
     },

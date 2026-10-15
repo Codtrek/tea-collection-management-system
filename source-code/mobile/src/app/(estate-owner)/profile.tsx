@@ -21,7 +21,8 @@ export default function Profile() {
             >
                 <View style={styles.avatarContainer}>
                     <Avatar
-                        image="https://plus.unsplash.com/premium_photo-1689539137236-b68e436248de?q=80&w=1171&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=NHwxMjA3fDA%3D"
+                        // image="https://plus.unsplash.com/premium_photo-1689539137236-b68e436248de?q=80&w=1171&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=NHwxMjA3fDA%3D"
+                        name="Kalana"
                         size={50}
                     />
                     <View>
@@ -35,7 +36,7 @@ export default function Profile() {
                 </View>
                 
                 <View>
-                    <AppText variant="subheading">Account</AppText>
+                    <AppText variant="sectionHeading">Account</AppText>
                     <View>
                         <ProfileFeatureCard iconName="person-outline" feature="Personal Information"/>
                         <ProfileFeatureCard iconName="key-outline" feature="Change Password"/>
@@ -43,7 +44,7 @@ export default function Profile() {
                 </View>
                 
                 <View>
-                    <AppText variant="subheading">Support</AppText>
+                    <AppText variant="sectionHeading">Support</AppText>
                     <View>
                         <ProfileFeatureCard iconName="help-outline" feature="Help & Support"/>
                         <ProfileFeatureCard iconName="information-circle-outline" feature="About"/>
