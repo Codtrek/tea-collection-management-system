@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { Pill } from "@/components/ui/demo-teacollector-pill";
 import { Btn } from "@/components/ui/demo-teacollector-button";
+import ConfirmationWarning from "@/components/ui/demo-teacollector-confirmationWarning";
 
 import { colors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
@@ -149,6 +150,7 @@ export const HomeStatsRow: React.FC<HomeStatsRowProps> = ({ stats, style }) => {
 interface FertRequestCardProps {
   request: any;
   onViewDetails?: (request: any) => void;
+  onAcceptFertilizer?: (request: any) => void;
   onLoadFertilizer?: (request: any) => void;
   onDeliverFertilizer?: (request: any) => void;
 }
@@ -156,10 +158,19 @@ interface FertRequestCardProps {
 export const FertRequestCard = ({
   request,
   onViewDetails,
+  onAcceptFertilizer,
   onLoadFertilizer,
   onDeliverFertilizer,
 }: FertRequestCardProps) => {
+  const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
+
   const statusMap: any = {
+    pending: {
+      label: "Pending",
+      action: "Accept Request",
+      handler: onAcceptFertilizer,
+    },
+
     confirmed: {
       label: "Confirmed",
       action: "Load Fertilizer",
@@ -194,6 +205,7 @@ export const FertRequestCard = ({
   const currentStatus = statusMap[request.status];
 
   return (
+    <>
     <View style={styles.card}>
       {/* =========================
           HEADER
@@ -211,6 +223,9 @@ export const FertRequestCard = ({
           </Text>
 
           <Text style={styles.timeText}>
+            {request.status === "pending" &&
+              `Requested at ${request.requestedAt}`}
+
             {request.status === "confirmed" &&
               `Confirmed at ${request.confirmedAt}`}
 
@@ -256,9 +271,13 @@ export const FertRequestCard = ({
               variant="primary"
               small
               block
-              onPress={() =>
-                currentStatus.handler?.(request)
-              }
+              onPress={() => {
+                if (request.status === "pending") {
+                  setShowAcceptConfirmation(true);
+                  return;
+                }
+                currentStatus.handler?.(request);
+              }}
             >
               {currentStatus.action}
             </Btn>
@@ -266,6 +285,19 @@ export const FertRequestCard = ({
         )}
       </View>
     </View>
+    <ConfirmationWarning
+      visible={showAcceptConfirmation}
+      title="Accept this fertilizer request?"
+      message={`You are confirming the fertilizer request from ${request.estateName || "this estate"}.`}
+      confirmLabel="Accept request"
+      intent="success"
+      onCancel={() => setShowAcceptConfirmation(false)}
+      onConfirm={() => {
+        setShowAcceptConfirmation(false);
+        onAcceptFertilizer?.(request);
+      }}
+    />
+    </>
   );
 };
 

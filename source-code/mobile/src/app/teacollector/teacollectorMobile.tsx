@@ -126,8 +126,7 @@ const INITIAL_FERT_REQUESTS = [
     fertilizerType: "Urea 46%",
     quantity: 50,
     requestedAt: "2026-07-23 08:15",
-    status: "confirmed",
-    confirmedAt: "2026-07-23 09:30",
+    status: "pending",
     notes: "For tea plantation"
   },
   { 
@@ -158,6 +157,19 @@ const INITIAL_FERT_REQUESTS = [
     loadedAt: "2026-07-23 08:45",
     deliveredAt: "2026-07-23 09:30",
     notes: "For organic section"
+  },
+  {
+    id: 4,
+    estateName: "Oakridge Estate",
+    owner: "D. Herath",
+    phone: "072 118 2290",
+    gps: "7.2299° N, 80.7115° E",
+    fertilizerType: "Urea 46%",
+    quantity: 40,
+    requestedAt: "2026-07-23 08:45",
+    status: "confirmed",
+    confirmedAt: "2026-07-23 09:10",
+    notes: "For the north field"
   },
 ];
 
@@ -477,6 +489,15 @@ export default function TeaCollectorMobile() {
     setSheet("fertDetails"); 
   };
 
+  const acceptFertilizer = (request: any) => {
+    if (!request || request.status !== "pending") return;
+    updateFert(request.id, {
+      status: "confirmed",
+      confirmedAt: nowTime(),
+    });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   const loadFertilizer = (request: any) => { 
     if (!request) return;
     setActiveFert(request); 
@@ -558,6 +579,7 @@ export default function TeaCollectorMobile() {
           <DemoTeaCollectorFertilizer
             requests={fertRequests}
             onViewDetails={openFertDetails}
+            onAcceptFertilizer={acceptFertilizer}
             onLoadFertilizer={loadFertilizer}
             onDeliverFertilizer={deliverFertilizer}
           />
