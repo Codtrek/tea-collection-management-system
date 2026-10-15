@@ -1,88 +1,24 @@
 services:
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - api
-    networks:
-      - tea-network
-    restart: unless-stopped
+#Serve HTTPS locally on port 443 with your local SSL certificates.
+# Route one domain/path to multiple services (for example /api → backend and / → frontend).
+# Mirror your production routing setup before deployment.
+# Add reverse-proxy features such as rate limiting, compression, or special headers.
+#   # nginx:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./nginx/ssl:/etc/nginx/ssl:ro
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   depends_on:
+  #     - api
+  #   networks:
+  #     - tea-network
+  #   restart: unless-stopped
 
-  api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: dev
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
-      - PORT=3000
-    ports:
-      - "3000:3000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - tea-network
-    restart: unless-stopped
-
-  # Not started by `docker compose up -d` — run natively instead (`cd admin && npm run dev`)
-  # so the file watcher gets real inotify events across the Windows/Docker bind-mount boundary.
-  # Kept here, behind a profile, for anyone who wants the fully-containerised workflow anyway
-  # (`docker compose --profile frontend up -d admin`); HMR will be slow/absent in that mode.
-  admin:
-    profiles: ["frontend"]
-    build:
-      context: ./admin
-      dockerfile: Dockerfile
-      target: dev
-    volumes:
-      - ./admin:/app
-      - /app/node_modules
-    environment:
-      - VITE_USE_MOCK_API=${VITE_USE_MOCK_API}
-      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
-    ports:
-      - "5173:5173"
-    command: npm run dev
-    networks:
-      - tea-network
-    restart: unless-stopped
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - tea-network
-    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -95,19 +31,7 @@ services:
       - tea-network
     restart: unless-stopped
 
-  adminer:
-    image: adminer
-    container_name: tea-cms-adminer
-    restart: unless-stopped
-    ports:
-      - "5050:8080"
-    depends_on:
-      - postgres
-    networks:
-      - tea-network
-
 volumes:
-  postgres_data:
   redis_data:
 
 networks:
