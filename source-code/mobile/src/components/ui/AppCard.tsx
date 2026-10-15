@@ -18,7 +18,7 @@ const styles = StyleSheet.create({
         padding: spacing.md,
         borderWidth: 1,
         borderColor: colors.border.default,
-        borderRadius: 10,
+        borderRadius: 20,
         marginVertical: spacing.sm,
     },
     cardTitle: {

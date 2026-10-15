@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
-import { Screen, AppText, SearchBar, GeneralHeader, Avatar } from "@/components/ui";
-import { EstateCard } from "@/components/estate-owner";
+import { Screen, AppText, SearchBar, GeneralHeader, Avatar, AppCard} from "@/components/ui";
+import { ProfileFeatureCard } from "@/components/estate-owner";
 import { colors, spacing } from "@/theme";
 
 export default function Profile() {
@@ -15,7 +15,26 @@ export default function Profile() {
                     />
                 }
             >
-                <AppText>Hello</AppText>
+                <View>
+                    
+                </View>
+                
+                <View>
+                    <AppText variant="subheading">Account</AppText>
+                    <View>
+                        <ProfileFeatureCard feature="Personal Information"/>
+                        <ProfileFeatureCard feature="Change Password"/>
+                    </View>
+                </View>
+                
+                <View>
+                    <AppText variant="subheading">Support</AppText>
+                    <View>
+                        <ProfileFeatureCard feature="Help & Support"/>
+                        <ProfileFeatureCard feature="About"/>
+                    </View>
+                </View>
+                
             </Screen>
         </>
     );
