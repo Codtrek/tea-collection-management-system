@@ -119,9 +119,38 @@ export interface PublicSettlement {
   transportCost: number;
   fertilizerDeduction: number;
   advanceDeduction: number;
+  /** signed carry-over from grading corrections on settled deliveries (0 when none) */
+  adjustment: number;
   status: AppSettlementStatus;
   selfDelivery: boolean;
   missingBank?: boolean;
   processedBy?: string;
   processedOn?: string;
+}
+
+/** The numeric parts of a settlement row (entity values arrive as decimal strings). */
+export interface SettlementAmounts {
+  superKg: string | number;
+  normalKg: string | number;
+  superRate: string | number;
+  normalRate: string | number;
+  transportCost: string | number;
+  fertilizerDeduction: string | number;
+  advanceDeduction: string | number;
+  adjustmentAmount?: string | number | null;
+}
+
+/**
+ * Net payable — the ONE place the formula lives backend-side:
+ * gross − transport − fertilizer − advance + signed grading adjustment.
+ */
+export function settlementNet(s: SettlementAmounts): number {
+  return (
+    Number(s.superKg) * Number(s.superRate) +
+    Number(s.normalKg) * Number(s.normalRate) -
+    Number(s.transportCost) -
+    Number(s.fertilizerDeduction) -
+    Number(s.advanceDeduction) +
+    Number(s.adjustmentAmount ?? 0)
+  );
 }

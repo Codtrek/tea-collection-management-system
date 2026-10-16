@@ -80,6 +80,26 @@ export class CollectionRecordEntity {
   @Column({ name: 'last_updated_on', type: 'timestamp', nullable: true })
   lastUpdatedOn: Date | null;
 
+  /** When the factory first saved the grading. */
+  @Column({ name: 'graded_at', type: 'timestamptz', nullable: true })
+  gradedAt: Date | null;
+
+  /**
+   * End of the OPEN window — graded_at + the correction window AS IT WAS WHEN GRADED
+   * (a snapshot, never recomputed from the current setting). Null on a confirmed row =
+   * legacy = locked. See `gradingState` in collection-map.ts.
+   */
+  @Column({ name: 'locked_at', type: 'timestamptz', nullable: true })
+  lockedAt: Date | null;
+
+  /** Set when an officer clicks Finalize; locked_at is pulled forward to it. */
+  @Column({ name: 'finalized_at', type: 'timestamptz', nullable: true })
+  finalizedAt: Date | null;
+
+  /** The processed settlement that paid this delivery (set at process time). */
+  @Column({ name: 'settlement_id', type: 'varchar', nullable: true })
+  settlementId: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

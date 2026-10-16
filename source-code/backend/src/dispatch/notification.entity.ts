@@ -11,7 +11,9 @@ export type NotificationType =
   | 'missed_checkin'
   | 'route_reassigned'
   | 'exception_request'
-  | 'collection_complete';
+  | 'collection_complete'
+  | 'delivery_graded'
+  | 'grade_correction';
 
 /** In-app notification row (the `notifications` table). Dispatch is its first writer. */
 @Entity('notifications')
@@ -39,6 +41,10 @@ export class NotificationEntity {
 
   @Column({ name: 'reference_type', type: 'varchar', nullable: true })
   referenceType: string | null;
+
+  /** Optional idempotency key (UNIQUE when set): a retried send can never store a second row. */
+  @Column({ name: 'dedupe_key', type: 'varchar', nullable: true })
+  dedupeKey: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

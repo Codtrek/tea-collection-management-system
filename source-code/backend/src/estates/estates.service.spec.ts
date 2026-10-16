@@ -1,10 +1,13 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
+import type { CollectionRecordEntity } from '../collections/collection-record.entity';
+import type { SettlementAdjustmentEntity } from '../collections/settlement-adjustment.entity';
 import type { UsersService } from '../users/users.service';
 import type { EstateAdvanceEntity } from './estate-advance.entity';
 import type { EstateDocumentEntity } from './estate-document.entity';
 import type { EstateOwnerEntity } from './estate-owner.entity';
 import type { EstateEntity } from './estate.entity';
+import { settlementNet } from './estate-map';
 import { type Actor, EstatesService } from './estates.service';
 import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import type { RouteEntity } from './route.entity';
@@ -18,8 +21,15 @@ class FakeRepository<T extends { id: string | number }> {
     this.store.set(record.id, record);
   }
 
-  find(): Promise<T[]> {
-    return Promise.resolve([...this.store.values()]);
+  find(opts?: { where?: Partial<T> }): Promise<T[]> {
+    const where = opts?.where;
+    return Promise.resolve(
+      [...this.store.values()].filter(
+        (r) =>
+          !where ||
+          (Object.entries(where) as [keyof T, unknown][]).every(([k, v]) => r[k] === v),
+      ),
+    );
   }
 
   findOne({ where }: { where: Partial<T> }): Promise<T | null> {
@@ -92,6 +102,7 @@ function makeSettlement(
     transportCost: '8400.00',
     fertilizerDeduction: '22800.00',
     advanceDeduction: '50000.00',
+    adjustmentAmount: '0',
     status: 'pending',
     selfDelivery: false,
     missingBank: false,
@@ -126,6 +137,8 @@ describe('EstatesService', () => {
   let advanceRepo: FakeRepository<EstateAdvanceEntity>;
   let settlementRepo: FakeRepository<SettlementEntity>;
   let routeRepo: FakeRepository<RouteEntity>;
+  let collectionRepo: FakeRepository<CollectionRecordEntity>;
+  let adjustmentRepo: FakeRepository<SettlementAdjustmentEntity>;
   let service: EstatesService;
 
   const admin: Actor = { name: 'A. Bandara', role: 'Administrator' };
@@ -139,6 +152,8 @@ describe('EstatesService', () => {
     advanceRepo = new FakeRepository();
     settlementRepo = new FakeRepository();
     routeRepo = new FakeRepository();
+    collectionRepo = new FakeRepository();
+    adjustmentRepo = new FakeRepository();
     ownerRepo.seed(makeOwner());
     routeRepo.seed({ id: 3, factoryId: 1, name: 'Route 3' });
 
@@ -149,6 +164,8 @@ describe('EstatesService', () => {
       advanceRepo as unknown as Repository<EstateAdvanceEntity>,
       settlementRepo as unknown as Repository<SettlementEntity>,
       routeRepo as unknown as Repository<RouteEntity>,
+      collectionRepo as unknown as Repository<CollectionRecordEntity>,
+      adjustmentRepo as unknown as Repository<SettlementAdjustmentEntity>,
       {} as UsersService,
       { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
     );
@@ -299,6 +316,83 @@ describe('EstatesService', () => {
       await expect(service.processSettlements(officer)).rejects.toThrow(
         ConflictException,
       );
+    });
+  });
+
+  describe('processSettlements — deliveries linked as paid; OPEN ones skipped; corrections carried', () => {
+    const lockedAt = (minsFromNow: number) => new Date(Date.now() + minsFromNow * 60_000);
+    const delivery = (id: string, over: Partial<CollectionRecordEntity> = {}) =>
+      ({
+        id,
+        estateId: 1,
+        status: 'confirmed',
+        collectionDate: '2026-07-14',
+        gradeLines: [],
+        settlementId: null,
+        lockedAt: lockedAt(-60),
+        ...over,
+      }) as unknown as CollectionRecordEntity;
+
+    beforeEach(() => {
+      settlementRepo.seed(makeSettlement());
+    });
+
+    it('links locked deliveries of the same estate + month to the settlement that pays them', async () => {
+      collectionRepo.seed(delivery('D-LOCKED'));
+      collectionRepo.seed(delivery('D-LEGACY', { lockedAt: null }));
+      await service.processSettlements(officer);
+      const rows = await collectionRepo.find();
+      expect(rows.find((r) => r.id === 'D-LOCKED')?.settlementId).toBe('SET-2026-07-001');
+      expect(rows.find((r) => r.id === 'D-LEGACY')?.settlementId).toBe('SET-2026-07-001');
+    });
+
+    it('SKIPS deliveries still inside the correction window — they stay unlinked and unpaid', async () => {
+      collectionRepo.seed(delivery('D-OPEN', { lockedAt: lockedAt(+20) }));
+      collectionRepo.seed(delivery('D-LOCKED'));
+      await service.processSettlements(officer);
+      const rows = await collectionRepo.find();
+      expect(rows.find((r) => r.id === 'D-OPEN')?.settlementId).toBeNull();
+      expect(rows.find((r) => r.id === 'D-LOCKED')?.settlementId).toBe('SET-2026-07-001');
+    });
+
+    it('does not link other estates, other months, ungraded/collected records, or already-paid deliveries', async () => {
+      collectionRepo.seed(delivery('D-OTHER-ESTATE', { estateId: 2 }));
+      collectionRepo.seed(delivery('D-OTHER-MONTH', { collectionDate: '2026-06-30' }));
+      collectionRepo.seed(delivery('D-COLLECTED', { status: 'collected' }));
+      collectionRepo.seed(delivery('D-PAID', { settlementId: 'SET-OLD' }));
+      await service.processSettlements(officer);
+      const byId = new Map((await collectionRepo.find()).map((r) => [r.id, r.settlementId]));
+      expect(byId.get('D-OTHER-ESTATE')).toBeNull();
+      expect(byId.get('D-OTHER-MONTH')).toBeNull();
+      expect(byId.get('D-COLLECTED')).toBeNull();
+      expect(byId.get('D-PAID')).toBe('SET-OLD');
+    });
+
+    it('carries pending signed adjustments for the estate into the settlement, marks them applied, and nets them in', async () => {
+      adjustmentRepo.seed({ id: 1, estateId: 1, amountRs: '1800.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
+      adjustmentRepo.seed({ id: 2, estateId: 1, amountRs: '-300.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
+      adjustmentRepo.seed({ id: 3, estateId: 2, amountRs: '999.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
+
+      const before = (await service.listSettlements())[0];
+      expect(before.adjustment).toBe(1500); // a pending settlement previews what it will carry
+
+      const [processed] = await service.processSettlements(officer);
+      expect(processed.adjustment).toBe(1500);
+      const adj = await adjustmentRepo.find();
+      expect(adj.find((a) => a.id === 1)).toMatchObject({ status: 'applied', appliedSettlementId: 'SET-2026-07-001' });
+      expect(adj.find((a) => a.id === 2)).toMatchObject({ status: 'applied' });
+      expect(adj.find((a) => a.id === 3)).toMatchObject({ status: 'pending', appliedSettlementId: null }); // another estate
+      // net = gross − deductions + adjustment
+      expect(settlementNet(await settlementRepo.findOne({ where: { id: 'SET-2026-07-001' } }) as SettlementEntity))
+        .toBe(408 * 185 + 175 * 95 - 8400 - 22800 - 50000 + 1500);
+    });
+
+    it('an adjustment is applied once — the next run does not carry it again', async () => {
+      adjustmentRepo.seed({ id: 1, estateId: 1, amountRs: '1800.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
+      await service.processSettlements(officer);
+      settlementRepo.seed(makeSettlement({ id: 'SET-2026-08-001', period: 'August 2026' }));
+      const [second] = await service.processSettlements(officer);
+      expect(second.adjustment).toBe(0);
     });
   });
 

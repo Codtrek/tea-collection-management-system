@@ -9,6 +9,9 @@ import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { UsersService } from '../users/users.service';
+import { CollectionRecordEntity } from '../collections/collection-record.entity';
+import { SettlementAdjustmentEntity } from '../collections/settlement-adjustment.entity';
+import { labelToKey } from '../reports/reports-map';
 import { EstateAdvanceEntity } from './estate-advance.entity';
 import { EstateDocumentEntity } from './estate-document.entity';
 import {
@@ -28,6 +31,7 @@ import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import { UpdateEstateDto } from './dto/update-estate.dto';
 import { RouteEntity } from './route.entity';
 import { SettlementEntity } from './settlement.entity';
+import { payableDeliveries } from './settlement-calc';
 
 export interface Actor {
   name: string;
@@ -49,6 +53,10 @@ export class EstatesService {
     private readonly settlementRepo: Repository<SettlementEntity>,
     @InjectRepository(RouteEntity)
     private readonly routeRepo: Repository<RouteEntity>,
+    @InjectRepository(CollectionRecordEntity)
+    private readonly collectionRepo: Repository<CollectionRecordEntity>,
+    @InjectRepository(SettlementAdjustmentEntity)
+    private readonly adjustmentRepo: Repository<SettlementAdjustmentEntity>,
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
   ) {}
@@ -219,7 +227,20 @@ export class EstatesService {
     const settlements = await this.settlementRepo.find({
       order: { period: 'DESC' },
     });
-    return settlements.map((s) => this.toPublicSettlement(s));
+    // A pending settlement previews the corrections it WILL carry; a processed one shows
+    // what it carried (stored on the row).
+    const pending = (await this.adjustmentRepo.find()).filter(
+      (a) => a.status === 'pending',
+    );
+    return settlements.map((s) => {
+      const out = this.toPublicSettlement(s);
+      if (s.status === 'pending') {
+        out.adjustment = pending
+          .filter((a) => a.estateId === s.estateId)
+          .reduce((sum, a) => sum + Number(a.amountRs), 0);
+      }
+      return out;
+    });
   }
 
   /**
@@ -248,12 +269,51 @@ export class EstatesService {
     const now = new Date();
     const processed: SettlementEntity[] = [];
     const allAdvances = await this.advanceRepo.find();
+    const pendingAdjustments = (await this.adjustmentRepo.find()).filter(
+      (a) => a.status === 'pending',
+    );
+    const allDeliveries = await this.collectionRepo.find({
+      where: { status: 'confirmed' },
+    });
+    let skippedOpen = 0;
+    let linked = 0;
 
     for (const settlement of eligible) {
+      // Signed corrections on deliveries paid in EARLIER settlements ride along here — the
+      // earlier payment is never rewritten, the difference is carried forward.
+      const carried = pendingAdjustments.filter(
+        (a) => a.estateId === settlement.estateId,
+      );
+      settlement.adjustmentAmount = String(
+        Math.round(carried.reduce((s, a) => s + Number(a.amountRs), 0) * 100) / 100,
+      );
       settlement.status = 'processed';
       settlement.processedBy = actor.name;
       settlement.processedOn = now;
       processed.push(await this.settlementRepo.save(settlement));
+      for (const a of carried) {
+        a.status = 'applied';
+        a.appliedSettlementId = settlement.id;
+        await this.adjustmentRepo.save(a);
+      }
+
+      // Link the deliveries this settlement pays for: same estate, same month, not already
+      // paid — and only those past the correction window. OPEN ones are skipped.
+      const monthKey = labelToKey(settlement.period);
+      const candidates = allDeliveries.filter(
+        (d) =>
+          d.estateId === settlement.estateId &&
+          !d.settlementId &&
+          monthKey !== '' &&
+          d.collectionDate.slice(0, 7) === monthKey,
+      );
+      const payable = payableDeliveries(candidates, now);
+      skippedOpen += candidates.length - payable.length;
+      for (const d of payable) {
+        d.settlementId = settlement.id;
+        await this.collectionRepo.save(d);
+        linked += 1;
+      }
 
       for (const advance of allAdvances) {
         if (
@@ -271,6 +331,11 @@ export class EstatesService {
       module: 'Estate Owner',
       record: `${processed.length} settlement(s)`,
       recordHref: '/estates/settlements',
+      details:
+        `${linked} deliver${linked === 1 ? 'y' : 'ies'} linked as paid` +
+        (skippedOpen > 0
+          ? `; ${skippedOpen} still inside the correction window and not included`
+          : ''),
     });
     return processed.map((s) => this.toPublicSettlement(s));
   }
@@ -410,6 +475,7 @@ export class EstatesService {
       transportCost: Number(entity.transportCost),
       fertilizerDeduction: Number(entity.fertilizerDeduction),
       advanceDeduction: Number(entity.advanceDeduction),
+      adjustment: Number(entity.adjustmentAmount ?? 0),
       status: toAppSettlementStatus(entity.status),
       selfDelivery: entity.selfDelivery,
       missingBank: entity.missingBank || undefined,

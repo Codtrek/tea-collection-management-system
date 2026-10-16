@@ -1,4 +1,4 @@
-import type { DbGrade } from '../collections/collection-map';
+import { isPayable, type DbGrade } from '../collections/collection-map';
 
 /** One ADM-01 rate version (effective-dated). */
 export interface RateVersion {
@@ -57,4 +57,15 @@ export function computeGross(
     grossRs: Math.round(priced.reduce((s, l) => s + l.amountRs, 0) * 100) / 100,
     lines: priced,
   };
+}
+
+/**
+ * The ONLY gate between deliveries and money. A delivery still inside its correction
+ * window (OPEN) can change, so it is skipped — it stays unlinked and unpaid until it
+ * locks. Anything that links deliveries to a settlement, or prices them, goes through here.
+ */
+export function payableDeliveries<
+  T extends Parameters<typeof isPayable>[0],
+>(deliveries: T[], now: Date = new Date()): T[] {
+  return deliveries.filter((d) => isPayable(d, now));
 }

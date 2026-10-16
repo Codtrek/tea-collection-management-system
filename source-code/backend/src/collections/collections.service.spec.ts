@@ -12,11 +12,8 @@ import type { EstateEntity } from '../estates/estate.entity';
 import { gradedTotalKg, weightSummary } from './collection-map';
 import type { CollectionRecordEntity } from './collection-record.entity';
 import { type Actor, CollectionsService } from './collections.service';
-import type { ComplaintEntity } from './complaint.entity';
 import type { DeliveryGradeLineEntity } from './delivery-grade-line.entity';
 import { CreateExceptionDto } from './dto/create-exception.dto';
-import { FlagCollectionDto } from './dto/flag-collection.dto';
-import { SetGradeLinesDto } from './dto/set-grade-lines.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 
 function makeRecord(
@@ -45,6 +42,10 @@ function makeRecord(
     ],
     provisional: null,
     mismatch: null,
+    gradedAt: null,
+    lockedAt: null,
+    finalizedAt: null,
+    settlementId: null,
     lastUpdatedBy: null,
     lastUpdatedOn: null,
     createdAt: new Date('2026-07-20T00:00:00.000Z'),
@@ -117,7 +118,6 @@ class FakeRepository<T extends { id: string | number }> {
 describe('CollectionsService', () => {
   let repo: FakeRepository<CollectionRecordEntity>;
   let estates: FakeRepository<EstateEntity>;
-  let complaints: FakeRepository<ComplaintEntity>;
   let resolver: { getAgentForRoute: jest.Mock };
   let notifier: { notifyAgent: jest.Mock };
   let service: CollectionsService;
@@ -128,7 +128,6 @@ describe('CollectionsService', () => {
   beforeEach(() => {
     repo = new FakeRepository<CollectionRecordEntity>();
     estates = new FakeRepository<EstateEntity>();
-    complaints = new FakeRepository<ComplaintEntity>();
     resolver = { getAgentForRoute: jest.fn().mockResolvedValue(null) };
     notifier = { notifyAgent: jest.fn().mockResolvedValue(undefined) };
     service = new CollectionsService(
@@ -147,7 +146,6 @@ describe('CollectionsService', () => {
       } as unknown as AgentDirectoryService,
       notifier as unknown as DispatchNotifier,
       estates as unknown as Repository<EstateEntity>,
-      complaints as unknown as Repository<ComplaintEntity>,
     );
   });
 
@@ -202,24 +200,6 @@ describe('CollectionsService', () => {
       await expect(service.createException(dto, manager)).rejects.toThrow(
         ForbiddenException,
       );
-    });
-
-    it('rejects Manager on flag', async () => {
-      repo.seed(makeRecord({ status: 'confirmed' }));
-      const dto: FlagCollectionDto = { reason: 'Weight looks wrong' };
-      await expect(service.flag('GV-2026-0001', dto, manager)).rejects.toThrow(
-        ForbiddenException,
-      );
-    });
-
-    it('rejects Manager on grading', async () => {
-      repo.seed(makeRecord({ status: 'collected' }));
-      const dto: SetGradeLinesDto = {
-        lines: [{ grade: 'Super', weightKg: 150 }],
-      };
-      await expect(
-        service.setGradeLines('GV-2026-0001', dto, manager),
-      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -340,114 +320,14 @@ describe('CollectionsService', () => {
     });
   });
 
-  describe('grade lines — factory-side, total = Σ lines', () => {
+  describe('grade lines — total = Σ lines (grading itself lives in grading.service.spec.ts)', () => {
     it('is Ungraded (estate weight shown) until lines exist', async () => {
       repo.seed(makeRecord({ status: 'collected', weightKg: '150.00' }));
       const r = await service.findById('GV-2026-0001');
       expect(r.graded).toBe(false);
       expect(r.weightKg).toBe(150);
       expect(r.estateWeightKg).toBe(150);
-    });
-
-    it('grades into multiple lines: total is the sum, estate weight is preserved, record confirms', async () => {
-      repo.seed(makeRecord({ status: 'collected', weightKg: '150.00' }));
-      const result = await service.setGradeLines(
-        'GV-2026-0001',
-        {
-          lines: [
-            { grade: 'Super', weightKg: 100 },
-            { grade: 'Normal', weightKg: 50 },
-          ],
-        },
-        officer,
-      );
-      expect(result.graded).toBe(true);
-      expect(result.weightKg).toBe(150);
-      expect(result.estateWeightKg).toBe(150);
-      expect(result.gradeLines).toEqual([
-        { grade: 'Super', weightKg: 100 },
-        { grade: 'Normal', weightKg: 50 },
-      ]);
-      expect(result.status).toBe('Confirmed');
-      expect(result.mismatch).toBeUndefined();
-    });
-
-    it('rejects two lines for the same grade (409)', async () => {
-      repo.seed(makeRecord({ status: 'collected' }));
-      await expect(
-        service.setGradeLines(
-          'GV-2026-0001',
-          {
-            lines: [
-              { grade: 'Super', weightKg: 100 },
-              { grade: 'Super', weightKg: 50 },
-            ],
-          },
-          officer,
-        ),
-      ).rejects.toThrow(ConflictException);
-    });
-
-    it('only grades a Collected record; Confirmed is locked', async () => {
-      const dto: SetGradeLinesDto = { lines: [{ grade: 'Super', weightKg: 150 }] };
-      repo.seed(makeRecord({ id: 'A', status: 'approved' }));
-      await expect(service.setGradeLines('A', dto, officer)).rejects.toThrow(
-        BadRequestException,
-      );
-      repo.seed(makeRecord({ id: 'B', status: 'confirmed' }));
-      await expect(service.setGradeLines('B', dto, officer)).rejects.toThrow(
-        ConflictException,
-      );
-    });
-
-    it('regrading a collected record updates lines in place and drops missing grades', async () => {
-      const existingSuper = line('super', '90.00');
-      const existingNormal = line('normal', '60.00');
-      repo.seed(
-        makeRecord({
-          status: 'collected',
-          weightKg: '150.00',
-          gradeLines: [existingSuper, existingNormal],
-        }),
-      );
-      const result = await service.setGradeLines(
-        'GV-2026-0001',
-        { lines: [{ grade: 'Super', weightKg: 150 }] },
-        officer,
-      );
-      expect(result.gradeLines).toEqual([{ grade: 'Super', weightKg: 150 }]);
-      // the Super row was reused, not recreated
-      const saved = repo.store.get('GV-2026-0001')!;
-      expect(saved.gradeLines).toHaveLength(1);
-      expect(saved.gradeLines[0]).toBe(existingSuper);
-    });
-
-    it('raises a weight-mismatch complaint when graded total strays beyond the threshold', async () => {
-      repo.seed(makeRecord({ status: 'collected', weightKg: '150.00' }));
-      const result = await service.setGradeLines(
-        'GV-2026-0001',
-        { lines: [{ grade: 'Super', weightKg: 120 }] },
-        officer,
-      );
-      expect(result.mismatch?.complaintId).toBe('C-1');
-      expect(result.mismatch?.note).toContain('150');
-      expect(result.mismatch?.note).toContain('120');
-      expect([...complaints.store.values()][0]).toMatchObject({
-        type: 'weight_mismatch',
-        raisedByUserId: 7,
-        collectionRecordId: 'GV-2026-0001',
-      });
-    });
-
-    it('does not complain for a small difference', async () => {
-      repo.seed(makeRecord({ status: 'collected', weightKg: '150.00' }));
-      const result = await service.setGradeLines(
-        'GV-2026-0001',
-        { lines: [{ grade: 'Super', weightKg: 147 }] },
-        officer,
-      );
-      expect(result.mismatch).toBeUndefined();
-      expect(complaints.store.size).toBe(0);
+      expect(r.gradingState).toBeUndefined();
     });
 
     it('weightSummary / gradedTotalKg are the single source of the total', () => {
@@ -462,34 +342,21 @@ describe('CollectionsService', () => {
     });
   });
 
-  describe('flag — Confirmed records only', () => {
-    it('rejects flagging a record that is not Confirmed', async () => {
-      repo.seed(makeRecord({ status: 'collected' }));
-      const dto: FlagCollectionDto = { reason: 'Weight looks wrong' };
-      await expect(service.flag('GV-2026-0001', dto, officer)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('appends a correction-request entry to the timeline for a Confirmed record', async () => {
-      repo.seed(
-        makeRecord({
-          status: 'confirmed',
-          timeline: [
-            {
-              status: 'Confirmed',
-              timestamp: '2026-07-20T11:00:00.000Z',
-              by: 'R. Jayasuriya',
-            },
-          ],
-        }),
-      );
-      const dto: FlagCollectionDto = { reason: 'Weight looks wrong' };
-      const result = await service.flag('GV-2026-0001', dto, officer);
-
-      expect(result.timeline).toHaveLength(2);
-      expect(result.timeline[1].status).toBe('Confirmed');
-      expect(result.timeline[1].by).toContain('correction requested');
+  describe('grading state is surfaced on every record', () => {
+    it('open inside the window, locked after it, settled once paid; legacy confirmed rows are locked', async () => {
+      const future = new Date(Date.now() + 10 * 60_000);
+      const past = new Date(Date.now() - 10 * 60_000);
+      repo.seed(makeRecord({ id: 'O', status: 'confirmed', lockedAt: future }));
+      repo.seed(makeRecord({ id: 'L', status: 'confirmed', lockedAt: past }));
+      repo.seed(makeRecord({ id: 'S', status: 'confirmed', lockedAt: past, settlementId: 'SET-1' }));
+      repo.seed(makeRecord({ id: 'G', status: 'confirmed', lockedAt: null }));
+      const all = await service.findAll();
+      const state = (id: string) => all.find((r) => r.id === id)?.gradingState;
+      expect(state('O')).toBe('open');
+      expect(state('L')).toBe('locked');
+      expect(state('S')).toBe('settled');
+      expect(state('G')).toBe('locked');
+      expect(all.find((r) => r.id === 'S')?.settlementId).toBe('SET-1');
     });
   });
 

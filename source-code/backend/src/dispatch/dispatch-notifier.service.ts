@@ -61,6 +61,34 @@ export class DispatchNotifier {
     await this.push(userId, input);
   }
 
+  /**
+   * Like `notifyUser` but for callers that must KNOW it worked (the grading outbox): the
+   * in-app row is the delivery, so a failure to store it throws, and `dedupeKey` makes a
+   * retry after a crash a no-op instead of a duplicate. Push stays best-effort.
+   */
+  async deliverToUser(
+    userId: number,
+    input: NotifyInput & { dedupeKey: string },
+  ): Promise<{ duplicate: boolean }> {
+    const existing = await this.notifications.findOne({
+      where: { dedupeKey: input.dedupeKey },
+    });
+    if (existing) return { duplicate: true };
+    await this.notifications.save(
+      this.notifications.create({
+        userId,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        referenceId: input.referenceId ?? null,
+        referenceType: input.referenceType ?? null,
+        dedupeKey: input.dedupeKey,
+      }),
+    );
+    await this.push(userId, input);
+    return { duplicate: false };
+  }
+
   private async push(userId: number, input: NotifyInput): Promise<void> {
     try {
       const rows = await this.tokens.find({ where: { userId } });

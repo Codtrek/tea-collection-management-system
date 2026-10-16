@@ -13,6 +13,7 @@ import { EstateAdvanceEntity } from './estate-advance.entity';
 import {
   formatEstateId,
   parseEstateId,
+  settlementNet,
   toAppAdvanceStatus,
   toAppEstateStatus,
   toAppSettlementStatus,
@@ -67,6 +68,7 @@ function toPublicSettlement(entity: SettlementEntity): PublicSettlement {
     transportCost: Number(entity.transportCost),
     fertilizerDeduction: Number(entity.fertilizerDeduction),
     advanceDeduction: Number(entity.advanceDeduction),
+    adjustment: Number(entity.adjustmentAmount ?? 0),
     status: toAppSettlementStatus(entity.status),
     selfDelivery: entity.selfDelivery,
     missingBank: entity.missingBank || undefined,
@@ -199,11 +201,7 @@ export class EstateLifetimeService {
       ),
     )[0];
     const lastSettlementRs = lastSettlement
-      ? Number(lastSettlement.superKg) * Number(lastSettlement.superRate) +
-        Number(lastSettlement.normalKg) * Number(lastSettlement.normalRate) -
-        Number(lastSettlement.transportCost) -
-        Number(lastSettlement.fertilizerDeduction) -
-        Number(lastSettlement.advanceDeduction)
+      ? settlementNet(lastSettlement)
       : null;
 
     const { deliveredVsAvgPct, qualityVsAvgPct } =
@@ -298,12 +296,7 @@ export class EstateLifetimeService {
 
     for (const s of settlements) {
       if (s.status !== 'processed') continue;
-      const net =
-        Number(s.superKg) * Number(s.superRate) +
-        Number(s.normalKg) * Number(s.normalRate) -
-        Number(s.transportCost) -
-        Number(s.fertilizerDeduction) -
-        Number(s.advanceDeduction);
+      const net = settlementNet(s);
       entries.push({
         id: `set-${s.id}`,
         type: 'Settlement',
@@ -499,13 +492,7 @@ export class EstateLifetimeService {
         (b.processedOn?.toISOString() ?? '').localeCompare(a.processedOn?.toISOString() ?? ''),
       )[0];
       const lastPaymentRs = lastSettlement
-        ? Math.round(
-            Number(lastSettlement.superKg) * Number(lastSettlement.superRate) +
-              Number(lastSettlement.normalKg) * Number(lastSettlement.normalRate) -
-              Number(lastSettlement.transportCost) -
-              Number(lastSettlement.fertilizerDeduction) -
-              Number(lastSettlement.advanceDeduction),
-          )
+        ? Math.round(settlementNet(lastSettlement))
         : null;
 
       const qualityTrend = trendMonths.map((month) => {

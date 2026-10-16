@@ -52,6 +52,13 @@ export class SettlementEntity {
   })
   advanceDeduction: string;
 
+  /**
+   * Signed Rs. carried in from approved grading corrections on already-SETTLED deliveries
+   * (settlement_adjustments). Set when the settlement is processed; the past is never rewritten.
+   */
+  @Column({ name: 'adjustment_amount', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  adjustmentAmount: string;
+
   @Column({ type: 'varchar' })
   status: DbSettlementStatus;
 

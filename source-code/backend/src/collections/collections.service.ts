@@ -16,24 +16,19 @@ import { RouteResolverService } from '../dispatch/route-resolver.service';
 import { EstateEntity } from '../estates/estate.entity';
 import { formatEstateId } from '../estates/estate-map';
 import {
-  MISMATCH_THRESHOLD,
+  gradingState,
   toAppStatus,
-  toDbGrade,
   weightSummary,
   type DbStatus,
   type PublicCollection,
 } from './collection-map';
-import { ComplaintEntity } from './complaint.entity';
-import { DeliveryGradeLineEntity } from './delivery-grade-line.entity';
 import { CreateExceptionDto } from './dto/create-exception.dto';
-import { FlagCollectionDto } from './dto/flag-collection.dto';
-import { SetGradeLinesDto } from './dto/set-grade-lines.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 
 export interface Actor {
   name: string;
   role: AppRole;
-  /** users.id — needed to attribute a mismatch complaint to a person */
+  /** users.id — attributes a mismatch complaint / audit row to a person */
   sub?: number | null;
 }
 
@@ -56,8 +51,6 @@ export class CollectionsService {
     private readonly notifier: DispatchNotifier,
     @InjectRepository(EstateEntity)
     private readonly estateRepo: Repository<EstateEntity>,
-    @InjectRepository(ComplaintEntity)
-    private readonly complaintRepo: Repository<ComplaintEntity>,
   ) {}
 
   async findAll(): Promise<PublicCollection[]> {
@@ -103,7 +96,7 @@ export class CollectionsService {
     return out;
   }
 
-  /** COL-04. Confirmed records are locked (§7.1) — must Flag for Correction instead. */
+  /** COL-04. Confirmed records are locked (§7.1) — grading changes go through the OPEN window or a correction request. */
   async update(
     id: string,
     dto: UpdateCollectionDto,
@@ -114,7 +107,7 @@ export class CollectionsService {
 
     if (record.status === 'confirmed') {
       throw new ConflictException(
-        'This record is confirmed and locked. Use Flag for Correction instead of editing it directly.',
+        'This record is confirmed and locked. To change the graded weights, request a correction instead of editing it directly.',
       );
     }
 
@@ -223,145 +216,6 @@ export class CollectionsService {
     );
   }
 
-  /**
-   * Factory-side grading at receiving — the ONLY way grade lines are written. Agents and
-   * owners can't reach this (portal tokens only) and the mobile app has no grade input.
-   * Replaces the delivery's lines (one per grade, a duplicate is a 409), confirms the
-   * record, and raises a weight-mismatch complaint when the graded total strays from the
-   * estate weight beyond the threshold.
-   */
-  async setGradeLines(
-    id: string,
-    dto: SetGradeLinesDto,
-    actor: Actor,
-  ): Promise<PublicCollection> {
-    this.assertCanWrite(actor);
-    const record = await this.findEntity(id);
-
-    if (record.status === 'confirmed') {
-      throw new ConflictException(
-        'This record is confirmed and locked. Use Flag for Correction instead of regrading it.',
-      );
-    }
-    if (record.status !== 'collected') {
-      throw new BadRequestException(
-        'Grading happens at the factory once the agent has collected — this record is not Collected yet.',
-      );
-    }
-
-    const grades = dto.lines.map((l) => toDbGrade(l.grade));
-    if (new Set(grades).size !== grades.length) {
-      throw new ConflictException(
-        'A delivery can have only one grade line per grade.',
-      );
-    }
-
-    const now = new Date();
-    const existing = new Map(
-      (record.gradeLines ?? []).map((l) => [l.grade, l]),
-    );
-    // Reuse a line's row when its grade is unchanged (updates in place — avoids tripping
-    // UNIQUE(delivery_id, grade) on replace); lines missing from the payload are orphan-deleted.
-    record.gradeLines = dto.lines.map((l) => {
-      const grade = toDbGrade(l.grade);
-      const line = existing.get(grade) ?? new DeliveryGradeLineEntity();
-      line.grade = grade;
-      line.weightKg = String(l.weightKg);
-      line.gradedBy = actor.name;
-      line.gradedAt = now;
-      return line;
-    });
-
-    const total = dto.lines.reduce((s, l) => s + l.weightKg, 0);
-    const estateKg = Number(record.weightKg);
-    const diff = estateKg > 0 ? Math.abs(total - estateKg) / estateKg : 0;
-
-    record.status = 'confirmed';
-    record.timeline = [
-      ...record.timeline,
-      {
-        status: 'Confirmed',
-        timestamp: now.toISOString(),
-        by: `${actor.name} — graded ${dto.lines
-          .map((l) => `${l.grade} ${l.weightKg} kg`)
-          .join(', ')}`,
-      },
-    ];
-    record.lastUpdatedBy = actor.name;
-    record.lastUpdatedOn = now;
-
-    if (diff > MISMATCH_THRESHOLD) {
-      const note = `Estate weight ${estateKg} kg vs factory graded total ${total} kg (${(diff * 100).toFixed(1)}% apart).`;
-      let complaintId = 'unfiled';
-      if (actor.sub) {
-        const complaint = await this.complaintRepo.save(
-          this.complaintRepo.create({
-            type: 'weight_mismatch',
-            raisedByUserId: actor.sub,
-            collectionRecordId: record.id,
-            description: note,
-            status: 'open',
-          }),
-        );
-        complaintId = `C-${complaint.id}`;
-      }
-      record.mismatch = { complaintId, note };
-    }
-
-    const saved = await this.repo.save(record);
-    await this.audit.record(actor, {
-      action: 'Graded collection record',
-      module: 'Collection',
-      record: saved.id,
-      recordHref: `/collections/${saved.id}`,
-      details: dto.lines.map((l) => `${l.grade} ${l.weightKg} kg`).join(', '),
-    });
-    return this.toPublic(saved);
-  }
-
-  /** Audit-tracked correction request against a locked (Confirmed) record. */
-  async flag(
-    id: string,
-    dto: FlagCollectionDto,
-    actor: Actor,
-  ): Promise<PublicCollection> {
-    this.assertCanWrite(actor);
-    const record = await this.findEntity(id);
-
-    if (record.status !== 'confirmed') {
-      throw new BadRequestException(
-        'Only confirmed records need Flag for Correction — this record can still be edited directly.',
-      );
-    }
-
-    // The correction request is captured both as a timeline entry (rendered on
-    // CollectionDetailPage) and, since the Administration slice (2.6), as a
-    // real audit_logs row via AuditService below.
-    // Note: CollectionDetailPage's timeline view matches the first entry for a
-    // given status, so this second 'Confirmed' entry isn't rendered as its own
-    // row there today; the data is still captured.
-    record.timeline = [
-      ...record.timeline,
-      {
-        status: toAppStatus(record.status),
-        timestamp: new Date().toISOString(),
-        by: `${actor.name} — correction requested: ${dto.reason}`,
-      },
-    ];
-    record.lastUpdatedBy = actor.name;
-    record.lastUpdatedOn = new Date();
-
-    const saved = await this.repo.save(record);
-    await this.audit.record(actor, {
-      action: 'Flagged collection record for correction',
-      module: 'Collection',
-      record: saved.id,
-      recordHref: `/collections/${saved.id}`,
-      details: dto.reason,
-    });
-    return this.toPublic(saved);
-  }
-
   private async findEntity(id: string): Promise<CollectionRecordEntity> {
     const record = await this.repo.findOne({ where: { id } });
     if (!record) {
@@ -406,6 +260,9 @@ export class CollectionsService {
       lastUpdatedOn: entity.lastUpdatedOn
         ? entity.lastUpdatedOn.toISOString()
         : undefined,
+      gradingState: gradingState(entity) ?? undefined,
+      lockedAt: entity.lockedAt ? entity.lockedAt.toISOString() : undefined,
+      settlementId: entity.settlementId ?? undefined,
     };
   }
 

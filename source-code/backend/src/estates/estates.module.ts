@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditLogEntity } from '../audit/audit-log.entity';
 import { AuditModule } from '../audit/audit.module';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
+import { SettlementAdjustmentEntity } from '../collections/settlement-adjustment.entity';
 import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
 import { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
 import { FertilizerRequestEntity } from '../fertilizer/fertilizer-request.entity';
@@ -33,6 +34,7 @@ import { SettlementEntity } from './settlement.entity';
       // exports AuditService, not its repository provider, so AuditLogEntity
       // is bound again here for @InjectRepository to work in this module.
       CollectionRecordEntity,
+      SettlementAdjustmentEntity,
       FertilizerRequestEntity,
       FertilizerChargeEntity,
       StockMovementEntity,

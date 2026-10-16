@@ -89,6 +89,55 @@ export interface PublicGradeLine {
   weightKg: number;
 }
 
+/** A graded delivery's lifecycle: OPEN (editable) → LOCKED (correction request) → SETTLED (adjustment). */
+export type GradingState = 'open' | 'locked' | 'settled';
+
+/** Footer status of the owner notification, as the delivery detail shows it. */
+export type NotificationStatus =
+  | 'Queued'
+  | 'Sent'
+  | 'Correction sent'
+  | 'Failed'
+  | 'Cancelled';
+
+export interface PublicRevisionLine {
+  grade: AppGrade;
+  weightKg: number;
+}
+
+export interface PublicRevision {
+  revisionNo: number;
+  kind: 'initial' | 'open_edit' | 'correction';
+  lines: PublicRevisionLine[];
+  totalKg: number;
+  reason: string | null;
+  changedBy: string;
+  changedAt: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+}
+
+export interface PublicCorrectionRequest {
+  id: number;
+  deliveryId: string;
+  lines: PublicRevisionLine[];
+  currentLines: PublicRevisionLine[];
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedBy: string;
+  requestedAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  /** Present for a pending request: what approving it would do to money. */
+  impact?: {
+    settled: boolean;
+    settlementId: string | null;
+    /** signed Rs. difference that would be carried into the next settlement (0 when not settled) */
+    adjustmentRs: number;
+  };
+}
+
 export interface PublicCollection {
   id: string;
   estateId: string;
@@ -110,6 +159,17 @@ export interface PublicCollection {
   provisional?: { reportedBy: string; reason: string };
   lastUpdatedBy?: string;
   lastUpdatedOn?: string;
+  /** Set once graded. */
+  gradingState?: GradingState;
+  /** ISO — when the OPEN window closes (a snapshot taken at grading time). */
+  lockedAt?: string;
+  /** The processed settlement that paid this delivery. */
+  settlementId?: string;
+  /** How many times the grade lines were revised after the initial grading. */
+  revisionCount?: number;
+  /** Open correction request awaiting a Manager, if any. */
+  pendingCorrectionId?: number;
+  notificationStatus?: NotificationStatus;
 }
 
 /* ── Weights: the ONE place a delivery's totals are computed ── */
@@ -162,3 +222,36 @@ export function weightSummary(record: WeighedRecord): {
 
 /** Graded total may differ from the estate weight by this much (fraction) before a complaint is raised. */
 export const MISMATCH_THRESHOLD = 0.05;
+
+/* ── Grading lifecycle: the ONE place OPEN / LOCKED / SETTLED is decided ── */
+
+interface GradedRecord {
+  status: DbStatus;
+  lockedAt?: Date | null;
+  settlementId?: string | null;
+}
+
+/**
+ * Derived on read — never stored, so no cron has to flip a flag. `lockedAt` is the snapshot
+ * taken at grading time (graded_at + the window THEN), so a later settings change never
+ * re-opens or re-locks an already-graded delivery. A confirmed row with no `lockedAt` is a
+ * legacy row from before the window existed: locked.
+ */
+export function gradingState(
+  record: GradedRecord,
+  now: Date = new Date(),
+): GradingState | null {
+  if (record.status !== 'confirmed') return null;
+  if (record.settlementId) return 'settled';
+  if (record.lockedAt && now.getTime() < record.lockedAt.getTime()) return 'open';
+  return 'locked';
+}
+
+/**
+ * Only deliveries past the correction window may feed a settlement or any payment figure.
+ * An OPEN delivery can still change, so paying (or even counting) it would be premature.
+ */
+export function isPayable(record: GradedRecord, now: Date = new Date()): boolean {
+  const state = gradingState(record, now);
+  return state === 'locked' || state === 'settled';
+}
