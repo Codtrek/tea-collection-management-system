@@ -1994,18 +1994,21 @@ const PERMISSION_MATRIX: Record<
     estateOwners: 'approve', payroll: 'approve', advances: 'approve',
     employees: 'approve', attendance: 'approve', performance: 'approve',
     reports: 'approve', administration: 'approve', dispatch: 'approve',
+    grading: 'view', gradingApproval: 'view',
   },
   Officer: {
     dashboard: 'view', collection: 'edit', fertilizer: 'edit',
     estateOwners: 'edit', payroll: 'edit', advances: 'approve',
     employees: 'view', attendance: 'edit', performance: 'view',
     reports: 'edit', administration: 'none', dispatch: 'edit',
+    grading: 'edit', gradingApproval: 'view',
   },
   Manager: {
     dashboard: 'view', collection: 'view', fertilizer: 'view',
     estateOwners: 'view', payroll: 'view', advances: 'view',
     employees: 'view', attendance: 'view', performance: 'approve',
     reports: 'view', administration: 'none', dispatch: 'approve',
+    grading: 'view', gradingApproval: 'approve',
   },
 };
 
@@ -2032,6 +2035,12 @@ const SETTING_SEEDS: { key: string; value: unknown }[] = [
   // Agent Dispatch: minutes a cover request waits for an answer; 'HH:MM' factory-local
   // cutoff after which an agent with no shift start raises a missed check-in alert.
   { key: 'dispatch', value: { coverRequestTimeoutMin: 15, shiftStartTime: '06:00' } },
+  // Grading corrections: minutes a graded delivery stays editable; % the factory total may
+  // differ from the estate weight before a warning/complaint; the "usual size" band for an estate.
+  {
+    key: 'collection',
+    value: { correctionWindowMin: 30, mismatchTolerancePct: 5, usualRangeLow: 0.5, usualRangeHigh: 2 },
+  },
 ];
 
 const AUDIT_LOG_SEEDS = [

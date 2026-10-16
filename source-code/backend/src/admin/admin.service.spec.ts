@@ -173,6 +173,36 @@ describe('AdminService — permission matrix (ADM-02)', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('still pins the Administrator to full access on every module except grading / gradingApproval', async () => {
+    const { service } = build();
+    for (const module of ['collection', 'dispatch', 'administration']) {
+      await expect(
+        service.updatePermissions(
+          { entries: [{ role: 'Administrator', module, level: 'view' }] },
+          admin,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    }
+  });
+
+  it('lets the Administrator be set view-only on grading and gradingApproval (separation of duties) and persists it', async () => {
+    const { service, permRepo } = build();
+    const matrix = await service.updatePermissions(
+      {
+        entries: [
+          { role: 'Administrator', module: 'grading', level: 'view' },
+          { role: 'Administrator', module: 'gradingApproval', level: 'view' },
+          { role: 'Manager', module: 'gradingApproval', level: 'approve' },
+        ],
+      },
+      admin,
+    );
+    expect(matrix.Administrator.grading).toBe('view');
+    expect(matrix.Administrator.gradingApproval).toBe('view');
+    expect(matrix.Manager.gradingApproval).toBe('approve');
+    expect(permRepo.store.size).toBe(3);
+  });
+
   it('rejects a non-Administrator', async () => {
     const { service } = build();
     await expect(

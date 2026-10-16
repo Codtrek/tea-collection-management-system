@@ -22,6 +22,8 @@ export type ModuleKey =
   | 'performance'
   | 'reports'
   | 'dispatch'
+  | 'grading'
+  | 'gradingApproval'
   | 'administration';
 
 export const PORTAL_ROLES: PortalRole[] = ['Administrator', 'Officer', 'Manager'];
@@ -38,8 +40,17 @@ export const MODULE_KEYS: ModuleKey[] = [
   'performance',
   'reports',
   'dispatch',
+  'grading',
+  'gradingApproval',
   'administration',
 ];
+
+/**
+ * Modules where the Administrator row IS editable. Every other module keeps the Administrator
+ * pinned to `approve` (the factory always has one unrestricted account), but grading is a
+ * separation-of-duties control: the Administrator audits it, an Officer grades, a Manager approves.
+ */
+export const ADMIN_EDITABLE_MODULES: ModuleKey[] = ['grading', 'gradingApproval'];
 
 export type PermissionMatrix = Record<
   PortalRole,

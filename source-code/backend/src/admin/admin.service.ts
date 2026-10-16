@@ -11,10 +11,12 @@ import { toAppRole } from '../auth/role-map';
 import { FactoryEmployee } from '../users/factory-employee.entity';
 import { User } from '../users/user.entity';
 import {
+  ADMIN_EDITABLE_MODULES,
   formatGradeRateId,
   formatUserId,
   parseUserId,
   rowsToMatrix,
+  type ModuleKey,
   type PermissionMatrix,
   type PortalRole,
   type PublicGradeRate,
@@ -118,7 +120,11 @@ export class AdminService {
     for (const entry of dto.entries) {
       // The Administrator role is immutable — the factory always keeps one
       // unrestricted account. Reject a real downgrade; allow the no-op.
-      if (entry.role === 'Administrator' && entry.level !== 'approve') {
+      if (
+        entry.role === 'Administrator' &&
+        entry.level !== 'approve' &&
+        !ADMIN_EDITABLE_MODULES.includes(entry.module as ModuleKey)
+      ) {
         throw new ForbiddenException(
           'The Administrator role always keeps full access and cannot be changed.',
         );
@@ -126,7 +132,13 @@ export class AdminService {
     }
 
     for (const entry of dto.entries) {
-      if (entry.role === 'Administrator') continue; // never persist admin rows
+      // Never persist Administrator rows — except the separation-of-duties modules.
+      if (
+        entry.role === 'Administrator' &&
+        !ADMIN_EDITABLE_MODULES.includes(entry.module as ModuleKey)
+      ) {
+        continue;
+      }
       await this.permissionRepo.save(
         this.permissionRepo.create({
           role: entry.role,
@@ -142,7 +154,7 @@ export class AdminService {
         action: 'Updated role permissions',
         module: 'Administration',
         record: 'Permission matrix',
-        details: `${dto.entries.filter((e) => e.role !== 'Administrator').length} cell(s) saved`,
+        details: `${dto.entries.filter((e) => e.role !== 'Administrator' || ADMIN_EDITABLE_MODULES.includes(e.module as ModuleKey)).length} cell(s) saved`,
       },
     );
 
