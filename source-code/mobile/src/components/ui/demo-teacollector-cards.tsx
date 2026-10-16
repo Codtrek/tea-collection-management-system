@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { Pill } from "@/components/ui/demo-teacollector-pill";
 import { Btn } from "@/components/ui/demo-teacollector-button";
+import ConfirmationWarning from "@/components/ui/demo-teacollector-confirmationWarning";
 
 import { colors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
@@ -149,6 +150,7 @@ export const HomeStatsRow: React.FC<HomeStatsRowProps> = ({ stats, style }) => {
 interface FertRequestCardProps {
   request: any;
   onViewDetails?: (request: any) => void;
+  onAcceptFertilizer?: (request: any) => void;
   onLoadFertilizer?: (request: any) => void;
   onDeliverFertilizer?: (request: any) => void;
 }
@@ -156,10 +158,19 @@ interface FertRequestCardProps {
 export const FertRequestCard = ({
   request,
   onViewDetails,
+  onAcceptFertilizer,
   onLoadFertilizer,
   onDeliverFertilizer,
 }: FertRequestCardProps) => {
+  const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
+
   const statusMap: any = {
+    pending: {
+      label: "Pending",
+      action: "Accept Request",
+      handler: onAcceptFertilizer,
+    },
+
     confirmed: {
       label: "Confirmed",
       action: "Load Fertilizer",
@@ -194,12 +205,19 @@ export const FertRequestCard = ({
   const currentStatus = statusMap[request.status];
 
   return (
+    <>
     <View style={styles.card}>
       {/* =========================
           HEADER
       ========================= */}
 
-      <View style={styles.header}>
+      <TouchableOpacity
+        style={styles.header}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${request.estateName || "tea estate"} fertilizer request details`}
+        onPress={() => onViewDetails?.(request)}
+      >
         <View style={styles.mainInfo}>
           <Text style={styles.title}>
             {request.estateName || "Tea Estate"}
@@ -211,6 +229,9 @@ export const FertRequestCard = ({
           </Text>
 
           <Text style={styles.timeText}>
+            {request.status === "pending" &&
+              `Requested at ${request.requestedAt}`}
+
             {request.status === "confirmed" &&
               `Confirmed at ${request.confirmedAt}`}
 
@@ -228,7 +249,7 @@ export const FertRequestCard = ({
         </View>
 
         <Pill status={request.status} />
-      </View>
+      </TouchableOpacity>
 
       {/* =========================
           BUTTONS
@@ -256,9 +277,13 @@ export const FertRequestCard = ({
               variant="primary"
               small
               block
-              onPress={() =>
-                currentStatus.handler?.(request)
-              }
+              onPress={() => {
+                if (request.status === "pending") {
+                  setShowAcceptConfirmation(true);
+                  return;
+                }
+                currentStatus.handler?.(request);
+              }}
             >
               {currentStatus.action}
             </Btn>
@@ -266,6 +291,19 @@ export const FertRequestCard = ({
         )}
       </View>
     </View>
+    <ConfirmationWarning
+      visible={showAcceptConfirmation}
+      title="Accept this fertilizer request?"
+      message={`You are confirming the fertilizer request from ${request.estateName || "this estate"}.`}
+      confirmLabel="Accept request"
+      intent="success"
+      onCancel={() => setShowAcceptConfirmation(false)}
+      onConfirm={() => {
+        setShowAcceptConfirmation(false);
+        onAcceptFertilizer?.(request);
+      }}
+    />
+    </>
   );
 };
 
@@ -402,7 +440,9 @@ export const StopCard = ({
                 `Accepted at ${stop.acceptedAt || "—"}`}
 
               {isLoaded &&
-                "Awaiting factory drop-off"}
+                (stop.collectionNote?.trim()
+                  ? `Note: ${stop.collectionNote.trim()}`
+                  : "")}
 
               {isDelivered &&
                 "✓ Completed"}
@@ -492,7 +532,7 @@ export const StopCard = ({
         ================================================== */}
 
         {isLoaded && (
-          <View style={styles.weightBreakdown}>
+          <View style={styles.loadedDetails}>
             <Text style={styles.metaText}>{stop.actualWeight || 0} kg collected</Text>
           </View>
         )}
@@ -741,6 +781,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 14,
+    marginTop: 10,
+  },
+
+  loadedDetails: {
+    gap: 4,
     marginTop: 10,
   },
 

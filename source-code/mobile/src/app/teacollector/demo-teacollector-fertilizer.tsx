@@ -14,10 +14,18 @@ import { fonts } from "@/theme/fonts";
 export default function DemoTeaCollectorFertilizer({
   requests,
   onViewDetails,
+  onAcceptFertilizer,
   onLoadFertilizer,
   onDeliverFertilizer,
 }: any) {
   const groups = [
+    {
+      key: "pending",
+      label: "Pending Requests",
+      items: requests.filter(
+        (r: any) => r.status === "pending"
+      ),
+    },
     {
       key: "confirmed",
       label: "Confirmed - Ready to Load",
@@ -67,6 +75,7 @@ export default function DemoTeaCollectorFertilizer({
                   key={r.id}
                   request={r}
                   onViewDetails={onViewDetails}
+                  onAcceptFertilizer={onAcceptFertilizer}
                   onLoadFertilizer={onLoadFertilizer}
                   onDeliverFertilizer={onDeliverFertilizer}
                 />

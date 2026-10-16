@@ -47,8 +47,6 @@ import {
   ConfirmSheet,
   FactoryMapSheet,
   DeliverySheet,
-  FactoryWeightSheet,
-  MismatchSheet,
   RegisterSheet,
   ManualCollectionRequestSheet,
   BatchCancelRequestsSheet,
@@ -95,6 +93,9 @@ type CollectionStop = {
   notes?: string;
   estimatedWeight: number;
   actualWeight?: number;
+  collectionNote?: string;
+  factoryReceivedAt?: string;
+  receivingOfficer?: string;
   dist?: number;
   status: string;
   acceptedAt?: string;
@@ -125,8 +126,7 @@ const INITIAL_FERT_REQUESTS = [
     fertilizerType: "Urea 46%",
     quantity: 50,
     requestedAt: "2026-07-23 08:15",
-    status: "confirmed",
-    confirmedAt: "2026-07-23 09:30",
+    status: "pending",
     notes: "For tea plantation"
   },
   { 
@@ -157,6 +157,19 @@ const INITIAL_FERT_REQUESTS = [
     loadedAt: "2026-07-23 08:45",
     deliveredAt: "2026-07-23 09:30",
     notes: "For organic section"
+  },
+  {
+    id: 4,
+    estateName: "Oakridge Estate",
+    owner: "D. Herath",
+    phone: "072 118 2290",
+    gps: "7.2299° N, 80.7115° E",
+    fertilizerType: "Urea 46%",
+    quantity: 40,
+    requestedAt: "2026-07-23 08:45",
+    status: "confirmed",
+    confirmedAt: "2026-07-23 09:10",
+    notes: "For the north field"
   },
 ];
 
@@ -189,13 +202,10 @@ export default function TeaCollectorMobile() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedRequestIds, setSelectedRequestIds] = useState<number[]>([]);
   const [collectedWeight, setCollectedWeight] = useState(0);
-  const [factoryWeight, setFactoryWeight] = useState(0);
-  const [batchTotal, setBatchTotal] = useState(0);
   const [officer, setOfficer] = useState("");
   const [sheet, setSheet] = useState<string | null>(null);
 
   const updateStop = (id: number, patch: any) => setStops((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const updateMany = (ids: number[], patch: any) => setStops((prev) => prev.map((s) => (ids.includes(s.id) ? { ...s, ...patch } : s)));
   const updateFert = (id: number, patch: any) => setFertRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   const toggleRequestSelection = (stop: CollectionStop) => {
@@ -371,7 +381,11 @@ export default function TeaCollectorMobile() {
     setSheet("collect");
   };
 
-  const submitCollection = (collection: { weight: string; photoUri?: string }) => {
+  const submitCollection = (collection: {
+    weight: string;
+    photoUri?: string;
+    remark: string;
+  }) => {
     if (!activeStop) {
       console.warn("No active stop to submit collection");
       return;
@@ -382,6 +396,7 @@ export default function TeaCollectorMobile() {
     updateStop(activeStop.id, { 
       actualWeight: weight,
       photoUri: collection.photoUri,
+      collectionNote: collection.remark.trim(),
     });
     setSheet("confirm");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -408,26 +423,23 @@ export default function TeaCollectorMobile() {
   };
   
   const arriveAtFactory = () => setSheet("delivery");
-  const submitToFactory = (total: number) => {
-    setBatchTotal(total);
-    setFactoryWeight(Math.max(0, total - 6));
-    setSheet("factoryWeight");
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-  const approveWeight = () => {
-    const ids = stops.filter((s) => s.status === "loaded").map((s) => s.id);
-    updateMany(ids, { status: "delivered" });
+  const submitToFactory = () => {
+    const receivedAt = nowTime();
+    setStops((previousStops) =>
+      previousStops.map((stop) =>
+        stop.status === "loaded"
+          ? {
+              ...stop,
+              status: "delivered",
+              factoryReceivedAt: receivedAt,
+              receivingOfficer: officer,
+            }
+          : stop,
+      ),
+    );
     setOfficer("");
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-  const goToMismatch = () => setSheet("mismatch");
-  const submitMismatch = () => {
-    const ids = stops.filter((s) => s.status === "loaded").map((s) => s.id);
-    updateMany(ids, { status: "delivered", mismatch: true });
-    setOfficer("");
-    setSheet(null);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
 
   const createManualCollectionRequest = ({
@@ -475,6 +487,15 @@ export default function TeaCollectorMobile() {
     if (!request) return;
     setActiveFert(request); 
     setSheet("fertDetails"); 
+  };
+
+  const acceptFertilizer = (request: any) => {
+    if (!request || request.status !== "pending") return;
+    updateFert(request.id, {
+      status: "confirmed",
+      confirmedAt: nowTime(),
+    });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const loadFertilizer = (request: any) => { 
@@ -558,6 +579,7 @@ export default function TeaCollectorMobile() {
           <DemoTeaCollectorFertilizer
             requests={fertRequests}
             onViewDetails={openFertDetails}
+            onAcceptFertilizer={acceptFertilizer}
             onLoadFertilizer={loadFertilizer}
             onDeliverFertilizer={deliverFertilizer}
           />
@@ -619,7 +641,7 @@ export default function TeaCollectorMobile() {
           open={sheet === "fertCancel"}
           onBack={() => setSheet("fertDetails")}
           onConfirm={confirmFertilizerCancel}
-          requestLabel="fertilizer delivery"
+          requestLabel={activeFert?.status === "confirmed" ? "fertilizer request" : "fertilizer delivery"}
         />
         <BatchCancelRequestsSheet
           open={sheet === "cancelSelectedRequests"}
@@ -646,15 +668,6 @@ export default function TeaCollectorMobile() {
           onBack={() => setSheet("map")}
           onSubmit={submitToFactory}
         />
-        <FactoryWeightSheet
-          open={sheet === "factoryWeight"}
-          collectionWeight={batchTotal}
-          factoryWeight={factoryWeight}
-          onClose={() => setSheet(null)}
-          onApprove={approveWeight}
-          onReportMismatch={goToMismatch}
-        />
-        <MismatchSheet open={sheet === "mismatch"} onClose={() => setSheet(null)} onSubmit={submitMismatch} />
         <ManualCollectionRequestSheet
           open={sheet === "manualRequest"}
           estates={INITIAL_STOPS}
@@ -667,8 +680,8 @@ export default function TeaCollectorMobile() {
           open={sheet === "fertDetails"}
           request={activeFert}
           onClose={() => setSheet(null)}
+          onAccept={() => acceptFertilizer(activeFert)}
           onLoad={() => loadFertilizer(activeFert)}
-          onDecline={goToFertilizerDecline}
           onDeliver={() => deliverFertilizer(activeFert)}
           onCancel={goToFertilizerCancel}
         />
