@@ -36,6 +36,11 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     performance: 'approve',
     reports: 'approve',
     dispatch: 'approve',
+    // Grading is a separation-of-duties control: an Officer grades, a Manager approves corrections,
+    // the Administrator audits (view). `gradingApproval` is its own module because the `approve`
+    // tier implies `edit` — a Manager can approve a correction without being able to grade.
+    grading: 'view',
+    gradingApproval: 'view',
     administration: 'approve',
   },
   Officer: {
@@ -54,6 +59,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     reports: 'edit',
     // Agent Dispatch: view the board · edit = mark absent / send cover · approve = permanent reassignment.
     dispatch: 'edit',
+    grading: 'edit',
+    gradingApproval: 'view',
     administration: 'none',
   },
   Manager: {
@@ -68,6 +75,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     performance: 'approve',
     reports: 'view',
     dispatch: 'approve',
+    grading: 'view',
+    gradingApproval: 'approve',
     administration: 'none',
   },
 }

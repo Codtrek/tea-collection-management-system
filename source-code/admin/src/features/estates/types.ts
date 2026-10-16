@@ -55,6 +55,8 @@ export interface Settlement {
   transportCost: number
   fertilizerDeduction: number
   advanceDeduction: number
+  /** signed carry-over from approved grading corrections on already-settled deliveries (0 when none) */
+  adjustment: number
   status: SettlementStatus
   selfDelivery: boolean
   /** excluded from a run and flagged, same exception pattern as payroll (UC-054) */

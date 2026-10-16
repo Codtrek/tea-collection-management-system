@@ -10,5 +10,7 @@ export function grossRevenue(s: Settlement): number {
 }
 
 export function netPayable(s: Settlement): number {
-  return grossRevenue(s) - s.transportCost - s.fertilizerDeduction - s.advanceDeduction
+  // `adjustment` is signed: a grading correction on an already-paid delivery is carried into the
+  // NEXT settlement (never rewriting the one that was paid).
+  return grossRevenue(s) - s.transportCost - s.fertilizerDeduction - s.advanceDeduction + s.adjustment
 }

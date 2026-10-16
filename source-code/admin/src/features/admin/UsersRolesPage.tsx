@@ -34,9 +34,14 @@ const MATRIX_MODULES: Array<{ key: ModuleKey; label: string }> = [
   { key: 'fertilizer', label: 'Fertilizer' },
   { key: 'collection', label: 'Collection' },
   { key: 'dispatch', label: 'Agent Dispatch' },
+  { key: 'grading', label: 'Grading' },
+  { key: 'gradingApproval', label: 'Approve Corrections' },
   { key: 'reports', label: 'Reports' },
   { key: 'administration', label: 'Administration' },
 ]
+
+/** The Administrator is pinned to full access everywhere EXCEPT these separation-of-duties modules (server-enforced). */
+const ADMIN_EDITABLE: ModuleKey[] = ['grading', 'gradingApproval']
 
 const LEVELS: Array<{ value: PermissionLevel; label: string }> = [
   { value: 'none', label: 'No Access' },
@@ -100,12 +105,13 @@ export function UsersRolesPage() {
 
   const saveMatrixMutation = useMutation({
     mutationFn: () => {
-      // Flatten the edited (non-Administrator) cells the UI shows into entries.
+      // Flatten the edited cells the UI shows into entries. The Administrator row is only sent for
+      // the separation-of-duties modules; everywhere else it is pinned server-side.
       const entries: PermissionEntry[] = []
       if (matrix) {
         for (const role of Object.keys(matrix) as Role[]) {
-          if (role === 'Administrator') continue
           for (const m of MATRIX_MODULES) {
+            if (role === 'Administrator' && !ADMIN_EDITABLE.includes(m.key)) continue
             entries.push({ role, module: m.key, level: matrix[role][m.key] })
           }
         }
@@ -223,7 +229,7 @@ export function UsersRolesPage() {
                           <Select
                             aria-label={`${role} — ${m.label} permission`}
                             value={matrix[role][m.key]}
-                            disabled={role === 'Administrator'}
+                            disabled={role === 'Administrator' && !ADMIN_EDITABLE.includes(m.key)}
                             onChange={(e) =>
                               setMatrix((prev) =>
                                 prev
@@ -242,7 +248,8 @@ export function UsersRolesPage() {
             </div>
             <p className="border-t border-border px-4 py-3 text-xs text-text-muted">
               The Administrator role keeps full access and can't be edited — the factory always needs at least one
-              unrestricted account. Changes apply to every user with the role at their next login.
+              unrestricted account — except Grading and Approve Corrections, which are kept separate so the people who
+              grade, approve and audit are different. Changes apply to every user with the role at their next login.
             </p>
           </div>
         ))}

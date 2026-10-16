@@ -37,6 +37,52 @@ export interface TimelineEntry {
   by?: string
 }
 
+/**
+ * A graded delivery's lifecycle. OPEN: the grading officer (or anyone with the grading
+ * permission) can still edit directly. LOCKED: only a correction request a Manager approves.
+ * SETTLED: paid — an approved correction becomes a signed adjustment in the next settlement.
+ */
+export type GradingState = 'open' | 'locked' | 'settled'
+
+export type OwnerNotificationStatus = 'Queued' | 'Sent' | 'Correction sent' | 'Failed' | 'Cancelled'
+
+export interface GradeRevision {
+  revisionNo: number
+  kind: 'initial' | 'open_edit' | 'correction'
+  lines: GradeLine[]
+  totalKg: number
+  reason: string | null
+  changedBy: string
+  changedAt: string
+  approvedBy: string | null
+  approvedAt: string | null
+}
+
+export interface CorrectionRequest {
+  id: number
+  deliveryId: string
+  lines: GradeLine[]
+  currentLines: GradeLine[]
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  requestedBy: string
+  requestedAt: string
+  decidedBy: string | null
+  decidedAt: string | null
+  decisionNote: string | null
+  /** pending requests only: what approving it would do to money */
+  impact?: { settled: boolean; settlementId: string | null; adjustmentRs: number }
+}
+
+/** What the grading review step warns against (server-configured, never hardcoded here). */
+export interface GradingContext {
+  estateWeightKg: number
+  /** fraction, e.g. 0.05 */
+  toleranceFraction: number
+  correctionWindowMin: number
+  usual: { medianKg: number; sampleSize: number; lowKg: number; highKg: number } | null
+}
+
 export interface CollectionRecord {
   id: string
   estateId: string
@@ -64,4 +110,14 @@ export interface CollectionRecord {
   provisional?: { reportedBy: string; reason: string }
   lastUpdatedBy?: string
   lastUpdatedOn?: string
+  /** set once graded */
+  gradingState?: GradingState
+  /** ISO — when the OPEN window closes (snapshot taken at grading time) */
+  lockedAt?: string
+  /** the processed settlement that paid this delivery */
+  settlementId?: string
+  /** times the grade lines were revised after the first grading */
+  revisionCount?: number
+  pendingCorrectionId?: number
+  notificationStatus?: OwnerNotificationStatus
 }

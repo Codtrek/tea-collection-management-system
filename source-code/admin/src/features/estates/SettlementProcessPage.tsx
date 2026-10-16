@@ -142,6 +142,12 @@ export function SettlementProcessPage() {
                       label="Less: Advance payments"
                       value={s.advanceDeduction ? `- ${formatCurrency(s.advanceDeduction)}` : '—'}
                     />
+                    {s.adjustment !== 0 && (
+                      <Row
+                        label="Grading correction carried forward (earlier delivery was already paid)"
+                        value={`${s.adjustment > 0 ? '+' : '-'} ${formatCurrency(Math.abs(s.adjustment))}`}
+                      />
+                    )}
                     <div className="mt-1 border-t border-border pt-1.5">
                       <Row label="Net payable" value={formatCurrency(netPayable(s))} strong />
                     </div>

@@ -14,7 +14,7 @@ import type { CollectionRecord } from './types'
 import { formatDate } from '@/lib/format'
 
 /* COL-04 — editable only before Confirmed. Stale links to locked records get
-   a banner pointing at Flag for Correction (audit pattern §12), not the form. */
+   a banner pointing at a Request correction (audit pattern §12), not the form. */
 export function CollectionEditPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -63,7 +63,7 @@ export function CollectionEditPage() {
               <h2 className="text-base font-semibold text-text-heading">This record is locked</h2>
               <p className="mt-1 text-sm text-text-muted">
                 Confirmed on {confirmedOn ? formatDate(confirmedOn) : formatDate(record.date)}. Confirmed records cannot
-                be edited or deleted (§7.1). Use <strong className="text-text">“Flag for Correction”</strong> from the
+                be edited or deleted (§7.1). Use <strong className="text-text">“Request correction”</strong> from the
                 detail page to request a change — corrections are audit-tracked, never silent edits.
               </p>
               <div className="mt-4 flex gap-2">

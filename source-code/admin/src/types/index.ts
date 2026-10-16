@@ -15,6 +15,8 @@ export type ModuleKey =
   | 'performance'
   | 'reports'
   | 'dispatch'
+  | 'grading'
+  | 'gradingApproval'
   | 'administration'
 
 /** Ordered so that a higher level implies the lower ones. */

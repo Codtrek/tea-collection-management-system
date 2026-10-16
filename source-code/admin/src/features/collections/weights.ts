@@ -24,3 +24,18 @@ export function hasGrade(record: Pick<CollectionRecord, 'gradeLines'>, grade: Te
 export function sortedLines(lines: GradeLine[]): GradeLine[] {
   return [...lines].sort((a, b) => GRADE_ORDER.indexOf(a.grade) - GRADE_ORDER.indexOf(b.grade))
 }
+
+/**
+ * One grade's input box → a line weight. '' = no line for this grade. Anything else must be a
+ * positive number with at most 2 decimals; zero, negative and non-numeric entries are errors
+ * (they block saving) rather than being silently dropped.
+ */
+export function parseWeight(raw: string): { kg: number | null; error?: string } {
+  const text = raw.trim()
+  if (text === '') return { kg: null }
+  if (!/^-?\d*\.?\d+$/.test(text)) return { kg: null, error: 'Enter a number, e.g. 42.5' }
+  const n = Number(text)
+  if (n <= 0) return { kg: null, error: 'Must be more than 0 — leave it blank for no line' }
+  if (!/^\d+(\.\d{1,2})?$/.test(text)) return { kg: null, error: 'Up to 2 decimal places' }
+  return { kg: n }
+}
