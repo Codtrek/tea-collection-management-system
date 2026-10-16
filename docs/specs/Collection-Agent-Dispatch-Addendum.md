@@ -145,8 +145,9 @@ him absent; (c) the missed check-in alert (§4) prompts an officer — it never 
 
 ## 7. COL-01 / COL-03 amendment — multi-grade deliveries
 - **Grading is factory-side only.** Agents and owners record only the estate weight; the mobile app has
-  no grade input. Grade-line create/edit is limited to factory roles (Administrator, Officer; Manager is
-  read-only).
+  no grade input. Grade-line create/edit is gated by the `grading` module (default: Officer edits, Manager
+  and Administrator view) — superseded from 2026-10-16 by `Collection-Grading-Corrections-Addendum.md`,
+  which also defines the OPEN → LOCKED → SETTLED states and the correction flow.
 - A delivery can have several grade lines (Super and/or Normal, one per grade).
 - **Total weight = sum of lines** (single server mapper + single frontend selector). Before grading, a
   delivery shows **Ungraded** and its estate weight.
@@ -170,7 +171,7 @@ New module key `dispatch`. Defaults, configurable per factory:
 | Permanent route reassignment | approve | Manager (and Administrator) |
 | Report own absence | — | Collection Agent (mobile, own record only) |
 | Flag "agent hasn't arrived" | — | Receiving Officer — **row kept in data, disabled (`none`)** this round |
-| Create/edit grade lines | `collection` edit | Administrator, Officer |
+| Create/edit grade lines | `grading` edit (was `collection` edit) | Officer — see Grading Corrections Addendum §4 |
 
 ## 8a. Agent authentication
 Collection agents sign in on mobile via `POST /auth/agent/login` (phone + password) and receive an

@@ -273,7 +273,7 @@ HighStakesConfirmFlow uses: issue-advance and settlement processing with expanda
 gross/transport/fertilizer/advance breakdown), Tea Leaf Collection (COL-01..04, new
 `PhotoEvidenceGallery` pattern; COL-02 is a provisional "Pending Agent Confirmation" exception
 entry, NOT a weight override — preserves the agent-entered-weight constraint §7.1; Confirmed
-records are locked with a Flag-for-Correction audit path), Reports & Analytics (RPT-01..04,
+records are locked — since 2026-10-16 after a short OPEN window, with a Manager-approved correction path instead of Flag-for-Correction), Reports & Analytics (RPT-01..04,
 shared `ReportViewer` + `ReportActionsBar`; RPT-04 Daily Expense Entry fills the §8.1.6 gap),
 Administration (ADM-01..04 behind `AdminGuard`: Factory Setup with VERSIONED grade-rate history,
 Users & Roles with the editable permission matrix that the data-driven `permissions.ts` model
@@ -308,7 +308,7 @@ first complete DB→backend→portal vertical slice built after auth, per `PLAN.
 four screens (COL-01 list, COL-02 exception entry, COL-03 detail, COL-04 edit) now read/write
 through TanStack Query + `src/services/collections.ts` instead of `features/collections/data.ts`.
 Server-side enforces exactly what the UI already implied: Confirmed records are locked (edit →
-409, must Flag for Correction instead); grade can only be set once status is Collected; Manager
+409; grading changes go through the OPEN window or a correction request, see the 2026-10-16 section); grade can only be set once status is Collected; Manager
 role is read-only (403 on any write); exception entries always land as **Pending Agent
 Confirmation** with no authoritative weight (§7.1). `features/collections/data.ts` is
 **intentionally kept** — `features/estates/EstateDetailPage.tsx`'s `collectionsForEstate` still
@@ -778,6 +778,13 @@ latter's only reason to exist was pinning down `fertilizer_charges`' old shape).
 The local dev DB runs everything in an isolated `tea_authslice` schema; the older, more-advanced
 `tea` schema left over from the abandoned test01 branch is untouched.
 
+**Native local DB setup (2026-10-12, hp laptop).** PostgreSQL 17 is installed natively (no Docker): DB
+`tea_db`, user `tea_user`, plain `public` schema (not `tea_authslice`), DBeaver as the GUI. The backend does
+**not** create tables (`synchronize: false` in `app.module.ts`) — they come from `source-code/database/
+init.sql` then `database/migrations/*.sql` in date order, applied by hand with `psql -f` (native installs
+skip Docker's `initdb.d`). Then `source-code/backend/.env` needs `DATABASE_URL` (a `!` in the password must
+be `%21`) and `JWT_SECRET` (`REDIS_URL` is optional), and `npm run seed` fills it. The `.env` is gitignored.
+
 Infra is already in place and needs no work: `source-code/docker-compose.yml` defines postgres 16,
 redis, api, admin, and nginx.
 
@@ -831,6 +838,48 @@ agent API exists, exercised by unit tests and curl — merge `origin/dev` for th
 - **Gotchas:** seed re-runs burn serial values, so seeded agent ids are 1, 2, 45–47 (don't hardcode). `expo-server-sdk`
   is ESM-only, loaded lazily in `DispatchNotifier`. Redis isn't installed locally — the fallback is what runs.
   Migration: `source-code/database/migrations/2026-10-09-agent-dispatch.sql` (idempotent; mirrored in `init.sql`).
+
+## Grading corrections & estate owner notification (2026-10-16, `feature/grading-corrections`)
+
+Spec: `docs/specs/Collection-Grading-Corrections-Addendum.md`. Branched from `feature/agent-dispatch`; `origin/dev` NOT merged.
+Migration `database/migrations/2026-10-16-grading-corrections.sql` (idempotent, mirrored in `init.sql`).
+
+- **States are derived, never stored:** OPEN (graded, `now < locked_at`) → LOCKED → SETTLED (`settlement_id`). `status` stays
+  `confirmed`. **`locked_at` is a snapshot** (`graded_at` + the window *at grading time*), so changing the setting never
+  re-opens/re-locks old deliveries; a confirmed row with null `locked_at` is legacy = LOCKED. One helper decides it:
+  `gradingState` / `isPayable` in `collections/collection-map.ts`.
+- **No silent edits:** every change is a row in append-only `delivery_grade_revisions` (initial / open_edit / correction;
+  who, when, why, approver). `delivery_grade_lines` is still the current projection. OPEN edits need a reason; after that
+  a correction request (`grade_correction_requests`, one pending per delivery) → Manager approves → new revision.
+  `POST /collections/:id/flag` is gone. Logic: `collections/grading.service.ts`.
+- **Permissions (2 new data-driven keys):** `grading` (Officer edit; Manager/Administrator view) and `gradingApproval`
+  (Manager approve). Approval is its own key because `approve` implies `edit`. The Administrator is still pinned to
+  `approve` everywhere except these two (`ADMIN_EDITABLE_MODULES` in `admin/admin-map.ts`; ADM-02 enables those cells).
+  So an Administrator can no longer grade by default. Gate with `useAuth().can('grading'|'gradingApproval', …)`.
+- **Settlement:** `tea_collection_records.settlement_id` is set when a settlement is *processed* (same estate + month,
+  via `labelToKey(period)`), and **only for payable (non-OPEN) deliveries** (`payableDeliveries` in `estates/settlement-calc.ts`).
+  A correction on a SETTLED delivery → pending `settlement_adjustments` row (Δkg × the PAYING settlement's rates, signed),
+  carried into the next processed settlement via `settlements.adjustment_amount`; the paid settlement is never rewritten.
+  Net = gross − deductions **+ adjustment**: `settlementNet` (backend) / `netPayable` (portal). Settled approvals use
+  `HighStakesConfirmFlow`. **Known gap:** no settlement generator and `period` is free text, so a delivery that was OPEN
+  at run time is never auto-picked-up by a later run for the same month.
+- **Owner notification:** outbox table `grading_notifications` (queued in the same transaction as the grading; held until
+  `locked_at` or Finalize; a minute cron `GradingNotificationTasks` → `GradingNotificationService.sweep`; compare-and-swap claim;
+  UNIQUE `dedupe_key` + `notifications.dedupe_key` ⇒ no duplicates; stale `sending` claims released after 5 min). A correction
+  made after the original was sent queues a labelled "Correction" notice (old → new); the original is never edited. Statuses
+  Queued/Sent/Correction sent/Failed/Cancelled + officer Resend. **Owners still have no login, push token or preferences**, so
+  "Sent" = stored for their account (+ push if a token exists); `system_settings.notifications/defaultChannel` are still unread.
+- **Settings:** `system_settings.collection` = `{correctionWindowMin: 30, mismatchTolerancePct: 5, usualRangeLow: 0.5, usualRangeHigh: 2}`
+  via `CollectionSettingsService` (no admin UI to edit it yet — SQL/seed only). The mismatch complaint now uses that tolerance
+  (was the hard-coded 5%) and follows the current grading (refreshed by edits; `resolved` when a fix brings it within tolerance).
+- **Portal:** `GradeDeliveryModal` = enter → Review step (estate weight, lines, total, difference; blocks zero/negative/non-numeric;
+  warns on tolerance and "unusual for this estate" from `GET /collections/:id/grading-context`). Detail page: state badge,
+  Edit grading / Finalize / Request correction, pending-request banner with Approve/Reject, "Revised N times" history with
+  diffs, owner-notification status + Resend. `features/collections/GradingPanels.tsx`.
+- **Gotchas:** `@nestjs/schedule` is ESM-only and Jest can't load it, so crons live in `*.tasks.ts` files with no spec (test `sweep()`
+  instead). Tests: `collections/testing/` (`FakeRepo` with `update()` + a fake `manager.transaction`, `grading-harness.ts` with
+  `freezeClock`/`setClock` that fake only `Date`). A running `nest start --watch` hot-reloads backend changes — don't start a second
+  one (port 3000).
 
 ## Remaining work (as of 2026-08-05)
 
