@@ -125,7 +125,6 @@ export const FertDetailsSheet = ({
 };
 
 export const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
-  const [notes, setNotes] = useState('');
   if (!request) return null;
   return (
     <Sheet open={open} onClose={onClose}>
@@ -159,26 +158,6 @@ export const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
         <DetailRow k="Quantity" v={`${request.quantity} kg`} />
         <DetailRow k="Destination" v={request.estateName} />
       </View>
-
-      <Field label="Loading Notes (optional)">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: c.line,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Any loading details..."
-          value={notes}
-          onChangeText={setNotes}
-        />
-      </Field>
 
       <Btn variant="primary" block onPress={onConfirm}>
         Confirm Loaded
@@ -219,6 +198,7 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
       }}>
         <DetailRow k="Fertilizer" v={request.fertilizerType} />
         <DetailRow k="Quantity" v={`${request.quantity} kg`} />
+        <DetailRow k="Destination Estate" v={request.estateName} />
       </View>
 
       <Btn variant="primary" block onPress={onConfirm}>

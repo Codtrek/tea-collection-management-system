@@ -240,6 +240,9 @@ export const FertRequestCard = ({
 
             {request.status === "delivered" &&
               `Delivered at ${request.deliveredAt}`}
+
+            {request.status === "cancelled" &&
+              `Cancelled at ${request.cancelledAt}`}
           </Text>
 
           {(request.status === "declined" || request.status === "cancelled") &&
