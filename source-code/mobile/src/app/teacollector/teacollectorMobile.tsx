@@ -38,7 +38,7 @@ const { width } = Dimensions.get('window');
 import {
   FertDetailsSheet,
   LoadFertSheet,
-  DeliverFertSheet,
+  FertilizerNavigateSheet,
   PickupSheet,
   DeclineSheet,
   CancelPickupSheet,
@@ -125,6 +125,7 @@ const INITIAL_FERT_REQUESTS = [
     gps: "7.1935Â° N, 80.6812Â° E",
     fertilizerType: "Urea 46%",
     quantity: 50,
+    estimatedDistanceKm: 4.1,
     requestedAt: "2026-07-23 08:15",
     status: "pending",
     notes: "For tea plantation"
@@ -137,6 +138,7 @@ const INITIAL_FERT_REQUESTS = [
     gps: "7.2180Â° N, 80.7422Â° E",
     fertilizerType: "NPK 20-10-10",
     quantity: 25,
+    estimatedDistanceKm: 6.8,
     requestedAt: "2026-07-23 07:45",
     status: "loaded",
     confirmedAt: "2026-07-23 08:30",
@@ -151,6 +153,7 @@ const INITIAL_FERT_REQUESTS = [
     gps: "7.2906Â° N, 80.7718Â° E",
     fertilizerType: "Organic Compost",
     quantity: 100,
+    estimatedDistanceKm: 2.4,
     requestedAt: "2026-07-23 06:30",
     status: "delivered",
     confirmedAt: "2026-07-23 07:15",
@@ -166,6 +169,7 @@ const INITIAL_FERT_REQUESTS = [
     gps: "7.2299° N, 80.7115° E",
     fertilizerType: "Urea 46%",
     quantity: 40,
+    estimatedDistanceKm: 5.2,
     requestedAt: "2026-07-23 08:45",
     status: "confirmed",
     confirmedAt: "2026-07-23 09:10",
@@ -518,10 +522,10 @@ export default function TeaCollectorMobile() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const deliverFertilizer = (request: any) => { 
+  const navigateToFertilizerEstate = (request: any) => {
     if (!request) return;
     setActiveFert(request); 
-    setSheet("fertDeliver"); 
+    setSheet("fertNavigate");
   };
 
   const confirmDeliverFertilizer = () => {
@@ -581,7 +585,7 @@ export default function TeaCollectorMobile() {
             onViewDetails={openFertDetails}
             onAcceptFertilizer={acceptFertilizer}
             onLoadFertilizer={loadFertilizer}
-            onDeliverFertilizer={deliverFertilizer}
+            onNavigateToFertilizerEstate={navigateToFertilizerEstate}
           />
         );
       case "notif":
@@ -682,7 +686,7 @@ export default function TeaCollectorMobile() {
           onClose={() => setSheet(null)}
           onAccept={() => acceptFertilizer(activeFert)}
           onLoad={() => loadFertilizer(activeFert)}
-          onDeliver={() => deliverFertilizer(activeFert)}
+          onNavigate={() => navigateToFertilizerEstate(activeFert)}
           onCancel={goToFertilizerCancel}
         />
         <LoadFertSheet 
@@ -691,11 +695,11 @@ export default function TeaCollectorMobile() {
           onClose={() => setSheet(null)} 
           onConfirm={confirmLoadFertilizer}
         />
-        <DeliverFertSheet 
-          open={sheet === "fertDeliver"} 
+        <FertilizerNavigateSheet
+          open={sheet === "fertNavigate"}
           request={activeFert} 
           onClose={() => setSheet(null)} 
-          onConfirm={confirmDeliverFertilizer}
+          onDeliver={confirmDeliverFertilizer}
         />
 
         <RegisterSheet open={sheet === "register"} onClose={() => setSheet(null)} />

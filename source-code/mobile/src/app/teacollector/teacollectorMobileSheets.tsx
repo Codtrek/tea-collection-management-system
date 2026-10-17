@@ -39,7 +39,7 @@ export const FertDetailsSheet = ({
   onClose,
   onAccept,
   onLoad,
-  onDeliver,
+  onNavigate,
   onCancel,
 }: any) => {
   const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
@@ -102,7 +102,7 @@ export const FertDetailsSheet = ({
               <Btn variant="danger" block onPress={onCancel}>Cancel</Btn>
             </View>
             <View style={{ flex: 1 }}>
-              <Btn variant="primary" block onPress={onDeliver}>Deliver</Btn>
+              <Btn variant="primary" block onPress={onNavigate}>Navigate to Estate</Btn>
             </View>
           </View>
         )}
@@ -166,7 +166,7 @@ export const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
   );
 };
 
-export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => {
+export const FertilizerNavigateSheet = ({ open, request, onClose, onDeliver }: any) => {
   if (!request) return null;
   return (
     <Sheet open={open} onClose={onClose}>
@@ -178,7 +178,7 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
         fontSize: 11,
         color: c.sageDeep,
       }}>
-        Deliver to Estates
+        Navigate to Estate
       </Text>
       <Text style={{
         fontFamily: fontDisplay.fontFamily,
@@ -189,6 +189,57 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
       }}>{request.estateName}</Text>
       
       <View style={{
+        height: 200,
+        borderRadius: 14,
+        padding: 16,
+        marginBottom: 14,
+        backgroundColor: "#E8F1E7",
+        borderWidth: 1,
+        borderColor: c.line,
+        overflow: "hidden",
+        justifyContent: "center",
+        alignItems: "center",
+      }}>
+        <View style={{
+          position: "absolute",
+          width: "130%",
+          height: 18,
+          backgroundColor: "#FFFFFF",
+          transform: [{ rotate: "-18deg" }],
+        }} />
+        <View style={{
+          position: "absolute",
+          width: "130%",
+          height: 10,
+          backgroundColor: "#D5E3D1",
+          transform: [{ rotate: "32deg" }],
+        }} />
+        <View style={{
+          width: 82,
+          height: 82,
+          borderRadius: 41,
+          backgroundColor: "rgba(83, 207, 129, 0.2)",
+          alignItems: "center",
+          justifyContent: "center",
+        }}>
+          <Ionicons name="location" size={38} color={colors.primary} />
+        </View>
+        <Text style={{
+          marginTop: 8,
+          paddingHorizontal: 10,
+          paddingVertical: 5,
+          borderRadius: 12,
+          overflow: "hidden",
+          backgroundColor: colors.white,
+          color: colors.text.primary,
+          fontSize: 12,
+          fontWeight: "600",
+        }}>
+          {request.estateName}
+        </Text>
+      </View>
+
+      <View style={{
         borderRadius: 14,
         padding: 14,
         marginBottom: 14,
@@ -198,11 +249,13 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
       }}>
         <DetailRow k="Fertilizer" v={request.fertilizerType} />
         <DetailRow k="Quantity" v={`${request.quantity} kg`} />
-        <DetailRow k="Destination Estate" v={request.estateName} />
+        {request.estimatedDistanceKm != null && (
+          <DetailRow k="Estimated distance" v={`~${request.estimatedDistanceKm} km`} />
+        )}
       </View>
 
-      <Btn variant="primary" block onPress={onConfirm}>
-        Confirm Delivered
+      <Btn variant="primary" block onPress={onDeliver}>
+        Deliver
       </Btn>
     </Sheet>
   );

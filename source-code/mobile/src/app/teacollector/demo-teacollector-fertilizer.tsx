@@ -16,7 +16,7 @@ export default function DemoTeaCollectorFertilizer({
   onViewDetails,
   onAcceptFertilizer,
   onLoadFertilizer,
-  onDeliverFertilizer,
+  onNavigateToFertilizerEstate,
 }: any) {
   const groups = [
     {
@@ -77,7 +77,7 @@ export default function DemoTeaCollectorFertilizer({
                   onViewDetails={onViewDetails}
                   onAcceptFertilizer={onAcceptFertilizer}
                   onLoadFertilizer={onLoadFertilizer}
-                  onDeliverFertilizer={onDeliverFertilizer}
+                  onNavigateToFertilizerEstate={onNavigateToFertilizerEstate}
                 />
               ))}
             </View>

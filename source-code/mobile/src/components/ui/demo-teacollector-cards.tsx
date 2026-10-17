@@ -152,7 +152,7 @@ interface FertRequestCardProps {
   onViewDetails?: (request: any) => void;
   onAcceptFertilizer?: (request: any) => void;
   onLoadFertilizer?: (request: any) => void;
-  onDeliverFertilizer?: (request: any) => void;
+  onNavigateToFertilizerEstate?: (request: any) => void;
 }
 
 export const FertRequestCard = ({
@@ -160,7 +160,7 @@ export const FertRequestCard = ({
   onViewDetails,
   onAcceptFertilizer,
   onLoadFertilizer,
-  onDeliverFertilizer,
+  onNavigateToFertilizerEstate,
 }: FertRequestCardProps) => {
   const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
 
@@ -179,8 +179,8 @@ export const FertRequestCard = ({
 
     loaded: {
       label: "Loaded",
-      action: "Deliver",
-      handler: onDeliverFertilizer,
+      action: "Navigate to Estate",
+      handler: onNavigateToFertilizerEstate,
     },
 
     delivered: {
@@ -244,6 +244,13 @@ export const FertRequestCard = ({
             {request.status === "cancelled" &&
               `Cancelled at ${request.cancelledAt}`}
           </Text>
+
+          {["pending", "confirmed", "loaded"].includes(request.status) &&
+            request.estimatedDistanceKm != null && (
+              <Text style={styles.estimatedDistance}>
+                Estimated distance: ~{request.estimatedDistanceKm} km
+              </Text>
+            )}
 
           {(request.status === "declined" || request.status === "cancelled") &&
             request.reason && (
@@ -762,6 +769,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     color: colors.text.muted,
+  },
+
+  estimatedDistance: {
+    fontFamily: fonts.default,
+    fontSize: 12,
+    marginTop: 4,
+    color: colors.primary,
   },
 
   reasonText: {
