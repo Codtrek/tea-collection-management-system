@@ -45,11 +45,7 @@ export default function AppButton({
         <ActivityIndicator />
       ) : (
         <AppText
-          variant="body"
-          style={[
-            styles.text,
-            variant === "secondary" && styles.secondaryText,
-          ]}
+          variant="label"
         >
           {title}
         </AppText>
@@ -61,7 +57,7 @@ export default function AppButton({
 const styles = StyleSheet.create({
   container: {
     height: 52,
-    borderRadius: 12,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
@@ -80,18 +76,9 @@ const styles = StyleSheet.create({
   },
 
   secondary: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.backgroundGray,
     borderWidth: 1.5,
-    borderColor: colors.primary,
-  },
-
-  text: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
-
-  secondaryText: {
-    color: colors.primary,
+    borderColor: colors.surface,
   },
 
   disabled: {

@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: colors.border.default,
-    borderRadius: 10,
+    borderRadius: 20,
     backgroundColor: colors.surface,
   },
   triggerText: {
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   },
   menu: {
     overflow: "hidden",
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border.light,
     backgroundColor: colors.white,
