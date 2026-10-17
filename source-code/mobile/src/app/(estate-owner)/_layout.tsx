@@ -24,6 +24,8 @@ export default function EstateOwnerLayout() {
             router.replace("/(estate-owner)/estates");
         }else if (tab.key === "profile") {
             router.replace("/(estate-owner)/profile");
+        }else if (tab.key === "requests") {
+            router.replace("../(shared)/collectionRequest")
         }
     };
 

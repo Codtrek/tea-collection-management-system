@@ -54,7 +54,7 @@ export default function Estates() {
     return (
         <Screen style={styles.container}>
              <View style={styles.heading}>
-                    <AppText variant="subheading" style={styles.heading}>
+                    <AppText variant="subHeading" style={styles.heading}>
                         Estates
                     </AppText>
                 </View>
@@ -89,7 +89,7 @@ export default function Estates() {
                         <View style={styles.emptyIcon}>
                             <Ionicons name="search-outline" size={24} color={colors.brandDark} />
                         </View>
-                        <AppText variant="subheading" style={styles.emptyTitle}>
+                        <AppText variant="subHeading" style={styles.emptyTitle}>
                             No estates found
                         </AppText>
                         <AppText variant="bodySmall" style={styles.emptyCopy}>

@@ -22,9 +22,11 @@ export default function Screen({
   style,
   ...props
 }: ScreenProps) {
+  const Container = header ? View : SafeAreaView;
+
   if (scroll) {
     return (
-      <View style={styles.container}>
+      <Container style={styles.container}>
         {header}
           <ScrollView
             style={styles.scrollView}
@@ -36,12 +38,12 @@ export default function Screen({
           >
             {children}
           </ScrollView>
-      </View>
+      </Container>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <Container style={styles.container}>
       {header}
       <View
         {...props}
@@ -52,7 +54,7 @@ export default function Screen({
       >
         {children}
       </View>
-    </View>
+    </Container>
   );
 }
 

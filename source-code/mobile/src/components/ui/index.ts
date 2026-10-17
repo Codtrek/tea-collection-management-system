@@ -14,3 +14,4 @@ export {default as EstateOwnerBottomTab} from './EstateOwnerBottomTab';
 export { default as StatCard} from './StatCard';
 export { default as AppCard} from './AppCard';
 export {default as Stat} from './Stat';
+export {default as Dropdown} from './Dropdown';
