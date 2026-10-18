@@ -35,6 +35,7 @@ jobs:
       - name: Check out deploy tooling
         uses: actions/checkout@v4
         with:
+          ref: dev
           path: tooling
 
       - name: Check out the branch to preview
