@@ -8,6 +8,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { FertRequestCard } from "@/components/ui/demo-teacollector-cards";
+import { Btn } from "@/components/ui/demo-teacollector-button";
 import {
   FertilizerRequestFilter,
   FertilizerRequestFilterTabs,
@@ -23,6 +24,12 @@ export default function DemoTeaCollectorFertilizer({
   onAcceptFertilizer,
   onLoadFertilizer,
   onNavigateToFertilizerEstate,
+  selectionMode,
+  selectedRequestIds,
+  onToggleRequestSelection,
+  onStartSelectionWithRequest,
+  onCancelRequestSelection,
+  onCancelSelectedRequests,
 }: {
   requests: any[];
   filter: FertilizerRequestFilter;
@@ -31,6 +38,12 @@ export default function DemoTeaCollectorFertilizer({
   onAcceptFertilizer?: (request: any) => void;
   onLoadFertilizer?: (request: any) => void;
   onNavigateToFertilizerEstate?: (request: any) => void;
+  selectionMode: boolean;
+  selectedRequestIds: number[];
+  onToggleRequestSelection: (request: any) => void;
+  onStartSelectionWithRequest: (request: any) => void;
+  onCancelRequestSelection: () => void;
+  onCancelSelectedRequests: () => void;
 }) {
   const groups = [
     {
@@ -97,6 +110,24 @@ export default function DemoTeaCollectorFertilizer({
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
+        {selectionMode && (
+          <View style={styles.selectionActions}>
+            <Text style={styles.selectionCount}>
+              {selectedRequestIds.length} request{selectedRequestIds.length === 1 ? "" : "s"} selected
+            </Text>
+            <View style={styles.selectionButtons}>
+              <Btn variant="ghost" small onPress={onCancelRequestSelection}>Done</Btn>
+              <Btn
+                variant="danger"
+                small
+                disabled={selectedRequestIds.length === 0}
+                onPress={onCancelSelectedRequests}
+              >
+                Cancel selected
+              </Btn>
+            </View>
+          </View>
+        )}
         {visibleGroups.map(
           (g) =>
             g.items.length > 0 && (
@@ -113,6 +144,10 @@ export default function DemoTeaCollectorFertilizer({
                     onAcceptFertilizer={onAcceptFertilizer}
                     onLoadFertilizer={onLoadFertilizer}
                     onNavigateToFertilizerEstate={onNavigateToFertilizerEstate}
+                    selectionMode={selectionMode}
+                    selected={selectedRequestIds.includes(r.id)}
+                    onToggleSelect={onToggleRequestSelection}
+                    onStartSelection={onStartSelectionWithRequest}
                   />
                 ))}
               </View>
@@ -170,6 +205,25 @@ const styles = StyleSheet.create({
 
   group: {
     marginBottom: 16,
+  },
+
+  selectionActions: {
+    marginBottom: 14,
+  },
+
+  selectionCount: {
+    color: colors.text.primary,
+    fontFamily: fonts.default,
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+
+  selectionButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
   },
 
   sectionTitle: {

@@ -153,6 +153,10 @@ interface FertRequestCardProps {
   onAcceptFertilizer?: (request: any) => void;
   onLoadFertilizer?: (request: any) => void;
   onNavigateToFertilizerEstate?: (request: any) => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (request: any) => void;
+  onStartSelection?: (request: any) => void;
 }
 
 export const FertRequestCard = ({
@@ -161,8 +165,13 @@ export const FertRequestCard = ({
   onAcceptFertilizer,
   onLoadFertilizer,
   onNavigateToFertilizerEstate,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onStartSelection,
 }: FertRequestCardProps) => {
   const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
+  const canCancel = ["pending", "confirmed", "loaded"].includes(request.status);
 
   const statusMap: any = {
     pending: {
@@ -206,7 +215,7 @@ export const FertRequestCard = ({
 
   return (
     <>
-    <View style={styles.card}>
+    <View style={[styles.card, selected && styles.selectedCard]}>
       {/* =========================
           HEADER
       ========================= */}
@@ -216,7 +225,22 @@ export const FertRequestCard = ({
         activeOpacity={0.85}
         accessibilityRole="button"
         accessibilityLabel={`View ${request.estateName || "tea estate"} fertilizer request details`}
-        onPress={() => onViewDetails?.(request)}
+        disabled={selectionMode && !canCancel}
+        onLongPress={() => {
+          if (!canCancel) return;
+          if (selectionMode) {
+            onToggleSelect?.(request);
+          } else {
+            onStartSelection?.(request);
+          }
+        }}
+        onPress={() => {
+          if (selectionMode) {
+            onToggleSelect?.(request);
+            return;
+          }
+          onViewDetails?.(request);
+        }}
       >
         <View style={styles.mainInfo}>
           <Text style={styles.title}>
@@ -258,48 +282,55 @@ export const FertRequestCard = ({
             )}
         </View>
 
-        <Pill status={request.status} />
+        <View style={styles.statusSelection}>
+          <Pill status={request.status} />
+          {selectionMode && canCancel && (
+            <Ionicons
+              name={selected ? "checkmark-circle" : "ellipse-outline"}
+              size={24}
+              color={selected ? colors.primary : colors.text.tertiary}
+            />
+          )}
+        </View>
       </TouchableOpacity>
 
       {/* =========================
           BUTTONS
       ========================= */}
 
-      <View style={styles.buttonRow}>
-        {/* View Details */}
-
-        <View style={styles.buttonWrapper}>
-          <Btn
-            variant="secondary"
-            small
-            block
-            onPress={() => onViewDetails?.(request)}
-          >
-            View Details
-          </Btn>
-        </View>
-
-        {/* Status Action */}
-
-        {currentStatus?.action && (
+      {!selectionMode && (
+        <View style={styles.buttonRow}>
           <View style={styles.buttonWrapper}>
             <Btn
-              variant="primary"
+              variant="secondary"
               small
               block
-              onPress={() => {
-                if (request.status === "pending") {
-                  setShowAcceptConfirmation(true);
-                  return;
-                }
-                currentStatus.handler?.(request);
-              }}
+              onPress={() => onViewDetails?.(request)}
             >
-              {currentStatus.action}
+              View Details
             </Btn>
           </View>
-        )}
-      </View>
+
+          {currentStatus?.action && (
+            <View style={styles.buttonWrapper}>
+              <Btn
+                variant="primary"
+                small
+                block
+                onPress={() => {
+                  if (request.status === "pending") {
+                    setShowAcceptConfirmation(true);
+                    return;
+                  }
+                  currentStatus.handler?.(request);
+                }}
+              >
+                {currentStatus.action}
+              </Btn>
+            </View>
+          )}
+        </View>
+      )}
     </View>
     <ConfirmationWarning
       visible={showAcceptConfirmation}
@@ -722,6 +753,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
+  },
+
+  statusSelection: {
+    alignItems: "center",
+    gap: 8,
   },
 
   estateNameRow: {

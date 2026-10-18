@@ -501,10 +501,17 @@ export const CancelPickupSheet = ({ open, onBack, onConfirm, requestLabel = "pic
   );
 };
 
-export const BatchCancelRequestsSheet = ({ open, requestCount, onClose, onConfirm }: any) => {
+export const BatchCancelRequestsSheet = ({
+  open,
+  requestCount,
+  onClose,
+  onConfirm,
+  requestLabel = "pickup request",
+}: any) => {
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [showWarning, setShowWarning] = useState(false);
+  const pluralRequestLabel = `${requestLabel}${requestCount === 1 ? '' : 's'}`;
 
   useEffect(() => {
     if (open) {
@@ -522,9 +529,9 @@ export const BatchCancelRequestsSheet = ({ open, requestCount, onClose, onConfir
           fontWeight: '600',
           marginBottom: 4,
           fontSize: 20,
-        }}>Cancel selected requests</Text>
+        }}>Cancel selected {pluralRequestLabel}</Text>
         <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
-          This will cancel {requestCount} selected pickup request{requestCount === 1 ? '' : 's'}. Select a reason.
+          This will cancel {requestCount} selected {pluralRequestLabel}. Select a reason.
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {PICKUP_REASONS.map((pickupReason) => (
@@ -569,8 +576,8 @@ export const BatchCancelRequestsSheet = ({ open, requestCount, onClose, onConfir
       </Sheet>
       <ConfirmationWarning
         visible={showWarning}
-        title={`Cancel ${requestCount} request${requestCount === 1 ? '' : 's'}?`}
-        message="These pickup requests will be cancelled. This action cannot be undone."
+        title={`Cancel ${requestCount} ${pluralRequestLabel}?`}
+        message={`These ${pluralRequestLabel} will be cancelled. This action cannot be undone.`}
         confirmLabel="Cancel requests"
         onCancel={() => setShowWarning(false)}
         onConfirm={() => {

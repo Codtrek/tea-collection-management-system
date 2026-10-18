@@ -48,12 +48,12 @@ export const collectionFilters: RequestFilterOption<RequestFilter>[] = [
     label: "Loaded",
   },
   {
-    key: "cancelled",
-    label: "Cancelled",
+    key: "history",
+    label: "Delivered",
   },
   {
-    key: "history",
-    label: "History",
+    key: "cancelled",
+    label: "Cancelled",
   },
 ];
 

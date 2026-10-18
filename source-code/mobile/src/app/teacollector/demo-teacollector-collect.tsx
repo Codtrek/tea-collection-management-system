@@ -56,6 +56,9 @@ export default function DemoTeaCollectorCollect({
       sum + (s.actualWeight || 0),
     0
   );
+  const deliveredToday = stops.filter(
+    (s: any) => s.status === "delivered"
+  );
 
   /*
    * ========================================================
@@ -86,6 +89,11 @@ export default function DemoTeaCollectorCollect({
       ),
     },
     {
+      key: "delivered",
+      label: "Delivered",
+      items: deliveredToday,
+    },
+    {
       key: "cancelled",
       label: "Cancelled",
       items: stops.filter(
@@ -100,9 +108,6 @@ export default function DemoTeaCollectorCollect({
    * ========================================================
    */
 
-  const deliveredToday = stops.filter(
-    (s: any) => s.status === "delivered"
-  );
   const visibleSelectableRequests = stops.filter(
     (stop: any) =>
       (stop.status === "pending" || stop.status === "accepted") &&

@@ -186,11 +186,37 @@ const HISTORY = [
 ];
 
 const NOTIFICATIONS: React.ComponentProps<typeof DemoTeaCollectorAlerts>['notifications'] = [
-  { icon: 'add-circle-outline', type: 'pickup', title: "New pickup request", desc: "Ceylon Green Estate Â· ~68 kg estimated", time: "12m" },
-  { icon: 'checkmark-circle-outline', type: 'success', title: "Pickup accepted", desc: "Hill Breeze Gardens confirmed for 10:30 AM", time: "40m" },
-  { icon: 'alert-circle-outline', type: 'warning', title: "Weight mismatch flagged", desc: "Mistvale Tea Farm Â· factory recorded 58 kg vs 61 kg", time: "1h" },
+  {
+    icon: 'leaf-outline',
+    type: 'pickupCancelled',
+    title: "Cancel pickup request by Owner",
+    desc: "Kotmale MPT owner: Couldn't ready the tea.",
+    time: "1h",
+  },
+  {
+    icon: 'leaf-outline',
+    type: 'pickupCancelled',
+    title: "Cancel pickup request by Manager",
+    desc: "Another factory manager: Road blocked.",
+    time: "2h",
+  },
+  {
+    icon: 'sprout',
+    iconFamily: 'materialCommunity',
+    type: 'fertilizerCancelled',
+    title: "Cancel fertilizer request by Owner",
+    desc: "Kotmale MPT Estate Owner: Fertilizer no longer needed.",
+    time: "2h",
+  },
+  {
+    icon: 'sprout',
+    iconFamily: 'materialCommunity',
+    type: 'fertilizerCancelled',
+    title: "Cancel fertilizer request by Manager",
+    desc: "Kotmale MPT Manager: Delivery schedule changed.",
+    time: "3h",
+  },
   { icon: 'business-outline', type: 'info', title: "Batch received at factory", desc: "Kotmale MPT confirmed 2 stops Â· 132 kg", time: "2h" },
-  { icon: 'leaf-outline', type: 'fertilizer', title: "Fertilizer confirmed", desc: "Urea 46% Â· 50 kg for Hill Breeze Gardens", time: "3h" },
 ];
 
 // Sheets moved to teacollectorMobileSheets.tsx (see ./teacollectorMobileSheets)
@@ -203,6 +229,14 @@ export default function TeaCollectorMobile() {
   const [fertilizerFilter, setFertilizerFilter] =
     useState<FertilizerRequestFilter>("all");
   const [stops, setStops] = useState<CollectionStop[]>(INITIAL_STOPS);
+  const [collectionReportNotifications, setCollectionReportNotifications] =
+    useState<React.ComponentProps<typeof DemoTeaCollectorAlerts>['notifications']>([]);
+  const [pickupCancellationNotifications, setPickupCancellationNotifications] =
+    useState<React.ComponentProps<typeof DemoTeaCollectorAlerts>['notifications']>([]);
+  const [fertilizerCancellationNotifications, setFertilizerCancellationNotifications] =
+    useState<React.ComponentProps<typeof DemoTeaCollectorAlerts>['notifications']>([]);
+  const [fertilizerSelectionMode, setFertilizerSelectionMode] = useState(false);
+  const [selectedFertilizerRequestIds, setSelectedFertilizerRequestIds] = useState<number[]>([]);
   const [fertRequests, setFertRequests] = useState(INITIAL_FERT_REQUESTS);
   const [activeStop, setActiveStop] = useState<any>(null);
   const [activeFert, setActiveFert] = useState<any>(null);
@@ -214,6 +248,87 @@ export default function TeaCollectorMobile() {
 
   const updateStop = (id: number, patch: any) => setStops((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const updateFert = (id: number, patch: any) => setFertRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const createPickupCancellationNotification = (
+    stop: CollectionStop,
+    reason: string,
+    note: string,
+  ) => ({
+    icon: 'leaf-outline' as const,
+    type: 'pickupCancelled' as const,
+    title: "Cancel pickup request by me",
+    desc: `${stop.name}: ${reason}${note.trim() ? ` — ${note.trim()}` : ''}`,
+    time: nowTime(),
+  });
+
+  const createFertilizerCancellationNotification = (
+    request: { estateName: string },
+    reason: string,
+    note: string,
+  ) => ({
+    icon: 'sprout' as const,
+    iconFamily: 'materialCommunity' as const,
+    type: 'fertilizerCancelled' as const,
+    title: "Cancel fertilizer request by me",
+    desc: `${request.estateName}: ${reason}${note.trim() ? ` — ${note.trim()}` : ''}`,
+    time: nowTime(),
+  });
+
+  const toggleFertilizerRequestSelection = (request: { id: number; status: string }) => {
+    if (!["pending", "confirmed", "loaded"].includes(request.status)) return;
+    setSelectedFertilizerRequestIds((selectedIds) =>
+      selectedIds.includes(request.id)
+        ? selectedIds.filter((id) => id !== request.id)
+        : [...selectedIds, request.id],
+    );
+  };
+
+  const startFertilizerSelectionWithRequest = (request: {
+    id: number;
+    status: string;
+  }) => {
+    if (!["pending", "confirmed", "loaded"].includes(request.status)) return;
+    setSelectedFertilizerRequestIds([request.id]);
+    setFertilizerSelectionMode(true);
+  };
+
+  const finishFertilizerRequestSelection = () => {
+    setSelectedFertilizerRequestIds([]);
+    setFertilizerSelectionMode(false);
+  };
+
+  const cancelSelectedFertilizerRequests = (reason: string, note: string) => {
+    if (selectedFertilizerRequestIds.length === 0) {
+      console.warn("No fertilizer requests selected for cancellation");
+      return;
+    }
+
+    const selectedIds = new Set(selectedFertilizerRequestIds);
+    const cancelledRequests = fertRequests.filter(
+      (request) =>
+        selectedIds.has(request.id) &&
+        ["pending", "confirmed", "loaded"].includes(request.status),
+    );
+    const cancelledAt = nowTime();
+
+    setFertRequests((previousRequests) =>
+      previousRequests.map((request) =>
+        selectedIds.has(request.id) &&
+        ["pending", "confirmed", "loaded"].includes(request.status)
+          ? { ...request, status: "cancelled", cancelledAt, reason, note }
+          : request,
+      ),
+    );
+    setFertilizerCancellationNotifications((previousNotifications) => [
+      ...cancelledRequests.map((request) =>
+        createFertilizerCancellationNotification(request, reason, note),
+      ),
+      ...previousNotifications,
+    ]);
+    finishFertilizerRequestSelection();
+    setSheet(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
 
   const toggleRequestSelection = (stop: CollectionStop) => {
     if (stop.status !== "pending" && stop.status !== "accepted") return;
@@ -247,6 +362,11 @@ export default function TeaCollectorMobile() {
     }
 
     const selectedIds = new Set(selectedRequestIds);
+    const cancelledStops = stops.filter(
+      (stop) =>
+        selectedIds.has(stop.id) &&
+        (stop.status === "pending" || stop.status === "accepted"),
+    );
     setStops((previousStops) =>
       previousStops.map((stop) =>
         selectedIds.has(stop.id) && (stop.status === "pending" || stop.status === "accepted")
@@ -254,6 +374,12 @@ export default function TeaCollectorMobile() {
           : stop,
       ),
     );
+    setPickupCancellationNotifications((previousNotifications) => [
+      ...cancelledStops.map((stop) =>
+        createPickupCancellationNotification(stop, reason, note),
+      ),
+      ...previousNotifications,
+    ]);
     finishRequestSelection();
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -305,6 +431,10 @@ export default function TeaCollectorMobile() {
       reason,
       note 
     }); 
+    setPickupCancellationNotifications((previousNotifications) => [
+      createPickupCancellationNotification(activeStop, reason, note),
+      ...previousNotifications,
+    ]);
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
@@ -353,6 +483,10 @@ export default function TeaCollectorMobile() {
       reason,
       note,
     });
+    setFertilizerCancellationNotifications((previousNotifications) => [
+      createFertilizerCancellationNotification(activeFert, reason, note),
+      ...previousNotifications,
+    ]);
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
@@ -368,6 +502,10 @@ export default function TeaCollectorMobile() {
       reason,
       note,
     });
+    setPickupCancellationNotifications((previousNotifications) => [
+      createPickupCancellationNotification(activeStop, reason, note),
+      ...previousNotifications,
+    ]);
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
@@ -431,6 +569,9 @@ export default function TeaCollectorMobile() {
   
   const arriveAtFactory = () => setSheet("delivery");
   const submitToFactory = () => {
+    const submittedEstates = stops
+      .filter((stop) => stop.status === "loaded")
+      .map((stop) => stop.name);
     const receivedAt = nowTime();
     setStops((previousStops) =>
       previousStops.map((stop) =>
@@ -444,6 +585,18 @@ export default function TeaCollectorMobile() {
           : stop,
       ),
     );
+    if (submittedEstates.length > 0) {
+      setCollectionReportNotifications((previousNotifications) => [
+        {
+          icon: 'leaf-outline',
+          type: 'collectionReport',
+          title: "Tea collection report submitted",
+          desc: submittedEstates.join(", "),
+          time: receivedAt,
+        },
+        ...previousNotifications,
+      ]);
+    }
     setOfficer("");
     setSheet(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -555,6 +708,31 @@ export default function TeaCollectorMobile() {
 
 
   const loadedStops = stops.filter((s) => s.status === "loaded");
+  const notifications: React.ComponentProps<typeof DemoTeaCollectorAlerts>['notifications'] = [
+    ...pickupCancellationNotifications,
+    ...fertilizerCancellationNotifications,
+    ...collectionReportNotifications,
+    ...stops
+      .filter((stop) => stop.status === "pending")
+      .map((stop) => ({
+        icon: 'leaf-outline' as const,
+        type: 'pickup' as const,
+        title: "New pickup request",
+        desc: `${stop.name} · ~${stop.estimatedWeight} kg estimated`,
+        time: "Now",
+      })),
+    ...fertRequests
+      .filter((request) => request.status === "pending")
+      .map((request) => ({
+        icon: 'sprout' as const,
+        iconFamily: 'materialCommunity' as const,
+        type: 'pendingFertilizer' as const,
+        title: "New fertilizer request",
+        desc: `${request.estateName} · ${request.fertilizerType} · ${request.quantity} kg`,
+        time: "Now",
+      })),
+    ...NOTIFICATIONS,
+  ];
 
   const renderScreen = () => {
     switch (tab) {
@@ -591,10 +769,16 @@ export default function TeaCollectorMobile() {
             onAcceptFertilizer={acceptFertilizer}
             onLoadFertilizer={loadFertilizer}
             onNavigateToFertilizerEstate={navigateToFertilizerEstate}
+            selectionMode={fertilizerSelectionMode}
+            selectedRequestIds={selectedFertilizerRequestIds}
+            onToggleRequestSelection={toggleFertilizerRequestSelection}
+            onStartSelectionWithRequest={startFertilizerSelectionWithRequest}
+            onCancelRequestSelection={finishFertilizerRequestSelection}
+            onCancelSelectedRequests={() => setSheet("cancelSelectedFertRequests")}
           />
         );
       case "notif":
-        return <DemoTeaCollectorAlerts notifications={NOTIFICATIONS} />;
+        return <DemoTeaCollectorAlerts notifications={notifications} />;
       case "profile":
         return <DemoTeaCollectorProfile />;
       default:
@@ -657,6 +841,13 @@ export default function TeaCollectorMobile() {
           requestCount={selectedRequestIds.length}
           onClose={() => setSheet(null)}
           onConfirm={cancelSelectedRequests}
+        />
+        <BatchCancelRequestsSheet
+          open={sheet === "cancelSelectedFertRequests"}
+          requestCount={selectedFertilizerRequestIds.length}
+          requestLabel="fertilizer request"
+          onClose={() => setSheet(null)}
+          onConfirm={cancelSelectedFertilizerRequests}
         />
         <CollectSheet open={sheet === "collect"} stop={activeStop} onClose={() => setSheet(null)} onBack={() => setSheet("arrived")} onSubmit={submitCollection} />
         <ConfirmSheet open={sheet === "confirm"} stop={activeStop} weight={collectedWeight} onBack={() => setSheet("collect")} onClose={continueCollecting} />
