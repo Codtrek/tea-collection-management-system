@@ -4,15 +4,21 @@
 \subsection{System Deliverables}
 The proposed Tea Leaf Collection and Distribution Management System will include the following system components:
 \begin{itemize}
-    \item Mobile application for tea estate owners, managers, collection agents, and receiving officers
+    \item Mobile application (React Native) for tea estate owners, tea estate managers, collection agents, and receiving officers, with offline data entry support via SQLite
+    \item Web-based admin portal (React with Vite) for Factory Administrators, Factory Managers, and Factory Officers
     \item Backend API system developed using Node.js and NestJS
     \item PostgreSQL database management system
-    \item Authentication and role-based access control system
-    \item Tea collection, delivery, and OTP-based weight verification modules
+    \item Redis caching layer for improved system performance
+    \item Authentication and role-based access control system using JWT
     \item Complaint handling and delivery confirmation workflows
-    \item Fertilizer request, approval, borrowing, and transport tracking module
+    \item Fertilizer and beneficiary item request, approval, borrowing, and transport tracking module
     \item Monthly payment management and deduction handling module
+    \item Employee management and attendance tracking module
+    \item Reporting and analytics dashboard with graphical charts and insights
     \item Reporting and notification module for operational and financial updates
+    \item CI/CD pipeline using GitHub Actions for automated deployment
+    \item Dockerized deployment infrastructure with Nginx reverse proxy hosted on DigitalOcean
+    \item Test suite covering unit, end-to-end, and load testing (Jest, Cypress, Grafana K6)
 \end{itemize}
 
 \subsection{Documentation}
@@ -46,7 +52,6 @@ The project will be developed in multiple stages:
     \begin{itemize}
         \item Basic user authentication
         \item Tea collection recording and delivery requests
-        \item OTP-based weight verification
         \item Basic reporting and notifications
     \end{itemize}
     \item \textbf{Beta Version}

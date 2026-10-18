@@ -1,22 +1,32 @@
-import{ View, Text, StyleSheet } from "react-native";
-import { colors, spacing, typography } from "@/theme";
+import { useEffect } from "react";
+import { useRouter } from "expo-router";
+import { StyleSheet, Image } from "react-native";
 
-export default function HomeScreen() {
-  return(
-    <View style={styles.container}>
-      <Text style={typography.heading as any}>Hello world!</Text>
-      <Text>Welcome! </Text>
-    </View>
+import Screen from "@/components/ui/Screen";
+import AppText from "@/components/ui/AppText";
+
+import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoGreen.png";
+
+export default function SplashScreen() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      router.replace("./(onboarding)");
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [router]);
+
+  return (
+    <Screen>  
+      <Image source={BrandLogo} style={styles.logo} resizeMode="contain"/>
+    </Screen>
   );
-
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: colors.primary,
-    padding: spacing.lg,
+  logo: {
+    width: 150,
   }
 });
