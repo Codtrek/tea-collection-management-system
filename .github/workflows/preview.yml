@@ -1,0 +1,95 @@
+name: Branch preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy as a preview
+        required: true
+        default: dev
+
+# One deploy at a time: they share the port registry and the single preview slot.
+concurrency:
+  group: branch-preview
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  SSH_USER: harboostuser
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BRANCH: ${{ inputs.branch }}
+    steps:
+      - name: Validate branch name
+        run: |
+          [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "Unsupported branch name: $BRANCH"; exit 1; }
+
+      # Deploy tooling always comes from the ref this workflow runs from (dev),
+      # so older branches don't need the scripts.
+      - name: Check out deploy tooling
+        uses: actions/checkout@v4
+        with:
+          path: tooling
+
+      - name: Check out the branch to preview
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          path: app
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/source-code/admin/package-lock.json
+
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.PREVIEW_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PREVIEW_KNOWN_HOSTS }}
+          HOST: ${{ secrets.PREVIEW_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'Host preview\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n' "$HOST" "$SSH_USER" > ~/.ssh/config
+
+      - name: Sync preview scripts and allocate the branch's port
+        run: |
+          scp tooling/source-code/deploy/preview/*.sh preview:/opt/preview/
+          ssh preview 'chmod +x /opt/preview/*.sh'
+          PORT=$(ssh preview "/opt/preview/port-for.sh '$BRANCH'")
+          [[ "$PORT" =~ ^[0-9]+$ ]] || { echo "Could not allocate a port"; exit 1; }
+          echo "PORT=$PORT" >> "$GITHUB_ENV"
+
+      - name: Build the admin frontend
+        working-directory: app/source-code/admin
+        env:
+          VITE_API_URL: /api
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build the backend image
+        run: docker build --target production -t "tea-preview-backend:$PORT" app/source-code/backend
+
+      - name: Upload the frontend and the image
+        run: |
+          tar -C app/source-code/admin/dist -cz . | ssh preview "rm -rf /srv/previews/$PORT && mkdir -p /srv/previews/$PORT && tar -xz -C /srv/previews/$PORT"
+          docker save "tea-preview-backend:$PORT" | gzip | ssh preview 'gunzip | docker load'
+
+      - name: Start the preview
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.PREVIEW_JWT_SECRET }}
+        run: |
+          printf '%s\n%s\n' "$DATABASE_URL" "$JWT_SECRET" | ssh preview "/opt/preview/preview-up.sh $PORT tea-preview-backend:$PORT"
+          ssh preview 'docker image prune -f' > /dev/null
+          echo "### Preview ready: https://harboost.duckdns.org:$PORT (branch \`$BRANCH\`)" >> "$GITHUB_STEP_SUMMARY"
