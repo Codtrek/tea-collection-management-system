@@ -8,16 +8,30 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { FertRequestCard } from "@/components/ui/demo-teacollector-cards";
+import {
+  FertilizerRequestFilter,
+  FertilizerRequestFilterTabs,
+} from "@/components/ui/demo-teacollector-requestfilter";
 import { colors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 
 export default function DemoTeaCollectorFertilizer({
   requests,
+  filter,
+  setFilter,
   onViewDetails,
   onAcceptFertilizer,
   onLoadFertilizer,
   onNavigateToFertilizerEstate,
-}: any) {
+}: {
+  requests: any[];
+  filter: FertilizerRequestFilter;
+  setFilter: (filter: FertilizerRequestFilter) => void;
+  onViewDetails?: (request: any) => void;
+  onAcceptFertilizer?: (request: any) => void;
+  onLoadFertilizer?: (request: any) => void;
+  onNavigateToFertilizerEstate?: (request: any) => void;
+}) {
   const groups = [
     {
       key: "pending",
@@ -48,62 +62,90 @@ export default function DemoTeaCollectorFertilizer({
       ),
     },
     {
-      key: "closed",
-      label: "Declined or Cancelled",
+      key: "cancelled",
+      label: "Cancelled",
       items: requests.filter(
-        (r: any) => r.status === "declined" || r.status === "cancelled"
+        (r: any) => r.status === "cancelled"
+      ),
+    },
+    {
+      key: "declined",
+      label: "Declined",
+      items: requests.filter(
+        (r: any) => r.status === "declined"
       ),
     },
   ];
 
+  const visibleGroups =
+    filter === "all"
+      ? groups
+      : groups.filter((group) => group.key === filter);
+  const hasVisibleRequests = visibleGroups.some(
+    (group) => group.items.length > 0
+  );
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-    >
-      {groups.map(
-        (g) =>
-          g.items.length > 0 && (
-            <View key={g.key} style={styles.group}>
-              <Text style={styles.sectionTitle}>
-                {g.label} · {g.items.length}
-              </Text>
+    <View style={styles.container}>
+      <View style={styles.stickyFilter}>
+        <FertilizerRequestFilterTabs
+          filter={filter}
+          setFilter={setFilter}
+        />
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {visibleGroups.map(
+          (g) =>
+            g.items.length > 0 && (
+              <View key={g.key} style={styles.group}>
+                <Text style={styles.sectionTitle}>
+                  {g.label} · {g.items.length}
+                </Text>
 
-              {g.items.map((r: any) => (
-                <FertRequestCard
-                  key={r.id}
-                  request={r}
-                  onViewDetails={onViewDetails}
-                  onAcceptFertilizer={onAcceptFertilizer}
-                  onLoadFertilizer={onLoadFertilizer}
-                  onNavigateToFertilizerEstate={onNavigateToFertilizerEstate}
-                />
-              ))}
-            </View>
-          )
-      )}
+                {g.items.map((r: any) => (
+                  <FertRequestCard
+                    key={r.id}
+                    request={r}
+                    onViewDetails={onViewDetails}
+                    onAcceptFertilizer={onAcceptFertilizer}
+                    onLoadFertilizer={onLoadFertilizer}
+                    onNavigateToFertilizerEstate={onNavigateToFertilizerEstate}
+                  />
+                ))}
+              </View>
+            )
+        )}
 
-      {/* Empty State */}
-      {requests.length === 0 && (
-        <View style={styles.emptyContainer}>
-          <Ionicons
-            name="leaf-outline"
-            size={48}
-            color={colors.text.secondary}
-            style={styles.emptyIcon}
-          />
+        {requests.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Ionicons
+              name="leaf-outline"
+              size={48}
+              color={colors.text.secondary}
+              style={styles.emptyIcon}
+            />
 
-          <Text style={styles.emptyTitle}>
-            No fertilizer requests
-          </Text>
+            <Text style={styles.emptyTitle}>
+              No fertilizer requests
+            </Text>
 
-          <Text style={styles.emptySubtitle}>
-            All requests have been completed
-          </Text>
-        </View>
-      )}
-    </ScrollView>
+            <Text style={styles.emptySubtitle}>
+              There are no fertilizer requests yet
+            </Text>
+          </View>
+        )}
+        {requests.length > 0 && !hasVisibleRequests && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>
+              No {filter} fertilizer requests
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -113,9 +155,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
+  stickyFilter: {
+    backgroundColor: colors.background,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    zIndex: 10,
+  },
+
   contentContainer: {
     paddingHorizontal: 20,
-    paddingTop: 20,
     paddingBottom: 100,
   },
 

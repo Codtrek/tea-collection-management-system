@@ -7,8 +7,8 @@ import {
   StyleSheet,
 } from "react-native";
 import {
+  collectionFilters,
   RequestFilterTabs,
-  RequestFilter,
 } from "@/components/ui/demo-teacollector-requestfilter";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -118,6 +118,7 @@ export default function DemoTeaCollectorCollect({
       <RequestFilterTabs
         filter={filter}
         setFilter={setFilter}
+        filters={collectionFilters}
       />
       </View>
     <ScrollView

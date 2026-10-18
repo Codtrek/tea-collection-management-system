@@ -17,42 +17,66 @@ export type RequestFilter =
   | "cancelled"
   | "history";
 
-type RequestFilterProps = {
-  filter: RequestFilter;
-  setFilter: (filter: RequestFilter) => void;
+export type FertilizerRequestFilter =
+  | "all"
+  | "pending"
+  | "confirmed"
+  | "loaded"
+  | "delivered"
+  | "cancelled";
+
+type RequestFilterOption<T extends string> = {
+  key: T;
+  label: string;
 };
 
-const filters = [
+export const collectionFilters: RequestFilterOption<RequestFilter>[] = [
   {
-    key: "all" as RequestFilter,
+    key: "all",
     label: "All Requests",
   },
   {
-    key: "pending" as RequestFilter,
+    key: "pending",
     label: "Pending",
   },
   {
-    key: "accepted" as RequestFilter,
+    key: "accepted",
     label: "Accepted",
   },
   {
-    key: "loaded" as RequestFilter,
+    key: "loaded",
     label: "Loaded",
   },
   {
-    key: "cancelled" as RequestFilter,
+    key: "cancelled",
     label: "Cancelled",
   },
   {
-    key: "history" as RequestFilter,
+    key: "history",
     label: "History",
   },
 ];
 
-export function RequestFilterTabs({
+const fertilizerFilters: RequestFilterOption<FertilizerRequestFilter>[] = [
+  { key: "all", label: "All Requests" },
+  { key: "pending", label: "Pending" },
+  { key: "confirmed", label: "Confirmed" },
+  { key: "loaded", label: "Loaded" },
+  { key: "delivered", label: "Delivered" },
+  { key: "cancelled", label: "Cancelled" },
+];
+
+type RequestFilterProps<T extends string> = {
+  filter: T;
+  setFilter: (filter: T) => void;
+  filters: RequestFilterOption<T>[];
+};
+
+export function RequestFilterTabs<T extends string>({
   filter,
   setFilter,
-}: RequestFilterProps) {
+  filters,
+}: RequestFilterProps<T>) {
   return (
     <View style={styles.container}>
       <ScrollView
@@ -85,6 +109,22 @@ export function RequestFilterTabs({
         })}
       </ScrollView>
     </View>
+  );
+}
+
+export function FertilizerRequestFilterTabs({
+  filter,
+  setFilter,
+}: {
+  filter: FertilizerRequestFilter;
+  setFilter: (filter: FertilizerRequestFilter) => void;
+}) {
+  return (
+    <RequestFilterTabs
+      filter={filter}
+      setFilter={setFilter}
+      filters={fertilizerFilters}
+    />
   );
 }
 

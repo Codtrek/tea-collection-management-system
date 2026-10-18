@@ -1,4 +1,4 @@
-﻿// app/teacollector/teacollectorMobile.tsx
+// app/teacollector/teacollectorMobile.tsx
 import React, { useState } from 'react';
 import {
   ScrollView,
@@ -29,6 +29,7 @@ import DemoTeaCollectorFertilizer from '@/app/teacollector/demo-teacollector-fer
 import DemoTeaCollectorAlerts from '@/app/teacollector/demo-teacollector-alerts';
 import DemoTeaCollectorProfile from '@/app/teacollector/demo-teacollector-profile';
 import {
+  FertilizerRequestFilter,
   RequestFilter,
 } from '@/components/ui/demo-teacollector-requestfilter';
 import { colors } from '@/theme/colors';
@@ -199,6 +200,8 @@ export default function TeaCollectorMobile() {
   const router = useRouter();
   const [tab, setTab] = useState("home");
   const [filter, setFilter] = useState<RequestFilter>("all");
+  const [fertilizerFilter, setFertilizerFilter] =
+    useState<FertilizerRequestFilter>("all");
   const [stops, setStops] = useState<CollectionStop[]>(INITIAL_STOPS);
   const [fertRequests, setFertRequests] = useState(INITIAL_FERT_REQUESTS);
   const [activeStop, setActiveStop] = useState<any>(null);
@@ -582,6 +585,8 @@ export default function TeaCollectorMobile() {
         return (
           <DemoTeaCollectorFertilizer
             requests={fertRequests}
+            filter={fertilizerFilter}
+            setFilter={setFertilizerFilter}
             onViewDetails={openFertDetails}
             onAcceptFertilizer={acceptFertilizer}
             onLoadFertilizer={loadFertilizer}
