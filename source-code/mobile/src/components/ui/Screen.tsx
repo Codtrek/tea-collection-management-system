@@ -1,4 +1,4 @@
-import { colors } from "@/theme";
+import { colors, spacing } from "@/theme";
 import {
   View,
   StyleSheet,
@@ -8,26 +8,36 @@ import {
 } from "react-native";
 
 import {SafeAreaView} from "react-native-safe-area-context";
+import AppText from "./AppText";
 
 interface ScreenProps extends ViewProps {
   children: React.ReactNode;
   scroll?: boolean;
   header?: React.ReactNode;
+  pageTitle?: string;
 }
 
 export default function Screen({
   children,
   scroll = false,
   header,
+  pageTitle,
   style,
   ...props
 }: ScreenProps) {
-  const Container = header ? View : SafeAreaView;
+  // const Container = header ? View : SafeAreaView;
+const TopSection = header ? (
+  header
+) : pageTitle ? (
+  <View style={styles.pageTitle}>
+    <AppText variant="subHeading">{pageTitle}</AppText>
+  </View>
+) : null;
 
   if (scroll) {
     return (
-      <Container style={styles.container}>
-        {header}
+      <View style={styles.container}>
+        {TopSection}
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={[
@@ -38,13 +48,13 @@ export default function Screen({
           >
             {children}
           </ScrollView>
-      </Container>
+      </View>
     );
   }
 
   return (
-    <Container style={styles.container}>
-      {header}
+    <View style={styles.container}>
+      {TopSection}
       <View
         {...props}
         style={[
@@ -54,7 +64,7 @@ export default function Screen({
       >
         {children}
       </View>
-    </Container>
+    </View>
   );
 }
 
@@ -63,6 +73,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     flex: 1,
     width: "100%",
+  },
+  pageTitle: {
+    paddingHorizontal: spacing.md,
+    paddingTop: 40,
+    height: 100,
   },
   scrollView: {
     flex: 1,

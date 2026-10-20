@@ -6,11 +6,12 @@ import { EstateOwnerBottomTab } from "@/components/ui";
 import type { BottomTabItem } from "@/components/ui/BottomTab";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { spacing } from "@/theme/spacing";
-
 export default function EstateOwnerLayout() {
     const pathname = usePathname();
-    const activeTab = pathname.endsWith("/estates") ? "estates" : "home";
+    const activeTab =
+        pathname.endsWith("/estates") || pathname.includes("/estate/")
+            ? "estates"
+            : "home";
 
     useEffect(() => {
         router.prefetch("/(estate-owner)/home");

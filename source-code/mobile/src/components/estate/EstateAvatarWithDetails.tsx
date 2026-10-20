@@ -1,42 +1,93 @@
-import {Avatar, AppText} from "@/components/ui";
-import {StyleSheet, View} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { StyleSheet, View } from "react-native";
 
-interface EstateAvatarWithDetailProps{
-    name: string,
-    address: string,
-    area: string,
-    image: string,
+import { AppText, Avatar } from "@/components/ui";
+import { colors } from "@/theme";
+
+interface EstateAvatarWithDetailsProps {
+  name: string;
+  address: string;
+  area: string;
+  image: string;
+  size?: number;
+  compact?: boolean;
 }
 
 export default function EstateAvatarWithDetails({
-    name,
-    address,
-    area,
-    image,
-}:EstateAvatarWithDetailProps) {
-    return(
-        <>
-            <View style={styles.container}>
-                <Avatar image={image} size={80}/>
-                <View style={styles.detailsContainer}>
-                    <AppText variant="sectionHeading">{name}</AppText>
-                    <AppText variant="label">{address}</AppText>
-                    <AppText variant="label">{area}</AppText>
-                </View>
-            </View>
-        </>
-    );
+  name,
+  address,
+  area,
+  image,
+  size = 80,
+  compact = false,
+}: EstateAvatarWithDetailsProps) {
+  return (
+    <View style={[styles.container, compact && styles.compactContainer]}>
+      <Avatar image={image} size={size} />
+      <View style={styles.detailsContainer}>
+        <AppText
+          variant={compact ? "bodySmall" : "sectionHeading"}
+          style={styles.name}
+          numberOfLines={1}
+        >
+          {name}
+        </AppText>
+        <View style={styles.detailRow}>
+          {compact ? (
+            <Ionicons
+              name="location-outline"
+              size={12}
+              color={colors.text.secondary}
+            />
+          ) : null}
+          <AppText
+            variant={compact ? "caption" : "bodySmall"}
+            style={styles.detailText}
+            numberOfLines={1}
+          >
+            {address}
+          </AppText>
+        </View>
+        <AppText
+          variant={compact ? "caption" : "label"}
+          style={[styles.detailText, compact && styles.areaText]}
+        >
+          {area}
+        </AppText>
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container:{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 5,
-        marginBottom: 20,
-    },
-    detailsContainer: {
-        flex: 1,
-        flexDirection: "column",
-    }
-})
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 20,
+  },
+  compactContainer: {
+    gap: 10,
+    marginBottom: 12,
+  },
+  detailsContainer: {
+    flex: 1,
+    flexDirection: "column",
+  },
+  name: {
+    color: colors.text.primary,
+    fontWeight: "600",
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  detailText: {
+    color: colors.text.secondary,
+  },
+  areaText: {
+    marginLeft: 15,
+    color: colors.text.tertiary,
+  },
+});
