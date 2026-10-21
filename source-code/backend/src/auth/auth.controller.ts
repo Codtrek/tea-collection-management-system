@@ -4,11 +4,13 @@ import { AuthService,  type LoginResult, type PublicUser } from './auth.service'
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { JwtPayload } from './jwt-payload.interface';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @SkipThrottle({ short: true, medium: true, long:true })
   @Post('login')
   login(@Body() dto: LoginDto): Promise<LoginResult> {
     return this.authService.login(dto.phone, dto.password);
