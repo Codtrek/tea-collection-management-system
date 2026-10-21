@@ -1,14 +1,21 @@
-import { StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 
 import { EstateAvatarWithDetails } from "@/components/estate";
 import { CollectionRecordsList } from "@/components/collection-request/CollectionRecordsList";
 import { CollectionRequestFormModal } from "@/components/collection-request/CollectionRequestFormModal";
 import { factoryOptions } from "@/data/collectionRequest";
+import { estateProfiles } from "@/data/estateOwnerEstates";
 import { useCollectionRequest } from "@/hooks/useCollectionRequest";
 import { AppButton, AppText, Dropdown, Screen, Stat } from "@/components/ui";
 import { spacing } from "@/theme";
 
 export default function CollectionRequest() {
+  const { estateId: estateIdParam } =
+    useLocalSearchParams<{ estateId?: string }>();
+  const estate =
+    estateProfiles.find((profile) => profile.id === estateIdParam) ??
+    estateProfiles[0];
   const {
     factory,
     setFactory,
@@ -29,6 +36,30 @@ export default function CollectionRequest() {
     handleDeleteRecord,
   } = useCollectionRequest();
 
+  const handleRequestPickup = () => {
+    if (!factory) {
+      Alert.alert("Factory required", "Select a factory for this pickup.");
+      return;
+    }
+
+    if (totalWeight <= 0) {
+      Alert.alert("Weight required", "Add at least one collection record.");
+      return;
+    }
+
+    router.push({
+      pathname: "/(estate-owner)/estate/[estateId]",
+      params: {
+        estateId: estate.id,
+        collectionFactory:
+          factoryOptions.find((option) => option.value === factory)?.label ??
+          factory,
+        collectionWeightKg: String(totalWeight),
+        collectionRequestedAt: new Date().toISOString(),
+      },
+    });
+  };
+
   return (
     <Screen
       scroll
@@ -41,10 +72,10 @@ export default function CollectionRequest() {
           </View> */}
 
           <EstateAvatarWithDetails
-            name="Nuwara Eliya Estate"
-            address="12-B, up road, Nuwara"
-            area="100 acres"
-            image="https://images.unsplash.com/photo-1506744038136-46273834b3fb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1170&q=80"
+            name={estate.name}
+            address={estate.location}
+            area={`${estate.areaAcres} acres`}
+            image={estate.imageSrc}
             size={52}
           />
 
@@ -88,7 +119,7 @@ export default function CollectionRequest() {
             title="Request pickup"
             variant="primary"
             width="half"
-            onPress={() => {}}
+            onPress={handleRequestPickup}
           />
         </View>
       </View>

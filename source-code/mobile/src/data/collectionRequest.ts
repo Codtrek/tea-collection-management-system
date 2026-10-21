@@ -1,7 +1,6 @@
 import type { DropdownOption } from "@/components/ui/Dropdown";
 
 export const factoryOptions: DropdownOption[] = [
-  { label: "Nuwara Eliya Tea Factory", value: "nuwara-eliya" },
-  { label: "Pedro Tea Factory", value: "pedro" },
-  { label: "Kandapola Tea Factory", value: "kandapola" },
+  { label: "Tea King Factory", value: "tea-king-factory" },
+  { label: "Ceylon Tea", value: "ceylon-tea" },
 ];

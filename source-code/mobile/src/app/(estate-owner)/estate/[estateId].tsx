@@ -13,14 +13,49 @@ import { router, useLocalSearchParams } from "expo-router";
 
 import { EstateAvatarWithDetails } from "@/components/estate";
 import WeeklyPluckedWeightChart from "@/components/estate-owner/WeeklyPluckedWeightChart";
+import { RequestListItem } from "@/components/estate-owner";
 import { AppButton, AppText, Avatar, Screen } from "@/components/ui";
 import { estateProfiles } from "@/data/estateOwnerEstates";
 import { colors, spacing } from "@/theme";
 
 export default function EstateDetails() {
-  const { estateId } = useLocalSearchParams<{ estateId: string }>();
+  const {
+    estateId,
+    collectionFactory,
+    collectionWeightKg,
+    collectionRequestedAt,
+  } = useLocalSearchParams<{
+    estateId: string;
+    collectionFactory?: string;
+    collectionWeightKg?: string;
+    collectionRequestedAt?: string;
+  }>();
   const [isWorkersVisible, setIsWorkersVisible] = useState(false);
   const estate = estateProfiles.find((profile) => profile.id === estateId);
+  const collectionWeight = Number(collectionWeightKg);
+  const requestedAt = collectionRequestedAt
+    ? new Date(collectionRequestedAt)
+    : null;
+  const pendingCollection =
+    estate &&
+    collectionFactory &&
+    Number.isFinite(collectionWeight) &&
+    collectionWeight > 0 &&
+    requestedAt &&
+    !Number.isNaN(requestedAt.getTime())
+      ? {
+          id: `request-${requestedAt.getTime()}`,
+          estateName: estate.name,
+          factory: collectionFactory,
+          estimatedWeightKg: collectionWeight,
+          requestedAt: requestedAt.toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+          status: "pending" as const,
+        }
+      : null;
 
   if (!estate) {
     return (
@@ -56,7 +91,10 @@ export default function EstateDetails() {
   };
 
   const openCollectionRequest = () => {
-    router.push("/(shared)/collectionRequest");
+    router.push({
+      pathname: "/(shared)/collectionRequest",
+      params: { estateId: estate.id },
+    });
   };
 
   return (
@@ -75,9 +113,21 @@ export default function EstateDetails() {
 
       <View style={styles.quickActions}>
         <AppButton title="Fertilizers" width="half"  variant="secondary"/>
-        <AppButton title="+Collection" width="half" variant="primary" onPress={()=> router.push("/(shared)/collectionRequest")}/>
+        <AppButton title="+Collection" width="half" variant="primary" onPress={openCollectionRequest}/>
         
       </View>
+
+      {pendingCollection ? (
+        <>
+          <SectionHeading title="Ongoing collection" />
+          <RequestListItem
+            request={pendingCollection}
+            title={pendingCollection.factory}
+            showFactory={false}
+            highlight
+          />
+        </>
+      ) : null}
 
       <SectionHeading title="Factories" actionLabel={`${estate.factories.length} linked`} />
       <View style={styles.factoryList}>
