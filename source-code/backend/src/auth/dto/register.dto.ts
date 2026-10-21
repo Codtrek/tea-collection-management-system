@@ -14,7 +14,7 @@ export class RegisterDto {
 
   @IsNotEmpty()
   @IsPhoneNumber('LK')
-  phoneNumber: string;
+  phone: string;
 
   @IsNotEmpty()
   @Matches(/^(?:\d{9}[VX]|\d{12})$/, {
