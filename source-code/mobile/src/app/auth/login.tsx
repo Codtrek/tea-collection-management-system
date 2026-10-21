@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { StyleSheet, View, Pressable, Platform} from "react-native";
+import { Image, StyleSheet, View, Pressable, Platform } from "react-native";
 import { Link, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { login } from "../services/api/auth.api";
@@ -15,6 +15,17 @@ import {
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
+import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoGreen.png";
+import { getErrorMessages } from "../services/api/client";
+import {
+  getPhoneNumberError,
+  getPhoneNumberResponseError,
+} from "@/utils/phoneValidation";
+
+type LoginFieldErrors = {
+  phoneNumber?: string;
+  password?: string;
+};
 
 export default function LogInScreen() {
   const router = useRouter();
@@ -22,7 +33,8 @@ export default function LogInScreen() {
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<LoginFieldErrors>({});
 //this function won't be necessary when running on mobile
   async function persistSession(accessToken: string, user: object) {
     const serializedUser = JSON.stringify(user);
@@ -42,10 +54,19 @@ export default function LogInScreen() {
       password,
     });
 
-    setError("");
+    setFormError("");
+    setFieldErrors({});
 
-  if (!phoneNumber || !password) {
-    setError("Please enter your phone number and password.");
+  const validationErrors: LoginFieldErrors = {};
+  const phoneError = getPhoneNumberError(phoneNumber);
+  if (phoneError) {
+    validationErrors.phoneNumber = phoneError;
+  }
+  if (!password) {
+    validationErrors.password = "Enter your password.";
+  }
+  if (Object.keys(validationErrors).length > 0) {
+    setFieldErrors(validationErrors);
     return;
   }
 
@@ -72,15 +93,32 @@ export default function LogInScreen() {
         router.replace("/estate-manager");
         return;
       default :
-        setError("This account does not have a mobile dashboard yet.");
+        setFormError("This account does not have a mobile dashboard yet.");
     }
 
   } catch (error) {
-    setError(
-      error instanceof Error
-        ? error.message
-        : "Unable to log in.",
-    );
+    const messages = getErrorMessages(error, "Unable to log in.");
+    const nextFieldErrors: LoginFieldErrors = {};
+    const formMessages: string[] = [];
+
+    messages.forEach((message) => {
+      if (/phone number|account found/i.test(message)) {
+        const phoneMessage = getPhoneNumberResponseError(message, "login");
+        nextFieldErrors.phoneNumber = [nextFieldErrors.phoneNumber, phoneMessage]
+          .filter(Boolean)
+          .filter((value, index, values) => values.indexOf(value) === index)
+          .join("\n");
+      } else if (/password/i.test(message)) {
+        nextFieldErrors.password = [nextFieldErrors.password, message]
+          .filter(Boolean)
+          .join("\n");
+      } else {
+        formMessages.push(message);
+      }
+    });
+
+    setFieldErrors(nextFieldErrors);
+    setFormError(formMessages.join("\n"));
   } finally {
     setLoading(false);
   }
@@ -88,64 +126,75 @@ export default function LogInScreen() {
   }
 
   return (
-    <Screen scroll style={styles.container}>
-      <View style={styles.logoContainer}>
-        <View style={styles.logoCircle}>
-          <AppText variant="heading" style={styles.logoText}>
-            🌿
-          </AppText>
+    <Screen scroll style={styles.screen}>
+      <View style={styles.page}>
+        <View style={styles.header}>
+          <Image source={BrandLogo} style={styles.logo} resizeMode="contain" />
+          <View style={styles.eyebrowRow}>
+          </View>
         </View>
 
-        <AppText variant="heading" style={styles.title}>
-          Login Portal
-        </AppText>
+        <View style={styles.formCard}>
 
-      </View>
+          <View style={styles.form}>
+            <AppInput
+              label="Phone number"
+              placeholder="Enter your phone number"
+              keyboardType="phone-pad"
+              value={phoneNumber}
+              error={fieldErrors.phoneNumber}
+              onChangeText={(value) => {
+                setPhoneNumber(value);
+                setFieldErrors((current) => ({ ...current, phoneNumber: undefined }));
+              }}
+            />
 
-      <View style={styles.form}>
-        <AppInput
-          label="Phone Number"
-          placeholder="Enter your phone number"
-          keyboardType="numeric"
-          value={phoneNumber}
-          onChangeText={setPhoneNumber}
-        />
+            <PasswordInput
+              label="Password"
+              placeholder="Enter your password"
+              value={password}
+              error={fieldErrors.password}
+              onChangeText={(value) => {
+                setPassword(value);
+                setFieldErrors((current) => ({ ...current, password: undefined }));
+              }}
+            />
 
-        <PasswordInput
-          label="Password"
-          placeholder="Enter your password"
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        <Pressable style={styles.forgotPassword}>
-          <Link href="/auth/change-password" asChild>
-            <AppText variant="bodySmall" style={styles.link}>
-              Forgot Password?
-            </AppText>
-          </Link>
-        </Pressable>
-
-        <AppButton
-          title="Log In"
-          onPress={handleLogIn}
-        />
-
-        <View style={styles.registerContainer}>
-          <AppText variant="bodySmall">
-            Don't have an account?{" "}
-          </AppText>
-
-          <Link href="/auth/register" asChild>
-            <Pressable>
-              <AppText
-                variant="bodySmall"
-                style={styles.link}
-              >
-                Register
-              </AppText>
+            <Pressable style={styles.forgotPassword}>
+              <Link href="/auth/change-password" asChild>
+                <AppText variant="bodySmall" style={styles.link}>
+                  Forgot password?
+                </AppText>
+              </Link>
             </Pressable>
-          </Link>
+
+            {formError ? (
+              <View style={styles.errorBox}>
+                <AppText variant="bodySmall" style={styles.error}>
+                  {formError}
+                </AppText>
+              </View>
+            ) : null}
+
+            <AppButton
+              title="Sign in"
+              onPress={handleLogIn}
+              loading={loading}
+            />
+          </View>
+
+          <View style={styles.registerContainer}>
+            <AppText variant="bodySmall" style={styles.mutedText}>
+              Estate Owner Registration?
+            </AppText>
+            <Link href="/auth/register" asChild>
+              <Pressable>
+                <AppText variant="bodySmall" style={styles.link}>
+                  Create an account
+                </AppText>
+              </Pressable>
+            </Link>
+          </View>
         </View>
       </View>
     </Screen>
@@ -153,68 +202,132 @@ export default function LogInScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+  screen: {
+    flexGrow: 1,
     width: "100%",
-    maxWidth: Platform.OS === 'web' ? 393 : '100%',
-    alignSelf: "center",    
-    backgroundColor: colors.background,
-    paddingVertical: spacing.xl,
+    maxWidth: "100%",
+    backgroundColor: "transparent",
+    paddingTop: spacing.xl,
+    paddingBottom: 40,
   },
 
-  logoContainer: {
+  page: {
+    width: "100%",
+    maxWidth: 440,
+    alignSelf: "center",
+  },
+
+  header: {
     alignItems: "center",
-    marginBottom: spacing.xl,
+    marginBottom: 28,
     width: "100%",
   },
 
-  logoCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.md,
-
-    borderWidth: 2,
-    borderColor: colors.primary,
+  logo: {
+    width: 178,
+    height: 38,
+    marginBottom: 20,
   },
 
-  logoText: {
+  eyebrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+
+  eyebrowDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+    marginRight: 7,
+  },
+
+  eyebrow: {
     color: colors.primary,
+    fontWeight: "700",
+    letterSpacing: 1.2,
   },
 
   title: {
-    color: colors.text.primaryGreen,
-    marginBottom: spacing.xs,
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: 6,
   },
 
   subtitle: {
     color: colors.text.secondary,
+    textAlign: "center",
+    maxWidth: 300,
+  },
+
+  formCard: {
+    width: "100%",
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "#E5ECE7",
+    shadowColor: "#193322",
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
+
+  formTitle: {
+    color: colors.text.primary,
+    marginBottom: 5,
+  },
+
+  formSubtitle: {
+    color: colors.text.secondary,
+    marginBottom: 22,
   },
 
   form: {
     width: "100%",
-    marginTop: spacing.lg,
   },
 
   forgotPassword: {
     alignSelf: "flex-end",
-    marginBottom: spacing.lg,
+    marginTop: -4,
+    marginBottom: 20,
+  },
+
+  errorBox: {
+    backgroundColor: colors.errorBackground,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+
+  error: {
+    color: colors.error,
   },
 
   registerContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: spacing.lg,
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 22,
   },
 
   link: {
     color: colors.primary,
-    fontWeight: "600",
+    fontWeight: "700",
+  },
+
+  mutedText: {
+    color: colors.text.secondary,
+  },
+
+  footerNote: {
+    color: colors.text.tertiary,
+    textAlign: "center",
+    marginTop: 20,
   },
 });
