@@ -9,6 +9,7 @@ export {default as Header} from './Header';
 export {default as SearchBar} from './SearchBar';
 
 export {default as PasswordInput} from './PasswordInput';
+export {default as PasswordStrengthMeter} from './PasswordStrengthMeter';
 export {default as EstateOwnerBottomTab} from './EstateOwnerBottomTab';
 export { default as StatCard} from './StatCard';
 export { default as AppCard} from './AppCard';
