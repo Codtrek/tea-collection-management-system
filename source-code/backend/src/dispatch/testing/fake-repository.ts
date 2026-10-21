@@ -48,6 +48,12 @@ export class FakeRepository<T extends object> {
     return { ...partial } as T;
   }
 
+  delete(where: Partial<T>): Promise<{ affected: number }> {
+    const hits = this.rows.filter((r) => this.matches(r, where));
+    for (const hit of hits) this.rows.splice(this.rows.indexOf(hit), 1);
+    return Promise.resolve({ affected: hits.length });
+  }
+
   save<E extends T | T[]>(entity: E): Promise<E> {
     const items = (Array.isArray(entity) ? entity : [entity]) as T[];
     for (const item of items) {

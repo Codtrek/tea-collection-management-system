@@ -26,9 +26,14 @@ import type {
 import { RouteLoadService } from '../route-load.service';
 import type { RouteNeighbourEntity } from '../route-neighbour.entity';
 import { RouteResolverService } from '../route-resolver.service';
+import type {
+  RouteScheduleOverrideEntity,
+  RouteScheduleWeekdayEntity,
+} from '../route-schedule.entity';
+import { RouteScheduleService } from '../route-schedule.service';
 import { FakeRepository } from './fake-repository';
 
-/** "Now" for dispatch specs: 09:30 on 2026-10-09 in Sri Lanka (04:00Z). */
+/** "Now" for dispatch specs: 09:30 on 2026-10-09 (a Friday) in Sri Lanka (04:00Z). */
 export const NOW = new Date('2026-10-09T04:00:00.000Z');
 export const TODAY = '2026-10-09';
 export const minutesAfter = (d: Date, m: number) =>
@@ -56,9 +61,17 @@ export function buildHarness() {
   const agentRows = new FakeRepository<CollectionAgentEntity>();
   const employeeRows = new FakeRepository<EmployeeEntity>();
   const userRows = new FakeRepository<User>();
+  const weekdayRows = new FakeRepository<RouteScheduleWeekdayEntity>(null);
+  const overrideRows = new FakeRepository<RouteScheduleOverrideEntity>();
 
   [1, 2, 3, 4].forEach((id) =>
     routes.seed({ id, factoryId: 1, name: `Route ${id}` }),
+  );
+  // Every route runs daily unless a spec sets a pattern (what the migration backfills).
+  [1, 2, 3, 4].forEach((routeId) =>
+    [0, 1, 2, 3, 4, 5, 6].forEach((weekday) =>
+      weekdayRows.seed({ routeId, weekday }),
+    ),
   );
   const names = [
     'R. Senanayake',
@@ -101,6 +114,22 @@ export function buildHarness() {
     cast<RouteAssignmentEntity>(assignments),
   );
   const load = new RouteLoadService(cast<CollectionRecordEntity>(records));
+  const notifier = {
+    notifyAgent: jest.fn().mockResolvedValue(undefined),
+    notifyUser: jest.fn(),
+  };
+  const audit = { record: jest.fn().mockResolvedValue(undefined) };
+  const schedule = new RouteScheduleService(
+    cast<RouteScheduleWeekdayEntity>(weekdayRows),
+    cast<RouteScheduleOverrideEntity>(overrideRows),
+    cast<RouteEntity>(routes),
+    cast<RouteAssignmentEntity>(assignments),
+    load,
+    directory,
+    notifier as unknown as DispatchNotifier,
+    audit as unknown as AuditService,
+  );
+
   const ranking = new CandidateRankingService(
     cast<RouteAssignmentEntity>(assignments),
     cast<AgentDayStatusEntity>(dayStatus),
@@ -108,15 +137,11 @@ export function buildHarness() {
     cast<RouteEntity>(routes),
     directory,
     load,
+    schedule,
   );
   const cache = new PositionCacheService({
     get: () => undefined,
   } as unknown as ConfigService);
-  const notifier = {
-    notifyAgent: jest.fn().mockResolvedValue(undefined),
-    notifyUser: jest.fn(),
-  };
-  const audit = { record: jest.fn().mockResolvedValue(undefined) };
   const settings = {
     get: jest.fn().mockResolvedValue({
       coverRequestTimeoutMin: 15,
@@ -138,6 +163,7 @@ export function buildHarness() {
     notifier as unknown as DispatchNotifier,
     settings as unknown as DispatchSettingsService,
     audit as unknown as AuditService,
+    schedule,
   );
   const self = new AgentSelfService(
     cast<RouteAssignmentEntity>(assignments),
@@ -153,6 +179,7 @@ export function buildHarness() {
     cache,
     notifier as unknown as DispatchNotifier,
     audit as unknown as AuditService,
+    schedule,
   );
 
   let recSeq = 0;
@@ -178,6 +205,17 @@ export function buildHarness() {
     settings,
     dispatch,
     self,
+    schedule,
+    weekdayRows,
+    overrideRows,
+
+    /** Replace a route's weekly pattern directly (0 = Sunday … 6 = Saturday). */
+    pattern(routeId: number, weekdays: number[]) {
+      for (const r of weekdayRows.rows.filter((x) => x.routeId === routeId)) {
+        weekdayRows.rows.splice(weekdayRows.rows.indexOf(r), 1);
+      }
+      weekdays.forEach((weekday) => weekdayRows.seed({ routeId, weekday }));
+    },
 
     permanent(
       routeId: number,

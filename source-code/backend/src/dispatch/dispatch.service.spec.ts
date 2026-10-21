@@ -24,7 +24,8 @@ describe('absence → cover flow', () => {
 
     await h.dispatch.markAbsent(1, 'Fever', officer, NOW);
     const ranked = await h.dispatch.candidates(1, NOW);
-    expect(ranked[0].agentId).toBe(2); // the system ranks, it does not assign
+    // the system ranks, it does not assign: agent 5 runs no route today, then neighbour 2
+    expect(ranked.slice(0, 2).map((c) => c.agentId)).toEqual([5, 2]);
     expect((await h.resolver.getAgentForRoute(1, TODAY))?.agentId).toBe(1);
 
     const req = await h.dispatch.createCoverRequest(
@@ -81,7 +82,7 @@ describe('absence → cover flow', () => {
       'DECLINED',
     );
     const next = await h.dispatch.candidates(1, minutesAfter(NOW, 3));
-    expect(next[0].agentId).toBe(4);
+    expect(next.slice(0, 2).map((c) => c.agentId)).toEqual([5, 4]);
     expect(next.at(-1)).toMatchObject({ agentId: 2, previouslyAsked: true });
     expect((await h.resolver.getAgentForRoute(1, TODAY))?.agentId).toBe(1);
   });
@@ -109,7 +110,9 @@ describe('absence → cover flow', () => {
     await expect(
       h.self.respondToCover(h.uid(2), req.id, 'accept', later),
     ).rejects.toThrow(/expired/i);
-    expect((await h.dispatch.candidates(1, later))[0].agentId).toBe(4);
+    expect(
+      (await h.dispatch.candidates(1, later)).slice(0, 2).map((c) => c.agentId),
+    ).toEqual([5, 4]);
   });
 
   it('honours a different timeout from settings', async () => {
@@ -287,11 +290,32 @@ describe('route reassignment', () => {
     ).resolves.toBeDefined();
   });
 
-  it('refuses to give a permanent route to an agent who already owns one', async () => {
-    const h = scenario();
+  it('refuses a permanent route that runs on the same day as one the agent already runs', async () => {
+    const h = scenario(); // every route runs daily by default
     await expect(
       h.dispatch.reassign(2, { agentId: 3, scope: 'permanent' }, officer, NOW),
-    ).rejects.toThrow(/already owns another route/);
+    ).rejects.toThrow(
+      /already runs Route 3 on 2026-10-09, the same day as Route 2/,
+    );
+  });
+
+  it('lets one agent hold a second permanent route that runs on other days', async () => {
+    const h = scenario();
+    h.pattern(2, [1, 4]); // Route 2: Mon/Thu
+    h.pattern(3, [2, 5]); // Route 3 (agent 3's): Tue/Fri
+    await expect(
+      h.dispatch.reassign(2, { agentId: 3, scope: 'permanent' }, officer, NOW),
+    ).resolves.toMatchObject({ agentId: 3, type: 'PERMANENT' });
+    // today (Friday) agent 3 runs only Route 3; Route 2 isn't scheduled
+    const board = await h.dispatch.board(NOW);
+    expect(board.agents.find((a) => a.agentId === 3)).toMatchObject({
+      routeId: 3,
+      ownRoutes: [
+        { routeId: 2, name: 'Route 2' },
+        { routeId: 3, name: 'Route 3' },
+      ],
+      scheduledRoutes: [{ routeId: 3, name: 'Route 3', covering: false }],
+    });
   });
 
   it('refuses an absent target and a no-op reassignment', async () => {
