@@ -881,6 +881,29 @@ Migration `database/migrations/2026-10-16-grading-corrections.sql` (idempotent, 
   `freezeClock`/`setClock` that fake only `Date`). A running `nest start --watch` hot-reloads backend changes — don't start a second
   one (port 3000).
 
+## Route schedule (2026-10-22, `feature/fertilizer-delivery`)
+
+Spec: `docs/specs/Route-Schedule-Addendum.md` (amends the dispatch addendum). Branched from `feature/grading-corrections`; `origin/dev`
+NOT merged; uncommitted. Migration `database/migrations/2026-10-22-route-schedule.sql` (idempotent, mirrored in `init.sql`; backfills all
+7 weekdays for existing routes) — **not yet applied to the shared Neon DB; the user applies it on a Neon branch.**
+
+- **Routes don't collect daily.** `route_schedule_weekdays` (weekly pattern, 0 = Sunday) + `route_schedule_overrides` (ADD / CANCEL one
+  date, reason required, UNIQUE route+date; a move = CANCEL + ADD sharing `move_group`). Overrides beat the pattern.
+- **One place reads it:** `dispatch/route-schedule.service.ts` — pure `isScheduledOn` / `nextScheduledDate` (strictly AFTER `fromDate`,
+  366-day horizon, null if none) + `isScheduled` / `nextCollectionDay` / `scheduledRoutesOn` / `agentClash`. Who runs a route is still
+  `getAgentForRoute` (unchanged); callers ask both. Fertilizer dispatch/redelivery will use `nextCollectionDay`.
+- **One agent, many permanent routes, one route per date.** The old "already owns another route" block on permanent reassignment is
+  gone; pattern/override changes and permanent reassignment are refused when an agent would run two of his routes on one date. Un-scheduling
+  today is refused once the route started collecting; covers on a dropped date are cancelled + the agent notified.
+- **Dispatch:** board takes `?date=` (portal date picker; absence/cover/reassign stay today-only). Unscheduled routes: no agent, no stops,
+  `nextCollectionDay`. Agent rows carry `ownRoutes` + `scheduledRoutes`; status `Not scheduled` = holds routes, none run that day (an agent
+  with no routes stays `Not started`). Missed check-ins only for scheduled agents. Cover candidates: `free` agents (no own route that day)
+  rank first, then neighbour/stops/load; candidates, cover requests and today-only reassignment refuse an unscheduled route. COL-02's
+  route-agent lookup returns `scheduled` / `nextScheduledDate` / `nextAgent`. Agent `myStops` lists only scheduled routes.
+- **Permissions:** weekly pattern = `dispatch: approve`; single-date changes = `dispatch: edit`. Portal: `RouteScheduleModal` ("Route
+  schedules" on the board). Seed writes day-relative patterns (Route 4 never runs on the seed day; R. Senanayake holds Routes 3 + 4) and
+  only seeds history/today stops on scheduled days; it never overwrites an existing pattern.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React
