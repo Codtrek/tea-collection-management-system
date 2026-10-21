@@ -1,0 +1,914 @@
+<!-- Layout concept: a field-guide with a sticky chapter rail on the left and wide reading column; the one bold move is the numbered "journey" strips that follow a click through the system. -->
+<title>Harboost Field Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #f5faf6;
+    --surface: #ffffff;
+    --surface-2: #eef6f0;
+    --fg: #16231b;
+    --muted: #51655a;
+    --line: #dbe6de;
+    --primary: #1b8b4e;
+    --primary-ink: #0f5c33;
+    --primary-soft: #e3f4ea;
+    --gold: #8a6420;
+    --gold-soft: #faf1db;
+    --danger: #b4233f;
+    --danger-soft: #fdecef;
+    --blue: #1d4ed8;
+    --blue-soft: #e8efff;
+    --code-bg: #0e1a13;
+    --code-fg: #dbe8df;
+    --code-key: #7fdca4;
+    --code-str: #e8c477;
+    --code-com: #7f9a89;
+    --code-num: #8fc3ff;
+    --font-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b140f; --surface: #111d16; --surface-2: #162419; --fg: #e5eee8; --muted: #9bb0a2;
+      --line: #25372c; --primary: #53cf81; --primary-ink: #8fe5ae; --primary-soft: #143221;
+      --gold: #e3bb68; --gold-soft: #2c2410; --danger: #ff8aa0; --danger-soft: #34141c;
+      --blue: #8fb0ff; --blue-soft: #16213f; --code-bg: #070e0a;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b140f; --surface: #111d16; --surface-2: #162419; --fg: #e5eee8; --muted: #9bb0a2;
+    --line: #25372c; --primary: #53cf81; --primary-ink: #8fe5ae; --primary-soft: #143221;
+    --gold: #e3bb68; --gold-soft: #2c2410; --danger: #ff8aa0; --danger-soft: #34141c;
+    --blue: #8fb0ff; --blue-soft: #16213f; --code-bg: #070e0a;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 72px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: var(--font-body); font-size: 17px; line-height: 1.7;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0 64px;
+  }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); }
+  a { color: var(--primary-ink); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+  img, svg { max-width: 100%; }
+
+  /* top bar */
+  .bar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    max-width: 1240px; margin: 0 auto; padding: 12px 0;
+    background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  .brand { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
+  .brand i { width: 26px; height: 26px; border-radius: 7px; background: var(--primary); display: inline-block; position: relative; }
+  .brand i::after { content: ""; position: absolute; left: 7px; top: 5px; width: 9px; height: 15px; border: 2.5px solid #fff; border-width: 0 0 2.5px 2.5px; transform: rotate(-35deg) skewX(8deg); border-radius: 0 0 0 8px; }
+  .bar .tools { display: flex; gap: 8px; align-items: center; }
+  .btn { font: inherit; font-size: 14px; font-weight: 600; padding: 6px 12px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; cursor: pointer; }
+  .btn:hover { border-color: var(--primary); }
+
+  .shell { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 56px; }
+  nav.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 74px); align-self: start; max-height: calc(100vh - 100px); overflow: auto; padding: 24px 0; font-size: 14px; line-height: 1.35; }
+  nav.rail h2 { font-family: var(--font-display); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; font-weight: 700; }
+  nav.rail ol { list-style: none; margin: 0; padding: 0; counter-reset: c; }
+  nav.rail li { counter-increment: c; }
+  nav.rail a { display: flex; gap: 10px; padding: 7px 10px; border-radius: 8px; text-decoration: none; color: var(--muted); }
+  nav.rail a::before { content: counter(c); font-family: var(--font-mono); font-size: 12px; min-width: 18px; color: var(--primary-ink); opacity: .8; padding-top: 1px; }
+  nav.rail a:hover { background: var(--surface-2); color: var(--fg); }
+  nav.rail a.on { background: var(--primary-soft); color: var(--fg); font-weight: 600; }
+
+  main { min-width: 0; padding: 40px 0 0; }
+  .hero { padding: 8px 0 28px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 13px; color: var(--primary-ink); letter-spacing: 0.04em; }
+  h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(38px, 6vw, 68px); line-height: 1.02; letter-spacing: -0.03em; margin: 10px 0 18px; text-wrap: balance; }
+  h1 em { font-style: normal; color: var(--primary); }
+  .lede { font-size: 20px; color: var(--muted); max-width: 62ch; margin: 0 0 20px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font-size: 13px; font-weight: 600; padding: 4px 11px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-ink); }
+  .chip.gold { background: var(--gold-soft); color: var(--gold); }
+  .chip.blue { background: var(--blue-soft); color: var(--blue); }
+
+  section { padding: 44px 0 8px; }
+  section > h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(28px, 3.6vw, 40px); letter-spacing: -0.02em; line-height: 1.1; margin: 0 0 14px; text-wrap: balance; }
+  section > h2 .n { display: block; font-family: var(--font-mono); font-size: 13px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary-ink); margin-bottom: 6px; }
+  h3 { font-family: var(--font-display); font-size: 22px; letter-spacing: -0.01em; margin: 32px 0 8px; text-wrap: balance; }
+  p, li { max-width: 72ch; }
+  p { margin: 0 0 14px; }
+  ul, ol { padding-left: 22px; margin: 0 0 16px; }
+  li { margin-bottom: 6px; }
+  code { font-family: var(--font-mono); font-size: 0.86em; background: var(--surface-2); padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line); overflow-wrap: anywhere; }
+  pre { margin: 16px 0 22px; padding: 16px 18px; background: var(--code-bg); color: var(--code-fg); border-radius: 12px; overflow-x: auto; font-size: 14px; line-height: 1.6; max-width: 100%; position: relative; }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; overflow-wrap: normal; }
+  pre .cap { display: block; font-family: var(--font-mono); font-size: 12px; color: var(--code-com); margin-bottom: 8px; }
+  .k { color: var(--code-key); } .s { color: var(--code-str); } .c { color: var(--code-com); font-style: italic; } .d { color: var(--code-num); }
+
+  .callout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; padding: 16px 18px; border-radius: 12px; margin: 20px 0; border: 1px solid var(--line); background: var(--surface); }
+  .callout .tag { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: 6px; height: fit-content; white-space: nowrap; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout.tip { background: var(--primary-soft); border-color: transparent; } .callout.tip .tag { background: var(--primary); color: #fff; }
+  .callout.warn { background: var(--gold-soft); border-color: transparent; } .callout.warn .tag { background: var(--gold); color: var(--gold-soft); }
+  .callout.why { background: var(--blue-soft); border-color: transparent; } .callout.why .tag { background: var(--blue); color: var(--blue-soft); }
+  .callout.danger { background: var(--danger-soft); border-color: transparent; } .callout.danger .tag { background: var(--danger); color: var(--danger-soft); }
+
+  .scroll { overflow-x: auto; max-width: 100%; }
+  figure { margin: 24px 0; padding: 0; }
+  figure .frame { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; overflow-x: auto; }
+  figure svg { display: block; min-width: 640px; width: 100%; height: auto; }
+  figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; }
+  figure img { display: block; border-radius: 12px; border: 1px solid var(--line); width: 100%; height: auto; }
+  svg text { font-family: var(--font-body); fill: var(--fg); font-size: 13px; }
+  svg .mono { font-family: var(--font-mono); font-size: 12px; }
+  svg .mut { fill: var(--muted); }
+  svg .ttl { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+  svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+  svg .box-g { fill: var(--primary-soft); stroke: var(--primary); stroke-width: 1.5; }
+  svg .box-y { fill: var(--gold-soft); stroke: var(--gold); stroke-width: 1.5; }
+  svg .box-b { fill: var(--blue-soft); stroke: var(--blue); stroke-width: 1.5; }
+  svg .ln { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  svg .ln-g { stroke: var(--primary); stroke-width: 2; fill: none; }
+  svg .dash { stroke-dasharray: 5 5; }
+  svg .dot { fill: var(--primary); }
+  svg .dot-t { fill: #fff; font-weight: 700; font-size: 12px; text-anchor: middle; }
+  svg .arrow { fill: var(--primary); }
+
+  /* the journey strip */
+  .journey { list-style: none; padding: 0; margin: 22px 0 28px; counter-reset: j; position: relative; }
+  .journey > li { counter-increment: j; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; max-width: none; padding-bottom: 18px; position: relative; margin: 0; }
+  .journey > li::before { content: counter(j); width: 34px; height: 34px; border-radius: 50%; background: var(--primary); color: #fff; font-family: var(--font-mono); font-size: 14px; font-weight: 500; display: grid; place-items: center; margin-left: 5px; position: relative; z-index: 1; }
+  .journey > li::after { content: ""; position: absolute; left: 21px; top: 34px; bottom: 0; width: 2px; background: var(--line); }
+  .journey > li:last-child::after { display: none; }
+  .journey .what { font-weight: 600; margin: 3px 0 2px; }
+  .journey .where { font-family: var(--font-mono); font-size: 12.5px; color: var(--primary-ink); overflow-wrap: anywhere; }
+  .journey .body > :last-child { margin-bottom: 0; }
+  .journey .body p { margin-bottom: 6px; }
+  .lane { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 7px; border-radius: 5px; margin-right: 6px; vertical-align: 1px; }
+  .lane.fe { background: var(--primary-soft); color: var(--primary-ink); }
+  .lane.be { background: var(--blue-soft); color: var(--blue); }
+  .lane.db { background: var(--gold-soft); color: var(--gold); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 18px 0 24px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+  .card h4 { margin: 0 0 6px; font-family: var(--font-display); font-size: 17px; }
+  .card p { margin: 0; font-size: 15px; color: var(--muted); }
+  .tree { font-family: var(--font-mono); font-size: 13.5px; line-height: 1.75; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; overflow-x: auto; white-space: pre; margin: 16px 0 22px; max-width: 100%; }
+  .tree b { color: var(--primary-ink); font-weight: 500; } .tree span { color: var(--muted); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--font-display); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  td:first-child { white-space: nowrap; font-family: var(--font-mono); font-size: 14px; }
+
+  .chain { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 22px; }
+  .chain .step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 14px; font-weight: 600; }
+  .chain .step small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; }
+  .chain .arr { color: var(--primary); font-weight: 700; }
+  .ladder { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: end; margin: 18px 0 24px; }
+  .ladder div { border-radius: 10px 10px 0 0; padding: 10px 12px; background: var(--primary-soft); color: var(--primary-ink); font-size: 14px; border: 1px solid var(--line); border-bottom: 3px solid var(--primary); }
+  .ladder div b { display: block; font-family: var(--font-mono); }
+  .ladder div:nth-child(1) { min-height: 74px; opacity: .55; } .ladder div:nth-child(2) { min-height: 104px; opacity: .75; }
+  .ladder div:nth-child(3) { min-height: 134px; opacity: .9; } .ladder div:nth-child(4) { min-height: 164px; }
+  .jwt { display: flex; flex-wrap: wrap; font-family: var(--font-mono); font-size: 13.5px; margin: 14px 0 6px; border-radius: 10px; overflow: hidden; }
+  .jwt span { padding: 10px 14px; overflow-wrap: anywhere; min-width: 0; }
+  .jwt .h { background: var(--blue-soft); color: var(--blue); } .jwt .p { background: var(--primary-soft); color: var(--primary-ink); } .jwt .g { background: var(--gold-soft); color: var(--gold); }
+  details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px 16px; margin: 10px 0; }
+  summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
+  details[open] summary { margin-bottom: 4px; }
+  dl { margin: 0; } dt { font-weight: 700; font-family: var(--font-display); margin-top: 14px; } dd { margin: 2px 0 0; color: var(--muted); max-width: 72ch; }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+
+  @media (max-width: 960px) {
+    .shell { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    nav.rail { position: static; max-height: none; padding: 16px 0 0; }
+    nav.rail ol { display: flex; flex-wrap: wrap; gap: 4px; }
+    nav.rail a { padding: 5px 10px; background: var(--surface); border: 1px solid var(--line); }
+    nav.rail a::before { min-width: 0; }
+    body { font-size: 16px; }
+    .callout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+
+<div class="bar">
+  <div class="brand"><i aria-hidden="true"></i>Harboost Field Guide</div>
+  <div class="tools"><button class="btn" id="theme" type="button" aria-label="Switch colour theme">Theme</button></div>
+</div>
+
+<div class="shell">
+<nav class="rail" aria-label="Chapters">
+  <h2>Chapters</h2>
+  <ol id="toc">
+    <li><a href="#welcome">Welcome</a></li>
+    <li><a href="#big-picture">The big picture</a></li>
+    <li><a href="#folders">Folder tour</a></li>
+    <li><a href="#typescript">TypeScript in 10 minutes</a></li>
+    <li><a href="#react">React in 10 minutes</a></li>
+    <li><a href="#story-read">Story 1: opening a list</a></li>
+    <li><a href="#story-write">Story 2: grading a delivery</a></li>
+    <li><a href="#login">Logging in</a></li>
+    <li><a href="#permissions">Who can do what</a></li>
+    <li><a href="#database">The database</a></li>
+    <li><a href="#background">Background jobs</a></li>
+    <li><a href="#errors">When things go wrong</a></li>
+    <li><a href="#tests">Tests</a></li>
+    <li><a href="#run">Run it on your machine</a></li>
+    <li><a href="#first-change">Your first change</a></li>
+    <li><a href="#glossary">Glossary and links</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">TEA COLLECTION MANAGEMENT SYSTEM · FOR NEW TEAMMATES</div>
+  <h1>Click a button. <em>Follow it</em> all the way to the database.</h1>
+  <p class="lede">This guide assumes you have never opened this project, you are new to TypeScript, and the word "API" still feels fuzzy. By the end you will know what happens, step by step, when someone clicks a button in the web portal.</p>
+  <div class="meta"><span class="chip">React 19 + Vite</span><span class="chip blue">NestJS + TypeORM</span><span class="chip gold">PostgreSQL</span><span class="chip">Expo mobile app</span></div>
+</header>
+
+<!-- 1 -->
+<section id="welcome">
+  <h2><span class="n">Chapter 1</span>Welcome: what this system does</h2>
+  <p>Tea estates pick leaves every day. A factory buys them. Someone has to record what arrived, grade it, decide how much each estate is owed, and keep a trail of who changed what. This system does that.</p>
+  <div class="grid">
+    <div class="card"><h4>Factory Officer</h4><p>Records deliveries, enters the Super and Normal grade weights, and asks for corrections when a figure was wrong.</p></div>
+    <div class="card"><h4>Factory Manager</h4><p>Approves corrections and settlements. Anything that moves money passes through the Manager.</p></div>
+    <div class="card"><h4>Administrator</h4><p>Manages users, roles and settings. Can view grading and the audit trail, but does not grade.</p></div>
+    <div class="card"><h4>Collection agents</h4><p>Drive the routes and collect leaves from estates. They will use the mobile app.</p></div>
+    <div class="card"><h4>Estate owners</h4><p>Get a notice after their delivery has been graded.</p></div>
+  </div>
+  <div class="callout tip"><span class="tag">How to read</span><div><p>Chapters 2 to 5 give you the map and the language. Chapters 6 and 7 are the heart of the guide: two real clicks followed from the screen to the database. Chapters 8 to 13 explain the pieces those stories touch. Chapters 14 and 15 get you running and changing code.</p></div></div>
+</section>
+
+<!-- 2 -->
+<section id="big-picture">
+  <h2><span class="n">Chapter 2</span>The big picture</h2>
+  <p>The project is three programs and one database that talk to each other.</p>
+  <figure>
+    <div class="frame">
+    <svg viewBox="0 0 900 400" role="img" aria-label="Architecture: browser portal and mobile app talk over HTTP to the NestJS API, which talks to PostgreSQL. Cron jobs and Redis sit beside the API.">
+      <defs><marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="arrow"/></marker></defs>
+      <rect x="20" y="40" width="210" height="120" rx="14" class="box-g"/>
+      <text x="40" y="70" class="ttl">Web portal</text>
+      <text x="40" y="92" class="mut">React 19 + Vite + Tailwind</text>
+      <text x="40" y="114" class="mono mut">source-code/admin</text>
+      <text x="40" y="142" class="mono">http://localhost:5173</text>
+      <rect x="20" y="220" width="210" height="120" rx="14" class="box"/>
+      <text x="40" y="250" class="ttl">Mobile app</text>
+      <text x="40" y="272" class="mut">Expo (React Native)</text>
+      <text x="40" y="294" class="mono mut">source-code/mobile</text>
+      <text x="40" y="322" class="mut">not wired to the API yet</text>
+      <rect x="330" y="80" width="240" height="220" rx="14" class="box-b"/>
+      <text x="352" y="112" class="ttl">API server</text>
+      <text x="352" y="134" class="mut">NestJS + TypeORM</text>
+      <text x="352" y="156" class="mono mut">source-code/backend</text>
+      <text x="352" y="188" class="mono">:3000 (your :3001 in .env)</text>
+      <text x="352" y="222">checks the token</text>
+      <text x="352" y="242">checks the permissions</text>
+      <text x="352" y="262">applies the business rules</text>
+      <text x="352" y="282">writes the audit trail</text>
+      <rect x="670" y="80" width="210" height="120" rx="14" class="box-y"/>
+      <text x="690" y="112" class="ttl">PostgreSQL</text>
+      <text x="690" y="134" class="mut">local or Neon cloud</text>
+      <text x="690" y="156" class="mono mut">source-code/database</text>
+      <text x="690" y="182" class="mut">tables, rows, history</text>
+      <rect x="670" y="240" width="210" height="60" rx="14" class="box"/>
+      <text x="690" y="266" class="ttl">Redis</text>
+      <text x="690" y="286" class="mut">cache and queues</text>
+      <path d="M232 100 L328 140" class="ln-g" marker-end="url(#ah)"/>
+      <path d="M328 160 L232 120" class="ln-g dash" marker-end="url(#ah)"/>
+      <text x="236" y="86" class="mono mut">HTTP + JSON</text>
+      <path d="M232 280 L328 240" class="ln dash"/>
+      <path d="M572 140 L668 140" class="ln-g" marker-end="url(#ah)"/>
+      <path d="M668 160 L572 160" class="ln-g dash" marker-end="url(#ah)"/>
+      <text x="586" y="128" class="mono mut">SQL</text>
+      <path d="M572 270 L668 270" class="ln dash"/>
+      <rect x="330" y="330" width="240" height="50" rx="12" class="box"/>
+      <text x="350" y="352" class="ttl">Cron (every minute)</text>
+      <text x="350" y="370" class="mut">sends held notifications</text>
+      <path d="M450 330 L450 302" class="ln dash"/>
+    </svg>
+    </div>
+    <figcaption>Solid green lines carry requests, dashed lines carry answers. The portal never touches the database directly; it always asks the API.</figcaption>
+  </figure>
+  <h3>The one rule that explains everything</h3>
+  <div class="callout why"><span class="tag">Why</span><div><p>The portal runs in a stranger's browser, so it cannot be trusted. Anyone can open developer tools and send any request they like. That is why the API checks the login, the permissions and the data again on every request. Hiding a button in the portal is for convenience. The checks in the API are the security.</p></div></div>
+  <h3>Words you will hear a lot</h3>
+  <ul>
+    <li><b>Frontend</b> is the portal: what you see and click.</li>
+    <li><b>Backend</b> is the API server: the rules and the gatekeeper.</li>
+    <li><b>API</b> is the list of questions the backend answers, such as "give me all collections".</li>
+    <li><b>Endpoint</b> is one question on that list, written as a verb and a path, for example <code>GET /collections</code>.</li>
+    <li><b>JSON</b> is the text format used for both questions and answers.</li>
+  </ul>
+  <div class="callout warn"><span class="tag">Heads up</span><div><p>With Docker, an nginx container sits in front and adds a <code>/api</code> prefix. When you run things natively, the portal calls the backend directly with no prefix.</p></div></div>
+</section>
+
+<!-- 3 -->
+<section id="folders">
+  <h2><span class="n">Chapter 3</span>Folder tour</h2>
+  <p>Everything lives under <code>source-code/</code>, with specs in <code>docs/</code>.</p>
+<div class="tree"><b>source-code/</b>
+├─ <b>admin/</b>            <span>the web portal (React)</span>
+│  └─ src/
+│     ├─ main.tsx        <span>starts the app, sets up providers</span>
+│     ├─ App.tsx         <span>the list of pages and their URLs (router)</span>
+│     ├─ context/        <span>AuthContext (who is logged in), permissions.ts</span>
+│     ├─ lib/api.ts      <span>the one function every API call goes through</span>
+│     ├─ services/       <span>one file per backend area: collections.ts, estates.ts ...</span>
+│     ├─ features/       <span>one folder per module: pages, types, tests</span>
+│     └─ components/     <span>reusable pieces: ui, data tables, layout, patterns</span>
+├─ <b>backend/</b>          <span>the API (NestJS)</span>
+│  └─ src/
+│     ├─ main.ts         <span>starts the server</span>
+│     ├─ app.module.ts   <span>plugs the modules and the database together</span>
+│     ├─ auth/ users/ collections/ dispatch/ estates/ employees/
+│     ├─ fertilizer/ reports/ audit/ admin/
+│     └─ seed.ts         <span>fills a database with demo data</span>
+├─ <b>database/</b>
+│  ├─ init.sql           <span>creates every table (for a new database)</span>
+│  └─ migrations/        <span>small SQL files that change an existing database</span>
+└─ <b>mobile/</b>           <span>the Expo app</span></div>
+  <h3>Every backend folder looks the same</h3>
+  <p>Learn one module and you know them all. For example, <code>backend/src/collections/</code> contains:</p>
+  <table>
+    <thead><tr><th>File</th><th>Job</th></tr></thead>
+    <tbody>
+      <tr><td>*.module.ts</td><td>Lists which controllers and services belong to this area.</td></tr>
+      <tr><td>*.controller.ts</td><td>Receives HTTP requests and hands them to a service. No business rules here.</td></tr>
+      <tr><td>*.service.ts</td><td>The rules and the work: checks, calculations, saving.</td></tr>
+      <tr><td>*.entity.ts</td><td>Describes one database table as a TypeScript class.</td></tr>
+      <tr><td>dto/</td><td>Describes what a valid request body looks like.</td></tr>
+      <tr><td>*-map.ts</td><td>Turns database rows into the JSON shape the portal expects.</td></tr>
+      <tr><td>*.spec.ts</td><td>Automated tests.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 4 -->
+<section id="typescript">
+  <h2><span class="n">Chapter 4</span>TypeScript in 10 minutes</h2>
+  <p>TypeScript is JavaScript with labels that say what kind of thing each value is. The computer checks the labels before the program runs, so a typo like <code>weigth</code> becomes a red underline in your editor and not a bug on a customer's screen. The browser only runs JavaScript, so the tools strip the labels away when building.</p>
+
+  <h3>1. Types on variables</h3>
+<pre><code class="ts">const total: number = 42.5
+const estateName: string = 'Pitiyagedara'
+const isLocked: boolean = false
+const weights: number[] = [12.5, 30]</code></pre>
+
+  <h3>2. Union types: a short list of allowed values</h3>
+  <p>The grade of tea is only ever Super or Normal. A union type says so, and the editor refuses anything else.</p>
+<pre><code class="ts">type Grade = 'Super' | 'Normal'
+
+let g: Grade = 'Super'   // fine
+g = 'Premium'            // error: not allowed</code></pre>
+
+  <h3>3. Interfaces: the shape of an object</h3>
+<pre><code class="ts">interface GradeLine {
+  grade: Grade
+  weightKg: number
+  note?: string          // the ? means optional
+}</code></pre>
+
+  <h3>4. Functions, Promises and async/await</h3>
+  <p>Talking to a server takes time. A <b>Promise</b> is a receipt for an answer that has not arrived yet. <code>await</code> pauses this function until the answer comes, while the rest of the page keeps working. A function that uses <code>await</code> is marked <code>async</code>.</p>
+<pre><code class="ts">async function loadCollections(): Promise&lt;CollectionRecord[]&gt; {
+  const list = await apiFetch&lt;CollectionRecord[]&gt;('/collections')
+  return list
+}</code></pre>
+
+  <h3>5. Generics: "this works for any type T"</h3>
+  <p>In <code>apiFetch&lt;CollectionRecord[]&gt;</code> the part in angle brackets tells the function what shape the answer will have, so the caller gets correct hints afterwards. Read it as "fetch, and the result is a list of collection records".</p>
+
+  <h3>6. Imports and exports</h3>
+  <p>Each file is its own room. <code>export</code> opens a door, <code>import</code> walks through it. The portal also has a shortcut: <code>@/</code> means <code>admin/src/</code>.</p>
+<pre><code class="ts">import { apiFetch } from '@/lib/api'
+export const collectionsService = { list, get, setGradeLines }</code></pre>
+
+  <h3>7. Decorators (backend only)</h3>
+  <p>The <code>@Something()</code> lines above classes and methods are labels that the NestJS framework reads. They say "this class answers requests under <code>/collections</code>" or "this method answers <code>GET</code>".</p>
+<pre><code class="ts">@Controller('collections')
+@UseGuards(JwtAuthGuard)        // every route here needs a valid login
+export class CollectionsController {
+  @Get()                        // GET /collections
+  findAll() { return this.collectionsService.findAll() }
+}</code></pre>
+
+  <h3>8. Classes and dependency injection</h3>
+  <p>A service needs other services, for example the controller needs <code>CollectionsService</code>. You do not create it yourself. You list it in the constructor and NestJS hands you a ready one. This is called <b>dependency injection</b>, and it is also why tests can hand in a fake database.</p>
+<pre><code class="ts">constructor(private readonly collectionsService: CollectionsService) {}</code></pre>
+  <div class="callout tip"><span class="tag">Learn more</span><div><p>The official <a href="https://www.typescriptlang.org/docs/handbook/intro.html" target="_blank" rel="noopener">TypeScript Handbook</a> covers all of this in depth. You only need chapters 1 to 4 to read this project.</p></div></div>
+</section>
+
+<!-- 5 -->
+<section id="react">
+  <h2><span class="n">Chapter 5</span>React in 10 minutes</h2>
+  <p>A React page is built from <b>components</b>. A component is a function that returns what should be on screen. When its data changes, React calls the function again and updates only the parts that changed. That re-run is called a <b>render</b>.</p>
+  <h3>Props: inputs to a component</h3>
+<pre><code class="tsx">function GradeBadge({ grade }: { grade: Grade }) {
+  return &lt;span className="badge"&gt;{grade}&lt;/span&gt;
+}
+// used as: &lt;GradeBadge grade="Super" /&gt;</code></pre>
+  <h3>State: memory that survives renders</h3>
+  <p><code>useState</code> gives a component a value and a way to change it. Calling the setter triggers a render. In <code>GradeDeliveryModal.tsx</code> the dialog remembers which step it is on:</p>
+<pre><code class="tsx">const [step, setStep] = useState&lt;'enter' | 'review'&gt;('enter')
+
+// "Review" button:
+&lt;Button onClick={() =&gt; setStep('review')}&gt;Review&lt;/Button&gt;</code></pre>
+  <p>Click the button, <code>setStep</code> runs, React re-renders, and the dialog now shows the review screen. Nothing else in the page had to be told.</p>
+  <h3>Hooks</h3>
+  <p>Functions that start with <code>use</code> are hooks. They plug a component into React features: <code>useState</code> for memory, <code>useNavigate</code> for changing page, <code>useAuth</code> for "who is logged in", <code>useQuery</code> for loading data.</p>
+  <h3>Passing events up: how a child talks to its parent</h3>
+  <p>A child cannot reach into its parent. The parent passes it a function, and the child calls that function when something happens. In the project the page passes <code>onSubmit</code> and <code>onClose</code> to the modal.</p>
+<pre><code class="tsx">&lt;GradeDeliveryModal
+  record={record}
+  mode={gradingMode}
+  onClose={() =&gt; setGradingMode(null)}
+  onSubmit={(lines, reason) =&gt; gradeMutation.mutate({ lines, reason })}
+/&gt;</code></pre>
+  <div class="callout why"><span class="tag">So</span><div><p>"Signals" in this project are just functions passed down as props (data goes down, events come up). There is no hidden message bus. When you wonder how one part tells another something, look for a prop that is a function.</p></div></div>
+  <h3>TanStack Query: loading and caching server data</h3>
+  <p>Most pages do not call <code>fetch</code> by hand. They use <b>TanStack Query</b>, which fetches, remembers the answer in a cache under a key like <code>['collections']</code>, and refetches when the cached copy is marked stale. Two tools matter:</p>
+  <ul>
+    <li><code>useQuery</code> reads data (a GET).</li>
+    <li><code>useMutation</code> changes data (POST, PUT, DELETE). After it succeeds you call <code>invalidateQueries</code> to mark the related cached data stale, and the list on screen refreshes by itself.</li>
+  </ul>
+  <p>See <a href="https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults" target="_blank" rel="noopener">Important Defaults</a> for what "stale" means and when refetching happens. New to React? The <a href="https://react.dev/learn" target="_blank" rel="noopener">react.dev Learn</a> tutorial is excellent.</p>
+</section>
+
+<!-- 6 -->
+<section id="story-read">
+  <h2><span class="n">Chapter 6</span>Story 1: opening the collections list</h2>
+  <p>A <b>read</b> is the simpler kind of click. You open <code>/collections</code> and a table of deliveries appears. Here is the whole journey.</p>
+  <figure>
+    <div class="frame">
+    <svg viewBox="0 0 900 470" role="img" aria-label="Sequence from the list page through the service and apiFetch to the API, the database and back">
+      <defs><marker id="ah2" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="arrow"/></marker></defs>
+      <rect x="20" y="10" width="190" height="40" rx="10" class="box-g"/><text x="115" y="35" text-anchor="middle" class="ttl">List page</text>
+      <rect x="250" y="10" width="190" height="40" rx="10" class="box-g"/><text x="345" y="35" text-anchor="middle" class="ttl">service + apiFetch</text>
+      <rect x="480" y="10" width="190" height="40" rx="10" class="box-b"/><text x="575" y="35" text-anchor="middle" class="ttl">API (NestJS)</text>
+      <rect x="710" y="10" width="170" height="40" rx="10" class="box-y"/><text x="795" y="35" text-anchor="middle" class="ttl">PostgreSQL</text>
+      <path d="M115 50 V455" class="ln dash"/><path d="M345 50 V455" class="ln dash"/><path d="M575 50 V455" class="ln dash"/><path d="M795 50 V455" class="ln dash"/>
+      <path d="M115 90 H343" class="ln-g" marker-end="url(#ah2)"/><circle cx="130" cy="90" r="11" class="dot"/><text x="130" y="94" class="dot-t">1</text>
+      <text x="160" y="80" class="mono mut">useQuery(['collections'])</text>
+      <path d="M345 135 H573" class="ln-g" marker-end="url(#ah2)"/><circle cx="360" cy="135" r="11" class="dot"/><text x="360" y="139" class="dot-t">2</text>
+      <text x="390" y="125" class="mono mut">GET /collections + Bearer token</text>
+      <path d="M575 180 H575" class="ln-g"/><circle cx="560" cy="180" r="11" class="dot"/><text x="560" y="184" class="dot-t">3</text>
+      <text x="590" y="184" class="mono mut">JwtAuthGuard checks the token</text>
+      <path d="M575 235 H793" class="ln-g" marker-end="url(#ah2)"/><circle cx="590" cy="235" r="11" class="dot"/><text x="590" y="239" class="dot-t">4</text>
+      <text x="618" y="225" class="mono mut">repo.find(...) = SQL SELECT</text>
+      <path d="M793 285 H577" class="ln-g dash" marker-end="url(#ah2)"/><circle cx="780" cy="285" r="11" class="dot"/><text x="780" y="289" class="dot-t">5</text>
+      <text x="610" y="275" class="mono mut">rows</text>
+      <path d="M575 330 H575" class="ln-g"/><circle cx="560" cy="330" r="11" class="dot"/><text x="560" y="334" class="dot-t">6</text>
+      <text x="590" y="334" class="mono mut">toPublic() reshapes rows to JSON</text>
+      <path d="M573 380 H347" class="ln-g dash" marker-end="url(#ah2)"/><circle cx="560" cy="380" r="11" class="dot"/><text x="560" y="384" class="dot-t">7</text>
+      <text x="390" y="370" class="mono mut">200 OK + JSON</text>
+      <path d="M343 425 H117" class="ln-g dash" marker-end="url(#ah2)"/><circle cx="330" cy="425" r="11" class="dot"/><text x="330" y="429" class="dot-t">8</text>
+      <text x="150" y="415" class="mono mut">data lands in the cache, table renders</text>
+    </svg>
+    </div>
+    <figcaption>Time runs downward. Each numbered dot matches the numbered step below.</figcaption>
+  </figure>
+
+  <ol class="journey">
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>The page asks for its data</div>
+      <p>When <code>CollectionListPage</code> appears, it runs <code>useQuery</code> with the key <code>['collections']</code> and a function to call.</p>
+<pre><code class="tsx">const { data: collections, isPending, isError, refetch } =
+  useQuery({ queryKey: ['collections'], queryFn: collectionsService.list })</code></pre>
+      <p>While the answer is on its way, <code>isPending</code> is true and the page shows a spinner. If it fails, <code>isError</code> shows an error box with a Retry button wired to <code>refetch</code>.</p>
+      <div class="where">admin/src/features/collections/CollectionListPage.tsx</div></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>The service builds the request</div>
+      <p>A <b>service</b> file in the portal is a thin set of named functions, one per endpoint. Pages call <code>collectionsService.list()</code> and never write URLs themselves. That way, a URL changes in one place.</p>
+<pre><code class="ts">list: () =&gt; apiFetch&lt;CollectionRecord[]&gt;('/collections')</code></pre>
+      <p><code>apiFetch</code> is the single doorway for all calls. It adds the base address, adds the login token to a header, turns errors into a friendly <code>ApiError</code>, and reads the JSON.</p>
+      <div class="where">admin/src/services/collections.ts · admin/src/lib/api.ts</div></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>The guard checks the login</div>
+      <p>The controller class carries <code>@UseGuards(JwtAuthGuard)</code>. Before any method runs, the guard reads the <code>Authorization: Bearer ...</code> header and verifies the token's signature and expiry. A bad or missing token ends the request here with a 401.</p>
+      <div class="where">backend/src/collections/collections.controller.ts · backend/src/auth/jwt-auth.guard.ts</div></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>The service asks the database</div>
+      <p><code>@Get()</code> routes the request to <code>findAll()</code>, which calls the service. The service uses a TypeORM <b>repository</b>, which turns a method call into SQL.</p>
+<pre><code class="ts">const records = await this.repo.find({ order: { collectionDate: 'DESC' } })</code></pre>
+      <p>You never write the <code>SELECT</code>. The grade lines come along automatically because the entity marks them <code>eager</code>.</p>
+      <div class="where">backend/src/collections/collections.service.ts</div></div></li>
+    <li><div class="body"><div class="what"><span class="lane db">Database</span>PostgreSQL answers</div>
+      <p>Rows come back from the <code>tea_collection_records</code> and <code>delivery_grade_lines</code> tables.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>Rows are reshaped for the portal</div>
+      <p>Database rows use names like <code>agent_assigned</code>. The portal expects <code>Agent Assigned</code>. <code>toPublic()</code> and the helpers in <code>collection-map.ts</code> do that translation. They also work out values that are not stored, such as whether grading is open, locked or settled.</p>
+      <div class="where">backend/src/collections/collection-map.ts</div></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>JSON goes back</div>
+      <p>Nest turns the array into JSON and replies <code>200 OK</code>.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>Cache fills, table renders</div>
+      <p>TanStack Query stores the data under <code>['collections']</code>. <code>useQuery</code> returns it and React renders the table. Search and filters then run in the browser on that list with <code>useMemo</code>, so typing in the search box makes no new request.</p></div></li>
+  </ol>
+  <div class="callout tip"><span class="tag">Try it</span><div><p>Open the browser developer tools (F12), go to the Network tab, and open the Collections page. Find the request named <code>collections</code>. Check the Headers for the <code>Authorization</code> line and the Response for the JSON. You have just watched steps 2 and 7.</p></div></div>
+</section>
+
+<!-- 7 -->
+<section id="story-write">
+  <h2><span class="n">Chapter 7</span>Story 2: clicking "Grade Delivery"</h2>
+  <p>A <b>write</b> changes data, so there are more safety steps. This is the click behind the grading feature: a Factory Officer enters the Super and Normal weights for a delivery.</p>
+
+  <h3>Part A: inside the browser</h3>
+  <ol class="journey">
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>The button only appears for people allowed to use it</div>
+<pre><code class="tsx">const canGradeEdit = can('grading', 'edit')
+const canGrade = canGradeEdit &amp;&amp; record.status === 'Collected'</code></pre>
+      <p><code>can()</code> comes from <code>useAuth()</code> and answers "does this user have at least edit level on the grading module?" Managers and Administrators get a view-only page, so they never see the button.</p>
+      <div class="where">admin/src/features/collections/CollectionDetailPage.tsx</div></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>The click opens the dialog</div>
+<pre><code class="tsx">const [gradingMode, setGradingMode] = useState&lt;GradingMode | null&gt;(null)
+// button:  onClick={() =&gt; setGradingMode('grade')}</code></pre>
+      <p>Changing <code>gradingMode</code> from <code>null</code> to <code>'grade'</code> causes a render, and the modal (which was hidden) now exists. The same modal also serves <code>'edit'</code> and <code>'correction'</code>. The page only changes the <code>mode</code> prop.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>The dialog collects and checks input</div>
+      <p><code>GradeDeliveryModal</code> keeps one text box per grade in <code>useState</code>, parses the numbers, adds up the total and compares it with the estate's weight. It also asks the API for context (<code>GET /collections/:id/grading-context</code>) to learn the tolerance and the estate's usual range. Problems like "this is far from the estate's figure" are warnings only. The Officer reviews and confirms in a second step.</p>
+      <div class="where">admin/src/features/collections/GradeDeliveryModal.tsx</div></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>Confirm calls the parent's function</div>
+      <p>The modal calls <code>onSubmit(lines, reason)</code>. The page turned that into <code>gradeMutation.mutate(...)</code>, a <code>useMutation</code>:</p>
+<pre><code class="tsx">mutationFn: async ({ lines, reason }) =&gt; {
+  if (gradingMode === 'correction') await collectionsService.requestCorrection(id!, lines, reason ?? '')
+  else await collectionsService.setGradeLines(id!, lines, reason)
+},
+onSuccess: () =&gt; { toast('Saved'); setGradingMode(null); refresh() },
+onError: fail('Could not save the grading'),</code></pre>
+      <p>While the request runs, <code>gradeMutation.isPending</code> is true, which the modal uses to disable its button, so a double click cannot save twice.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>The service sends the request</div>
+<pre><code class="ts">setGradeLines: (id, lines, reason) =&gt;
+  apiFetch&lt;CollectionRecord&gt;(`/collections/${id}/grade-lines`, {
+    method: 'PUT',
+    body: JSON.stringify({ lines, ...(reason ? { reason } : {}) }),
+  })</code></pre>
+      <p>The wire carries <code>PUT /collections/DSP-20261012-1/grade-lines</code> with a JSON body and the Bearer token.</p>
+      <div class="where">admin/src/services/collections.ts</div></div></li>
+  </ol>
+
+  <h3>Part B: inside the API</h3>
+  <p>A NestJS request goes through a fixed sequence. Knowing it tells you where to look when something is rejected.</p>
+  <div class="chain">
+    <span class="step">Guard<small>valid login?</small></span><span class="arr">→</span>
+    <span class="step">Pipe<small>valid body?</small></span><span class="arr">→</span>
+    <span class="step">Controller<small>route handler</small></span><span class="arr">→</span>
+    <span class="step">Service<small>the real work</small></span><span class="arr">→</span>
+    <span class="step">Database<small>one transaction</small></span><span class="arr">→</span>
+    <span class="step">Audit<small>write the trail</small></span>
+  </div>
+  <p>This follows the order in the official <a href="https://docs.nestjs.com/faq/request-lifecycle" target="_blank" rel="noopener">NestJS request lifecycle</a>: middleware, guards, interceptors, pipes, then your handler. If anything throws an error on the way, an exception filter turns it into an HTTP error reply.</p>
+  <ol class="journey">
+    <li><div class="body"><div class="what"><span class="lane be">API</span>The guard, then the validation pipe</div>
+      <p>The class-level <code>JwtAuthGuard</code> accepts the token. Then the global <code>ValidationPipe</code> (set in <code>main.ts</code>) checks the body against a <b>DTO</b>, a class whose decorators describe a valid request. Unknown fields are removed.</p>
+<pre><code class="ts">export class GradeLineDto {
+  @IsIn(['Super', 'Normal']) grade: 'Super' | 'Normal'
+  @IsNumber({ maxDecimalPlaces: 2 }) @IsPositive() weightKg: number
+}
+export class SetGradeLinesDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(10)
+  @ValidateNested({ each: true }) @Type(() =&gt; GradeLineDto)
+  lines: GradeLineDto[]
+}</code></pre>
+      <p>A body of <code>-5</code> kg or the grade "Premium" never reaches your code. The API replies 400 with a message that names the problem.</p>
+      <div class="where">backend/src/collections/dto/set-grade-lines.dto.ts · backend/src/main.ts</div></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>The controller hands over</div>
+<pre><code class="ts">@Put(':id/grade-lines')
+async setGradeLines(@Param('id') id: string, @Body() dto: SetGradeLinesDto, @Req() req: AuthedRequest) {
+  await this.grading.setGradeLines(id, dto, await this.resolveActor(req))
+  return this.findOne(id)
+}</code></pre>
+      <p>Notice how little is here. <code>resolveActor</code> turns the token into "who is this person, and what is their role". The controller then calls the service and returns the fresh record.</p>
+      <div class="where">backend/src/collections/collections.controller.ts</div></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>The service enforces the rules</div>
+      <p><code>GradingService.setGradeLines</code> does the thinking, in this order:</p>
+      <ol>
+        <li><b>Permission.</b> Reads the role's level from the <code>role_permissions</code> table and refuses with 403 if it is too low.</li>
+        <li><b>State.</b> Loads the delivery and works out its grading state. A delivery that was never graded gets its first grading. One still inside its correction window can be edited, but a reason is required. A locked or settled one is refused with 409.</li>
+        <li><b>Transaction.</b> The saves below all happen in one database transaction. If any of them fails, none are kept.</li>
+      </ol>
+<pre><code class="ts">await this.access.require(actor.role, 'edit', 'grade deliveries', 'grading')</code></pre>
+      <div class="where">backend/src/collections/grading.service.ts · backend/src/dispatch/dispatch-access.service.ts</div></div></li>
+    <li><div class="body"><div class="what"><span class="lane db">Database</span>One transaction, several rows</div>
+      <ul>
+        <li>the delivery's grade lines are saved and the total is recomputed;</li>
+        <li>a new row is appended to <code>delivery_grade_revisions</code>, so the history of changes is never lost;</li>
+        <li>a held owner notification is queued in <code>grading_notifications</code>;</li>
+        <li>a weight mismatch complaint is opened, updated or resolved.</li>
+      </ul>
+      <div class="callout why"><span class="tag">Why</span><div><p>A transaction means all or nothing. Without it, a crash after saving the lines but before saving the revision would leave a delivery with grades and no history.</p></div></div></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>The audit trail</div>
+      <p>After the transaction, <code>AuditService.record</code> writes who did what to which record. Every change in this system leaves one of these lines.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>The response</div>
+      <p>The controller returns the updated record as JSON, with extra fields such as the revision count and the notification status.</p></div></li>
+  </ol>
+
+  <h3>Part C: back in the browser</h3>
+  <ol class="journey">
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>Mark old data stale, so the screen refreshes</div>
+<pre><code class="tsx">void queryClient.invalidateQueries({ queryKey: ['collection', id] })
+void queryClient.invalidateQueries({ queryKey: ['collections'] })
+void queryClient.invalidateQueries({ queryKey: ['estates'] })</code></pre>
+      <p><code>onSuccess</code> calls <code>refresh()</code>. It does not copy the answer by hand into several screens. It marks every cache entry that could now be wrong as stale, and TanStack Query refetches those that are on screen. The detail page, the list and the estate totals all update with no extra wiring.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>The user sees the result</div>
+      <p>A toast says "Saved", the modal closes (<code>setGradingMode(null)</code>), and the detail page shows the new grade lines and the history panel.</p></div></li>
+  </ol>
+  <div class="callout warn"><span class="tag">Notice</span><div><p>The permission is checked twice: once in the portal with <code>can()</code> to decide whether to show the button, and once in the API with <code>access.require</code> to decide whether to allow the change. The first is polite. The second is the one that counts.</p></div></div>
+</section>
+
+<!-- 8 -->
+<section id="login">
+  <h2><span class="n">Chapter 8</span>Logging in and staying logged in</h2>
+  <figure>
+    <img src="img/01-login.jpg" alt="The Harboost factory portal login screen with phone number and password fields on a green background" width="1568" height="760" loading="lazy">
+    <figcaption>The portal's sign-in screen, running locally.</figcaption>
+  </figure>
+  <ol class="journey">
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>The form calls <code>login(phone, password)</code></div>
+      <p><code>LoginPage</code> calls <code>login</code> from <code>AuthContext</code>, which sends <code>POST /auth/login</code>.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>The API checks the password</div>
+      <p><code>AuthService.login</code> finds the user by phone, compares the password to its stored hash with <code>bcrypt</code> (passwords are never stored in plain text), rejects suspended accounts, then signs a token.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>A token comes back</div>
+      <p>The reply contains an <code>accessToken</code> and the user's profile with their permissions.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>The token is saved and attached</div>
+      <p>The portal keeps the token in <code>localStorage</code> under <code>harboost.token</code>. From then on <code>apiFetch</code> adds <code>Authorization: Bearer &lt;token&gt;</code> to every request. When you reload the page, <code>AuthContext</code> finds the token and calls <code>GET /auth/me</code> to restore the session.</p></div></li>
+  </ol>
+  <h3>What is inside a JWT?</h3>
+  <p>A JSON Web Token has three parts separated by dots. Anyone can read the first two. Only the server can produce a valid third, because it needs the secret key.</p>
+  <div class="jwt"><span class="h">header: algorithm</span><span class="p">payload: { sub: user id, role }</span><span class="g">signature: proof it was not edited</span></div>
+  <p>If someone edits the payload to claim a higher role, the signature no longer matches and the guard rejects the token. The token expires after <code>JWT_EXPIRES_IN</code> (7 days locally). Any 401 reply makes the portal log the user out, using a handler registered in <code>AuthContext</code>.</p>
+  <div class="callout warn"><span class="tag">Two kinds</span><div><p>Mobile agents get a different token from <code>POST /auth/agent/login</code>, checked by a separate guard. The portal's guard refuses agent tokens, and the agent guard refuses portal tokens.</p></div></div>
+</section>
+
+<!-- 9 -->
+<section id="permissions">
+  <h2><span class="n">Chapter 9</span>Who can do what</h2>
+  <p>Permissions are data, not code. A table named <code>role_permissions</code> says, for each role and module, how much that role may do. The levels climb like stairs, and each level includes the ones below it.</p>
+  <div class="ladder" role="img" aria-label="Levels: none, view, edit, approve">
+    <div><b>none</b>cannot see it</div><div><b>view</b>can read</div><div><b>edit</b>can change</div><div><b>approve</b>can sign off</div>
+  </div>
+  <div class="chain">
+    <span class="step">role_permissions<small>table in the database</small></span><span class="arr">→</span>
+    <span class="step">login or /auth/me<small>sent to the portal</small></span><span class="arr">→</span>
+    <span class="step">useAuth().can('grading','edit')<small>hide or show things</small></span>
+  </div>
+  <p>The same table is read by the API in <code>DispatchAccessService.require(role, needed, what, module)</code>, which throws a 403 such as "Your role may not grade deliveries."</p>
+  <p>The sidebar uses it too. In <code>Sidebar.tsx</code> each menu item carries a module name, and items the user cannot view are filtered out. A direct URL to an admin page is blocked by <code>AdminGuard</code>.</p>
+  <h3>The grading modules</h3>
+  <table>
+    <thead><tr><th>Module key</th><th>Who</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>grading</td><td>Officer edit; Manager and Admin view</td><td>Grade a delivery, edit while open, request a correction.</td></tr>
+      <tr><td>gradingApproval</td><td>Manager approve</td><td>Approve or reject a correction, including one that changes a settled payment.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout tip"><span class="tag">Where</span><div><p>Defaults for the portal live in <code>admin/src/context/permissions.ts</code>. The real values come from the database table and can be changed on the Users &amp; Roles page.</p></div></div>
+</section>
+
+<!-- 10 -->
+<section id="database">
+  <h2><span class="n">Chapter 10</span>The database</h2>
+  <p>PostgreSQL stores everything in <b>tables</b>. A table is a spreadsheet with strict columns. A <b>row</b> is one record, and rows in different tables point to each other with ids.</p>
+  <h3>Three kinds of SQL file</h3>
+  <ul>
+    <li><code>database/init.sql</code> creates the whole schema. It runs when a database is created.</li>
+    <li><code>database/migrations/*.sql</code> are small, repeatable patches for a database that already exists. If you add a column, you add a migration and also update <code>init.sql</code>.</li>
+    <li><code>backend/src/seed.ts</code> fills a database with demo users, estates and deliveries. Run it on your local database only.</li>
+  </ul>
+  <div class="callout danger"><span class="tag">Careful</span><div><p>TypeORM is set to <code>synchronize: false</code>. Changing an entity class does not change the database. If you forget the SQL migration, the code will fail with "column does not exist".</p></div></div>
+  <h3>Entities: a class per table</h3>
+<pre><code class="ts">@Entity('tea_collection_records')
+export class CollectionRecordEntity {
+  @PrimaryColumn() id: string
+  @Column({ name: 'collection_date' }) collectionDate: string
+  @OneToMany(() =&gt; DeliveryGradeLineEntity, (l) =&gt; l.record, { eager: true, cascade: true })
+  gradeLines: DeliveryGradeLineEntity[]
+}</code></pre>
+  <p>The table uses <code>snake_case</code> column names and the class uses <code>camelCase</code>. The <code>name:</code> option connects them.</p>
+  <h3>How grading tables relate</h3>
+  <div class="chain">
+    <span class="step">tea_collection_records<small>one delivery</small></span><span class="arr">→</span>
+    <span class="step">delivery_grade_lines<small>Super, Normal rows</small></span>
+  </div>
+  <div class="chain">
+    <span class="step">tea_collection_records</span><span class="arr">→</span>
+    <span class="step">delivery_grade_revisions<small>append-only history</small></span><span class="arr">→</span>
+    <span class="step">grade_correction_requests<small>one pending per delivery</small></span>
+  </div>
+  <div class="chain">
+    <span class="step">grade_correction_requests</span><span class="arr">→</span>
+    <span class="step">settlement_adjustments<small>money fix, priced at the paying settlement's rates</small></span><span class="arr">→</span>
+    <span class="step">settlements<small>adjustment_amount</small></span>
+  </div>
+  <p>Some values are derived and not stored. The "state" of a delivery (open, locked, settled) is worked out on every read by <code>gradingState()</code> from the timestamps and the settlement link. Fewer stored copies means fewer chances to disagree.</p>
+  <h3>See it with your own eyes</h3>
+  <p>Install DBeaver, connect to <code>localhost:5432</code>, database <code>tea_db</code>, user <code>tea_user</code>. Open <code>tea_collection_records</code> and look at the rows, then change a delivery in the portal and refresh DBeaver.</p>
+</section>
+
+<!-- 11 -->
+<section id="background">
+  <h2><span class="n">Chapter 11</span>Background jobs and notifications</h2>
+  <p>Not everything happens during a click. After grading, the estate owner should get a notice, but only once the correction window has passed, so owners are never told a figure that is about to change.</p>
+  <div class="chain">
+    <span class="step">Grading saved<small>same transaction</small></span><span class="arr">→</span>
+    <span class="step">Row in grading_notifications<small>status queued, held until locked_at</small></span><span class="arr">→</span>
+    <span class="step">Cron every minute<small>picks due rows</small></span><span class="arr">→</span>
+    <span class="step">In-app notification<small>status sent</small></span>
+  </div>
+  <p>This pattern is called an <b>outbox</b>. The "to send" row is saved together with the data, so it can never be lost, and a separate worker does the sending. Details that make it safe:</p>
+  <ul>
+    <li>A <code>dedupe_key</code> such as <code>graded:DSP-...</code> is unique, so the same notice is never created or sent twice.</li>
+    <li>A worker first claims a row by changing <code>queued</code> to <code>sending</code>. Only one worker can win that update.</li>
+    <li>A row stuck in <code>sending</code> for more than 5 minutes is put back in the queue.</li>
+    <li>If grading is later corrected after the notice went out, a new "Correction" notice is sent showing old and new values. The first notice stays on record.</li>
+  </ul>
+  <p>The scheduler lives in <code>grading-notification.tasks.ts</code> using <code>@Cron('* * * * *')</code>, and the logic lives in <code>grading-notification.service.ts</code>. The two are kept apart so the tests can run the logic without the scheduler.</p>
+</section>
+
+<!-- 12 -->
+<section id="errors">
+  <h2><span class="n">Chapter 12</span>When things go wrong</h2>
+  <p>HTTP replies carry a number. The first digit tells you whose problem it is. Learn these six and you can read most failures.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Status</th><th>Meaning</th><th>Usual cause here</th></tr></thead>
+    <tbody>
+      <tr><td>200 / 201</td><td>It worked.</td><td>Normal reply.</td></tr>
+      <tr><td>400</td><td>Bad request.</td><td>The body failed DTO validation, or a required reason was missing.</td></tr>
+      <tr><td>401</td><td>Not logged in.</td><td>Missing, wrong or expired token. The portal logs you out.</td></tr>
+      <tr><td>403</td><td>Logged in, not allowed.</td><td>Your role's level is too low, "Your role may not ...".</td></tr>
+      <tr><td>404</td><td>Not found.</td><td>No record with that id.</td></tr>
+      <tr><td>409</td><td>Conflict with the current state.</td><td>Trying to edit a locked delivery, or a second pending correction.</td></tr>
+      <tr><td>500</td><td>Server bug.</td><td>An unhandled error, often a missing column. Check the backend terminal.</td></tr>
+    </tbody>
+  </table></div>
+  <p>In the portal, <code>apiFetch</code> turns a failed reply into <code>ApiError(status, message)</code> using the <code>message</code> field Nest sends. Pages then show <code>toast(err.message, 'danger')</code> or an <code>ErrorState</code> with a Retry button. If the server cannot be reached at all, the status is 0 and the message names the address that failed. The <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status" target="_blank" rel="noopener">MDN status code reference</a> lists the rest.</p>
+  <div class="callout tip"><span class="tag">Debug</span><div><p>Start at the symptom. Red toast: read its message, it usually comes straight from the API. Blank page: check the browser console. Nothing changes after a click: check the Network tab for the request and its status. 500: read the backend terminal, which prints the stack trace.</p></div></div>
+</section>
+
+<!-- 13 -->
+<section id="tests">
+  <h2><span class="n">Chapter 13</span>Tests</h2>
+  <p>Tests are small programs that call your code and check the answer. They let you change things without fear.</p>
+  <div class="grid">
+    <div class="card"><h4>Backend: Jest</h4><p>Files ending in <code>.spec.ts</code> next to the code. Run <code>npm test</code> inside <code>backend/</code>.</p></div>
+    <div class="card"><h4>Portal: Vitest</h4><p>Files ending in <code>.test.ts</code>. Run <code>npm test</code> inside <code>admin/</code>.</p></div>
+  </div>
+  <p>The backend tests do not need a real database. A <code>FakeRepo</code> in <code>collections/testing/fake-repo.ts</code> imitates a TypeORM repository in memory, and NestJS dependency injection lets a test hand it to the service in place of the real one.</p>
+<pre><code class="ts">it('locks once the window closes: direct edit is refused', async () =&gt; {
+  setClock(minutes(T0, 31))                       // pretend 31 minutes have passed
+  expect(gradingState(record())).toBe('locked')
+  await expect(
+    h.grading.setGradeLines(ID, { lines: LINES, reason: 'late' }, officer),
+  ).rejects.toThrow(/locked/)
+  expect(h.revisions.rows).toHaveLength(1)        // nothing new was written
+})</code></pre>
+  <p>This is a real test from <code>grading.service.spec.ts</code>. <code>setClock</code> moves a fake clock, <code>h</code> is a harness that wires the service to in-memory fake repositories, and <code>officer</code> is a ready-made user.</p>
+  <p>A good test names a rule in plain words. When you add a rule, add a test for the case where it must refuse.</p>
+  <div class="callout tip"><span class="tag">Try it</span><div><p>In <code>backend/</code> run <code>npx jest grading</code> to run just the grading tests. Then break a rule on purpose in <code>grading.service.ts</code> and watch a test fail. Undo the change afterwards.</p></div></div>
+</section>
+
+<!-- 14 -->
+<section id="run">
+  <h2><span class="n">Chapter 14</span>Run it on your machine</h2>
+  <ol>
+    <li><b>Install</b> Node.js, PostgreSQL 17 and DBeaver (optional, for looking at tables).</li>
+    <li><b>Create the local database</b> (user <code>tea_user</code>, database <code>tea_db</code>), then load <code>database/init.sql</code> and the files in <code>database/migrations/</code>.</li>
+    <li><b>Create <code>backend/.env</code></b> with these keys: <code>DATABASE_URL</code>, <code>JWT_SECRET</code>, <code>JWT_EXPIRES_IN</code>, <code>REDIS_URL</code>, <code>PORT</code>. Ask a teammate for the values. Never commit this file.</li>
+    <li><b>Start the API</b>: <code>cd source-code/backend &amp;&amp; npm install &amp;&amp; npm run start:dev</code></li>
+    <li><b>Fill demo data</b> (local database only): <code>npm run seed</code></li>
+    <li><b>Point the portal at the API</b>: in <code>admin/.env.local</code> set <code>VITE_API_URL=http://localhost:3000</code> (use the same port as your backend <code>PORT</code>).</li>
+    <li><b>Start the portal</b>: <code>cd source-code/admin &amp;&amp; npm install &amp;&amp; npm run dev</code> and open <code>http://localhost:5173</code>.</li>
+  </ol>
+  <div class="callout danger"><span class="tag">Never</span><div><p>Do not run <code>npm run seed</code> while your <code>DATABASE_URL</code> points at a shared cloud database. Check the value before you run it. Read the demo credentials in <code>seed.ts</code>; they are for local use only.</p></div></div>
+  <h3>Scripts you will use</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Where</th><th>Command</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>admin</td><td>npm run dev</td><td>Portal with live reload on port 5173.</td></tr>
+      <tr><td>admin</td><td>npm test / npm run build</td><td>Vitest, and type-check plus production build.</td></tr>
+      <tr><td>backend</td><td>npm run start:dev</td><td>API that restarts when you save a file.</td></tr>
+      <tr><td>backend</td><td>npm test / npm run build</td><td>Jest, and compile to <code>dist/</code>.</td></tr>
+      <tr><td>backend</td><td>npm run seed</td><td>Demo data, local only.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 15 -->
+<section id="first-change">
+  <h2><span class="n">Chapter 15</span>Your first change: add one field, end to end</h2>
+  <p>Say the factory wants a "driver note" on every delivery. Every layer you met in this guide takes part. Do the steps in this order and build or test after each.</p>
+  <ol class="journey">
+    <li><div class="body"><div class="what"><span class="lane db">Database</span>Add the column</div>
+      <p>Create a migration file in <code>database/migrations/</code> that adds <code>driver_note text</code> to <code>tea_collection_records</code>, written so it can run twice safely (<code>ADD COLUMN IF NOT EXISTS</code>). Mirror the same line in <code>init.sql</code>.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>Entity</div>
+      <p>Add <code>@Column({ name: 'driver_note', type: 'text', nullable: true }) driverNote: string | null</code> to the entity.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>Map, DTO and service</div>
+      <p>Add the field to the public type and <code>toPublic()</code> in <code>collection-map.ts</code>. If users can set it, add it to the DTO with a validation decorator, and handle it in the service. If the change is a mutation, call the audit service.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane be">API</span>Test</div>
+      <p>Add a spec case: field saved, field returned, invalid value rejected. Run <code>npx jest collections</code>.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>Type and service</div>
+      <p>Add <code>driverNote</code> to the <code>CollectionRecord</code> type in <code>features/collections/types.ts</code>. The compiler now shows every place that must handle it.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>The screen</div>
+      <p>Show the value on <code>CollectionDetailPage</code>. If editable, add an input, send it through the mutation, and rely on <code>invalidateQueries</code> to refresh.</p></div></li>
+    <li><div class="body"><div class="what"><span class="lane fe">Portal</span>Check everything</div>
+      <p>Run <code>npm run build</code> and <code>npm test</code> in both <code>admin</code> and <code>backend</code>, then click through it in the browser.</p></div></li>
+  </ol>
+  <div class="callout tip"><span class="tag">Habit</span><div><p>Work in small steps, commit each one that works, and write the reason for a change in the commit message. When a rule is unclear, ask before guessing. Rules about money are the ones to ask about.</p></div></div>
+  <h3>Known rough edges</h3>
+  <ul>
+    <li>The mobile app does not call the API yet. Its screens use local sample data.</li>
+    <li>All portal pages load up front. There is no lazy loading.</li>
+    <li><code>VITE_USE_MOCK_API</code> exists in Docker settings but no code reads it. Every module that matters talks to the real API.</li>
+    <li>One place hard-codes a role check (<code>assertCanWrite</code> in <code>collections.service.ts</code>) while the rest reads the permissions table. Treat the table as the rule.</li>
+  </ul>
+</section>
+
+<!-- 16 -->
+<section id="glossary">
+  <h2><span class="n">Chapter 16</span>Glossary and where to learn more</h2>
+  <dl>
+    <dt>API / endpoint</dt><dd>The set of questions the backend answers. One endpoint is one verb and path, like <code>PUT /collections/:id/grade-lines</code>.</dd>
+    <dt>HTTP verb</dt><dd>GET reads, POST creates or triggers an action, PUT replaces or updates, DELETE removes.</dd>
+    <dt>JSON</dt><dd>A text format for data made of objects, lists, strings, numbers and booleans.</dd>
+    <dt>JWT</dt><dd>A signed token that proves who you are without the server looking you up on every request.</dd>
+    <dt>Guard</dt><dd>NestJS code that allows or blocks a request before the handler runs.</dd>
+    <dt>Pipe / DTO</dt><dd>A pipe checks or converts input. A DTO is the class that describes a valid request body.</dd>
+    <dt>Controller / service</dt><dd>The controller receives requests. The service holds the rules.</dd>
+    <dt>Entity / ORM</dt><dd>An entity is a class mapped to a table. An ORM, here TypeORM, turns method calls into SQL.</dd>
+    <dt>Transaction</dt><dd>A group of database changes that either all succeed or all roll back.</dd>
+    <dt>Migration</dt><dd>A SQL file that changes an existing database's structure.</dd>
+    <dt>Component / props / state</dt><dd>A piece of the screen, the inputs it receives, and the memory it keeps.</dd>
+    <dt>Hook</dt><dd>A function starting with <code>use</code> that plugs a component into React features.</dd>
+    <dt>Query cache</dt><dd>TanStack Query's memory of server answers, organised by key. Invalidating a key marks it stale so it refetches.</dd>
+    <dt>Outbox</dt><dd>A table of "to send" work, saved together with the data and processed by a separate worker.</dd>
+    <dt>Cron</dt><dd>A schedule, such as "every minute", for background work.</dd>
+    <dt>Audit log</dt><dd>The permanent record of who changed what and when.</dd>
+    <dt>Idempotent</dt><dd>Doing it twice has the same effect as doing it once. Needed so a retry never sends two notices.</dd>
+  </dl>
+  <h3>Official documentation</h3>
+  <ul>
+    <li><a href="https://www.typescriptlang.org/docs/handbook/intro.html" target="_blank" rel="noopener">TypeScript Handbook</a></li>
+    <li><a href="https://react.dev/learn" target="_blank" rel="noopener">React: Learn</a></li>
+    <li><a href="https://tanstack.com/query/latest/docs/framework/react/overview" target="_blank" rel="noopener">TanStack Query for React</a></li>
+    <li><a href="https://docs.nestjs.com/first-steps" target="_blank" rel="noopener">NestJS: First steps</a> and <a href="https://docs.nestjs.com/faq/request-lifecycle" target="_blank" rel="noopener">Request lifecycle</a></li>
+    <li><a href="https://typeorm.io/" target="_blank" rel="noopener">TypeORM</a></li>
+    <li><a href="https://www.postgresql.org/docs/current/tutorial.html" target="_blank" rel="noopener">PostgreSQL tutorial</a></li>
+    <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status" target="_blank" rel="noopener">MDN: HTTP status codes</a></li>
+    <li><a href="https://jwt.io/introduction" target="_blank" rel="noopener">jwt.io: Introduction</a></li>
+  </ul>
+  <h3>Inside this repository</h3>
+  <ul>
+    <li><code>Claude.md</code> at the repo root: project notes and conventions.</li>
+    <li><code>docs/specs/Collection-Grading-Corrections-Addendum.md</code>: the full grading and correction rules.</li>
+    <li><code>docs/specs/Collection-Agent-Dispatch-Addendum.md</code>: the dispatch rules.</li>
+    <li><code>source-code/admin/AGENTS.md</code>: portal conventions.</li>
+  </ul>
+  <footer>Line numbers and file names were checked against the code on the <code>feature/grading-corrections</code> branch in October 2026. If a function has moved, search for its name.</footer>
+</section>
+</main>
+</div>
+
+<script>
+  /* theme toggle */
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('theme');
+    function current() {
+      var t = root.getAttribute('data-theme');
+      if (t) return t;
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    btn.addEventListener('click', function () { root.setAttribute('data-theme', current() === 'dark' ? 'light' : 'dark'); });
+  })();
+
+  /* tiny syntax highlighter for the code blocks */
+  (function () {
+    var KW = /\b(const|let|var|function|async|await|return|if|else|import|export|from|type|interface|class|new|this|private|readonly|extends|implements|constructor|void|null|undefined|true|false|it|expect)\b/g;
+    document.querySelectorAll('pre code').forEach(function (el) {
+      var src = el.textContent;
+      var esc = src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      var tokens = [];
+      function stash(cls) { return function (m) { tokens.push('<span class="' + cls + '">' + m + '</span>'); return '\u0000T' + (tokens.length - 1) + 'T\u0000'; }; }
+      esc = esc.replace(/(\/\/[^\n]*)/g, stash('c'))
+               .replace(/(`[^`]*`|'[^'\n]*'|"[^"\n]*")/g, stash('s'))
+               .replace(KW, '<span class="k">$1</span>')
+               .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="d">$1</span>');
+      el.innerHTML = esc.replace(/\u0000T(\d+)T\u0000/g, function (_, i) { return tokens[+i]; });
+    });
+  })();
+
+  /* highlight the current chapter in the rail */
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    if (!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (a) { a.classList.remove('on'); });
+          var a = map[e.target.id]; if (a) a.classList.add('on');
+        }
+      });
+    }, { rootMargin: '-80px 0px -65% 0px' });
+    Object.keys(map).forEach(function (id) { var s = document.getElementById(id); if (s) io.observe(s); });
+  })();
+</script>

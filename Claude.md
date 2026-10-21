@@ -881,6 +881,13 @@ Migration `database/migrations/2026-10-16-grading-corrections.sql` (idempotent, 
   `freezeClock`/`setClock` that fake only `Date`). A running `nest start --watch` hot-reloads backend changes — don't start a second
   one (port 3000).
 
+## Newcomer's guide (2026-10-18)
+
+`docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React
+basics, and two traced clicks (collections list = read, Grade Delivery = write) from portal to database, plus permissions, JWT, DB,
+outbox/cron, errors, tests, run steps and a first-change recipe. Open the file in a browser. Keep file names/line refs in it in sync when
+the grading, auth or `apiFetch` code moves.
+
 ## Remaining work (as of 2026-08-05)
 
 **See `PLAN.md` at the repo root for the phased execution roadmap** (schema → auth slice →
