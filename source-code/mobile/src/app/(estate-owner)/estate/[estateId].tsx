@@ -1,10 +1,7 @@
-import { useState } from "react";
 import {
   Alert,
   Linking,
-  Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
@@ -16,6 +13,7 @@ import WeeklyPluckedWeightChart from "@/components/estate-owner/WeeklyPluckedWei
 import { RequestListItem } from "@/components/estate-owner";
 import { AppButton, AppText, Avatar, Screen } from "@/components/ui";
 import { estateProfiles } from "@/data/estateOwnerEstates";
+import { useSavedEstateWorkers } from "@/data/estateWorkers";
 import { colors, spacing } from "@/theme";
 
 export default function EstateDetails() {
@@ -30,8 +28,8 @@ export default function EstateDetails() {
     collectionWeightKg?: string;
     collectionRequestedAt?: string;
   }>();
-  const [isWorkersVisible, setIsWorkersVisible] = useState(false);
   const estate = estateProfiles.find((profile) => profile.id === estateId);
+  const savedWorkers = useSavedEstateWorkers(estate?.id);
   const collectionWeight = Number(collectionWeightKg);
   const requestedAt = collectionRequestedAt
     ? new Date(collectionRequestedAt)
@@ -81,6 +79,10 @@ export default function EstateDetails() {
       </Screen>
     );
   }
+
+  const workersActionLabel = savedWorkers
+    ? `${savedWorkers.filter((worker) => worker.present).length}/${savedWorkers.length} present`
+    : "0/0 present";
 
   const callManager = async () => {
     try {
@@ -194,12 +196,17 @@ export default function EstateDetails() {
 
       <SectionHeading
         title="Workers"
-        actionLabel={`${estate.workersActive}/${estate.workersTotal} active`}
+        actionLabel={workersActionLabel}
       />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="View estate workers"
-        onPress={() => setIsWorkersVisible(true)}
+        onPress={() =>
+          router.push({
+            pathname: "/(estate-owner)/workers/[estateId]",
+            params: { estateId: estate.id },
+          })
+        }
         style={({ pressed }) => [styles.workersCard, pressed && styles.pressed]}
       >
         <View style={styles.workersIcon}>
@@ -207,10 +214,12 @@ export default function EstateDetails() {
         </View>
         <View style={styles.workersInfo}>
           <AppText variant="bodySmall" style={styles.workersCount}>
-            {estate.workersActive} of {estate.workersTotal} workers active
+            {savedWorkers
+              ? `${savedWorkers.filter((worker) => worker.present).length} of ${savedWorkers.length} workers present`
+              : "0 workers added"}
           </AppText>
           <AppText variant="caption" style={styles.workersHint}>
-            View estate worker list
+            Manage workers and attendance
           </AppText>
         </View>
         <Ionicons
@@ -248,63 +257,6 @@ export default function EstateDetails() {
         ))}
       </View>
 
-      <Modal
-        visible={isWorkersVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsWorkersVisible(false)}
-      >
-        <View style={styles.modalRoot}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close worker list"
-            onPress={() => setIsWorkersVisible(false)}
-            style={styles.modalBackdrop}
-          />
-          <View style={styles.workersModal}>
-            <View style={styles.modalHeading}>
-              <View>
-                <AppText variant="sectionHeading" style={styles.modalTitle}>
-                  Estate workers
-                </AppText>
-                <AppText variant="caption" style={styles.modalSubtitle}>
-                  {estate.workersActive} active · {estate.workersTotal} registered
-                </AppText>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close worker list"
-                onPress={() => setIsWorkersVisible(false)}
-                hitSlop={8}
-                style={styles.modalClose}
-              >
-                <Ionicons name="close" size={20} color={colors.text.secondary} />
-              </Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {estate.workers.map((worker) => (
-                <View key={worker.id} style={styles.workerRow}>
-                  <Avatar name={worker.name} size={40} />
-                  <View style={styles.workerInfo}>
-                    <AppText variant="bodySmall" style={styles.workerName}>
-                      {worker.name}
-                    </AppText>
-                    <AppText variant="caption" style={styles.workerRole}>
-                      {worker.role}
-                    </AppText>
-                  </View>
-                  <View style={styles.activeBadge}>
-                    <View style={styles.activeDot} />
-                    <AppText variant="caption" style={styles.activeText}>
-                      Active
-                    </AppText>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </Screen>
     </>
   );
@@ -571,81 +523,5 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: colors.brandDark,
-  },
-  modalRoot: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(16, 24, 7, 0.35)",
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFill,
-  },
-  workersModal: {
-    maxHeight: "72%",
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    backgroundColor: colors.white,
-  },
-  modalHeading: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.md,
-  },
-  modalTitle: {
-    color: colors.text.primary,
-  },
-  modalSubtitle: {
-    marginTop: spacing.xs,
-    color: colors.text.secondary,
-  },
-  modalClose: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-  },
-  workerRow: {
-    minHeight: 64,
-    flexDirection: "row",
-    alignItems: "center",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-  },
-  workerInfo: {
-    flex: 1,
-    gap: 3,
-    marginLeft: spacing.sm,
-  },
-  workerName: {
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  workerRole: {
-    color: colors.text.secondary,
-  },
-  activeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 5,
-    borderRadius: 99,
-    backgroundColor: colors.successBackground,
-  },
-  activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 99,
-    backgroundColor: colors.success,
-  },
-  activeText: {
-    color: colors.brandDark,
-    fontWeight: "600",
   },
 });
