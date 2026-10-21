@@ -1,13 +1,25 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeftRight, History, ListChecks, Loader2, MapPin, RefreshCw, UserCheck, UserX, Users } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  CalendarDays,
+  History,
+  ListChecks,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  UserCheck,
+  UserX,
+  Users,
+} from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, RowAction } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorState } from '@/components/data/ErrorState'
 import { AlertList, type AlertListItem } from '@/components/patterns/AlertList'
 import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as collectionsService from '@/services/collections'
@@ -16,6 +28,8 @@ import { agentHistoryHref } from '@/features/employees/links'
 import { agentColumns } from './board-columns'
 import { CoverModal } from './CoverModal'
 import { ReassignRouteModal } from './ReassignRouteModal'
+import { RouteScheduleModal } from './RouteScheduleModal'
+import { factoryToday } from './status'
 import { TodayStopsModal } from './TodayStopsModal'
 import type { BoardAgent } from './types'
 
@@ -28,6 +42,7 @@ type Dialog =
   | { kind: 'reassign'; agent: BoardAgent | null; routeId: number | null }
   | { kind: 'cover'; agent: BoardAgent }
   | { kind: 'stops'; agent: BoardAgent }
+  | { kind: 'schedule'; routeId: number | null }
   | null
 
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -38,6 +53,8 @@ const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hou
   LAST KNOWN fixes from agents' phones during a shift — the page says how old they are and
   refreshes every 30 s; it never claims to be live. Permissions are data-driven: view = see
   the board · edit = mark absent / send cover / reassign for today · approve = permanent change.
+  Routes run on scheduled dates (Route-Schedule-Addendum): a date picker shows another day's
+  plan; absence, covers and reassignment stay today-only, so those actions only show for today.
 */
 export function DispatchBoardPage() {
   const queryClient = useQueryClient()
@@ -51,11 +68,15 @@ export function DispatchBoardPage() {
 
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
+  const today = factoryToday()
+  const [date, setDate] = useState(today)
+  const isToday = date === today
 
   const board = useQuery({
-    queryKey: ['dispatch', 'board'],
-    queryFn: dispatchService.getBoard,
-    refetchInterval: POLL_MS,
+    queryKey: ['dispatch', 'board', date],
+    queryFn: () => dispatchService.getBoard(date),
+    // only today's board is live; another day's plan doesn't need polling
+    refetchInterval: isToday ? POLL_MS : false,
   })
   // only needed for "View today's stops" — fetched lazily when that dialog opens
   const records = useQuery({
@@ -78,7 +99,7 @@ export function DispatchBoardPage() {
   const columns = useMemo(() => agentColumns(), [])
 
   const alerts = useMemo<AlertListItem[]>(() => {
-    if (!data) return []
+    if (!data || !isToday) return []
     const items: AlertListItem[] = []
     const byId = new Map(data.agents.map((a) => [a.agentId, a]))
 
@@ -129,7 +150,7 @@ export function DispatchBoardPage() {
       })
     }
     return items
-  }, [data, canEdit])
+  }, [data, canEdit, isToday])
 
   const selectedAgent = data?.agents.find((a) => a.agentId === selectedId) ?? null
   const routeNamesFor = (agent: BoardAgent) => (data?.routes ?? []).filter((r) => r.agentId === agent.agentId).map((r) => r.name)
@@ -143,18 +164,34 @@ export function DispatchBoardPage() {
           { label: 'Tea Leaf Collection', to: '/collections' },
           { label: 'Agent Dispatch' },
         ]}
-        description="Where each collection agent is, which route they handle, and who is covering for whom. Locations are last-known fixes from agents on shift — check the age beside each."
+        description="Where each collection agent is, which route they run on the chosen day, and who is covering for whom. Locations are last-known fixes from agents on shift — check the age beside each."
         actions={
-          <div className="flex items-center gap-2">
-            {data && (
+          <div className="flex flex-wrap items-center gap-2">
+            {data && isToday && (
               <span className="tabular hidden text-xs text-text-muted sm:inline">
                 Updated {fmtTime(data.generatedAt)} · refreshes every 30 s
               </span>
             )}
+            <div className="w-40">
+              <Input
+                type="date"
+                aria-label="Board date"
+                value={date}
+                onChange={(e) => setDate(e.target.value || today)}
+              />
+            </div>
+            {!isToday && (
+              <Button variant="ghost" onClick={() => setDate(today)}>
+                Today
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => setDialog({ kind: 'schedule', routeId: null })}>
+              <CalendarDays className="size-4" /> Route schedules
+            </Button>
             <Button variant="secondary" onClick={() => void board.refetch()} loading={board.isFetching && !board.isPending}>
               <RefreshCw className="size-4" /> Refresh
             </Button>
-            {canEdit && (
+            {canEdit && isToday && (
               <Button onClick={() => setDialog({ kind: 'reassign', agent: null, routeId: null })}>
                 <ArrowLeftRight className="size-4" /> Reassign Route
               </Button>
@@ -172,6 +209,21 @@ export function DispatchBoardPage() {
       ) : (
         <>
           {alerts.length > 0 && <AlertList items={alerts} className="mb-4" />}
+          {!isToday && (
+            <p className="mb-4 rounded-[var(--radius-md)] border border-border bg-surface px-3 py-2 text-sm text-text-muted">
+              Showing the plan for {data.date}: which routes run and who is responsible. Absence, covers and reassignment
+              can only be set for today.
+            </p>
+          )}
+          {data.routes.some((r) => !r.scheduled) && (
+            <p className="mb-4 text-xs text-text-muted">
+              Not scheduled {isToday ? 'today' : 'that day'}:{' '}
+              {data.routes
+                .filter((r) => !r.scheduled)
+                .map((r) => `${r.name}${r.nextCollectionDay ? ` (next ${r.nextCollectionDay})` : ''}`)
+                .join(' · ')}
+            </p>
+          )}
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
             <DataTable
@@ -190,11 +242,11 @@ export function DispatchBoardPage() {
               }
               actions={(a) => (
                 <>
-                  <RowAction icon={<ListChecks className="size-4" />} label="View today’s stops" onClick={() => setDialog({ kind: 'stops', agent: a })} />
+                  <RowAction icon={<ListChecks className="size-4" />} label={isToday ? 'View today’s stops' : 'View stops'} onClick={() => setDialog({ kind: 'stops', agent: a })} />
                   {canSeeHistory && (
                     <RowAction icon={<History className="size-4" />} label="View history" onClick={() => navigate(agentHistoryHref(a.employeeId))} />
                   )}
-                  {canEdit && (
+                  {canEdit && isToday && (
                     <RowAction
                       icon={<ArrowLeftRight className="size-4" />}
                       label="Reassign route"
@@ -202,6 +254,7 @@ export function DispatchBoardPage() {
                     />
                   )}
                   {canEdit &&
+                    isToday &&
                     (a.absent ? (
                       <>
                         <RowAction icon={<UserX className="size-4" />} label="Find cover" onClick={() => setDialog({ kind: 'cover', agent: a })} />
@@ -257,6 +310,16 @@ export function DispatchBoardPage() {
               open
               // the live row, so the modal advances from "mark absent" to "find cover" once the board refreshes
               agent={data.agents.find((a) => a.agentId === dialog.agent.agentId) ?? dialog.agent}
+              onClose={() => setDialog(null)}
+            />
+          )}
+          {dialog?.kind === 'schedule' && (
+            <RouteScheduleModal
+              open
+              routes={data.routes}
+              initialRouteId={dialog.routeId}
+              canEdit={canEdit}
+              canApprove={canApprove}
               onClose={() => setDialog(null)}
             />
           )}

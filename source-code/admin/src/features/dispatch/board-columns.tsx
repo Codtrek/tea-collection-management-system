@@ -22,12 +22,37 @@ export function agentColumns(): Column<BoardAgent>[] {
     {
       key: 'route',
       header: 'Route',
-      render: (a) => (
-        <div className="flex flex-col items-start gap-1">
-          <span>{a.routeName ?? <span className="text-text-muted">Unassigned</span>}</span>
-          {a.coveringRouteName && <StatusBadge tone="warning">Covering {a.coveringRouteName}</StatusBadge>}
-        </div>
-      ),
+      // What the agent runs on the board's date; a route he holds but that doesn't run that
+      // day is listed muted underneath (Route-Schedule-Addendum §5).
+      render: (a) => {
+        const offToday = a.ownRoutes.filter((r) => r.routeId !== a.routeId)
+        return (
+          <div className="flex flex-col items-start gap-1">
+            {a.scheduledRoutes.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {a.scheduledRoutes.map((r) =>
+                  r.covering ? (
+                    <StatusBadge key={r.routeId} tone="warning">
+                      Covering {r.name}
+                    </StatusBadge>
+                  ) : (
+                    <StatusBadge key={r.routeId} tone="approved">
+                      {r.name}
+                    </StatusBadge>
+                  ),
+                )}
+              </div>
+            ) : a.ownRoutes.length > 0 ? (
+              <StatusBadge tone="neutral">Not scheduled today</StatusBadge>
+            ) : (
+              <span className="text-text-muted">Unassigned</span>
+            )}
+            {offToday.length > 0 && (
+              <span className="text-xs text-text-muted">Also holds {offToday.map((r) => r.name).join(', ')}</span>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'status',

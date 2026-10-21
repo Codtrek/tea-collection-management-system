@@ -1,10 +1,19 @@
 import { apiFetch } from '@/lib/api'
-import type { CoverCandidate, DispatchBoard, EstateRouteAgent, RouteAssignment } from '@/features/dispatch/types'
+import type {
+  CoverCandidate,
+  DispatchBoard,
+  EstateRouteAgent,
+  RouteAssignment,
+  RouteSchedule,
+  ScheduleOverrideKind,
+} from '@/features/dispatch/types'
 
 /* Agent Dispatch (COL-05) — portal side. The agent's phone talks to /dispatch/me/* instead. */
 
-export function getBoard(): Promise<DispatchBoard> {
-  return apiFetch<DispatchBoard>('/dispatch/board')
+/** The board for `date` (YYYY-MM-DD, default today on the server). */
+export function getBoard(date?: string): Promise<DispatchBoard> {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : ''
+  return apiFetch<DispatchBoard>(`/dispatch/board${qs}`)
 }
 
 export function getCoverCandidates(routeId: number): Promise<CoverCandidate[]> {
@@ -44,4 +53,45 @@ export function reassignRoute(
 export function getEstateRouteAgent(estateId: string, date?: string): Promise<EstateRouteAgent> {
   const qs = date ? `?date=${encodeURIComponent(date)}` : ''
   return apiFetch<EstateRouteAgent>(`/dispatch/estates/${estateId}/route-agent${qs}`)
+}
+
+/* ── Route schedule (Route-Schedule-Addendum §6) ── */
+
+export function getRouteSchedule(routeId: number): Promise<RouteSchedule> {
+  return apiFetch<RouteSchedule>(`/dispatch/routes/${routeId}/schedule`)
+}
+
+/** Needs dispatch = Approve. 0 = Sunday … 6 = Saturday. */
+export function setRouteWeekdays(routeId: number, weekdays: number[]): Promise<RouteSchedule> {
+  return apiFetch<RouteSchedule>(`/dispatch/routes/${routeId}/schedule/weekdays`, {
+    method: 'PUT',
+    body: JSON.stringify({ weekdays }),
+  })
+}
+
+export function addScheduleOverride(
+  routeId: number,
+  input: { date: string; kind: ScheduleOverrideKind; reason: string },
+): Promise<RouteSchedule> {
+  return apiFetch<RouteSchedule>(`/dispatch/routes/${routeId}/schedule/overrides`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function moveScheduleDate(
+  routeId: number,
+  input: { fromDate: string; toDate: string; reason: string },
+): Promise<RouteSchedule> {
+  return apiFetch<RouteSchedule>(`/dispatch/routes/${routeId}/schedule/move`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+/** Removes the override (both halves of a moved date). */
+export function removeScheduleOverride(routeId: number, overrideId: number): Promise<RouteSchedule> {
+  return apiFetch<RouteSchedule>(`/dispatch/routes/${routeId}/schedule/overrides/${overrideId}`, {
+    method: 'DELETE',
+  })
 }

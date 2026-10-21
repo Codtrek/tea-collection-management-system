@@ -8,6 +8,7 @@ export const BOARD_STATUS_TONE: Record<BoardStatus, BadgeTone> = {
   Completed: 'success',
   Absent: 'danger',
   Covering: 'warning',
+  'Not scheduled': 'neutral',
 }
 
 /** CSS custom-property name (without `--color-`) for each freshness level's dot. */
@@ -35,4 +36,22 @@ export function freshnessLabel(agent: Pick<BoardAgent, 'freshness' | 'ageMin' | 
 /** Read a design token's current value (Leaflet draws on a canvas and needs literal colours). */
 export function tokenColor(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(`--color-${name}`).trim()
+}
+
+/** The factory's calendar date (Sri Lanka), 'YYYY-MM-DD' — what the server calls "today". */
+export function factoryToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Colombo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
+
+/** 0 = Sunday … 6 = Saturday — the backend's weekday numbering for route schedules. */
+export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+
+/** Weekday of a 'YYYY-MM-DD' date, read in UTC so it never shifts with the browser's zone. */
+export function weekdayOf(date: string): number {
+  return new Date(`${date}T00:00:00Z`).getUTCDay()
 }
