@@ -975,15 +975,26 @@ const AGENT_SEEDS = [
 ] as const;
 
 /* ── Agent Dispatch (COL-05) reference data ─────────────────────────────────
-   Each route's permanent agent (D. Silva is deliberately a floater with no
-   route — an obvious zero-load cover candidate), neighbouring routes, and map
-   coordinates for the estates. Only inserted where nothing is assigned yet, so
-   re-seeding never overrides an officer's reassignment. */
+   Each route's permanent agent (N. Perera and D. Silva are deliberately floaters
+   with no route — obvious zero-load cover candidates; R. Senanayake holds two
+   routes that run on different days), neighbouring routes, and map coordinates
+   for the estates. Only inserted where nothing is assigned yet, so re-seeding
+   never overrides an officer's reassignment. */
 const PERMANENT_AGENT_SEEDS: Record<string, string> = {
   'Route 2': 'K. Weerasinghe',
   'Route 3': 'R. Senanayake',
-  'Route 4': 'N. Perera',
+  'Route 4': 'R. Senanayake',
   'Route 5': 'W. Gunaratne',
+};
+/* Route schedule (Route-Schedule-Addendum): weekdays as offsets from the seed
+   day's weekday, so every demo run has routes running today and one (Route 4)
+   that isn't. Route 3 and Route 4 share an agent, so they never share a day.
+   Only written for a route that has no pattern yet. */
+const ROUTE_SCHEDULE_SEEDS: Record<string, number[]> = {
+  'Route 2': [0, 3],
+  'Route 3': [0, 3],
+  'Route 4': [1, 4],
+  'Route 5': [0, 2, 5],
 };
 const NEIGHBOUR_ROUTE_SEEDS: [string, string][] = [
   ['Route 2', 'Route 3'],
@@ -2104,6 +2115,32 @@ async function seedDispatch(client: Client, ctx: DispatchSeedContext) {
     }
   }
 
+  // route schedule (Route-Schedule-Addendum) — written before the permanent assignments
+  // (one route per agent per day). A route that already has a pattern keeps it.
+  const todayWeekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+  for (const [routeName, routeId] of Object.entries(routeIds)) {
+    const offsets = ROUTE_SCHEDULE_SEEDS[routeName] ?? [0, 1, 2, 3, 4, 5, 6];
+    await client.query(
+      `INSERT INTO route_schedule_weekdays (route_id, weekday)
+       SELECT $1, d FROM unnest($2::smallint[]) AS d
+        WHERE NOT EXISTS (SELECT 1 FROM route_schedule_weekdays WHERE route_id = $1)`,
+      [routeId, offsets.map((o) => (todayWeekday + o) % 7)],
+    );
+  }
+  // what the seeded records below may use: does a route run on a date (overrides win)?
+  const patternRows = await client.query<{ route_id: number; weekday: number }>(
+    `SELECT route_id, weekday FROM route_schedule_weekdays`,
+  );
+  const overrideRows = await client.query<{ route_id: number; date: string; kind: string }>(
+    `SELECT route_id, to_char(date, 'YYYY-MM-DD') AS date, kind FROM route_schedule_overrides`,
+  );
+  const runsOn = (routeId: number, date: string): boolean => {
+    const o = overrideRows.rows.find((r) => r.route_id === routeId && r.date === date);
+    if (o) return o.kind === 'ADD';
+    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+    return patternRows.rows.some((r) => r.route_id === routeId && Number(r.weekday) === weekday);
+  };
+
   // permanent assignments — only where the route has none
   for (const [routeName, agentName] of Object.entries(PERMANENT_AGENT_SEEDS)) {
     const routeId = routeIds[routeName];
@@ -2155,13 +2192,14 @@ async function seedDispatch(client: Client, ctx: DispatchSeedContext) {
   );
 
   // The last 10 days: collected, awaiting factory grading → gives load history
-  // for the "expected route load" and the agent's soft ceiling.
+  // for the "expected route load" and the agent's soft ceiling. Only on the days
+  // each route actually runs.
   let history = 0;
   for (let back = 1; back <= 10; back++) {
     const date = dayOffset(back);
     for (const [idx, e] of estates.rows.entries()) {
       const owner = ownerByRoute.get(e.route_id as number);
-      if (!owner) continue;
+      if (!owner || !runsOn(e.route_id as number, date)) continue;
       const kg = 40 + ((idx * 37 + back * 53) % 70);
       const id = `DSP-${date.replace(/-/g, '')}-${e.id}`;
       await client.query(
@@ -2182,13 +2220,13 @@ async function seedDispatch(client: Client, ctx: DispatchSeedContext) {
     }
   }
 
-  // Today: the first estate on each route is the day's stop. Route 3 has already been
-  // collected (so reassigning it is blocked); the rest are still to do (so they can be
-  // covered / reassigned, and COL-01 shows the resolver-driven agent).
+  // Today: the first estate on each route that runs today is the day's stop. Route 3
+  // has already been collected (so reassigning it is blocked); the rest are still to do
+  // (so they can be covered / reassigned, and COL-01 shows the resolver-driven agent).
   const seenRoute = new Set<number>();
   for (const e of estates.rows) {
     const routeId = e.route_id as number;
-    if (seenRoute.has(routeId)) continue;
+    if (seenRoute.has(routeId) || !runsOn(routeId, today)) continue;
     seenRoute.add(routeId);
     const owner = ownerByRoute.get(routeId);
     if (!owner) continue;

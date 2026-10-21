@@ -848,3 +848,31 @@ CREATE INDEX IF NOT EXISTS idx_grading_notifications_due ON grading_notification
 -- Idempotent in-app rows: a retry after a crash can never store the same notification twice.
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS dedupe_key VARCHAR(80);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_notifications_dedupe ON notifications(dedupe_key) WHERE dedupe_key IS NOT NULL;
+
+-- ════════════════════════════════════════════════════════════════
+-- Route schedule (mirrors migrations/2026-10-22-route-schedule.sql)
+-- Spec: docs/specs/Route-Schedule-Addendum.md. Routes run on set weekdays plus
+-- one-date overrides, not daily. Fresh databases have no routes yet, so the
+-- migration's all-weekdays backfill is done by the seed instead.
+-- ════════════════════════════════════════════════════════════════
+
+-- Weekly pattern: one row per (route, weekday); 0 = Sunday … 6 = Saturday
+CREATE TABLE IF NOT EXISTS route_schedule_weekdays (
+    route_id INTEGER  NOT NULL REFERENCES routes(id),
+    weekday  SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+    PRIMARY KEY (route_id, weekday)
+);
+
+-- One-date exceptions. A move = CANCEL(old) + ADD(new) sharing move_group
+CREATE TABLE IF NOT EXISTS route_schedule_overrides (
+    id         SERIAL PRIMARY KEY,
+    route_id   INTEGER NOT NULL REFERENCES routes(id),
+    date       DATE NOT NULL,
+    kind       VARCHAR(6) NOT NULL CHECK (kind IN ('ADD', 'CANCEL')),
+    reason     TEXT NOT NULL,
+    move_group UUID,
+    created_by VARCHAR(100) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (route_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_route_overrides_route_date ON route_schedule_overrides (route_id, date);
