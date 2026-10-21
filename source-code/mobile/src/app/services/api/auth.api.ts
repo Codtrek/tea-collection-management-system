@@ -39,7 +39,7 @@ export async function register(
     method: "POST",
     body: JSON.stringify({
       name,
-      phoneNumber,
+      phone: phoneNumber,
       nic,
       password,
       confirmPassword
