@@ -2,6 +2,8 @@
 
 Status: draft for implementation · 2026-10-09 · Branch `feature/agent-dispatch`
 
+> **Amended 2026-10-22 by `Route-Schedule-Addendum.md`:** routes run on scheduled dates, not daily, and one agent may hold several permanent routes (§3–§6 changes are listed there).
+
 This is an **addendum**. It adds requirements without rewriting the existing Collection specs
 (COL-01..04). Token names, component names and existing screen codes stay unchanged. Where this file
 amends an existing screen, only the delta is described.
