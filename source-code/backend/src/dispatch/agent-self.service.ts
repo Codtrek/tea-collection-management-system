@@ -30,6 +30,7 @@ import { PositionCacheService } from './position-cache.service';
 import { RouteAssignmentEntity } from './route-assignment.entity';
 import { RouteLoadService } from './route-load.service';
 import { RouteResolverService } from './route-resolver.service';
+import { RouteScheduleService } from './route-schedule.service';
 
 export interface PingInput {
   /** device clock, ISO — when the fix was taken */
@@ -73,6 +74,7 @@ export class AgentSelfService {
     private readonly cache: PositionCacheService,
     private readonly notifier: DispatchNotifier,
     private readonly audit: AuditService,
+    private readonly schedule: RouteScheduleService,
   ) {}
 
   /** The calling agent, from the JWT's user id. */
@@ -385,8 +387,11 @@ export class AgentSelfService {
       routeRows.map((r) => r.id),
       date,
     );
+    // only routes that run today (Route-Schedule-Addendum §5)
+    const scheduled = await this.schedule.scheduledRoutesOn(date);
     const mine = routeRows.filter(
-      (r) => resolved.get(r.id)?.agentId === agent.agentId,
+      (r) =>
+        scheduled.has(r.id) && resolved.get(r.id)?.agentId === agent.agentId,
     );
     const stops: {
       id: string;

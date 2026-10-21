@@ -8,6 +8,7 @@ import { type PublicCandidate, windowIncludes } from './dispatch-map';
 import { RouteAssignmentEntity } from './route-assignment.entity';
 import { RouteLoadService } from './route-load.service';
 import { RouteNeighbourEntity } from './route-neighbour.entity';
+import { isScheduledOn, RouteScheduleService } from './route-schedule.service';
 
 /**
  * Proximity seam. Today proximity is the factory-configured neighbour list; route
@@ -32,6 +33,7 @@ export class CandidateRankingService implements ProximityProvider {
     private readonly routes: Repository<RouteEntity>,
     private readonly directory: AgentDirectoryService,
     private readonly load: RouteLoadService,
+    private readonly schedule: RouteScheduleService,
   ) {}
 
   /** Configured neighbour routes (the primary proximity signal). */
@@ -45,19 +47,32 @@ export class CandidateRankingService implements ProximityProvider {
    * Excluded: absent / unavailable agents, agents who finished their shift, agents
    * already holding (or being asked to hold) a cover that day — the one-cover rule —
    * and the route's own agent. Over-ceiling is a warning flag, never an exclusion.
-   * Order: not-yet-asked first, then neighbouring routes, then fewest remaining
+   * Order: not-yet-asked first, then agents with no route of their own scheduled that
+   * date (Route-Schedule-Addendum §5), then neighbouring routes, then fewest remaining
    * stops, then lowest expected own load.
    */
   async rank(routeId: number, date: string): Promise<PublicCandidate[]> {
-    const [agents, active, pending, allForRoute, dayRows, routeRows] =
-      await Promise.all([
-        this.directory.all(),
-        this.assignments.find({ where: { status: 'ACTIVE' } }),
-        this.assignments.find({ where: { status: 'PENDING' } }),
-        this.assignments.find({ where: { routeId } }),
-        this.dayStatus.find({ where: { day: date } }),
-        this.routes.find(),
-      ]);
+    const [
+      agents,
+      active,
+      pending,
+      allForRoute,
+      dayRows,
+      routeRows,
+      schedules,
+    ] = await Promise.all([
+      this.directory.all(),
+      this.assignments.find({ where: { status: 'ACTIVE' } }),
+      this.assignments.find({ where: { status: 'PENDING' } }),
+      this.assignments.find({ where: { routeId } }),
+      this.dayStatus.find({ where: { day: date } }),
+      this.routes.find(),
+      this.schedule.allSchedules(),
+    ]);
+    const runs = (rid: number) => {
+      const s = schedules.get(rid);
+      return s ? isScheduledOn(s, date) : false;
+    };
 
     const neighbourIds = await this.neighbours(routeId);
     const dayByAgent = new Map(dayRows.map((d) => [d.agentId, d]));
@@ -65,9 +80,15 @@ export class CandidateRankingService implements ProximityProvider {
       routeRows.map((r) => [r.id, r.name ?? `Route ${r.id}`]),
     );
 
-    const ownRoute = new Map<number, number>(); // agentId → own permanent route today
+    // agentId → his own permanent route scheduled that date (at most one per date)
+    const ownRoute = new Map<number, number>();
     for (const a of active) {
-      if (a.type === 'PERMANENT' && windowIncludes(a, date)) {
+      if (
+        a.type === 'PERMANENT' &&
+        windowIncludes(a, date) &&
+        a.routeId !== routeId &&
+        runs(a.routeId)
+      ) {
         ownRoute.set(a.agentId, a.routeId);
       }
     }
@@ -77,9 +98,12 @@ export class CandidateRankingService implements ProximityProvider {
         holdsCover.add(a.agentId);
       }
     }
-    const targetOwner = [...ownRoute.entries()].find(
-      ([, r]) => r === routeId,
-    )?.[0];
+    const targetOwner = active.find(
+      (a) =>
+        a.type === 'PERMANENT' &&
+        a.routeId === routeId &&
+        windowIncludes(a, date),
+    )?.agentId;
     const asked = new Set(
       allForRoute
         .filter(
@@ -122,12 +146,14 @@ export class CandidateRankingService implements ProximityProvider {
         overCeiling:
           ceilingKg > 0 && ownExpectedKg + coverExpectedKg > ceilingKg,
         previouslyAsked: asked.has(agent.agentId),
+        free: own === null,
       });
     }
 
     return out.sort(
       (a, b) =>
         Number(a.previouslyAsked) - Number(b.previouslyAsked) ||
+        Number(b.free) - Number(a.free) ||
         Number(b.neighbour) - Number(a.neighbour) ||
         a.remainingStops - b.remainingStops ||
         a.ownExpectedKg - b.ownExpectedKg ||
