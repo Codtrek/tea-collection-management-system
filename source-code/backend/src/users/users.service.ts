@@ -2,11 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { FactoryEmployee } from './factory-employee.entity';
+import { EstateOwner } from './estate-owner.entity';
+import { EstateManager } from './estate-manager.entity';
 import { User } from './user.entity';
 
 export interface UserProfile {
   name: string;
-  factory: string;
+  factory?: string;
+  estate?: string;
 }
 
 @Injectable()
@@ -16,6 +19,10 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(FactoryEmployee)
     private readonly factoryEmployeesRepository: Repository<FactoryEmployee>,
+    @InjectRepository(EstateOwner)
+    private readonly estateOwnersRepository: Repository<EstateOwner>,
+    @InjectRepository(EstateManager)
+    private readonly estateManagersRepository: Repository<EstateManager>,
   ) {}
 
   findByPhone(phone: string): Promise<User | null> {
@@ -26,6 +33,36 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { id } });
   }
 
+  findByNic(nic: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { nic } });
+  }
+
+  async createEstateOwner(
+    name: string,
+    phone: string,
+    nic: string,
+    password_hash: string,
+  ): Promise<User> {
+    return this.usersRepository.manager.transaction(async (manager) => {
+      const user = manager.create(User, {
+        name,
+        phone,
+        nic,
+        password_hash,
+        role: 'estate_owner',
+      });
+      const savedUser = await manager.save(user);
+
+      await manager.save(EstateOwner, {
+        user_id: savedUser.id,
+        name,
+        contact: phone,
+        nic,
+      });
+
+      return savedUser;
+    });
+  }
   /** Name + factory affiliation for a factory-side user (Administrator/Officer/Manager). */
   async getProfile(userId: number): Promise<UserProfile | null> {
     const employee = await this.factoryEmployeesRepository.findOne({
@@ -34,5 +71,30 @@ export class UsersService {
     });
     if (!employee) return null;
     return { name: employee.name, factory: employee.factory.name };
+  }
+
+  async getEstateOwnerProfile(userId: number): Promise<UserProfile | null> {
+    const estateOwner = await this.estateOwnersRepository.findOne({
+      where: { user_id: userId },
+      relations: { estate: true },
+    });
+    if (!estateOwner) return null;
+    const estate = estateOwner.estate[0];
+    if (!estate) return null;
+    return { name: estateOwner.name, estate: estate.name };
+  }
+  async getEstateManagerProfile(userId: number): Promise<UserProfile | null> {
+    const estateManager = await this.estateManagersRepository
+      .createQueryBuilder('estateManager')
+      .leftJoinAndSelect('estateManager.employee', 'employee')
+      .leftJoinAndSelect('estateManager.estate', 'estate')
+      .where('employee.user_id = :userId', { userId })
+      .getOne();
+    if (!estateManager) return null;
+    if (!estateManager.employee || !estateManager.estate) return null;
+    return {
+      name: estateManager.employee.name,
+      estate: estateManager.estate.name,
+    };
   }
 }

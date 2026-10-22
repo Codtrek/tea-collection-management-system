@@ -6,12 +6,13 @@ describe('toAppRole', () => {
     ['factory_admin', 'Administrator'],
     ['factory_officer', 'Officer'],
     ['factory_manager', 'Manager'],
+    ['estate_owner' , 'Estate Owner'],
   ] as const)('maps %s to %s', (dbRole, appRole) => {
     expect(toAppRole(dbRole)).toBe(appRole);
   });
 
+
   it.each([
-    'estate_owner',
     'estate_manager',
     'plucking_employee',
     'collection_agent',

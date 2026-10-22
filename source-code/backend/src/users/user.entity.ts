@@ -25,10 +25,16 @@ export class User {
   phone: string;
 
   @Column()
+  name: string;
+
+  @Column()
   password_hash: string;
 
   @Column()
   role: DbRole;
+
+  @Column()
+  nic: string;
 
   @CreateDateColumn()
   created_at: Date;

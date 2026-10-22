@@ -22,10 +22,10 @@ export default function RootLayout() {
         }}
       />
       <Stack.Screen 
-        name="auth/signin" 
+        name="auth/login"
       />
       <Stack.Screen 
-        name="auth/signup" 
+        name="auth/register"
       />
       <Stack.Screen 
         name="auth/change-password"
