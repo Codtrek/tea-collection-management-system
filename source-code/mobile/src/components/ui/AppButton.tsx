@@ -1,3 +1,4 @@
+
 import {
   Pressable,
   StyleSheet,
@@ -10,9 +11,9 @@ import { colors } from "@/theme/colors";
 
 interface AppButtonProps {
   title: string;
-  onPress: () => void;
+  onPress?: () => void;
   variant?: "primary" | "secondary";
-  width?: "full" | "half";
+  width?: "full" | "half" | "auto" | ViewStyle["width"];
   loading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
@@ -29,30 +30,39 @@ export default function AppButton({
 }: AppButtonProps) {
   const isDisabled = disabled || loading;
 
+  const buttonWidth: ViewStyle["width"] =
+    width === "full"
+      ? "100%"
+      : width === "half"
+        ? undefined
+        : width === "auto"
+          ? undefined
+          : width;
+  const buttonSizingStyle: ViewStyle =
+    width === "half" ? { flex: 1, minWidth: 0 } : { width: buttonWidth };
+
   return (
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{
+        disabled: isDisabled,
+        busy: loading,
+      }}
       style={[
         styles.container,
         styles[variant],
-        styles[width],
+        buttonSizingStyle,
         isDisabled && styles.disabled,
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator />
+        <ActivityIndicator color={colors.text} />
       ) : (
-        <AppText
-          variant="body"
-          style={[
-            styles.text,
-            variant === "secondary" && styles.secondaryText,
-          ]}
-        >
-          {title}
-        </AppText>
+        <AppText variant="bodySmall">{title}</AppText>
       )}
     </Pressable>
   );
@@ -60,19 +70,12 @@ export default function AppButton({
 
 const styles = StyleSheet.create({
   container: {
-    height: 52,
-    borderRadius: 12,
+    aspectRatio: 4,
+    maxHeight: 50,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
-  },
-
-  full: {
-    width: "100%",
-  },
-
-  half: {
-    flex: 1,
   },
 
   primary: {
@@ -80,18 +83,7 @@ const styles = StyleSheet.create({
   },
 
   secondary: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-  },
-
-  text: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
-
-  secondaryText: {
-    color: colors.primary,
+    backgroundColor: colors.backgroundGray,
   },
 
   disabled: {

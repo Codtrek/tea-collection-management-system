@@ -14,6 +14,30 @@ export interface Estate {
   grade: EstateGrade;
 }
 
+export interface EstateProfile extends Estate {
+  imageSrc: string;
+  managerName: string;
+  managerPhone: string;
+  factories: {
+    name: string;
+    address: string;
+  }[];
+  workersActive: number;
+  workersTotal: number;
+  workers: {
+    id: string;
+    name: string;
+    role: string;
+  }[];
+  weeklyPluckedWeightsKg: number[];
+  recentActivities: {
+    id: string;
+    description: string;
+    factory: string;
+    timeAgo: string;
+  }[];
+}
+
 export type PickupRequestStatus =
   | "pending"
   | "accepted"
