@@ -41,6 +41,10 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     // tier implies `edit` — a Manager can approve a correction without being able to grade.
     grading: 'view',
     gradingApproval: 'view',
+    // Fertilizer approval is the same kind of control: the Officer approves, a Manager signs
+    // off above the quantity limit, the Administrator audits (Fertilizer-Delivery-Addendum §4).
+    fertilizerApproval: 'view',
+    fertilizerManagerApproval: 'view',
     administration: 'approve',
   },
   Officer: {
@@ -61,6 +65,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     dispatch: 'edit',
     grading: 'edit',
     gradingApproval: 'view',
+    fertilizerApproval: 'approve',
+    fertilizerManagerApproval: 'view',
     administration: 'none',
   },
   Manager: {
@@ -77,6 +83,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     dispatch: 'approve',
     grading: 'view',
     gradingApproval: 'approve',
+    fertilizerApproval: 'view',
+    fertilizerManagerApproval: 'approve',
     administration: 'none',
   },
 }

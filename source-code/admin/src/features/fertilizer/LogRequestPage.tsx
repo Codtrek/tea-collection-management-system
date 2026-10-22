@@ -1,27 +1,36 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Loader2, Plus, Route as RouteIcon, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
-import { Checkbox } from '@/components/ui/Checkbox'
 import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as estatesService from '@/services/estates'
 import * as fertilizerService from '@/services/fertilizer'
 import { availableForItem } from './lib'
+import { PAYMENT_METHOD_LABEL } from './status'
+import type { PaymentMethod } from './types'
 import { formatWeight } from '@/lib/format'
 
+interface Line {
+  key: number
+  item: string
+  quantity: string
+}
+
 /*
-  FERT-07 — Log a phoned-in fertilizer request (addendum §3/§6). The exception path
-  for rural connectivity: recorded on the owner's behalf, web-originated, entering the
-  same approval queue as any mobile request. It does NOT auto-approve.
+  FERT-07 — Log a phoned-in order on the owner's behalf (Fertilizer-Delivery-Addendum §4).
+  One order may list several items; the server creates one request per item, all sharing an
+  order reference so they display and deliver together. The route comes from the estate (the
+  client never chooses it). Logging does NOT approve — every line enters the FERT-05 queue.
 */
 export function LogRequestPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { toast } = useToast()
 
   const {
@@ -38,43 +47,55 @@ export function LogRequestPage() {
   } = useQuery({ queryKey: ['fertilizer', 'batches'], queryFn: fertilizerService.listBatches })
   const { data: positions } = useQuery({ queryKey: ['fertilizer', 'positions'], queryFn: fertilizerService.listPositions })
 
-  const items = useMemo(() => [...new Set((batches ?? []).map((b) => b.item))], [batches])
-  const today = new Date().toISOString().slice(0, 10)
+  const items = useMemo(() => [...new Set((batches ?? []).map((b) => b.item))].sort(), [batches])
 
-  const [estate, setEstate] = useState('')
-  const [item, setItem] = useState('')
-  const [quantity, setQuantity] = useState('')
-  const [date, setDate] = useState(today)
+  const [estateId, setEstateId] = useState('')
+  const [lines, setLines] = useState<Line[]>([{ key: 1, item: '', quantity: '' }])
+  const [method, setMethod] = useState<PaymentMethod | ''>('')
   const [reason, setReason] = useState('')
-  const [notify, setNotify] = useState(true)
-  const [errors, setErrors] = useState<{ estate?: string; item?: string; quantity?: string; date?: string }>({})
+  const [errors, setErrors] = useState<{ estate?: string; method?: string; lines?: Record<number, { item?: string; quantity?: string }> }>({})
 
-  const qty = Number(quantity)
-  const available = item && positions ? availableForItem(item, positions) : null
+  const estate = estates?.find((e) => e.id === estateId)
 
-  const logMutation = useMutation({
-    mutationFn: () => fertilizerService.logRequest({ estateId: estate, item, quantityKg: qty, reason: reason || undefined }),
-    onSuccess: () => {
-      toast(`Request for ${formatWeight(qty)} of ${item} logged for approval${notify ? ' · owner notified' : ''}`)
+  const createMutation = useMutation({
+    mutationFn: () =>
+      fertilizerService.createOrder({
+        estateId,
+        items: lines.map((l) => ({ item: l.item, quantityKg: Number(l.quantity) })),
+        paymentMethod: method as PaymentMethod,
+        reason: reason.trim() || undefined,
+      }),
+    onSuccess: (res) => {
+      toast(
+        res.requests.length === 1
+          ? `Request ${res.requests[0].id} logged for approval`
+          : `Order ${res.orderRef} logged — ${res.requests.length} requests for approval`,
+      )
+      void queryClient.invalidateQueries({ queryKey: ['fertilizer'] })
       navigate('/fertilizer/requests')
     },
-    onError: (err) => toast(err instanceof Error ? err.message : 'Could not log this request', 'danger'),
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not log this order', 'danger'),
   })
 
-  const validate = () => {
-    const next: typeof errors = {}
-    if (!estate) next.estate = 'Select an estate owner'
-    if (!item) next.item = 'Select an item'
-    if (!quantity || Number.isNaN(qty) || qty <= 0) next.quantity = 'Enter a positive quantity'
-    if (!date) next.date = 'Date is required'
-    else if (date > today) next.date = 'Date cannot be in the future'
-    setErrors(next)
-    return Object.keys(next).length === 0
-  }
+  const setLine = (key: number, patch: Partial<Line>) =>
+    setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)))
 
-  const submit = () => {
-    if (!validate()) return
-    logMutation.mutate()
+  const validate = () => {
+    const next: typeof errors = { lines: {} }
+    if (!estateId) next.estate = 'Select an estate owner'
+    if (!method) next.method = 'Choose how the owner will pay'
+    const seen = new Set<string>()
+    for (const l of lines) {
+      const e: { item?: string; quantity?: string } = {}
+      const qty = Number(l.quantity)
+      if (!l.item) e.item = 'Select an item'
+      else if (seen.has(l.item)) e.item = 'Already on this order'
+      if (!l.quantity || Number.isNaN(qty) || qty <= 0) e.quantity = 'Enter a positive quantity'
+      seen.add(l.item)
+      if (e.item || e.quantity) next.lines![l.key] = e
+    }
+    setErrors(next)
+    return !next.estate && !next.method && Object.keys(next.lines!).length === 0
   }
 
   if (estatesPending || batchesPending) {
@@ -110,53 +131,106 @@ export function LogRequestPage() {
         ]}
       />
 
-      <Card className="max-w-xl">
+      <Card className="max-w-2xl">
         <div className="flex flex-col gap-5">
           <Select
             label="Estate owner"
             placeholder="Select estate owner"
-            value={estate}
+            value={estateId}
             error={errors.estate}
-            onChange={(e) => setEstate(e.target.value)}
-            options={estates.map((o) => ({ value: o.id, label: `${o.ownerName} — ${o.estateName}` }))}
+            onChange={(e) => setEstateId(e.target.value)}
+            options={estates
+              .filter((o) => o.status === 'Active')
+              .map((o) => ({ value: o.id, label: `${o.ownerName} — ${o.estateName}` }))}
           />
-
-          <div className="grid gap-4 sm:grid-cols-[1fr_140px_120px]">
-            <Select
-              label="Item"
-              placeholder="Select item"
-              value={item}
-              error={errors.item}
-              onChange={(e) => setItem(e.target.value)}
-              options={items.map((i) => ({ value: i, label: i }))}
-            />
-            <Input
-              label="Quantity"
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={quantity}
-              error={errors.quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder="200"
-            />
-            {/* Unit is read-only — the item's base unit (§9 unit canonicalisation) */}
-            <Input label="Unit" value="kg" readOnly disabled />
-          </div>
-
-          {available !== null && (
-            <p className="-mt-2 text-[13px] text-text-muted">
-              Currently available for <span className="font-medium text-text">{item}</span>:{' '}
-              <span className={`tabular font-semibold ${available < 0 ? 'text-danger-fg' : 'text-text'}`}>
-                {formatWeight(available)}
-              </span>{' '}
-              — availability is confirmed at approval, not now.
+          {estate && (
+            <p className="-mt-2 flex items-center gap-1.5 text-[13px] text-text-muted">
+              <RouteIcon className="size-3.5" aria-hidden />
+              {estate.selfDelivery ? (
+                <span className="text-warning-fg">
+                  This estate delivers its own tea, so no agent visits it — fertilizer can’t go out on a route stop yet.
+                </span>
+              ) : (
+                <>
+                  Delivered with the collection on <span className="font-medium text-text">{estate.route || 'its route'}</span>
+                </>
+              )}
             </p>
           )}
 
-          {/* Validated but not sent — the backend always stamps the request with "now"; there's
-              no field to backdate it to (the almost-always-true case is "logged today anyway"). */}
-          <Input label="Requested date" type="date" max={today} value={date} error={errors.date} onChange={(e) => setDate(e.target.value)} />
+          <fieldset className="flex flex-col gap-3">
+            <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-text-muted">Items</legend>
+            {lines.map((l) => {
+              const available = l.item && positions ? availableForItem(l.item, positions) : null
+              const err = errors.lines?.[l.key]
+              return (
+                <div key={l.key} className="rounded-[var(--radius-md)] border border-border p-3">
+                  <div className="grid gap-3 sm:grid-cols-[1fr_140px_auto]">
+                    <Select
+                      label="Item"
+                      placeholder="Select item"
+                      value={l.item}
+                      error={err?.item}
+                      onChange={(e) => setLine(l.key, { item: e.target.value })}
+                      options={items.map((i) => ({ value: i, label: i }))}
+                    />
+                    <Input
+                      label="Quantity (kg)"
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      value={l.quantity}
+                      error={err?.quantity}
+                      onChange={(e) => setLine(l.key, { quantity: e.target.value })}
+                      placeholder="200"
+                    />
+                    <div className="flex items-end">
+                      <Button
+                        variant="ghost"
+                        iconOnly
+                        aria-label="Remove this item"
+                        disabled={lines.length === 1}
+                        onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  {available !== null && (
+                    <p className="mt-2 text-[13px] text-text-muted">
+                      Available now:{' '}
+                      <span className={`tabular font-semibold ${available < 0 ? 'text-danger-fg' : 'text-text'}`}>
+                        {formatWeight(available)}
+                      </span>{' '}
+                      — stock is committed at approval, not now.
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+            <div>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={lines.length >= 10}
+                onClick={() => setLines((ls) => [...ls, { key: Math.max(...ls.map((x) => x.key)) + 1, item: '', quantity: '' }])}
+              >
+                <Plus className="size-4" /> Add another item
+              </Button>
+            </div>
+          </fieldset>
+
+          <Select
+            label="How the owner will pay"
+            placeholder="Choose a payment method"
+            value={method}
+            error={errors.method}
+            onChange={(e) => setMethod(e.target.value as PaymentMethod)}
+            options={(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((m) => ({
+              value: m,
+              label: PAYMENT_METHOD_LABEL[m],
+            }))}
+          />
 
           <Input
             label="Reason for logging outside the app"
@@ -165,19 +239,22 @@ export function LogRequestPage() {
             placeholder="e.g. Owner has no signal — phoned the factory"
           />
 
-          <Checkbox label="Notify the estate owner that this request was logged" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
-
           <p className="text-xs text-text-muted">
-            The request is recorded as <strong>Submitted</strong> and enters the approval queue — logging and approving
-            are separate steps.
+            Each item becomes its own request, recorded as <strong>Requested</strong> in the approval queue — logging and
+            approving are separate steps. The owner can change the payment method until delivery.
           </p>
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button variant="secondary" onClick={() => navigate('/fertilizer/requests')} disabled={logMutation.isPending}>
+            <Button variant="secondary" onClick={() => navigate('/fertilizer/requests')} disabled={createMutation.isPending}>
               Cancel
             </Button>
-            <Button size="lg" onClick={submit} loading={logMutation.isPending}>
-              Log Request
+            <Button
+              size="lg"
+              onClick={() => validate() && createMutation.mutate()}
+              loading={createMutation.isPending}
+              disabled={!!estate?.selfDelivery}
+            >
+              Log {lines.length > 1 ? `${lines.length} Requests` : 'Request'}
             </Button>
           </div>
         </div>

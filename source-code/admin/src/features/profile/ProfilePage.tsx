@@ -34,6 +34,8 @@ const MODULE_LABELS: Record<ModuleKey, string> = {
   dispatch: 'Agent Dispatch',
   grading: 'Grading',
   gradingApproval: 'Grading Corrections',
+  fertilizerApproval: 'Fertilizer Approval',
+  fertilizerManagerApproval: 'Fertilizer Approval (over limit)',
   administration: 'Administration',
 }
 

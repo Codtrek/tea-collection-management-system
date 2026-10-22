@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as fertilizerService from '@/services/fertilizer'
-import { batchStatus, daysToExpiry, remainderOf } from './lib'
+import { batchStatus, daysToExpiry } from './lib'
 import type { FertilizerBatch, FertilizerRequest } from './types'
 import { formatDate, formatNumber, formatWeight } from '@/lib/format'
 
@@ -20,12 +20,13 @@ import { formatDate, formatNumber, formatWeight } from '@/lib/format'
    Amended per addendum §8: each expiring batch shows whether it can cover open demand,
    and batches with NO matching demand (genuine write-off risk) sort to the top. */
 
-/** Open demand (submitted + approved-undispatched) for an item — the batch can help fulfil this. */
+/**
+ * Open demand for an item — requests awaiting a decision (their requested kg) plus stock already
+ * committed to approved requests (server-computed `committedKg`). The batch can help fulfil this.
+ */
 function openDemandFor(item: string, requests: FertilizerRequest[]): { count: number; kg: number } {
-  const open = requests.filter(
-    (r) => r.item === item && (r.status === 'Submitted' || r.status === 'Approved' || r.status === 'Partially Dispatched'),
-  )
-  const kg = open.reduce((sum, r) => sum + (r.status === 'Submitted' ? r.quantityKg : remainderOf(r)), 0)
+  const open = requests.filter((r) => r.item === item && (r.status === 'Requested' || r.committedKg > 0))
+  const kg = open.reduce((sum, r) => sum + (r.status === 'Requested' ? r.quantityKg : r.committedKg), 0)
   return { count: open.length, kg }
 }
 

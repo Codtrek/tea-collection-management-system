@@ -24,13 +24,7 @@ export function batchStatus(batch: FertilizerBatch): BatchStatus {
   return 'Fresh'
 }
 
-const isCommitting = (r: FertilizerRequest) => r.status === 'Approved' || r.status === 'Partially Dispatched'
 const isLiveBatch = (item: string) => (b: FertilizerBatch) => b.item === item && batchStatus(b) !== 'Expired' && batchStatus(b) !== 'Discarded'
-
-/** Undispatched remainder of an approved request. */
-export function remainderOf(r: FertilizerRequest): number {
-  return (r.approvedQtyKg ?? r.quantityKg) - (r.dispatchedQtyKg ?? 0)
-}
 
 /** Looks up the server-computed `available` figure for an item — never recomputed client-side. */
 export function availableForItem(item: string, positions: ItemPosition[]): number {
@@ -46,7 +40,7 @@ export function requestAvailability(
   batches: FertilizerBatch[],
 ): RequestAvailability {
   const available = availableForItem(req.item, positions)
-  const want = req.status === 'Submitted' ? req.quantityKg : remainderOf(req)
+  const want = req.quantityKg
   if (available <= 0) return 'none'
   if (available < want) return 'partial'
   const leansOnExpiring = batches.some(
@@ -73,24 +67,22 @@ export function fefoAllocation(
   return out
 }
 
-/** Submitted requests awaiting a decision, oldest first (FERT-05 default order). */
+/** Requests awaiting the Officer's decision, oldest first (FERT-05 default order). */
 export function pendingRequests(requests: FertilizerRequest[]): FertilizerRequest[] {
-  return requests.filter((r) => r.status === 'Submitted').sort((a, b) => a.requestedDate.localeCompare(b.requestedDate))
+  return requests.filter((r) => r.status === 'Requested').sort((a, b) => a.requestedDate.localeCompare(b.requestedDate))
 }
 
-/** Approved requests still awaiting dispatch — the FERT-02 "linked request" options. */
-export function dispatchableRequests(requests: FertilizerRequest[]): FertilizerRequest[] {
-  return requests.filter((r) => isCommitting(r) && remainderOf(r) > 0)
-}
-
-/** Mock settlement rate used to value committed stock (Rs/kg) for the FERT-01 card. */
-export const RATE_PER_KG = 120
-
-/** Committed kg / value / count for the FERT-01 "awaiting dispatch" card. */
+/**
+ * Committed kg / value / count for the FERT-01 "awaiting dispatch" card. Reads the
+ * server-computed `committedKg` and the approval-time `ratePerKg` — nothing recomputed.
+ */
 export function committedSummary(requests: FertilizerRequest[]): { kg: number; valueRs: number; count: number } {
-  const committed = requests.filter(isCommitting)
-  const kg = committed.reduce((sum, r) => sum + remainderOf(r), 0)
-  return { kg, valueRs: kg * RATE_PER_KG, count: committed.length }
+  const committed = requests.filter((r) => r.committedKg > 0)
+  return {
+    kg: committed.reduce((sum, r) => sum + r.committedKg, 0),
+    valueRs: committed.reduce((sum, r) => sum + r.committedKg * (r.ratePerKg ?? 0), 0),
+    count: committed.length,
+  }
 }
 
 /** Items whose available stock cannot meet their pending demand (FERT-01 card 1). */

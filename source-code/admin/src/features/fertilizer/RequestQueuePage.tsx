@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PhoneCall, Check, X, Eye, CheckCheck, Loader2 } from 'lucide-react'
+import { PhoneCall, Check, X, Eye, CheckCheck, Loader2, AlertTriangle } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Tabs } from '@/components/ui/Tabs'
 import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
@@ -15,24 +15,59 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as fertilizerService from '@/services/fertilizer'
 import { availableForItem, requestAvailability } from './lib'
-import { REQUEST_TONE } from './status'
+import { PAYMENT_METHOD_LABEL, PAYMENT_TONE, REQUEST_TONE } from './status'
 import type { FertilizerBatch, FertilizerRequest, ItemPosition, RequestStatus } from './types'
-import { formatDate, formatWeight } from '@/lib/format'
+import { formatCurrency, formatDate, formatWeight } from '@/lib/format'
 
-/* FERT-05 — the approval work queue where an estate owner's request lands (addendum §6). */
+/*
+  FERT-05 — the fertilizer work queue (Fertilizer-Delivery-Addendum §10): requests to decide,
+  approved stock waiting for its route stop, deliveries in play, the ones that need a decision
+  after repeated failures, and the closed ones. Shows each request's attempt, delivery date and
+  agent, payment method and payment status.
+*/
 
 const TABS = [
-  { id: 'pending', label: 'Pending' },
+  { id: 'decide', label: 'To decide' },
   { id: 'approved', label: 'Approved' },
-  { id: 'dispatched', label: 'Dispatched' },
+  { id: 'delivery', label: 'In delivery' },
+  { id: 'review', label: 'Needs review' },
+  { id: 'closed', label: 'Closed' },
   { id: 'all', label: 'All' },
 ]
 
+const ALL_STATUSES: RequestStatus[] = [
+  'Requested',
+  'Awaiting manager approval',
+  'Approved',
+  'Partially approved',
+  'Ready for dispatch',
+  'Picked up',
+  'Out for delivery',
+  'Partially delivered',
+  'Failed',
+  'Returned to factory',
+  'Rescheduled',
+  'Needs review',
+  'Delivered',
+  'Rejected',
+  'Cancelled',
+]
+
 const TAB_STATUSES: Record<string, RequestStatus[]> = {
-  pending: ['Submitted'],
-  approved: ['Approved', 'Partially Dispatched'],
-  dispatched: ['Dispatched', 'Deducted'],
-  all: ['Submitted', 'Approved', 'Partially Dispatched', 'Dispatched', 'Deducted', 'Rejected', 'Cancelled'],
+  decide: ['Requested', 'Awaiting manager approval'],
+  approved: ['Approved', 'Partially approved'],
+  delivery: [
+    'Ready for dispatch',
+    'Picked up',
+    'Out for delivery',
+    'Partially delivered',
+    'Failed',
+    'Returned to factory',
+    'Rescheduled',
+  ],
+  review: ['Needs review'],
+  closed: ['Delivered', 'Rejected', 'Cancelled'],
+  all: ALL_STATUSES,
 }
 
 export function RequestQueuePage() {
@@ -40,11 +75,13 @@ export function RequestQueuePage() {
   const { toast } = useToast()
   const { can } = useAuth()
   const queryClient = useQueryClient()
-  const canApprove = can('fertilizer', 'approve')
+  // data-driven: the Officer's approval is its own permission key (the Administrator audits)
+  const canApprove = can('fertilizerApproval', 'approve')
 
-  const [tab, setTab] = useState('pending')
+  const [tab, setTab] = useState('decide')
   const [search, setSearch] = useState('')
   const [origin, setOrigin] = useState('')
+  const [status, setStatus] = useState('')
   const [selected, setSelected] = useState<string[]>([])
 
   const {
@@ -84,14 +121,18 @@ export function RequestQueuePage() {
       .filter(
         (r) =>
           allowed.includes(r.status) &&
+          (!status || r.status === status) &&
           (!origin || r.origin === origin) &&
-          (r.estateName.toLowerCase().includes(q) || r.item.toLowerCase().includes(q) || r.id.toLowerCase().includes(q)),
+          (r.estateName.toLowerCase().includes(q) ||
+            r.item.toLowerCase().includes(q) ||
+            r.id.toLowerCase().includes(q) ||
+            (r.orderRef ?? '').toLowerCase().includes(q)),
       )
       .sort((a, b) =>
-        // oldest first while pending (waiting longest = decide first); newest first elsewhere
-        tab === 'pending' ? a.requestedDate.localeCompare(b.requestedDate) : b.requestedDate.localeCompare(a.requestedDate),
+        // oldest first while deciding (waiting longest = decide first); newest first elsewhere
+        tab === 'decide' ? a.requestedDate.localeCompare(b.requestedDate) : b.requestedDate.localeCompare(a.requestedDate),
       )
-  }, [requests, tab, search, origin])
+  }, [requests, tab, search, origin, status])
 
   if (requestsPending || positionsPending || batchesPending) {
     return (
@@ -125,7 +166,7 @@ export function RequestQueuePage() {
     let skipped = 0
     for (const id of selected) {
       const req = requests.find((r) => r.id === id)
-      if (!req || req.status !== 'Submitted') continue
+      if (!req || req.status !== 'Requested') continue
       if (pool[req.item] === undefined) pool[req.item] = availableForItem(req.item, positions)
       if (pool[req.item] >= req.quantityKg) {
         pool[req.item] -= req.quantityKg
@@ -148,20 +189,73 @@ export function RequestQueuePage() {
       render: (r) => (
         <div>
           <p className="font-medium text-text">{r.estateName}</p>
-          <p className="id text-xs text-text-muted">{r.id}</p>
+          <p className="id text-xs text-text-muted">
+            {r.id}
+            {r.orderRef && <span> · order {r.orderRef}</span>}
+          </p>
         </div>
       ),
     },
     { key: 'item', header: 'Item' },
-    { key: 'quantityKg', header: 'Quantity', align: 'right', render: (r) => formatWeight(r.quantityKg) },
-    { key: 'requestedDate', header: 'Requested', render: (r) => formatDate(r.requestedDate) },
-    { key: 'availability', header: 'Availability', render: (r) => <AvailabilityCell req={r} positions={positions} batches={batches} /> },
     {
-      key: 'origin',
-      header: 'Origin',
-      render: (r) => <span className="text-xs capitalize text-text-muted">{r.origin}</span>,
+      key: 'quantityKg',
+      header: 'Quantity',
+      align: 'right',
+      render: (r) => (
+        <div>
+          <p className="tabular">{formatWeight(r.quantityKg)}</p>
+          {r.approvedQtyKg !== undefined && r.approvedQtyKg !== r.quantityKg && (
+            <p className="tabular text-xs text-text-muted">{formatWeight(r.approvedQtyKg)} approved</p>
+          )}
+        </div>
+      ),
     },
-    { key: 'status', header: 'Status', render: (r) => <StatusBadge tone={REQUEST_TONE[r.status]}>{r.status}</StatusBadge> },
+    {
+      key: 'progress',
+      header: 'Stock / delivery',
+      render: (r) =>
+        r.status === 'Requested' ? (
+          <AvailabilityCell req={r} positions={positions} batches={batches} />
+        ) : r.attempt && !r.attempt.cancelled && r.attemptLabel ? (
+          <div className="text-xs">
+            <p className="font-medium text-text">{r.attemptLabel}</p>
+            <p className="text-text-muted">
+              {formatDate(r.attempt.scheduledDate)} · {r.attempt.routeName}
+              {r.attempt.agentName ? ` · ${r.attempt.agentName}` : ' · no agent yet'}
+              {r.attempt.covering ? ' (cover)' : ''}
+            </p>
+          </div>
+        ) : (
+          <span className="text-xs text-text-muted">Requested {formatDate(r.requestedDate)}</span>
+        ),
+    },
+    {
+      key: 'payment',
+      header: 'Payment',
+      render: (r) => (
+        <div className="flex flex-col items-start gap-1">
+          <span className="text-xs text-text-muted">{PAYMENT_METHOD_LABEL[r.payment.method]}</span>
+          <StatusBadge tone={PAYMENT_TONE[r.payment.status]}>
+            {r.payment.status}
+            {r.payment.outstandingRs > 0 ? ` · ${formatCurrency(r.payment.outstandingRs)}` : ''}
+          </StatusBadge>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (r) => (
+        <div className="flex flex-col items-start gap-1">
+          <StatusBadge tone={REQUEST_TONE[r.status]}>{r.status}</StatusBadge>
+          {r.pickupMismatch && (
+            <span className="flex items-center gap-1 text-xs text-warning-fg">
+              <AlertTriangle className="size-3" aria-hidden /> Pickup qty differs
+            </span>
+          )}
+        </div>
+      ),
+    },
   ]
 
   return (
@@ -182,10 +276,25 @@ export function RequestQueuePage() {
         }
       />
 
-      <Tabs tabs={TABS} active={tab} onChange={(t) => { setTab(t); setSelected([]) }} className="mb-4" />
+      <Tabs
+        tabs={TABS}
+        active={tab}
+        onChange={(t) => {
+          setTab(t)
+          setStatus('')
+          setSelected([])
+        }}
+        className="mb-4"
+      />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px]">
-        <Input placeholder="Search estate, item, or request ID…" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_220px_180px]">
+        <Input placeholder="Search estate, item, request or order ID…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Select
+          placeholder="All statuses"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          options={TAB_STATUSES[tab].map((st) => ({ value: st, label: st }))}
+        />
         <Select
           placeholder="All origins"
           value={origin}
@@ -197,7 +306,7 @@ export function RequestQueuePage() {
         />
       </div>
 
-      {canApprove && tab === 'pending' && selected.length > 0 && (
+      {canApprove && tab === 'decide' && selected.length > 0 && (
         <div className="mb-3 flex items-center justify-between rounded-[var(--radius-md)] border border-border bg-surface px-4 py-2.5">
           <span className="text-sm text-text-muted">{selected.length} selected</span>
           <Button size="sm" onClick={bulkApprove} loading={bulkApproveMutation.isPending}>
@@ -210,20 +319,20 @@ export function RequestQueuePage() {
         columns={columns}
         rows={rows}
         rowKey={(r) => r.id}
-        selectable={canApprove && tab === 'pending'}
+        selectable={canApprove && tab === 'decide'}
         onSelectionChange={setSelected}
         onRowClick={(r) => navigate(`/fertilizer/requests/${r.id}`)}
         emptyState={
           <EmptyState
             icon={<Check className="size-6" strokeWidth={1.5} />}
-            title="No pending fertilizer requests"
-            description="Requests submitted by estate owners appear here for approval."
+            title="Nothing here"
+            description="Requests logged for estate owners appear here as they move through approval and delivery."
           />
         }
         actions={(r) => (
           <>
             <RowAction icon={<Eye className="size-4" />} label="View" onClick={() => navigate(`/fertilizer/requests/${r.id}`)} />
-            {canApprove && r.status === 'Submitted' && (
+            {canApprove && r.status === 'Requested' && (
               <>
                 <RowAction icon={<Check className="size-4" />} label="Approve" onClick={() => navigate(`/fertilizer/requests/${r.id}`)} />
                 <RowAction icon={<X className="size-4" />} label="Reject" tone="danger" onClick={() => navigate(`/fertilizer/requests/${r.id}`)} />
@@ -246,7 +355,7 @@ function AvailabilityCell({
   batches: FertilizerBatch[]
 }) {
   const verdict = requestAvailability(req, positions, batches)
-  const want = req.status === 'Submitted' ? req.quantityKg : (req.approvedQtyKg ?? req.quantityKg)
+  const want = req.quantityKg
   const available = availableForItem(req.item, positions)
 
   const map = {
