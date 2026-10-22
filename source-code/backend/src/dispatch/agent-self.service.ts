@@ -31,6 +31,7 @@ import { RouteAssignmentEntity } from './route-assignment.entity';
 import { RouteLoadService } from './route-load.service';
 import { RouteResolverService } from './route-resolver.service';
 import { RouteScheduleService } from './route-schedule.service';
+import { AgentTaskHooks, type ExtraStopTask } from './agent-task-hooks.service';
 
 export interface PingInput {
   /** device clock, ISO — when the fix was taken */
@@ -75,6 +76,7 @@ export class AgentSelfService {
     private readonly notifier: DispatchNotifier,
     private readonly audit: AuditService,
     private readonly schedule: RouteScheduleService,
+    private readonly hooks: AgentTaskHooks,
   ) {}
 
   /** The calling agent, from the JWT's user id. */
@@ -120,6 +122,8 @@ export class AgentSelfService {
       shiftStartedAt: now,
       shiftEndedAt: null,
     });
+    // starting the shift = starting the route: picked-up fertilizer goes "Out for delivery"
+    await this.hooks.shiftStarted(agent.agentId, date, now);
     return shiftState(saved);
   }
 
@@ -395,12 +399,17 @@ export class AgentSelfService {
     );
     const stops: {
       id: string;
+      estateId: number | null;
       routeId: number;
       routeName: string;
       covering: boolean;
       estateName: string;
-      estateWeightKg: number;
+      /** null on a stop that is only there for a fertilizer delivery */
+      estateWeightKg: number | null;
       status: string;
+      hasTeaPickup: boolean;
+      /** fertilizer to deliver at this stop (Fertilizer-Delivery-Addendum §6) */
+      fertilizer: ExtraStopTask[];
     }[] = [];
     for (const r of mine) {
       const rows = (
@@ -409,14 +418,47 @@ export class AgentSelfService {
       for (const x of rows) {
         stops.push({
           id: x.id,
+          estateId: x.estateId,
           routeId: r.id,
           routeName: r.name ?? `Route ${r.id}`,
           covering: resolved.get(r.id)?.covering ?? false,
           estateName: x.estateName,
           estateWeightKg: Number(x.weightKg),
           status: x.status,
+          hasTeaPickup: true,
+          fertilizer: [],
         });
       }
+    }
+    // Fertilizer rides on the same stop (estate + date); an estate with no tea pickup today
+    // still gets a stop of its own.
+    for (const task of await this.hooks.extraStops(agent.agentId, date, now)) {
+      const stop = stops.find(
+        (st) => st.estateId === task.estateId && st.hasTeaPickup,
+      );
+      if (stop) {
+        stop.fertilizer.push(task);
+        continue;
+      }
+      const own = stops.find(
+        (st) => st.estateId === task.estateId && !st.hasTeaPickup,
+      );
+      if (own) {
+        own.fertilizer.push(task);
+        continue;
+      }
+      stops.push({
+        id: `FERT-${task.estateId}-${date}`,
+        estateId: task.estateId,
+        routeId: task.routeId,
+        routeName: task.routeName,
+        covering: task.covering,
+        estateName: task.estateName,
+        estateWeightKg: null,
+        status: 'fertilizer_only',
+        hasTeaPickup: false,
+        fertilizer: [task],
+      });
     }
     return {
       date,

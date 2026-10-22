@@ -1,4 +1,10 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import type { PaymentMethod } from './fertilizer-map';
 
 /**
  * Estate Owner Lifetime History slice — one row per *dispatch event*, written
@@ -17,8 +23,17 @@ export class FertilizerChargeEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'stock_movement_id' })
-  stockMovementId: number;
+  /** the FERT-02 dispatch that billed it (legacy / ad-hoc); null for a route-stop delivery */
+  @Column({ name: 'stock_movement_id', type: 'int', nullable: true })
+  stockMovementId: number | null;
+
+  /** the delivery attempt that billed it (Fertilizer-Delivery-Addendum: charged at delivery) */
+  @Column({ name: 'delivery_id', type: 'int', nullable: true })
+  deliveryId: number | null;
+
+  /** the request's payment method at delivery; null on legacy rows (= deduct) */
+  @Column({ name: 'payment_method', type: 'varchar', nullable: true })
+  paymentMethod: PaymentMethod | null;
 
   /** Null when the dispatch isn't billable to an estate (e.g. internal use). */
   @Column({ name: 'estate_id', type: 'int', nullable: true })

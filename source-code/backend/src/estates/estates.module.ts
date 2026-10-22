@@ -4,6 +4,7 @@ import { AuditLogEntity } from '../audit/audit-log.entity';
 import { AuditModule } from '../audit/audit.module';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { SettlementAdjustmentEntity } from '../collections/settlement-adjustment.entity';
+import { FertilizerPaymentEntity } from '../fertilizer/fertilizer-payment.entity';
 import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
 import { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
 import { FertilizerRequestEntity } from '../fertilizer/fertilizer-request.entity';
@@ -39,6 +40,7 @@ import { SettlementEntity } from './settlement.entity';
       FertilizerChargeEntity,
       StockMovementEntity,
       FertilizerBatchEntity,
+      FertilizerPaymentEntity,
       AuditLogEntity,
     ]),
     UsersModule,

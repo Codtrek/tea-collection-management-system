@@ -19,6 +19,7 @@ import { AgentHistoryService } from './agent-history.service';
 import { AgentProvisioningService } from './agent-provisioning.service';
 import { AgentLocationPingEntity } from './agent-location-ping.entity';
 import { AgentSelfService } from './agent-self.service';
+import { AgentTaskHooks } from './agent-task-hooks.service';
 import { CandidateRankingService } from './candidate-ranking.service';
 import { CollectionAgentEntity } from './collection-agent.entity';
 import { DevicePushTokenEntity } from './device-push-token.entity';
@@ -83,6 +84,7 @@ import { RouteScheduleService } from './route-schedule.service';
     PositionCacheService,
     DispatchService,
     AgentSelfService,
+    AgentTaskHooks,
     DispatchTasks,
   ],
   exports: [
@@ -94,6 +96,8 @@ import { RouteScheduleService } from './route-schedule.service';
     DispatchAccessService,
     DispatchNotifier,
     RouteLoadService,
+    AgentSelfService,
+    AgentTaskHooks,
   ],
 })
 export class DispatchModule {}

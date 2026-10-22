@@ -4,10 +4,14 @@ import {
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import type { DbRequestOrigin, DbRequestStatus } from './fertilizer-map';
+import type {
+  DbRequestOrigin,
+  DbRequestStatus,
+  PaymentMethod,
+} from './fertilizer-map';
 
 /**
- * FERT-05..08. Extends the pre-existing `fertilizer_requests` table (created
+ * FERT-05..08 + Fertilizer-Delivery-Addendum. Extends the pre-existing `fertilizer_requests` table (created
  * for a dual owner/factory approval flow that the portal never built) with
  * the columns the portal's `FertilizerRequest` contract actually needs.
  * `ownerStatus`/`factoryStatus` stay mapped but unused by this slice — see
@@ -70,6 +74,58 @@ export class FertilizerRequestEntity {
 
   @Column({ name: 'decided_on', type: 'timestamp', nullable: true })
   decidedOn: Date | null;
+
+  /* ── Fertilizer-Delivery-Addendum ── */
+
+  /** shared by the requests one order produced (one per item) */
+  @Column({ name: 'order_ref', type: 'varchar', nullable: true })
+  orderRef: string | null;
+
+  /** the estate's route, auto-filled (each estate belongs to exactly one route) */
+  @Column({ name: 'route_id', type: 'int', nullable: true })
+  routeId: number | null;
+
+  @Column({ name: 'payment_method', type: 'varchar', default: 'deduct' })
+  paymentMethod: PaymentMethod;
+
+  /** why a partial approval or a rejection — shown to the owner */
+  @Column({ name: 'decision_reason', type: 'text', nullable: true })
+  decisionReason: string | null;
+
+  /** Rs./kg snapshotted at approval — never recalculated from the current price */
+  @Column({
+    name: 'rate_per_kg',
+    type: 'decimal',
+    precision: 8,
+    scale: 2,
+    nullable: true,
+  })
+  ratePerKg: string | null;
+
+  @Column({ name: 'price_id', type: 'int', nullable: true })
+  priceId: number | null;
+
+  @Column({
+    name: 'delivered_qty_kg',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  deliveredQtyKg: string;
+
+  /** failed attempts since the last review — Needs review at system_settings.fertilizer.maxDeliveryAttempts */
+  @Column({ name: 'cycle_failures', type: 'int', default: 0 })
+  cycleFailures: number;
+
+  @Column({ name: 'manager_decided_by', type: 'varchar', nullable: true })
+  managerDecidedBy: string | null;
+
+  @Column({ name: 'manager_decided_on', type: 'timestamp', nullable: true })
+  managerDecidedOn: Date | null;
+
+  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  updatedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

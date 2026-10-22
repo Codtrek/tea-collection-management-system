@@ -1568,6 +1568,10 @@ interface SeedBatch {
   discarded?: boolean;
 }
 
+/** 'YYYY-MM-DD', `days` from the day the seed runs — keeps a few lots live whenever it's run. */
+const seedDaysFromNow = (days: number): string =>
+  new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+
 const BATCH_SEEDS: SeedBatch[] = [
   {
     item: 'Urea Fertilizer',
@@ -1680,6 +1684,53 @@ const BATCH_SEEDS: SeedBatch[] = [
     lotNumber: 'LOT-HIST-0001',
     qualityNotes: 'Historical placeholder for pre-2026 dispatch records.',
   },
+  // Fertilizer-Delivery-Addendum: fresh lots with expiries relative to the seed day, so the
+  // request → approval → delivery flow always has live stock to commit (the fixed-date lots
+  // above age out over time — that is still the FEFO / expiry showcase).
+  {
+    item: 'Urea Fertilizer',
+    category: 'Fertilizer',
+    quantityKg: 800,
+    unit: 'kg',
+    receivedDate: '2026-10-01',
+    expiryDate: seedDaysFromNow(270),
+    location: 'Warehouse A',
+    supplier: 'CIC Agri Businesses',
+    lotNumber: 'LOT-U-4520',
+  },
+  {
+    item: 'TSP',
+    category: 'Fertilizer',
+    quantityKg: 600,
+    unit: 'kg',
+    receivedDate: '2026-10-01',
+    expiryDate: seedDaysFromNow(240),
+    location: 'Warehouse A',
+    supplier: 'Hayleys Agriculture',
+    lotNumber: 'LOT-T-2290',
+  },
+  {
+    item: 'Muriate of Potash',
+    category: 'Fertilizer',
+    quantityKg: 500,
+    unit: 'kg',
+    receivedDate: '2026-10-01',
+    expiryDate: seedDaysFromNow(300),
+    location: 'Warehouse B',
+    supplier: 'CIC Agri Businesses',
+    lotNumber: 'LOT-M-3390',
+  },
+  {
+    item: 'Dolomite',
+    category: 'Fertilizer',
+    quantityKg: 400,
+    unit: 'kg',
+    receivedDate: '2026-10-01',
+    expiryDate: seedDaysFromNow(200),
+    location: 'Warehouse B',
+    supplier: 'Lanka Minerals',
+    lotNumber: 'LOT-D-0990',
+  },
 ];
 
 interface SeedFertilizerRequest {
@@ -1687,19 +1738,64 @@ interface SeedFertilizerRequest {
   item: string;
   quantityKg: number;
   origin: 'mobile' | 'web';
-  status:
-    | 'Submitted'
-    | 'Approved'
-    | 'Partially Dispatched'
-    | 'Dispatched'
-    | 'Deducted'
-    | 'Rejected'
-    | 'Cancelled';
+  /** Fertilizer-Delivery-Addendum statuses (seeded only on insert — never reset afterwards). */
+  status: 'Requested' | 'Approved' | 'Delivered' | 'Rejected';
   reason?: string;
   approvedQtyKg?: number;
   dispatchedQtyKg?: number;
   decidedBy?: string;
+  paymentMethod?: 'deduct' | 'cash' | 'bank';
 }
+
+/** Same FEFO rule as `FertilizerStockLedger.allocate` and the migration's legacy backfill. */
+const SEED_FEFO_BACKFILL_SQL = `
+DO $$
+DECLARE r RECORD; b RECORD; need NUMERIC; take NUMERIC; price RECORD;
+BEGIN
+  FOR r IN
+    SELECT fr.* FROM fertilizer_requests fr
+     WHERE fr.status = 'Approved'
+       AND NOT EXISTS (SELECT 1 FROM fertilizer_allocations a WHERE a.request_id = fr.id)
+     ORDER BY fr.created_at, fr.id
+  LOOP
+    need := COALESCE(r.approved_qty_kg, r.quantity_kg) - r.delivered_qty_kg;
+    FOR b IN
+      SELECT fb.id,
+             fb.quantity_kg - COALESCE((SELECT SUM(a.qty_kg) FROM fertilizer_allocations a
+                                         WHERE a.batch_id = fb.id AND a.state = 'active'), 0) AS free
+        FROM fertilizer_batches fb
+       WHERE fb.item = r.item AND NOT fb.discarded AND fb.expiry_date >= CURRENT_DATE
+       ORDER BY fb.expiry_date, fb.id
+    LOOP
+      EXIT WHEN need <= 0;
+      take := LEAST(need, b.free);
+      IF take > 0 THEN
+        INSERT INTO fertilizer_allocations (request_id, batch_id, qty_kg) VALUES (r.id, b.id, take);
+        need := need - take;
+      END IF;
+    END LOOP;
+    SELECT id, rate_per_kg INTO price FROM fertilizer_item_prices
+     WHERE item = r.item AND effective_date <= CURRENT_DATE
+     ORDER BY effective_date DESC, id DESC LIMIT 1;
+    UPDATE fertilizer_requests SET rate_per_kg = price.rate_per_kg, price_id = price.id
+     WHERE id = r.id AND rate_per_kg IS NULL;
+    IF need > 0 THEN
+      UPDATE fertilizer_requests SET status = 'Needs review', updated_at = NOW() WHERE id = r.id;
+      INSERT INTO fertilizer_request_events (request_id, actor, actor_role, action, from_status, to_status, note)
+      VALUES (r.id, 'seed', 'System', 'Moved to review', 'Approved', 'Needs review',
+              'Not enough live stock to commit (' || need || ' kg short)');
+    END IF;
+  END LOOP;
+END $$;`;
+
+/* Fertilizer prices (Rs./kg) — none existed before the delivery flow. Effective 2026-01-01. */
+const FERTILIZER_PRICE_SEEDS: { item: string; ratePerKg: number }[] = [
+  { item: 'Urea Fertilizer', ratePerKg: 90 },
+  { item: 'TSP', ratePerKg: 85 },
+  { item: 'Muriate of Potash', ratePerKg: 95 },
+  { item: 'Dolomite', ratePerKg: 40 },
+  { item: 'Rice', ratePerKg: 210 },
+];
 
 // `quantityKg` is unique per (estate, item) below, so that triple doubles as
 // this fixture's natural key for idempotent re-seeding (fertilizer_requests
@@ -1755,15 +1851,16 @@ const FERTILIZER_REQUEST_SEEDS: SeedFertilizerRequest[] = [
     item: 'Urea Fertilizer',
     quantityKg: 300,
     origin: 'mobile',
-    status: 'Submitted',
+    status: 'Requested',
     reason: 'Top dressing for the new flush.',
+    paymentMethod: 'cash',
   },
   {
     estateName: 'Hilltop Estate',
     item: 'TSP',
     quantityKg: 200,
     origin: 'mobile',
-    status: 'Submitted',
+    status: 'Requested',
     reason: 'Base fertiliser, lower field.',
   },
   {
@@ -1771,15 +1868,16 @@ const FERTILIZER_REQUEST_SEEDS: SeedFertilizerRequest[] = [
     item: 'Muriate of Potash',
     quantityKg: 400,
     origin: 'web',
-    status: 'Submitted',
+    status: 'Requested',
     reason: 'Phoned in — potassium deficiency flagged by manager.',
+    paymentMethod: 'bank',
   },
   {
     estateName: 'Silver Peak Estate',
     item: 'Rice',
     quantityKg: 100,
     origin: 'mobile',
-    status: 'Submitted',
+    status: 'Requested',
     reason: 'Monthly beneficiary ration.',
   },
   {
@@ -1787,7 +1885,7 @@ const FERTILIZER_REQUEST_SEEDS: SeedFertilizerRequest[] = [
     item: 'Urea Fertilizer',
     quantityKg: 120,
     origin: 'mobile',
-    status: 'Dispatched',
+    status: 'Delivered',
     approvedQtyKg: 120,
     dispatchedQtyKg: 120,
     decidedBy: 'A. Bandara',
@@ -2006,6 +2104,7 @@ const PERMISSION_MATRIX: Record<
     employees: 'approve', attendance: 'approve', performance: 'approve',
     reports: 'approve', administration: 'approve', dispatch: 'approve',
     grading: 'view', gradingApproval: 'view',
+    fertilizerApproval: 'view', fertilizerManagerApproval: 'view',
   },
   Officer: {
     dashboard: 'view', collection: 'edit', fertilizer: 'edit',
@@ -2013,6 +2112,7 @@ const PERMISSION_MATRIX: Record<
     employees: 'view', attendance: 'edit', performance: 'view',
     reports: 'edit', administration: 'none', dispatch: 'edit',
     grading: 'edit', gradingApproval: 'view',
+    fertilizerApproval: 'approve', fertilizerManagerApproval: 'view',
   },
   Manager: {
     dashboard: 'view', collection: 'view', fertilizer: 'view',
@@ -2020,6 +2120,7 @@ const PERMISSION_MATRIX: Record<
     employees: 'view', attendance: 'view', performance: 'approve',
     reports: 'view', administration: 'none', dispatch: 'approve',
     grading: 'view', gradingApproval: 'approve',
+    fertilizerApproval: 'view', fertilizerManagerApproval: 'approve',
   },
 };
 
@@ -2855,11 +2956,7 @@ async function seed() {
       const ownerId = estateOwnerIds[r.estateName];
       const approvedQtyKg =
         r.approvedQtyKg ??
-        (r.status === 'Approved' ||
-        r.status === 'Dispatched' ||
-        r.status === 'Partially Dispatched'
-          ? r.quantityKg
-          : null);
+        (r.status === 'Approved' || r.status === 'Delivered' ? r.quantityKg : null);
 
       const requestId = await findOrCreate(
         client,
@@ -2867,8 +2964,10 @@ async function seed() {
         [estateId, r.item, r.quantityKg],
         `INSERT INTO fertilizer_requests
            (estate_id, owner_id, item, quantity_kg, justification, origin, status,
-            approved_qty_kg, dispatched_qty_kg, decided_by, decided_on)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+            approved_qty_kg, dispatched_qty_kg, decided_by, decided_on,
+            route_id, payment_method, delivered_qty_kg)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+                 (SELECT route_id FROM estates WHERE id = $1), $12, $13)
          RETURNING id`,
         [
           estateId,
@@ -2882,24 +2981,73 @@ async function seed() {
           r.dispatchedQtyKg ?? 0,
           r.decidedBy ?? null,
           r.decidedBy ? new Date() : null,
+          r.paymentMethod ?? 'deduct',
+          r.status === 'Delivered' ? (r.dispatchedQtyKg ?? 0) : 0,
         ],
       );
       requestIds[requestKey(r.estateName, r.item, r.quantityKg)] = requestId;
 
+      // Status / quantities are seeded on insert only: re-seeding must never rewind a request
+      // the delivery flow has moved on (its allocations, attempts and charges would disagree).
       await client.query(
-        `UPDATE fertilizer_requests SET
-           justification = $2, origin = $3, status = $4, approved_qty_kg = $5,
-           dispatched_qty_kg = $6, decided_by = $7
-         WHERE id = $1`,
-        [
-          requestId,
-          r.reason ?? null,
-          r.origin,
-          r.status,
-          approvedQtyKg,
-          r.dispatchedQtyKg ?? 0,
-          r.decidedBy ?? null,
-        ],
+        `UPDATE fertilizer_requests SET justification = $2, origin = $3 WHERE id = $1`,
+        [requestId, r.reason ?? null, r.origin],
+      );
+    }
+
+    for (const p of FERTILIZER_PRICE_SEEDS) {
+      await client.query(
+        `INSERT INTO fertilizer_item_prices (item, rate_per_kg, effective_date, set_by)
+         VALUES ($1, $2, '2026-01-01', 'seed')
+         ON CONFLICT (item, effective_date) DO NOTHING`,
+        [p.item, p.ratePerKg],
+      );
+    }
+
+    // Approved requests with nothing committed yet: FEFO-allocate from live stock and snapshot
+    // the price — exactly what approving one does. Anything live stock can't cover goes to
+    // Needs review (same rule as the migration's legacy backfill).
+    await client.query(SEED_FEFO_BACKFILL_SQL);
+
+    // One request already on today's route stop, so the handover → agent → delivery flow can be
+    // tried straight away (Green Valley's route runs on the seed day — see ROUTE_SCHEDULE_SEEDS).
+    const demo = requestIds[requestKey('Green Valley Estate', 'Urea Fertilizer', 400)];
+    const demoState = await client.query<{ status: string }>(
+      `SELECT status FROM fertilizer_requests WHERE id = $1`,
+      [demo],
+    );
+    const hasAttempt = await client.query(
+      `SELECT 1 FROM fertilizer_deliveries WHERE request_id = $1`,
+      [demo],
+    );
+    if (demoState.rows[0]?.status === 'Approved' && hasAttempt.rowCount === 0) {
+      const today = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Colombo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+      await client.query(
+        `INSERT INTO fertilizer_deliveries (request_id, attempt_no, estate_id, route_id, scheduled_date)
+         SELECT r.id, 1, r.estate_id, e.route_id, $2 FROM fertilizer_requests r
+           JOIN estates e ON e.id = r.estate_id WHERE r.id = $1`,
+        [demo, today],
+      );
+      // markReady prices a legacy approval at dispatch; do the same here.
+      await client.query(
+        `UPDATE fertilizer_requests r SET status = 'Ready for dispatch', updated_at = NOW(),
+                rate_per_kg = COALESCE(r.rate_per_kg, p.rate_per_kg),
+                price_id = COALESCE(r.price_id, p.id)
+           FROM (SELECT id, rate_per_kg FROM fertilizer_item_prices
+                  WHERE item = 'Urea Fertilizer' AND effective_date <= CURRENT_DATE
+                  ORDER BY effective_date DESC, id DESC LIMIT 1) p
+          WHERE r.id = $1`,
+        [demo],
+      );
+      await client.query(
+        `INSERT INTO fertilizer_request_events (request_id, actor, actor_role, action, from_status, to_status, note)
+         VALUES ($1, 'seed', 'System', 'Ready for dispatch', 'Approved', 'Ready for dispatch', $2)`,
+        [demo, `On today's stop (${today}) — record the handover on FERT-06 to send it out`],
       );
     }
     console.log(

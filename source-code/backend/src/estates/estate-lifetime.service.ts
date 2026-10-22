@@ -5,8 +5,10 @@ import { AuditLogEntity } from '../audit/audit-log.entity';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { gradeKg, toAppStatus, weightSummary, type PublicCollection } from '../collections/collection-map';
 import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
+import { fertilizerOutstanding } from '../fertilizer/fertilizer-balance';
 import { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
 import { formatBatchId, formatChargeId, formatRequestId } from '../fertilizer/fertilizer-map';
+import { FertilizerPaymentEntity } from '../fertilizer/fertilizer-payment.entity';
 import { FertilizerRequestEntity } from '../fertilizer/fertilizer-request.entity';
 import { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import { EstateAdvanceEntity } from './estate-advance.entity';
@@ -149,6 +151,9 @@ export class EstateLifetimeService {
     private readonly batchRepo: Repository<FertilizerBatchEntity>,
     @InjectRepository(AuditLogEntity)
     private readonly auditRepo: Repository<AuditLogEntity>,
+    // Cash / bank fertilizer payments — part of the shared outstanding figure.
+    @InjectRepository(FertilizerPaymentEntity)
+    private readonly paymentRepo: Repository<FertilizerPaymentEntity>,
   ) {}
 
   // ── §3 — the shared lifetime selector ───────────────────────────
@@ -161,7 +166,7 @@ export class EstateLifetimeService {
     const estate = await this.findEstate(formattedId);
     const now = new Date();
 
-    const [confirmed, processed, advances, requests, charges] =
+    const [confirmed, processed, advances, requests, charges, payments] =
       await Promise.all([
         this.collectionRepo.find({
           where: { estateId: estate.id, status: 'confirmed' },
@@ -172,6 +177,7 @@ export class EstateLifetimeService {
         this.advanceRepo.find({ where: { estateId: estate.id } }),
         this.requestRepo.find({ where: { estateId: estate.id } }),
         this.chargeRepo.find({ where: { estateId: estate.id } }),
+        this.paymentRepo.find({ where: { estateId: estate.id } }),
       ]);
 
     const deliveredKg = confirmed.reduce((s, c) => s + weightSummary(c).weightKg, 0);
@@ -189,11 +195,12 @@ export class EstateLifetimeService {
     const fertilizerRs = charges.reduce((s, c) => s + Number(c.totalCharge), 0);
     const advancesRs = advances.reduce((s, a) => s + Number(a.amount), 0);
 
+    // The one fertilizer-balance rule (charges − settlement recoveries − cash/bank payments).
     const outstandingCharges = charges.filter((c) => !c.settlementId);
-    const fertilizerUndeductedRs = outstandingCharges.reduce(
-      (s, c) => s + Number(c.totalCharge),
-      0,
-    );
+    const fertilizerUndeductedRs = fertilizerOutstanding(
+      charges,
+      payments,
+    ).outstandingRs;
 
     const lastSettlement = [...processed].sort((a, b) =>
       (b.processedOn?.toISOString() ?? '').localeCompare(
@@ -327,9 +334,17 @@ export class EstateLifetimeService {
       // with the charge highlighted — `EstateDetailPage` reads `?record=` and
       // forces `showAll` so a multi-year-old charge is actually on screen
       // (the tab defaults to the last 90 days like the other paginated tabs).
-      const movement = movementById.get(c.stockMovementId);
+      // A route-stop delivery (Fertilizer-Delivery-Addendum) has no stock movement of its
+      // own — its item comes from the request.
+      const movement =
+        c.stockMovementId !== null ? movementById.get(c.stockMovementId) : undefined;
       const batch = movement ? batchById.get(movement.batchId) : undefined;
-      const itemLabel = batch ? `${batch.item} dispatched` : 'Dispatched';
+      const viaRequest = c.fertilizerRequestId ? requestById.get(c.fertilizerRequestId) : undefined;
+      const itemLabel = batch
+        ? `${batch.item} dispatched`
+        : viaRequest
+          ? `${viaRequest.item} delivered`
+          : 'Dispatched';
 
       entries.push({
         id: `fert-${c.id}`,
@@ -450,13 +465,14 @@ export class EstateLifetimeService {
   // aggregation and shouldn't slow those down.
 
   async directory(): Promise<EstateDirectoryRow[]> {
-    const [estates, owners, confirmed, processed, charges, documents] = await Promise.all([
+    const [estates, owners, confirmed, processed, charges, documents, payments] = await Promise.all([
       this.estateRepo.find(),
       this.ownerRepo.find(),
       this.collectionRepo.find({ where: { status: 'confirmed' } }),
       this.settlementRepo.find({ where: { status: 'processed' } }),
       this.chargeRepo.find(),
       this.documentRepo.find(),
+      this.paymentRepo.find(),
     ]);
 
     const now = new Date();
@@ -482,9 +498,10 @@ export class EstateLifetimeService {
         0,
       );
 
-      const outstandingRs = ownCharges
-        .filter((c) => !c.settlementId)
-        .reduce((s, c) => s + Number(c.totalCharge), 0);
+      const outstandingRs = fertilizerOutstanding(
+        ownCharges,
+        payments.filter((p) => p.estateId === estate.id),
+      ).outstandingRs;
 
       const lastDelivery = [...ownDeliveries].sort((a, b) => b.collectionDate.localeCompare(a.collectionDate))[0];
 
@@ -587,13 +604,14 @@ export class EstateLifetimeService {
     return {
       ...paged,
       rows: paged.rows.map((c) => {
-        const movement = movementById.get(c.stockMovementId);
+        const movement =
+          c.stockMovementId !== null ? movementById.get(c.stockMovementId) : undefined;
         const batch = movement ? batchById.get(movement.batchId) : undefined;
         const linkedRequest = c.fertilizerRequestId ? requestById.get(c.fertilizerRequestId) : undefined;
         return {
           id: formatChargeId(c.id),
           date: c.calculatedAt.toISOString(),
-          item: batch?.item ?? 'Unknown',
+          item: batch?.item ?? linkedRequest?.item ?? 'Unknown',
           quantityKg: Number(c.quantityKg),
           ratePerKg: Number(c.ratePerKg),
           totalCharge: Number(c.totalCharge),

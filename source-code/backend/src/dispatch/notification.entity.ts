@@ -13,7 +13,9 @@ export type NotificationType =
   | 'exception_request'
   | 'collection_complete'
   | 'delivery_graded'
-  | 'grade_correction';
+  | 'grade_correction'
+  | 'fertilizer_approval'
+  | 'fertilizer_update';
 
 /** In-app notification row (the `notifications` table). Dispatch is its first writer. */
 @Entity('notifications')
