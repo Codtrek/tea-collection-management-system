@@ -904,6 +904,47 @@ NOT merged; uncommitted. Migration `database/migrations/2026-10-22-route-schedul
   schedules" on the board). Seed writes day-relative patterns (Route 4 never runs on the seed day; R. Senanayake holds Routes 3 + 4) and
   only seeds history/today stops on scheduled days; it never overwrites an existing pattern.
 
+## Fertilizer delivery flow (2026-10-22, `feature/fertilizer-delivery`)
+
+Spec: `docs/specs/Fertilizer-Delivery-Addendum.md` (reconciled against the shipped FERT code — the FERT-01..08 source docs
+were not in the repo yet; diff against them when they land). Migration `database/migrations/2026-10-22-fertilizer-delivery.sql`
+(idempotent; apply AFTER the route-schedule migration; mirrored in `init.sql`) — **not applied to Neon; the user applies it on a
+Neon branch.** Both migrations were verified on a throwaway local Postgres: old HEAD schema + seed → migrate → the mapping
+below on real rows → re-run is a no-op → new seed → API booted and the whole flow walked over HTTP.
+
+- **Statuses** (`fertilizer/fertilizer-flow.ts` `TRANSITIONS`, the only place moves are defined; every change goes through
+  `moveTo()` in `fertilizer-journal.ts`, which also writes `fertilizer_request_events` = the FERT-06 timeline): Requested →
+  (Awaiting manager approval →) Approved | Partially approved | Rejected → Ready for dispatch → Picked up → Out for delivery →
+  Delivered | **Partially delivered** (the one extra status) | Failed → Returned to factory → Rescheduled … → Needs review →
+  Rescheduled (retry) | Cancelled. `fertilizer_requests.status` widened to VARCHAR(30). Legacy mapping: Submitted→Requested,
+  Dispatched/Deducted/Partially Dispatched→Delivered (dispatched qty), Approved→FEFO-allocated or Needs review ("No live stock
+  at migration"). Legacy approvals have no price → priced at first dispatch (logged).
+- **Stock** (`fertilizer-stock-ledger.service.ts`): Committed = Σ ACTIVE `fertilizer_allocations` (FEFO, batch rows locked
+  `pessimistic_write`; approval capped at Available — the portal override is gone). Handover = picked (On Hand↓ Committed↓),
+  check-in = active again (stays the owner's), cancel/reject/owner-refused = released. Handover/check-in write `stock_movements`.
+  FERT-02 Outgoing is ad-hoc only and can't take committed stock. Positions: `FertilizerService.listPositions`.
+- **Dispatch** (`fertilizer-delivery.service.ts`): Ready → attempt on `nextCollectionDay(route, today)`; agent resolved at read
+  time via `getAgentForRoute` until the officer's handover pins `pickup_agent_id`. Handover only on the scheduled day, qty = committed.
+  Dropped/missed dates move lazily (`reconcile`). Check-in qty must match exactly; Nth failure (`system_settings.fertilizer.
+  maxDeliveryAttempts`, 3) → Needs review. `managerApprovalAboveKg` (500, on APPROVED kg) → Awaiting manager approval.
+- **Agent API** (`fertilizer-agent.controller.ts`, `/dispatch/me/fertilizer`): tasks, pickup confirm (evidence; mismatch flag),
+  delivered (photo metadata + owner name + confirm; device time; sync key idempotent), failed (reason list). Dispatch ↔ fertilizer
+  without a module cycle via `dispatch/agent-task-hooks.service.ts` (stop contributor → fertilizer flags on `myStops`, incl.
+  fertilizer-only stops; shift-start listener → Out for delivery).
+- **Money:** price = effective-dated `fertilizer_item_prices` (Administrator, ADM-03 card), snapshotted at approval. Charge written
+  AT DELIVERY (delivered qty × snapshot) on `fertilizer_charges` (`delivery_id`, `payment_method`; `stock_movement_id` now
+  nullable). Deduct = the pending deduction (settlement_id null). Cash/bank → `fertilizer_payments`. ONE balance rule:
+  `fertilizer/fertilizer-balance.ts` `fertilizerOutstanding` — used by EST-10 lifetime + EST-01 directory + FERT-06.
+- **Notices:** `fertilizer_notifications` outbox (grading pattern) + minute cron; "Stored, not delivered" = no device token.
+- **Permissions:** new keys `fertilizerApproval` (Officer approve) and `fertilizerManagerApproval` (Manager approve), Admin view on
+  both, both in `ADMIN_EDITABLE_MODULES`. Officer flow actions = `fertilizer: edit`; prices = `administration: approve`.
+- **Portal:** FERT-05 (stage tabs, attempt/date/agent, payment), FERT-06 (rewritten: decisions, delivery, timeline, payment,
+  allocations, notices), FERT-07 (multi-item order), FERT-02 (ad-hoc only), ADM-03 `FertilizerPricesCard`.
+- **Tests:** `fertilizer/fertilizer-delivery.spec.ts` + rewritten `fertilizer.service.spec.ts` over
+  `fertilizer/testing/fertilizer-harness.ts` (builds on the dispatch harness + collections `FakeRepo`/`FakeManager`).
+  **Gotcha:** the fakes don't enforce column lengths — two VARCHAR overflows were only caught on a real DB; keep timeline `action`
+  ≤ 80 chars. **Mobile UI for the agent flow is NOT built** (origin/dev not merged) — only the API.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React
