@@ -20,7 +20,12 @@ export default function TeaEstateManagerDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Existing dashboard navigation
+  const [activeTab, setActiveTab] = useState("dashboard");
+
+  // -----------------------------
+  // Dashboard navigation
+  // -----------------------------
+
   const openNotifications = () => {
     router.push("/estatemanager/Notification");
   };
@@ -33,46 +38,71 @@ export default function TeaEstateManagerDashboard() {
     router.push("/estatemanager/FertilizerStock");
   };
 
+  // -----------------------------
+  // Bottom tab navigation
+  // -----------------------------
+
+  const handleTabPress = (tab: {
+    key: string;
+    label: string;
+    icon: keyof typeof Ionicons.glyphMap;
+  }) => {
+    setActiveTab(tab.key);
+
+    switch (tab.key) {
+      case "dashboard":
+        router.push("/estatemanager/index");
+        break;
+
+      case "employees":
+        router.push("/estatemanager/Employees");
+        break;
+
+      case "photoEvidence":
+        router.push("/estatemanager/PhotoEvidence");
+        break;
+
+      case "reports":
+        router.push("/estatemanager/Reports");
+        break;
+
+      default:
+        break;
+    }
+  };
+
   return (
-    <SafeAreaView
-      style={styles.container}
-      edges={["top", "left", "right"]}
-    >
-      <View style={styles.screen}>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
         <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingBottom: 24 + insets.bottom,
-            },
-          ]}
         >
-          {/* ================= HEADER ================= */}
+          {/* -------------------------------- */}
+          {/* Header */}
+          {/* -------------------------------- */}
+
           <View style={styles.header}>
             <View style={styles.profileSection}>
-              <Avatar name="Rohan" size={42} />
+              <Avatar
+                name="Estate Manager"
+                size={48}
+              />
 
               <View style={styles.profileText}>
                 <AppText
-                  variant="caption"
-                  style={styles.welcomeText}
+                  variant="bodySmall"
+                  style={styles.greeting}
                 >
-                  Welcome back,
+                  Welcome back
                 </AppText>
 
                 <AppText
-                  variant="body"
+                  variant="subheading"
                   style={styles.managerName}
                 >
-                  Manager Rohan
-                </AppText>
-
-                <AppText
-                  variant="caption"
-                  style={styles.estateName}
-                >
-                  Nuwara Eliya Highlands
+                  Estate Manager
                 </AppText>
               </View>
             </View>
@@ -91,76 +121,104 @@ export default function TeaEstateManagerDashboard() {
             </Pressable>
           </View>
 
-          {/* ================= ESTATE BANNER ================= */}
-          <View style={styles.estateBanner}>
-            <View style={styles.bannerPlaceholder}>
-              <View style={styles.bannerIconContainer}>
+          {/* -------------------------------- */}
+          {/* Dashboard title */}
+          {/* -------------------------------- */}
+
+          <View style={styles.titleSection}>
+            <AppText
+              variant="heading"
+              style={styles.pageTitle}
+            >
+              Estate Dashboard
+            </AppText>
+
+            <AppText
+              variant="bodySmall"
+              style={styles.pageSubtitle}
+            >
+              Manage your estate operations
+            </AppText>
+          </View>
+
+          {/* -------------------------------- */}
+          {/* Summary cards */}
+          {/* -------------------------------- */}
+
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryIcon}>
                 <Ionicons
-                  name="leaf-outline"
-                  size={30}
+                  name="people-outline"
+                  size={22}
                   color={colors.primary}
                 />
               </View>
 
               <AppText
-                variant="bodySmall"
-                style={styles.bannerTitle}
+                variant="heading"
+                style={styles.summaryNumber}
               >
-                Tea Estate Highlands
+                24
+              </AppText>
+
+              <AppText
+                variant="bodySmall"
+                style={styles.summaryLabel}
+              >
+                Employees
+              </AppText>
+            </View>
+
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryIcon}>
+                <Ionicons
+                  name="leaf-outline"
+                  size={22}
+                  color={colors.primary}
+                />
+              </View>
+
+              <AppText
+                variant="heading"
+                style={styles.summaryNumber}
+              >
+                1,250 kg
+              </AppText>
+
+              <AppText
+                variant="bodySmall"
+                style={styles.summaryLabel}
+              >
+                Today's Tea
               </AppText>
             </View>
           </View>
 
-          {/* ================= COLLECTION STATUS ================= */}
+          {/* -------------------------------- */}
+          {/* Quick actions */}
+          {/* -------------------------------- */}
+
           <AppText
-            variant="caption"
-            style={styles.sectionLabel}
+            variant="subheading"
+            style={styles.sectionTitle}
           >
-            COLLECTION STATUS
+            Quick Actions
           </AppText>
 
-          <View style={styles.progressCard}>
-            <View style={styles.progressHeader}>
-              <AppText
-                variant="body"
-                style={styles.progressTitle}
-              >
-                Daily Progress
-              </AppText>
+          <View style={styles.dashboardGrid}>
+            {/* Daily Tea Plucking */}
 
-              <AppText
-                variant="subheading"
-                style={styles.progressPercentage}
-              >
-                82.7%
-              </AppText>
-            </View>
-
-            <View style={styles.progressTrack}>
-              <View style={styles.progressFill} />
-            </View>
-
-            <AppText
-              variant="caption"
-              style={styles.progressDescription}
-            >
-              1,240.5kg of 1,500kg target collected
-            </AppText>
-          </View>
-
-          {/* ================= QUICK ACTION CARDS ================= */}
-          <View style={styles.cardsRow}>
-            {/* FERTILIZER STOCK */}
             <Pressable
               style={styles.dashboardCard}
               onPress={openFertilizerStock}
               accessibilityRole="button"
             >
-              <View style={styles.cardIconBlue}>
+              <View style={styles.cardIconContainer}>
                 <Ionicons
-                  name="bicycle-outline"
-                  size={24}
-                  color="#5872A8"
+                  name="leaf-outline"
+                  size={28}
+                  color={colors.primary}
                 />
               </View>
 
@@ -171,25 +229,26 @@ export default function TeaEstateManagerDashboard() {
                 Fertilizer Stock
               </AppText>
 
-              <AppText
-                variant="caption"
-                style={styles.cardSubtitle}
-              >
-                85% Available
-              </AppText>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.text.tertiary}
+                style={styles.cardArrow}
+              />
             </Pressable>
 
-            {/* DAILY TEA PLUCKING */}
+            {/* Fertilizer Stock */}
+
             <Pressable
               style={styles.dashboardCardGreen}
               onPress={openDailyPluckingDetails}
               accessibilityRole="button"
             >
-              <View style={styles.cardIconGreen}>
+              <View style={styles.cardIconContainer}>
                 <Ionicons
-                  name="list-outline"
-                  size={24}
-                  color={colors.success}
+                  name="flask-outline"
+                  size={28}
+                  color={colors.primary}
                 />
               </View>
 
@@ -200,50 +259,188 @@ export default function TeaEstateManagerDashboard() {
                 Daily Tea Plucking
               </AppText>
 
-              <AppText
-                variant="caption"
-                style={styles.cardSubtitle}
-              >
-                1/3 Completed
-              </AppText>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.text.tertiary}
+                style={styles.cardArrow}
+              />
             </Pressable>
           </View>
+
+          {/* -------------------------------- */}
+          {/* Today's overview */}
+          {/* -------------------------------- */}
+
+          <AppText
+            variant="subheading"
+            style={styles.sectionTitle}
+          >
+            Today's Overview
+          </AppText>
+
+          <View style={styles.overviewCard}>
+            <View style={styles.overviewRow}>
+              <View style={styles.overviewLeft}>
+                <View style={styles.smallIcon}>
+                  <Ionicons
+                    name="people-outline"
+                    size={19}
+                    color={colors.primary}
+                  />
+                </View>
+
+                <View>
+                  <AppText
+                    variant="body"
+                    style={styles.overviewTitle}
+                  >
+                    Employees Present
+                  </AppText>
+
+                  <AppText
+                    variant="bodySmall"
+                    style={styles.overviewSubtitle}
+                  >
+                    Today's attendance
+                  </AppText>
+                </View>
+              </View>
+
+              <AppText
+                variant="subheading"
+                style={styles.overviewValue}
+              >
+                21 / 24
+              </AppText>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.overviewRow}>
+              <View style={styles.overviewLeft}>
+                <View style={styles.smallIcon}>
+                  <Ionicons
+                    name="basket-outline"
+                    size={19}
+                    color={colors.primary}
+                  />
+                </View>
+
+                <View>
+                  <AppText
+                    variant="body"
+                    style={styles.overviewTitle}
+                  >
+                    Tea Collected
+                  </AppText>
+
+                  <AppText
+                    variant="bodySmall"
+                    style={styles.overviewSubtitle}
+                  >
+                    Today's collection
+                  </AppText>
+                </View>
+              </View>
+
+              <AppText
+                variant="subheading"
+                style={styles.overviewValue}
+              >
+                1,250 kg
+              </AppText>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.overviewRow}>
+              <View style={styles.overviewLeft}>
+                <View style={styles.smallIcon}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={19}
+                    color={colors.primary}
+                  />
+                </View>
+
+                <View>
+                  <AppText
+                    variant="body"
+                    style={styles.overviewTitle}
+                  >
+                    Completed Requests
+                  </AppText>
+
+                  <AppText
+                    variant="bodySmall"
+                    style={styles.overviewSubtitle}
+                  >
+                    Collection requests
+                  </AppText>
+                </View>
+              </View>
+
+              <AppText
+                variant="subheading"
+                style={styles.overviewValue}
+              >
+                8
+              </AppText>
+            </View>
+          </View>
+
+          {/* Bottom spacing */}
+
+          <View style={styles.bottomSpacing} />
         </ScrollView>
+
+        {/* -------------------------------- */}
+        {/* Bottom Navigation */}
+        {/* -------------------------------- */}
+
+        <EstateManagerBottomTab
+          activeTab={activeTab}
+          onTabPress={handleTabPress}
+        />
       </View>
     </SafeAreaView>
   );
 }
 
-/* ============================================================
-   STYLES
-   ============================================================ */
-
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+
   container: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
 
-  screen: {
+  scrollView: {
     flex: 1,
-    backgroundColor: colors.surface,
   },
 
-  scrollContent: {
+  contentContainer: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
   },
 
-  /* HEADER */
+  // --------------------------------
+  // Header
+  // --------------------------------
+
   header: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 60,
-    marginBottom: spacing.md,
+    justifyContent: "space-between",
+    marginBottom: spacing.lg,
   },
 
   profileSection: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -252,166 +449,198 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
 
-  welcomeText: {
+  greeting: {
     color: colors.text.secondary,
+    marginBottom: 2,
   },
 
   managerName: {
-    color: colors.text.primaryGreen,
-  },
-
-  estateName: {
-    color: colors.text.secondary,
+    color: colors.text.primary,
   },
 
   notificationButton: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 20,
-  },
-
-  /* ESTATE BANNER */
-  estateBanner: {
-    width: "100%",
-    height: 148,
-    backgroundColor: colors.background,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: colors.border.light,
-    borderRadius: 8,
-    overflow: "hidden",
-    marginBottom: spacing.lg,
-  },
-
-  bannerPlaceholder: {
-    flex: 1,
-    padding: spacing.sm,
-    justifyContent: "flex-start",
-    alignItems: "flex-start",
-  },
-
-  bannerIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: colors.successBackground,
-    alignItems: "center",
     justifyContent: "center",
-    marginBottom: spacing.xs,
+    alignItems: "center",
+    backgroundColor: colors.white,
   },
 
-  bannerTitle: {
-    color: colors.text.primary,
-  },
+  // --------------------------------
+  // Title
+  // --------------------------------
 
-  /* SECTION LABEL */
-  sectionLabel: {
-    color: colors.text.tertiary,
-    letterSpacing: 0.8,
-    marginBottom: spacing.sm,
-  },
-
-  /* PROGRESS CARD */
-  progressCard: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    borderRadius: 8,
-    padding: spacing.md,
+  titleSection: {
     marginBottom: spacing.lg,
   },
 
-  progressHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.sm,
-  },
-
-  progressTitle: {
+  pageTitle: {
     color: colors.text.primary,
   },
 
-  progressPercentage: {
-    color: colors.success,
+  pageSubtitle: {
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
   },
 
-  progressTrack: {
-    width: "100%",
-    height: 7,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 5,
-    overflow: "hidden",
+  // --------------------------------
+  // Summary
+  // --------------------------------
+
+  summaryRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+
+  summaryCard: {
+    flex: 1,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderRadius: 12,
+  },
+
+  summaryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.successBackground,
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: spacing.sm,
   },
 
-  progressFill: {
-    width: "82.7%",
-    height: "100%",
-    backgroundColor: colors.primary,
-    borderRadius: 5,
+  summaryNumber: {
+    color: colors.text.primary,
   },
 
-  progressDescription: {
+  summaryLabel: {
     color: colors.text.secondary,
+    marginTop: 2,
   },
 
-  /* QUICK ACTION CARDS */
-  cardsRow: {
+  // --------------------------------
+  // Sections
+  // --------------------------------
+
+  sectionTitle: {
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+
+  // --------------------------------
+  // Dashboard cards
+  // --------------------------------
+
+  dashboardGrid: {
     flexDirection: "row",
-    gap: spacing.md,
+    gap: spacing.sm,
     marginBottom: spacing.lg,
   },
 
   dashboardCard: {
     flex: 1,
-    minHeight: 132,
-    backgroundColor: "#F1F5FF",
-    borderWidth: 1,
-    borderColor: "#D5DDEA",
-    borderRadius: 8,
+    minHeight: 145,
     padding: spacing.md,
-    justifyContent: "flex-start",
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    position: "relative",
   },
 
   dashboardCardGreen: {
     flex: 1,
-    minHeight: 132,
-    backgroundColor: "#EDF9F3",
-    borderWidth: 1,
-    borderColor: "#D1E8DC",
-    borderRadius: 8,
+    minHeight: 145,
     padding: spacing.md,
-    justifyContent: "flex-start",
-  },
-
-  cardIconBlue: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: "#DCE5FA",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.sm,
-  },
-
-  cardIconGreen: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    borderRadius: 14,
     backgroundColor: colors.successBackground,
-    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    position: "relative",
+  },
+
+  cardIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.white,
     justifyContent: "center",
+    alignItems: "center",
     marginBottom: spacing.sm,
   },
 
   cardTitle: {
     color: colors.text.primary,
+    fontWeight: "600",
   },
 
-  cardSubtitle: {
+  cardArrow: {
+    position: "absolute",
+    right: spacing.md,
+    bottom: spacing.md,
+  },
+
+  // --------------------------------
+  // Today's overview
+  // --------------------------------
+
+  overviewCard: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderRadius: 14,
+    paddingHorizontal: spacing.md,
+  },
+
+  overviewRow: {
+    minHeight: 76,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  overviewLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+
+  smallIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.successBackground,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.sm,
+  },
+
+  overviewTitle: {
+    color: colors.text.primary,
+  },
+
+  overviewSubtitle: {
     color: colors.text.secondary,
-    marginTop: spacing.xs,
+    marginTop: 2,
+  },
+
+  overviewValue: {
+    color: colors.primary,
+    marginLeft: spacing.sm,
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: colors.border.light,
+  },
+
+  bottomSpacing: {
+    height: spacing.xl,
   },
 });

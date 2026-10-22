@@ -12,13 +12,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pill } from "@/components/ui/demo-teacollector-pill";
 import { Btn } from "@/components/ui/demo-teacollector-button";
 
-import {
-  c,
-  fontDisplay,
-  fontMono,
-} from "@/components/ui/demo-teacollector-theme";
-
 import { colors } from "@/theme/colors";
+import { fonts } from "@/theme/fonts";
 
 /* =========================================================
    HOME / STATS CARDS
@@ -57,7 +52,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   const textColor =
     variant === "primary" || variant === "success" || variant === "warning"
       ? colors.white
-      : c.ink;
+      : colors.primary;
 
   return (
     <TouchableOpacity
@@ -88,7 +83,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           <Text
             style={[
               statStyles.statValue,
-              { color: variant === "muted" ? c.ink : colors.white },
+              { color: variant === "muted" ? colors.text.muted : colors.white },
             ]}
             numberOfLines={1}
           >
@@ -98,7 +93,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           <Text
             style={[
               statStyles.statTitle,
-              { color: variant === "muted" ? c.muted : colors.white },
+              { color: variant === "muted" ?  colors.text.muted : colors.white },
             ]}
             numberOfLines={1}
           >
@@ -106,7 +101,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           </Text>
 
           {subtitle ? (
-            <Text style={[statStyles.statSubtitle, { color: c.muted }]}>
+            <Text style={[statStyles.statSubtitle, { color: colors.text.muted }]}>
               {subtitle}
             </Text>
           ) : null}
@@ -386,10 +381,11 @@ export const StopCard = ({
             {/* Estimated weight + distance */}
 
             <View style={styles.metaRow}>
-              {stop.estWeight != null && (
-                <Text style={styles.metaText}>
-                  ~{stop.estWeight} kg
-                </Text>
+              {stop.estNormalWeight > 0 && (
+                <Text style={styles.metaText}>Normal ~{stop.estNormalWeight} kg</Text>
+              )}
+              {stop.estSupperWeight > 0 && (
+                <Text style={styles.metaText}>Supper ~{stop.estSupperWeight} kg</Text>
               )}
 
               {stop.dist != null && (
@@ -422,10 +418,11 @@ export const StopCard = ({
             {/* Keep existing accepted information */}
 
             <View style={styles.metaRow}>
-              {stop.estWeight != null && (
-                <Text style={styles.metaText}>
-                  ~{stop.estWeight} kg
-                </Text>
+              {stop.estNormalWeight > 0 && (
+                <Text style={styles.metaText}>Normal ~{stop.estNormalWeight} kg</Text>
+              )}
+              {stop.estSupperWeight > 0 && (
+                <Text style={styles.metaText}>Supper ~{stop.estSupperWeight} kg</Text>
               )}
 
               {stop.dist != null && (
@@ -448,11 +445,12 @@ export const StopCard = ({
         ================================================== */}
 
         {isLoaded && (
-          <View style={styles.metaRow}>
-            {stop.actualWeight != null && (
-              <Text style={styles.metaText}>
-                {stop.actualWeight} kg
-              </Text>
+          <View style={styles.weightBreakdown}>
+            {stop.actualNormalWeight > 0 && (
+              <Text style={styles.metaText}>Normal {stop.actualNormalWeight} kg</Text>
+            )}
+            {stop.actualSupperWeight > 0 && (
+              <Text style={styles.metaText}>Supper {stop.actualSupperWeight} kg</Text>
             )}
           </View>
         )}
@@ -462,11 +460,12 @@ export const StopCard = ({
         ================================================== */}
 
         {isDelivered && (
-          <View style={styles.metaRow}>
-            {stop.actualWeight != null && (
-              <Text style={styles.mutedMetaText}>
-                {stop.actualWeight} kg delivered
-              </Text>
+          <View style={styles.weightBreakdown}>
+            {stop.actualNormalWeight > 0 && (
+              <Text style={styles.mutedMetaText}>Normal {stop.actualNormalWeight} kg delivered</Text>
+            )}
+            {stop.actualSupperWeight > 0 && (
+              <Text style={styles.mutedMetaText}>Supper {stop.actualSupperWeight} kg delivered</Text>
             )}
           </View>
         )}
@@ -544,7 +543,7 @@ const statStyles = StyleSheet.create({
    shadowRadius: 8,
    elevation: 2,
    borderWidth: 1,
-   borderColor: c.line,
+   borderColor: colors.border.light,
    alignSelf: "flex-start",
  },
 
@@ -570,7 +569,7 @@ const statStyles = StyleSheet.create({
  },
 
  statValue: {
-   fontFamily: fontDisplay.fontFamily,
+   fontFamily: fonts.display,
    fontSize: 26,
    fontWeight: "700",
    lineHeight: 30,
@@ -620,22 +619,22 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontFamily: fontDisplay.fontFamily,
+    fontFamily: fonts.display,
     fontWeight: "600",
     fontSize: 16,
-    color: c.ink,
+    color: colors.text.primary,
   },
 
   subtitle: {
     fontSize: 12,
     marginTop: 2,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   timeText: {
     fontSize: 12,
     marginTop: 4,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   /* =======================================================
@@ -648,16 +647,23 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+  weightBreakdown: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 14,
+    marginTop: 10,
+  },
+
   metaText: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 12,
-    color: c.forest,
+    color: colors.text.primaryGreen,
   },
 
   mutedMetaText: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 12,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   /* =======================================================
@@ -683,13 +689,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1.5,
-    borderColor: c.forestLight,
+    borderColor: colors.border.focused,
   },
 
   continueText: {
     fontWeight: "600",
     fontSize: 13,
-    color: c.forest,
+    color: colors.text.primaryGreen,
   },
 
   /* =======================================================
@@ -713,15 +719,15 @@ const styles = StyleSheet.create({
   },
 
   cancelledText: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 12,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   cancelledNote: {
-    fontFamily: fontMono.fontFamily,
+    fontFamily: fonts.default,
     fontSize: 12,
-    color: c.muted,
+    color: colors.text.muted,
   },
 
   /* =======================================================
