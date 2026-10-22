@@ -11,6 +11,7 @@ import type { AgentDayStatusEntity } from '../agent-day-status.entity';
 import { AgentDirectoryService } from '../agent-directory.service';
 import type { AgentLocationPingEntity } from '../agent-location-ping.entity';
 import { AgentSelfService } from '../agent-self.service';
+import { AgentTaskHooks } from '../agent-task-hooks.service';
 import { CandidateRankingService } from '../candidate-ranking.service';
 import type { CollectionAgentEntity } from '../collection-agent.entity';
 import type { DevicePushTokenEntity } from '../device-push-token.entity';
@@ -149,6 +150,7 @@ export function buildHarness() {
     }),
   };
 
+  const hooks = new AgentTaskHooks();
   const dispatch = new DispatchService(
     cast<RouteAssignmentEntity>(assignments),
     cast<AgentDayStatusEntity>(dayStatus),
@@ -180,6 +182,7 @@ export function buildHarness() {
     notifier as unknown as DispatchNotifier,
     audit as unknown as AuditService,
     schedule,
+    hooks,
   );
 
   let recSeq = 0;
@@ -206,6 +209,7 @@ export function buildHarness() {
     dispatch,
     self,
     schedule,
+    hooks,
     weekdayRows,
     overrideRows,
 
