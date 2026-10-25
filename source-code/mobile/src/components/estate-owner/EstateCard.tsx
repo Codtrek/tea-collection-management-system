@@ -41,7 +41,7 @@ export default function EstateCard({
       </View>
 
       <View style={styles.content}>
-        <AppText variant="subheading" style={styles.name} numberOfLines={1}>
+        <AppText variant="subHeading" style={styles.name} numberOfLines={1}>
           {name}
         </AppText>
 

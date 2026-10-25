@@ -1,3 +1,4 @@
+import { colors, spacing } from "@/theme";
 import {
   View,
   StyleSheet,
@@ -7,61 +8,94 @@ import {
 } from "react-native";
 
 import {SafeAreaView} from "react-native-safe-area-context";
+import AppText from "./AppText";
 
 interface ScreenProps extends ViewProps {
   children: React.ReactNode;
   scroll?: boolean;
+  header?: React.ReactNode;
+  pageTitle?: string;
 }
 
 export default function Screen({
   children,
   scroll = false,
+  header,
+  pageTitle,
   style,
   ...props
 }: ScreenProps) {
+  // const Container = header ? View : SafeAreaView;
+const TopSection = header ? (
+  header
+) : pageTitle ? (
+  <View style={styles.pageTitle}>
+    <AppText variant="subHeading">{pageTitle}</AppText>
+  </View>
+) : null;
+
   if (scroll) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          contentContainerStyle={[
-            styles.container,
-            style,
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          {children}
-        </ScrollView>
-      </SafeAreaView>
+      <View style={styles.container}>
+        {TopSection}
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[
+              styles.scrollContainer,
+              style,
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.container}>
+      {TopSection}
       <View
         {...props}
         style={[
-          styles.container,
+          styles.content,
           style,
         ]}
       >
         {children}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    justifyContent: "center",
-  },
-
   container: {
+    backgroundColor: colors.white,
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    width: "100%",
+  },
+  pageTitle: {
+    paddingHorizontal: spacing.md,
+    paddingTop: 40,
+    height: 100,
+  },
+  scrollView: {
+    flex: 1,
+    width: "100%",
+  },
+  scrollContainer: {
     paddingHorizontal: 20,
+    backgroundColor: "#FFFFFF",
     alignSelf: "center",
     maxWidth: Platform.OS === 'web' ? 393 : '100%',
-    paddingTop: 20,
+    width: "100%",
+  },
+  content:{
+    flex: 1,
+    paddingHorizontal: 20,
+    backgroundColor: colors.white,
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 393 : undefined,
   },
 });

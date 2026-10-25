@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
     borderWidth: 1,
     borderColor: colors.border.default,
-    borderRadius: 12,
+    borderRadius: 20,
     // backgroundColor: colors.surface,
     paddingHorizontal: 14,
     marginBottom: 16,
