@@ -17,6 +17,6 @@ export const userRoles: UserRole[] = [
     id: '3',
     role: 'Factory Collector',
     description: 'Collect tea leaves from the fields.',
-    route: '/auth/login'
+    route: '/teacollector/teacollectorMobile'
   }
 ];
