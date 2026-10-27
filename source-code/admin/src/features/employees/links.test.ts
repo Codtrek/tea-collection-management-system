@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentHistoryHref, COLLECTIONS_TAB, resolveEmployeeTab } from './links'
+import { agentHistoryHref, COLLECTIONS_TAB, FERTILIZER_TAB, resolveEmployeeTab } from './links'
 
 describe('agentHistoryHref — dispatch "View history"', () => {
   it('goes to the agent’s EMPLOYEE page, on the Collections tab', () => {
@@ -34,5 +34,10 @@ describe('resolveEmployeeTab — the link lands on the right tab', () => {
 
   it('still supports the other tabs by URL', () => {
     expect(resolveEmployeeTab('bank', agentTabs)).toBe('bank')
+  })
+
+  it('opens Fertilizer deliveries by URL, and falls back to Overview without Fertilizer access', () => {
+    expect(resolveEmployeeTab(FERTILIZER_TAB, [...agentTabs, FERTILIZER_TAB])).toBe('fertilizer')
+    expect(resolveEmployeeTab(FERTILIZER_TAB, agentTabs)).toBe('overview')
   })
 })

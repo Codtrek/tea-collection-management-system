@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditModule } from '../audit/audit.module';
 import { DispatchModule } from '../dispatch/dispatch.module';
+import { FertilizerModule } from '../fertilizer/fertilizer.module';
 import { UsersModule } from '../users/users.module';
 import { EmployeeAttendanceEntity } from './employee-attendance.entity';
 import { EmployeeEntity } from './employee.entity';
@@ -22,6 +23,8 @@ import { SalaryAdvanceEntity } from './salary-advance.entity';
     AuditModule,
     // agent provisioning (registering a Tea Collecting Agent) + their collection history
     DispatchModule,
+    // an agent's fertilizer delivery history
+    FertilizerModule,
   ],
   controllers: [EmployeesController],
   providers: [EmployeesService],

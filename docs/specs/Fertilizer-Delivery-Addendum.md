@@ -237,6 +237,11 @@ How they're sent:
 - `POST :deliveryId/delivered`
 - `POST :deliveryId/failed`
 
+**Agent history** (`GET /employees/:id/fertilizer-deliveries`, needs `employees` view and
+`fertilizer` view): the agent's finished attempts, meaning delivered, part delivered or
+failed. It is shown on the Employee page's "Fertilizer deliveries" tab next to Collections,
+with the same paging (last 90 days, 25 per page) and the same "Covering Route X" rule.
+
 `GET /dispatch/me/stops` merges fertilizer onto stops by estate + date. Each stop carries
 `fertilizer[]` and `hasTeaPickup`, and a fertilizer-only stop appears when the estate has no
 tea pickup that day.

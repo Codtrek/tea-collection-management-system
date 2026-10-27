@@ -1,6 +1,7 @@
 import { apiFetch } from '@/lib/api'
 import type { PaginatedResult } from '@/features/estates/types'
 import type {
+  AgentFertilizerRow,
   AgentHistoryRow,
   Advance,
   AttendanceRecord,
@@ -77,6 +78,14 @@ export function getCollections(id: string, q: AgentHistoryQuery = {}): Promise<P
   for (const [k, v] of Object.entries(q)) if (v !== undefined) params.set(k, String(v))
   const qs = params.toString()
   return apiFetch<PaginatedResult<AgentHistoryRow>>(`/employees/${id}/collections${qs ? `?${qs}` : ''}`)
+}
+
+/** A collection agent's finished fertilizer deliveries (Employee detail → Fertilizer deliveries tab). Same paging as Collections. */
+export function getFertilizerDeliveries(id: string, q: AgentHistoryQuery = {}): Promise<PaginatedResult<AgentFertilizerRow>> {
+  const params = new URLSearchParams()
+  for (const [k, v] of Object.entries(q)) if (v !== undefined) params.set(k, String(v))
+  const qs = params.toString()
+  return apiFetch<PaginatedResult<AgentFertilizerRow>>(`/employees/${id}/fertilizer-deliveries${qs ? `?${qs}` : ''}`)
 }
 
 export function create(input: EmployeeInput): Promise<Employee> {

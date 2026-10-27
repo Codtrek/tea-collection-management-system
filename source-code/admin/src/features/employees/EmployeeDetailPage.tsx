@@ -15,8 +15,9 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as employeesService from '@/services/employees'
 import { AgentCollectionsTab } from './AgentCollectionsTab'
+import { AgentFertilizerTab } from './AgentFertilizerTab'
 import { netPay } from './calc'
-import { COLLECTIONS_TAB, resolveEmployeeTab } from './links'
+import { COLLECTIONS_TAB, FERTILIZER_TAB, resolveEmployeeTab } from './links'
 import { useEmployeeRoles } from './useEmployeeRoles'
 import type { AttendanceRecord, PayrollRow } from './types'
 import { formatCurrency, formatDate, initials, maskAccount } from '@/lib/format'
@@ -143,6 +144,7 @@ export function EmployeeDetailPage() {
 
   const isAgent = !!agentRole && employee.role === agentRole
   const canSeeCollections = can('employees', 'view') && can('collection', 'view')
+  const canSeeFertilizer = can('employees', 'view') && can('fertilizer', 'view')
 
   const tabs = [
     {
@@ -189,6 +191,10 @@ export function EmployeeDetailPage() {
     // both employees and collection data (the server enforces the same rule).
     ...(isAgent && canSeeCollections
       ? [{ id: COLLECTIONS_TAB, label: 'Collections', content: <AgentCollectionsTab employeeId={employee.id} /> }]
+      : []),
+    // the fertilizer the agent took out on their stops — same rule, with Fertilizer access instead
+    ...(isAgent && canSeeFertilizer
+      ? [{ id: FERTILIZER_TAB, label: 'Fertilizer deliveries', content: <AgentFertilizerTab employeeId={employee.id} /> }]
       : []),
     {
       id: 'bank',

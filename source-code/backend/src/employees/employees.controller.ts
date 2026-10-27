@@ -15,6 +15,7 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AgentHistoryService } from '../dispatch/agent-history.service';
 import { DispatchAccessService } from '../dispatch/dispatch-access.service';
+import { AgentFertilizerHistoryService } from '../fertilizer/agent-fertilizer-history.service';
 import type { JwtPayload } from '../auth/jwt-payload.interface';
 import { UsersService } from '../users/users.service';
 import { AGENT_JOB_ROLE, EMPLOYEE_ROLES } from './employee-roles';
@@ -44,6 +45,7 @@ export class EmployeesController {
     private readonly usersService: UsersService,
     private readonly agentHistory: AgentHistoryService,
     private readonly access: DispatchAccessService,
+    private readonly agentFertilizer: AgentFertilizerHistoryService,
   ) {}
 
   // Static segments (attendance/advances/payroll) are registered before the
@@ -182,6 +184,44 @@ export class EmployeesController {
       throw new NotFoundException(`No employee with ID “${id}”.`);
     }
     return this.agentHistory.history(employeeId, {
+      from,
+      to,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  /**
+   * A collection agent's fertilizer deliveries (Employee detail → Fertilizer deliveries tab):
+   * finished attempts he was handed — delivered, part delivered or failed. Same paging as
+   * Collections. Needs BOTH employee and fertilizer access.
+   */
+  @Get(':id/fertilizer-deliveries')
+  async fertilizerDeliveries(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    await this.access.require(
+      req.user.role,
+      'view',
+      'view employees',
+      'employees',
+    );
+    await this.access.require(
+      req.user.role,
+      'view',
+      'view fertilizer',
+      'fertilizer',
+    );
+    const employeeId = parseEmployeeId(id);
+    if (!Number.isInteger(employeeId)) {
+      throw new NotFoundException(`No employee with ID “${id}”.`);
+    }
+    return this.agentFertilizer.history(employeeId, {
       from,
       to,
       page: page ? Number(page) : undefined,

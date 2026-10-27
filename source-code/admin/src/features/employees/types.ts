@@ -57,6 +57,26 @@ export interface AgentHistoryRow {
   status: string
 }
 
+/** One finished fertilizer delivery attempt in an agent's history (mirrors the backend's PublicAgentFertilizerRow). */
+export interface AgentFertilizerRow {
+  deliveryId: number
+  date: string
+  /** 'FR-2026-0001'; null only if the request is gone */
+  requestId: string | null
+  estateName: string
+  route: string
+  /** set when the agent was COVERING this route that day */
+  coveringRoute: string | null
+  item: string
+  handedOverKg: number | null
+  /** 0 for a failed attempt */
+  deliveredKg: number
+  outcome: 'Delivered' | 'Partially delivered' | 'Failed'
+  failReason: string | null
+  /** the agent's note on a failure, or the shortfall reason on a part delivery */
+  note: string | null
+}
+
 export type AdvanceStatus = 'Pending' | 'Approved' | 'Rejected'
 export interface Advance {
   id: string

@@ -908,8 +908,9 @@ NOT merged; uncommitted. Migration `database/migrations/2026-10-22-route-schedul
 
 Spec: `docs/specs/Fertilizer-Delivery-Addendum.md` (reconciled against the shipped FERT code — the FERT-01..08 source docs
 were not in the repo yet; diff against them when they land). Migration `database/migrations/2026-10-22-fertilizer-delivery.sql`
-(idempotent; apply AFTER the route-schedule migration; mirrored in `init.sql`) — **not applied to Neon; the user applies it on a
-Neon branch.** Both migrations were verified on a throwaway local Postgres: old HEAD schema + seed → migrate → the mapping
+(idempotent; apply AFTER the route-schedule migration; mirrored in `init.sql`) — **not applied to Neon** (a teammate's
+account; never write to it). This branch runs on a private local Postgres: `~/tea-pg-dev` (port 5433, db `tea_dev`, user `tea`,
+no password; `~/tea-pg-dev/start.sh` after a reboot), loaded from `init.sql` + `npm run seed`. Both migrations were verified on a throwaway local Postgres: old HEAD schema + seed → migrate → the mapping
 below on real rows → re-run is a no-op → new seed → API booted and the whole flow walked over HTTP.
 
 - **Statuses** (`fertilizer/fertilizer-flow.ts` `TRANSITIONS`, the only place moves are defined; every change goes through
@@ -940,6 +941,11 @@ below on real rows → re-run is a no-op → new seed → API booted and the who
   both, both in `ADMIN_EDITABLE_MODULES`. Officer flow actions = `fertilizer: edit`; prices = `administration: approve`.
 - **Portal:** FERT-05 (stage tabs, attempt/date/agent, payment), FERT-06 (rewritten: decisions, delivery, timeline, payment,
   allocations, notices), FERT-07 (multi-item order), FERT-02 (ad-hoc only), ADM-03 `FertilizerPricesCard`.
+- **Agent history (2026-10-27):** EMP-03 has a "Fertilizer deliveries" tab (`?tab=fertilizer`) beside Collections for Tea
+  Collecting Agents. It is fed by `GET /employees/:id/fertilizer-deliveries` (`fertilizer/agent-fertilizer-history.service.ts`,
+  exported from `FertilizerModule` and imported by `EmployeesModule`). It lists finished attempts the agent was handed
+  (delivered / part delivered / failed), with the same paging and "Covering Route X" rule as `AgentHistoryService`. It needs
+  `employees` view AND `fertilizer` view.
 - **Tests:** `fertilizer/fertilizer-delivery.spec.ts` + rewritten `fertilizer.service.spec.ts` over
   `fertilizer/testing/fertilizer-harness.ts` (builds on the dispatch harness + collections `FakeRepo`/`FakeManager`).
   **Gotcha:** the fakes don't enforce column lengths — two VARCHAR overflows were only caught on a real DB; keep timeline `action`

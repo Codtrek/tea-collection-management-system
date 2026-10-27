@@ -351,6 +351,32 @@ export interface PublicAgentTask {
   agentConfirmQtyKg: number | null;
 }
 
+export type AgentDeliveryOutcome =
+  | 'Delivered'
+  | 'Partially delivered'
+  | 'Failed';
+
+/** One finished delivery attempt in an agent's history (Employee detail → Fertilizer deliveries). */
+export interface PublicAgentFertilizerRow {
+  deliveryId: number;
+  date: string;
+  /** 'FR-2026-0001' — the row links to the request; null only if the request is gone */
+  requestId: string | null;
+  estateName: string;
+  route: string;
+  /** set when the agent was COVERING this route that day */
+  coveringRoute: string | null;
+  item: string;
+  /** what the officer handed over at the store */
+  handedOverKg: number | null;
+  /** what the owner received (0 for a failed attempt) */
+  deliveredKg: number;
+  outcome: AgentDeliveryOutcome;
+  failReason: string | null;
+  /** the agent's note on a failure, or the shortfall reason on a part delivery */
+  note: string | null;
+}
+
 export type CoverageStatus = 'Healthy' | 'Tight' | 'Short';
 
 export interface PublicItemPosition {

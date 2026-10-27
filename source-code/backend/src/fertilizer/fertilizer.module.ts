@@ -3,12 +3,15 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SystemSettingEntity } from '../admin/system-setting.entity';
 import { AuditModule } from '../audit/audit.module';
 import { AgentDayStatusEntity } from '../dispatch/agent-day-status.entity';
+import { CollectionAgentEntity } from '../dispatch/collection-agent.entity';
 import { DevicePushTokenEntity } from '../dispatch/device-push-token.entity';
 import { DispatchModule } from '../dispatch/dispatch.module';
+import { RouteAssignmentEntity } from '../dispatch/route-assignment.entity';
 import { EstateOwnerEntity } from '../estates/estate-owner.entity';
 import { EstateEntity } from '../estates/estate.entity';
 import { RouteEntity } from '../estates/route.entity';
 import { UsersModule } from '../users/users.module';
+import { AgentFertilizerHistoryService } from './agent-fertilizer-history.service';
 import { FertilizerAgentController } from './fertilizer-agent.controller';
 import { FertilizerAllocationEntity } from './fertilizer-allocation.entity';
 import { FertilizerBatchEntity } from './fertilizer-batch.entity';
@@ -44,13 +47,16 @@ import { StockMovementEntity } from './stock-movement.entity';
       FertilizerPaymentEntity,
       FertilizerNotificationEntity,
       // Read-only lookups bound a second time here (same pattern as before): estate name /
-      // route / owner, the agent's shift, push tokens ("Stored, not delivered"), settings.
+      // route / owner, the agent's shift, push tokens ("Stored, not delivered"), settings,
+      // and the agent + cover rows behind an agent's delivery history.
       EstateEntity,
       EstateOwnerEntity,
       RouteEntity,
       AgentDayStatusEntity,
       DevicePushTokenEntity,
       SystemSettingEntity,
+      CollectionAgentEntity,
+      RouteAssignmentEntity,
     ]),
     UsersModule,
     AuditModule,
@@ -67,6 +73,9 @@ import { StockMovementEntity } from './stock-movement.entity';
     FertilizerDeliveryService,
     FertilizerNotificationService,
     FertilizerNotificationTasks,
+    AgentFertilizerHistoryService,
   ],
+  // the Employee detail page's "Fertilizer deliveries" tab
+  exports: [AgentFertilizerHistoryService],
 })
 export class FertilizerModule {}
