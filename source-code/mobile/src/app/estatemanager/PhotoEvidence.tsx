@@ -1,122 +1,69 @@
 import React, { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
-
 import {
 
   View,
-
   StyleSheet,
-
   Alert,
-
   ScrollView,
-
   Pressable,
-
   Image,
 
 } from "react-native";
-
 import {
-
   SafeAreaView,
-
   useSafeAreaInsets,
-
 } from "react-native-safe-area-context";
-
 import { Ionicons } from "@expo/vector-icons";
-
 import { useRouter } from "expo-router";
 
-
-
 import AppText from "@/components/ui/AppText";
-
 import Avatar from "@/components/ui/Avatar";
 
-
-
 import { colors } from "@/theme/colors";
-
 import { spacing } from "@/theme/spacing";
 
 
-
 type EvidenceItem = {
-
   id: string;
-
   category: string;
-
   title: string;
-
   date: string;
-
   time: string;
-
   uri?: string;
-
 };
 
 
-
 const evidenceItems: EvidenceItem[] = [
-
   {
-
     id: "1",
-
     category: "Leaf Health",
-
     title: "Block A-12 Inspection",
-
     date: "OCT 24, 2023",
-
     time: "10:30 AM",
-
   },
-
   {
-
     id: "2",
-
     category: "General",
-
     title: "Terrace Perimeter Check",
-
     date: "OCT 23, 2023",
-
     time: "04:15 PM",
-
   },
 
   {
-
     id: "3",
-
     category: "Factory",
-
     title: "Processing Unit 04",
-
     date: "OCT 23, 2023",
-
     time: "09:08 AM",
-
   },
 
   {
-
     id: "4",
-
     category: "Botanical",
-
     title: "Tea Plant Growth",
-
     date: "OCT 22, 2023",
-
     time: "02:20 PM",
-
   },
 
 ];
