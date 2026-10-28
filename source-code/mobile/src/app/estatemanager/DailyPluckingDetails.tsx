@@ -217,16 +217,7 @@ export default function DailyPlucking() {
             },
           ]}
         >
-          <EstateManagerBottomTab
-            activeTab={activeTab}
-            onTabPress={(tab) => {
-              setActiveTab(tab.key);
-
-              if (tab.key === "dashboard") {
-                router.back();
-              }
-            }}
-          />
+         
         </View>
       </View>
     </SafeAreaView>
