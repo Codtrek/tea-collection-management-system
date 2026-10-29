@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PhoneCall, Check, X, Eye, CheckCheck, Loader2, AlertTriangle } from 'lucide-react'
+import { PhoneCall, Check, X, Eye, Loader2, AlertTriangle } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Tabs } from '@/components/ui/Tabs'
 import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorState } from '@/components/data/ErrorState'
+import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -14,9 +15,18 @@ import { Select } from '@/components/ui/Select'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as fertilizerService from '@/services/fertilizer'
-import { availableForItem, requestAvailability } from './lib'
+import {
+  availableForItem,
+  QUEUE_TAB_STATUSES,
+  QUEUE_TABS,
+  queueParams,
+  queueRows,
+  readQueueFilters,
+  requestAvailability,
+  type QueueFilters,
+} from './lib'
 import { PAYMENT_METHOD_LABEL, PAYMENT_TONE, REQUEST_TONE } from './status'
-import type { FertilizerBatch, FertilizerRequest, ItemPosition, RequestStatus } from './types'
+import type { FertilizerBatch, FertilizerRequest, ItemPosition } from './types'
 import { formatCurrency, formatDate, formatWeight } from '@/lib/format'
 
 /*
@@ -24,51 +34,11 @@ import { formatCurrency, formatDate, formatWeight } from '@/lib/format'
   approved stock waiting for its route stop, deliveries in play, the ones that need a decision
   after repeated failures, and the closed ones. Shows each request's attempt, delivery date and
   agent, payment method and payment status.
+
+  Review on the page, confirm in a modal: approving commits stock, so it happens only on FERT-06
+  (no bulk approve). Rejecting commits nothing, so a row can be rejected here with a reason.
+  The filters live in the URL — FERT-06's "Back to queue" / "Next request" keep them.
 */
-
-const TABS = [
-  { id: 'decide', label: 'To decide' },
-  { id: 'approved', label: 'Approved' },
-  { id: 'delivery', label: 'In delivery' },
-  { id: 'review', label: 'Needs review' },
-  { id: 'closed', label: 'Closed' },
-  { id: 'all', label: 'All' },
-]
-
-const ALL_STATUSES: RequestStatus[] = [
-  'Requested',
-  'Awaiting manager approval',
-  'Approved',
-  'Partially approved',
-  'Ready for dispatch',
-  'Picked up',
-  'Out for delivery',
-  'Partially delivered',
-  'Failed',
-  'Returned to factory',
-  'Rescheduled',
-  'Needs review',
-  'Delivered',
-  'Rejected',
-  'Cancelled',
-]
-
-const TAB_STATUSES: Record<string, RequestStatus[]> = {
-  decide: ['Requested', 'Awaiting manager approval'],
-  approved: ['Approved', 'Partially approved'],
-  delivery: [
-    'Ready for dispatch',
-    'Picked up',
-    'Out for delivery',
-    'Partially delivered',
-    'Failed',
-    'Returned to factory',
-    'Rescheduled',
-  ],
-  review: ['Needs review'],
-  closed: ['Delivered', 'Rejected', 'Cancelled'],
-  all: ALL_STATUSES,
-}
 
 export function RequestQueuePage() {
   const navigate = useNavigate()
@@ -78,11 +48,13 @@ export function RequestQueuePage() {
   // data-driven: the Officer's approval is its own permission key (the Administrator audits)
   const canApprove = can('fertilizerApproval', 'approve')
 
-  const [tab, setTab] = useState('decide')
-  const [search, setSearch] = useState('')
-  const [origin, setOrigin] = useState('')
-  const [status, setStatus] = useState('')
-  const [selected, setSelected] = useState<string[]>([])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filters = readQueueFilters(searchParams)
+  const setFilters = (patch: Partial<QueueFilters>) =>
+    setSearchParams(queueParams({ ...filters, ...patch }), { replace: true })
+
+  const [rejecting, setRejecting] = useState<FertilizerRequest | null>(null)
+  const [reason, setReason] = useState('')
 
   const {
     data: requests,
@@ -103,36 +75,25 @@ export function RequestQueuePage() {
     refetch: refetchBatches,
   } = useQuery({ queryKey: ['fertilizer', 'batches'], queryFn: fertilizerService.listBatches })
 
-  const bulkApproveMutation = useMutation({
-    mutationFn: ({ ids }: { ids: string[]; skipped: number }) =>
-      Promise.all(ids.map((id) => fertilizerService.decideRequest(id, { decision: 'approve' }))),
-    onSuccess: (approved, { skipped }) => {
-      toast(`Approved ${approved.length} request${approved.length > 1 ? 's' : ''}${skipped ? ` · ${skipped} skipped (insufficient stock)` : ''}`)
-      setSelected([])
+  const rejectMutation = useMutation({
+    mutationFn: ({ id, why }: { id: string; why: string }) => fertilizerService.decideRequest(id, { decision: 'reject', reason: why }),
+    onSuccess: (updated) => {
+      toast(`${updated.id} rejected`)
+      setRejecting(null)
       void queryClient.invalidateQueries({ queryKey: ['fertilizer'] })
     },
-    onError: (err) => toast(err instanceof Error ? err.message : 'Could not approve the selected requests', 'danger'),
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not reject the request', 'danger'),
   })
 
-  const rows = useMemo(() => {
-    const allowed = TAB_STATUSES[tab]
-    const q = search.trim().toLowerCase()
-    return (requests ?? [])
-      .filter(
-        (r) =>
-          allowed.includes(r.status) &&
-          (!status || r.status === status) &&
-          (!origin || r.origin === origin) &&
-          (r.estateName.toLowerCase().includes(q) ||
-            r.item.toLowerCase().includes(q) ||
-            r.id.toLowerCase().includes(q) ||
-            (r.orderRef ?? '').toLowerCase().includes(q)),
-      )
-      .sort((a, b) =>
-        // oldest first while deciding (waiting longest = decide first); newest first elsewhere
-        tab === 'decide' ? a.requestedDate.localeCompare(b.requestedDate) : b.requestedDate.localeCompare(a.requestedDate),
-      )
-  }, [requests, tab, search, origin, status])
+  const rows = useMemo(
+    () => queueRows(requests ?? [], { tab: filters.tab, search: filters.search, status: filters.status, origin: filters.origin }),
+    [requests, filters.tab, filters.search, filters.status, filters.origin],
+  )
+  // FERT-06 is opened with the queue's filters, for its "Back to queue" and "Next request"
+  const openRequest = (id: string) => {
+    const from = queueParams(filters).toString()
+    navigate(`/fertilizer/requests/${id}${from ? `?from=${encodeURIComponent(from)}` : ''}`)
+  }
 
   if (requestsPending || positionsPending || batchesPending) {
     return (
@@ -154,32 +115,6 @@ export function RequestQueuePage() {
         }}
       />
     )
-  }
-
-  const bulkApprove = () => {
-    // Re-check availability against the current pool before submitting —
-    // approving in sequence consumes the same stock, so a later selection may
-    // no longer be coverable (§6). Requests that don't fit are simply left
-    // unselected rather than sent to the server.
-    const pool: Record<string, number> = {}
-    const toApprove: string[] = []
-    let skipped = 0
-    for (const id of selected) {
-      const req = requests.find((r) => r.id === id)
-      if (!req || req.status !== 'Requested') continue
-      if (pool[req.item] === undefined) pool[req.item] = availableForItem(req.item, positions)
-      if (pool[req.item] >= req.quantityKg) {
-        pool[req.item] -= req.quantityKg
-        toApprove.push(id)
-      } else {
-        skipped += 1
-      }
-    }
-    if (toApprove.length === 0) {
-      toast('None of the selected requests could be covered by available stock', 'warning')
-      return
-    }
-    bulkApproveMutation.mutate({ ids: toApprove, skipped })
   }
 
   const columns: Column<FertilizerRequest>[] = [
@@ -276,29 +211,24 @@ export function RequestQueuePage() {
         }
       />
 
-      <Tabs
-        tabs={TABS}
-        active={tab}
-        onChange={(t) => {
-          setTab(t)
-          setStatus('')
-          setSelected([])
-        }}
-        className="mb-4"
-      />
+      <Tabs tabs={QUEUE_TABS} active={filters.tab} onChange={(t) => setFilters({ tab: t, status: '' })} className="mb-4" />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_220px_180px]">
-        <Input placeholder="Search estate, item, request or order ID…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input
+          placeholder="Search estate, item, request or order ID…"
+          value={filters.search}
+          onChange={(e) => setFilters({ search: e.target.value })}
+        />
         <Select
           placeholder="All statuses"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          options={TAB_STATUSES[tab].map((st) => ({ value: st, label: st }))}
+          value={filters.status}
+          onChange={(e) => setFilters({ status: e.target.value })}
+          options={QUEUE_TAB_STATUSES[filters.tab].map((st) => ({ value: st, label: st }))}
         />
         <Select
           placeholder="All origins"
-          value={origin}
-          onChange={(e) => setOrigin(e.target.value)}
+          value={filters.origin}
+          onChange={(e) => setFilters({ origin: e.target.value })}
           options={[
             { value: 'mobile', label: 'Mobile' },
             { value: 'web', label: 'Web (phoned-in)' },
@@ -306,22 +236,11 @@ export function RequestQueuePage() {
         />
       </div>
 
-      {canApprove && tab === 'decide' && selected.length > 0 && (
-        <div className="mb-3 flex items-center justify-between rounded-[var(--radius-md)] border border-border bg-surface px-4 py-2.5">
-          <span className="text-sm text-text-muted">{selected.length} selected</span>
-          <Button size="sm" onClick={bulkApprove} loading={bulkApproveMutation.isPending}>
-            <CheckCheck className="size-4" /> Approve selected
-          </Button>
-        </div>
-      )}
-
       <DataTable
         columns={columns}
         rows={rows}
         rowKey={(r) => r.id}
-        selectable={canApprove && tab === 'decide'}
-        onSelectionChange={setSelected}
-        onRowClick={(r) => navigate(`/fertilizer/requests/${r.id}`)}
+        onRowClick={(r) => openRequest(r.id)}
         emptyState={
           <EmptyState
             icon={<Check className="size-6" strokeWidth={1.5} />}
@@ -331,16 +250,42 @@ export function RequestQueuePage() {
         }
         actions={(r) => (
           <>
-            <RowAction icon={<Eye className="size-4" />} label="View" onClick={() => navigate(`/fertilizer/requests/${r.id}`)} />
+            <RowAction icon={<Eye className="size-4" />} label="Review" onClick={() => openRequest(r.id)} />
             {canApprove && r.status === 'Requested' && (
-              <>
-                <RowAction icon={<Check className="size-4" />} label="Approve" onClick={() => navigate(`/fertilizer/requests/${r.id}`)} />
-                <RowAction icon={<X className="size-4" />} label="Reject" tone="danger" onClick={() => navigate(`/fertilizer/requests/${r.id}`)} />
-              </>
+              <RowAction
+                icon={<X className="size-4" />}
+                label="Reject"
+                tone="danger"
+                onClick={() => {
+                  setReason('')
+                  setRejecting(r)
+                }}
+              />
             )}
           </>
         )}
       />
+
+      {rejecting && (
+        <LightConfirmModal
+          open
+          onClose={() => setRejecting(null)}
+          onConfirm={() => rejectMutation.mutate({ id: rejecting.id, why: reason.trim() })}
+          loading={rejectMutation.isPending}
+          confirmDisabled={!reason.trim()}
+          tone="danger"
+          title="Reject request"
+          confirmLabel="Reject"
+          message={
+            <>
+              Reject {rejecting.id}: {formatWeight(rejecting.quantityKg)} of {rejecting.item} for {rejecting.estateName}? The
+              reason is shown to the owner. To approve, open the request — approval commits stock.
+            </>
+          }
+        >
+          <Input label="Reason (required)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} autoFocus />
+        </LightConfirmModal>
+      )}
     </div>
   )
 }

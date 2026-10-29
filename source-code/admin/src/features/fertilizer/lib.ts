@@ -1,4 +1,4 @@
-import type { BatchStatus, FertilizerBatch, FertilizerRequest, ItemPosition } from './types'
+import type { BatchStatus, FertilizerBatch, FertilizerRequest, ItemPosition, RequestStatus } from './types'
 
 /*
   Pure, presentation-only helpers that operate on data already fetched from
@@ -93,4 +93,99 @@ export function itemsBelowDemand(positions: ItemPosition[]): ItemPosition[] {
 /** Per-item shortfall to fulfil already-approved commitments = negative available (FERT-01 card 4 + ShortfallPanel). */
 export function shortfalls(positions: ItemPosition[]): { item: string; shortfallKg: number }[] {
   return positions.filter((p) => p.available < 0).map((p) => ({ item: p.item, shortfallKg: -p.available }))
+}
+
+/* ── FERT-05 queue: tabs + filters, shared with FERT-06's "Next request" ── */
+
+export const QUEUE_TABS = [
+  { id: 'decide', label: 'To decide' },
+  { id: 'approved', label: 'Approved' },
+  { id: 'delivery', label: 'In delivery' },
+  { id: 'review', label: 'Needs review' },
+  { id: 'closed', label: 'Closed' },
+  { id: 'all', label: 'All' },
+]
+
+const ALL_STATUSES: RequestStatus[] = [
+  'Requested',
+  'Awaiting manager approval',
+  'Approved',
+  'Partially approved',
+  'Ready for dispatch',
+  'Picked up',
+  'Out for delivery',
+  'Partially delivered',
+  'Failed',
+  'Returned to factory',
+  'Rescheduled',
+  'Needs review',
+  'Delivered',
+  'Rejected',
+  'Cancelled',
+]
+
+export const QUEUE_TAB_STATUSES: Record<string, RequestStatus[]> = {
+  decide: ['Requested', 'Awaiting manager approval'],
+  approved: ['Approved', 'Partially approved'],
+  delivery: ['Ready for dispatch', 'Picked up', 'Out for delivery', 'Partially delivered', 'Failed', 'Returned to factory', 'Rescheduled'],
+  review: ['Needs review'],
+  closed: ['Delivered', 'Rejected', 'Cancelled'],
+  all: ALL_STATUSES,
+}
+
+export interface QueueFilters {
+  tab: string
+  search: string
+  status: string
+  origin: string
+}
+
+/** The queue's filters live in the URL (`?tab=&q=&status=&origin=`), so going back keeps them. */
+export function readQueueFilters(params: URLSearchParams): QueueFilters {
+  const tab = params.get('tab') ?? ''
+  return {
+    tab: tab in QUEUE_TAB_STATUSES ? tab : 'decide',
+    search: params.get('q') ?? '',
+    status: params.get('status') ?? '',
+    origin: params.get('origin') ?? '',
+  }
+}
+
+export function queueParams(f: QueueFilters): URLSearchParams {
+  const p = new URLSearchParams()
+  if (f.tab !== 'decide') p.set('tab', f.tab)
+  if (f.search) p.set('q', f.search)
+  if (f.status) p.set('status', f.status)
+  if (f.origin) p.set('origin', f.origin)
+  return p
+}
+
+/** The queue's rows in display order — oldest first while deciding (waiting longest), newest first elsewhere. */
+export function queueRows(requests: FertilizerRequest[], f: QueueFilters): FertilizerRequest[] {
+  const allowed = QUEUE_TAB_STATUSES[f.tab] ?? QUEUE_TAB_STATUSES.decide
+  const q = f.search.trim().toLowerCase()
+  return requests
+    .filter(
+      (r) =>
+        allowed.includes(r.status) &&
+        (!f.status || r.status === f.status) &&
+        (!f.origin || r.origin === f.origin) &&
+        (r.estateName.toLowerCase().includes(q) ||
+          r.item.toLowerCase().includes(q) ||
+          r.id.toLowerCase().includes(q) ||
+          (r.orderRef ?? '').toLowerCase().includes(q)),
+    )
+    .sort((a, b) =>
+      f.tab === 'decide' ? a.requestedDate.localeCompare(b.requestedDate) : b.requestedDate.localeCompare(a.requestedDate),
+    )
+}
+
+/**
+ * The request to open after deciding `currentId`, in the queue's own order. A decided request
+ * usually drops out of its tab, so then the queue's first row is the next one to work on.
+ */
+export function nextInQueue(rows: FertilizerRequest[], currentId: string): FertilizerRequest | null {
+  const at = rows.findIndex((r) => r.id === currentId)
+  if (at === -1) return rows[0] ?? null
+  return rows[at + 1] ?? null
 }

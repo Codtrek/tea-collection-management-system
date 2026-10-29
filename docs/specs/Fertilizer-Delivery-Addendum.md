@@ -224,6 +224,29 @@ How they're sent:
 | FERT-02 (movement) | Linked-request dispatch removed |
 | ADM-03 (system settings) | New Fertilizer prices section |
 
+**Approval UX: review on the page, confirm in a modal (decided 2026-10-29)**
+
+- **FERT-05 (queue):**
+  - Opening a row goes to FERT-06.
+  - The queue's tab, search, status and origin filters live in the URL (`?tab=&q=&status=&origin=`), so returning keeps them along with the sort.
+  - **No bulk approve.** Approval commits stock, so it never happens from the list.
+  - The only quick action is **Reject from the row**. It uses a modal with a required reason, because rejecting commits nothing.
+- **FERT-06 (detail):** the Officer reviews before deciding:
+  - the owner and estate;
+  - the route and its **next scheduled date**;
+  - the item and the requested quantity;
+  - Available stock and the FEFO batches that would be used;
+  - the payment method;
+  - **today's price** (the one approval snapshots);
+  - the owner's **previous requests** (the last 5);
+  - the owner's **outstanding fertilizer balance**.
+- **The three actions each open a `LightConfirmModal`:**
+  - **Approve:** a summary of the quantity, batches, price snapshot and earliest delivery, then Confirm. It is disabled when Available is less than the requested quantity.
+  - **Partial approve:** a quantity input and a **required reason**. The maximum is min(Available, requested − 1 kg).
+  - **Reject:** a **required reason**.
+- **Next request:** after a decision, FERT-06 offers **Next request** (the next row of the queue the officer came from, in that queue's order) and **Back to queue** (filters kept).
+- **Above the limit:** approving above the limit still shows "Awaiting manager approval". The Manager reviews the same page and approves or rejects there.
+
 **Portal API** (`/fertilizer`):
 - `GET requests`, `POST requests`, `GET requests/:id`
 - `PATCH requests/:id/decide`, `PATCH requests/:id/manager-decide`

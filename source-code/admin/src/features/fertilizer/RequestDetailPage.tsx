@@ -1,14 +1,17 @@
 import { useState, type ReactNode } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
   Ban,
   CalendarClock,
   Check,
   Loader2,
   PackageCheck,
   RotateCcw,
+  Scissors,
   Truck,
   Undo2,
   Wallet,
@@ -25,14 +28,17 @@ import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { factoryToday } from '@/features/dispatch/status'
+import * as dispatchService from '@/services/dispatch'
+import * as estatesService from '@/services/estates'
 import * as fertilizerService from '@/services/fertilizer'
-import { availableForItem, fefoAllocation } from './lib'
+import { availableForItem, fefoAllocation, nextInQueue, queueRows, readQueueFilters } from './lib'
 import { NOTICE_TONE, PAYMENT_METHOD_LABEL, PAYMENT_TONE, REQUEST_TONE } from './status'
-import type { DeliveryAttempt, FertilizerRequestDetail, PaymentMethod } from './types'
+import type { DeliveryAttempt, FertilizerBatch, FertilizerRequest, FertilizerRequestDetail, PaymentMethod } from './types'
 import { formatCurrency, formatDate, formatDateTime, formatWeight } from '@/lib/format'
 
 type Action =
   | 'approve'
+  | 'partial'
   | 'reject'
   | 'mgrApprove'
   | 'mgrReject'
@@ -64,12 +70,18 @@ const NOTICE_LABEL: Record<string, string> = {
 */
 export function RequestDetailPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { toast } = useToast()
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const canDecide = can('fertilizerApproval', 'approve')
   const canManager = can('fertilizerManagerApproval', 'approve')
   const canEdit = can('fertilizer', 'edit')
+
+  // `?from=` carries the FERT-05 queue's filters: "Back to queue" and "Next request" keep them
+  const [searchParams] = useSearchParams()
+  const from = searchParams.get('from') ?? ''
+  const queueHref = `/fertilizer/requests${from ? `?${from}` : ''}`
 
   const request = useQuery({
     queryKey: ['fertilizer', 'requests', id],
@@ -78,17 +90,38 @@ export function RequestDetailPage() {
   })
   const positions = useQuery({ queryKey: ['fertilizer', 'positions'], queryFn: fertilizerService.listPositions })
   const batches = useQuery({ queryKey: ['fertilizer', 'batches'], queryFn: fertilizerService.listBatches })
+  const allRequests = useQuery({ queryKey: ['fertilizer', 'requests'], queryFn: fertilizerService.listRequests })
+
+  // the facts an Officer reviews before deciding — only fetched while there is a decision to make
+  const reviewing = canDecide && request.data?.status === 'Requested'
+  const estateId = request.data?.estateId ?? ''
+  // "Mark ready" books the route's next collection day strictly after today — so ask about tomorrow
+  const tomorrow = new Date(Date.parse(`${factoryToday()}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
+  const routeAgent = useQuery({
+    queryKey: ['dispatch', 'estate-route-agent', estateId, tomorrow],
+    queryFn: () => dispatchService.getEstateRouteAgent(estateId, tomorrow),
+    enabled: reviewing,
+  })
+  const lifetime = useQuery({
+    queryKey: ['estate', estateId, 'lifetime'],
+    queryFn: () => estatesService.getLifetimeMetrics(estateId),
+    enabled: reviewing,
+  })
+  const prices = useQuery({ queryKey: ['fertilizer', 'prices'], queryFn: fertilizerService.listPrices, enabled: reviewing })
 
   const [action, setAction] = useState<Action | null>(null)
-  const [approveQty, setApproveQty] = useState<number | null>(null)
+  // the request a decision was just saved for — offers "Next request" (an id, not a flag, so
+  // moving on to the next request resets it without an effect)
+  const [decidedId, setDecidedId] = useState<string | null>(null)
 
   const run = useMutation({
-    mutationFn: (job: { call: () => Promise<FertilizerRequestDetail>; done: string }) => job.call(),
+    mutationFn: (job: { call: () => Promise<FertilizerRequestDetail>; done: string; decision?: boolean }) => job.call(),
     onSuccess: (updated, job) => {
       queryClient.setQueryData(['fertilizer', 'requests', id], updated)
       void queryClient.invalidateQueries({ queryKey: ['fertilizer'] })
       toast(job.done)
       setAction(null)
+      if (job.decision) setDecidedId(id ?? null)
     },
     onError: (err) => toast(err instanceof Error ? err.message : 'That didn’t work', 'danger'),
   })
@@ -113,13 +146,27 @@ export function RequestDetailPage() {
   const r = request.data
   const attempt = r.attempt && !r.attempt.cancelled ? r.attempt : null
   const available = availableForItem(r.item, positions.data)
-  const qty = approveQty ?? r.quantityKg
   const status = r.status
   const preDispatch = status === 'Ready for dispatch' || status === 'Rescheduled'
   const carried = attempt?.handoverQtyKg ?? 0
   const toCheckIn = Math.max(0, carried - (attempt?.deliveredQtyKg ?? 0))
+  // a partial approval is strictly less than asked, and never more than is free
+  const partialMax = Math.min(available, r.quantityKg - 1)
+  const currentPrice = prices.data?.find((p) => p.item === r.item && p.current)?.ratePerKg ?? null
+  const nextDate = routeAgent.data ? (routeAgent.data.scheduled ? tomorrow : routeAgent.data.nextScheduledDate) : null
+  const previous = (allRequests.data ?? [])
+    .filter((x) => x.estateId === r.estateId && x.id !== r.id)
+    .sort((a, b) => b.requestedDate.localeCompare(a.requestedDate))
+    .slice(0, 5)
+  const next =
+    decidedId === r.id && allRequests.data
+      ? nextInQueue(queueRows(allRequests.data, readQueueFilters(new URLSearchParams(from))), r.id)
+      : null
 
-  const do_ = (call: () => Promise<FertilizerRequestDetail>, done: string) => run.mutate({ call, done })
+  const do_ = (call: () => Promise<FertilizerRequestDetail>, done: string, decision?: boolean) =>
+    run.mutate({ call, done, decision })
+  const openRequest = (rid: string) =>
+    navigate(`/fertilizer/requests/${rid}${from ? `?from=${encodeURIComponent(from)}` : ''}`)
 
   return (
     <div>
@@ -128,10 +175,31 @@ export function RequestDetailPage() {
         breadcrumb={[
           { label: 'Home', to: '/dashboard' },
           { label: 'Fertilizer Inventory', to: '/fertilizer' },
-          { label: 'Requests', to: '/fertilizer/requests' },
+          { label: 'Requests', to: queueHref },
           { label: r.id },
         ]}
       />
+
+      {decidedId === r.id && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border bg-brand-soft/50 px-4 py-3">
+          <p className="text-sm text-text">
+            Decision saved — <strong>{r.status}</strong>.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={() => navigate(queueHref)}>
+              <ArrowLeft className="size-4" /> Back to queue
+            </Button>
+            {next ? (
+              <Button size="sm" onClick={() => openRequest(next.id)}>
+                Next request · {next.id} <ArrowRight className="size-4" />
+              </Button>
+            ) : (
+              <span className="self-center text-xs text-text-muted">No more requests in this queue.</span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* its own row, not the header's action slot — several buttons must wrap on narrow screens */}
       <ActionBar r={r} canEdit={canEdit} preDispatch={preDispatch} onAction={setAction} />
 
@@ -140,38 +208,63 @@ export function RequestDetailPage() {
           <SummaryCard r={r} />
 
           {status === 'Requested' && canDecide && (
+            // review on the page, confirm in a modal (Fertilizer-Delivery-Addendum §10)
             <Card>
               <CardHeader>
                 <CardTitle>Officer decision</CardTitle>
               </CardHeader>
               <div className="flex flex-col gap-5">
                 <div className="grid grid-cols-3 gap-4">
-                  <Snapshot label="Available now" value={formatWeight(available)} danger={available < qty} />
+                  <Snapshot label="Available now" value={formatWeight(available)} danger={available < r.quantityKg} />
                   <Snapshot label="Requested" value={formatWeight(r.quantityKg)} />
-                  <Snapshot label="After approval" value={formatWeight(available - qty)} danger={available - qty < 0} />
+                  <Snapshot
+                    label="After full approval"
+                    value={formatWeight(available - r.quantityKg)}
+                    danger={available - r.quantityKg < 0}
+                  />
                 </div>
-                <Input
-                  label="Quantity to approve (kg)"
-                  type="number"
-                  min="0"
-                  value={String(qty)}
-                  onChange={(e) => setApproveQty(Number(e.target.value))}
-                  hint={
-                    qty < r.quantityKg
-                      ? `Partial approval — ${formatWeight(r.quantityKg - qty)} short of the request; a reason is required and shown to the owner.`
-                      : undefined
-                  }
-                  error={qty > available ? `Only ${formatWeight(Math.max(0, available))} is available — stock is never promised twice.` : undefined}
-                />
-                <FefoPreview allocation={fefoAllocation(r.item, Math.max(0, Math.min(qty, available)), batches.data)} />
-                {qty > 0 && qty <= available && (
-                  <p className="text-xs text-text-muted">
-                    The current price is snapshotted on approval and never recalculated.
+                <FefoPreview allocation={fefoAllocation(r.item, Math.max(0, Math.min(r.quantityKg, available)), batches.data)} />
+                <dl className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
+                  <Field
+                    label="Route · next collection day"
+                    value={
+                      routeAgent.isPending
+                        ? '…'
+                        : `${r.routeName ?? routeAgent.data?.routeName ?? '—'}${nextDate ? ` · ${formatDate(nextDate)}` : ''}`
+                    }
+                  />
+                  <Field label="Payment method" value={PAYMENT_METHOD_LABEL[r.payment.method]} />
+                  <Field
+                    label="Price today (fixed at approval)"
+                    value={currentPrice !== null ? `${formatCurrency(currentPrice)}/kg` : prices.isPending ? '…' : 'No price set'}
+                  />
+                  <Field
+                    label="Owner’s fertilizer balance"
+                    value={
+                      lifetime.data ? (
+                        <span className={lifetime.data.outstanding.fertilizerUndeductedRs > 0 ? 'font-medium text-warning-fg' : undefined}>
+                          {formatCurrency(lifetime.data.outstanding.fertilizerUndeductedRs)} outstanding
+                        </span>
+                      ) : lifetime.isError ? (
+                        '—'
+                      ) : (
+                        '…'
+                      )
+                    }
+                  />
+                </dl>
+                <PreviousRequests rows={previous} estateName={r.estateName} onOpen={openRequest} />
+                {available < r.quantityKg && (
+                  <p className="text-xs text-warning-fg">
+                    Only {formatWeight(Math.max(0, available))} is free — approve partially or reject. Stock is never promised twice.
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-                  <Button onClick={() => setAction('approve')} disabled={qty <= 0 || qty > r.quantityKg || qty > available}>
-                    <Check className="size-4" /> {qty < r.quantityKg ? 'Approve partially' : 'Approve'}
+                  <Button onClick={() => setAction('approve')} disabled={available < r.quantityKg}>
+                    <Check className="size-4" /> Approve
+                  </Button>
+                  <Button variant="secondary" onClick={() => setAction('partial')} disabled={partialMax <= 0}>
+                    <Scissors className="size-4" /> Partial approve
                   </Button>
                   <Button variant="danger" onClick={() => setAction('reject')}>
                     <X className="size-4" /> Reject
@@ -225,7 +318,11 @@ export function RequestDetailPage() {
           key={action}
           action={action}
           r={r}
-          qty={qty}
+          available={available}
+          partialMax={partialMax}
+          batches={batches.data}
+          price={currentPrice}
+          nextDate={nextDate}
           committed={r.committedKg}
           toCheckIn={toCheckIn}
           loading={run.isPending}
@@ -303,7 +400,11 @@ function ActionBar({
 function ActionDialog({
   action,
   r,
-  qty,
+  available,
+  partialMax,
+  batches,
+  price,
+  nextDate,
   committed,
   toCheckIn,
   loading,
@@ -312,12 +413,18 @@ function ActionDialog({
 }: {
   action: Action
   r: FertilizerRequestDetail
-  qty: number
+  available: number
+  partialMax: number
+  batches: FertilizerBatch[]
+  /** today's Rs./kg for the item — what approval will snapshot */
+  price: number | null
+  /** the route's next collection day (the delivery date is set when it's marked ready) */
+  nextDate: string | null
   committed: number
   toCheckIn: number
   loading: boolean
   onClose: () => void
-  onRun: (call: () => Promise<FertilizerRequestDetail>, done: string) => void
+  onRun: (call: () => Promise<FertilizerRequestDetail>, done: string, decision?: boolean) => void
 }) {
   const today = factoryToday()
   const [reason, setReason] = useState('')
@@ -327,47 +434,101 @@ function ActionDialog({
   const [reference, setReference] = useState('')
   const [handover, setHandover] = useState(String(committed))
   const [checkIn, setCheckIn] = useState(String(toCheckIn))
+  const [partialQty, setPartialQty] = useState(String(Math.max(0, partialMax)))
 
-  const partial = qty < r.quantityKg
+  // the quantity this decision commits: all of it, or the partial amount typed in the modal
+  const qty = action === 'partial' ? Number(partialQty) : r.quantityKg
+  const partialInvalid = action === 'partial' && !(qty > 0 && qty <= partialMax)
   const overLimit = qty > r.managerApprovalAboveKg
-  const needReason = ['reject', 'mgrReject', 'release', 'cancel', 'date'].includes(action) || (action === 'approve' && partial)
+  const needReason = ['partial', 'reject', 'mgrReject', 'release', 'cancel', 'date'].includes(action)
   const missing = needReason && !reason.trim()
+
+  const approveSummary = (
+    <>
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-[var(--radius-md)] bg-surface-sunken p-3 text-xs">
+        <dt className="text-text-muted">Quantity</dt>
+        <dd className="tabular text-right font-medium text-text">
+          {partialInvalid ? '—' : formatWeight(qty)}
+          {action === 'partial' && !partialInvalid && <span className="text-text-muted"> of {formatWeight(r.quantityKg)}</span>}
+        </dd>
+        <dt className="text-text-muted">Price (snapshot)</dt>
+        <dd className="tabular text-right text-text">
+          {price !== null ? `${formatCurrency(price)}/kg · ${formatCurrency(price * (partialInvalid ? 0 : qty))}` : 'No price set'}
+        </dd>
+        <dt className="text-text-muted">Earliest delivery</dt>
+        <dd className="text-right text-text">{nextDate ? formatDate(nextDate) : 'Next collection day'}</dd>
+      </dl>
+      <div className="mt-3">
+        <FefoPreview allocation={fefoAllocation(r.item, partialInvalid ? 0 : Math.min(qty, available), batches)} />
+      </div>
+      {overLimit && !partialInvalid && (
+        <span className="mt-2 block text-warning-fg">
+          That is over the {formatWeight(r.managerApprovalAboveKg)} limit — a Factory Manager must also approve.
+        </span>
+      )}
+    </>
+  )
 
   const cfg: Record<Action, { title: string; label: string; tone?: 'danger'; message: ReactNode; go: () => void; disabled?: boolean }> = {
     approve: {
-      title: partial ? 'Approve partially' : 'Approve request',
-      label: 'Approve',
+      title: 'Approve request',
+      label: 'Confirm approval',
       message: (
         <>
           Commit <strong>{formatWeight(qty)}</strong> of {r.item} to {r.estateName}, first-expiring batches first.
-          {overLimit && (
-            <span className="mt-2 block text-warning-fg">
-              That is over the {formatWeight(r.managerApprovalAboveKg)} limit — a Factory Manager must also approve.
-            </span>
-          )}
+          {approveSummary}
         </>
       ),
-      go: () => onRun(() => fertilizerService.decideRequest(r.id, { decision: 'approve', approvedQtyKg: qty, reason: reason.trim() || undefined }), overLimit ? 'Approved — waiting for a Factory Manager' : `Approved ${formatWeight(qty)}`),
+      go: () =>
+        onRun(
+          () => fertilizerService.decideRequest(r.id, { decision: 'approve', approvedQtyKg: qty }),
+          overLimit ? 'Approved — waiting for a Factory Manager' : `Approved ${formatWeight(qty)}`,
+          true,
+        ),
+    },
+    partial: {
+      title: 'Partial approve',
+      label: 'Confirm partial approval',
+      message: (
+        <>
+          Approve less than the {formatWeight(r.quantityKg)} asked — at most {formatWeight(Math.max(0, partialMax))} (what is
+          free, and less than requested). The reason is shown to the owner.
+          {approveSummary}
+        </>
+      ),
+      go: () =>
+        onRun(
+          () => fertilizerService.decideRequest(r.id, { decision: 'approve', approvedQtyKg: qty, reason: reason.trim() }),
+          overLimit ? 'Approved — waiting for a Factory Manager' : `Approved ${formatWeight(qty)} of ${formatWeight(r.quantityKg)}`,
+          true,
+        ),
+      disabled: partialInvalid,
     },
     reject: {
       title: 'Reject request',
       label: 'Reject',
       tone: 'danger',
       message: <>Reject the request for {r.estateName}? The reason is shown to the owner.</>,
-      go: () => onRun(() => fertilizerService.decideRequest(r.id, { decision: 'reject', reason: reason.trim() }), 'Request rejected'),
+      go: () => onRun(() => fertilizerService.decideRequest(r.id, { decision: 'reject', reason: reason.trim() }), 'Request rejected', true),
     },
     mgrApprove: {
       title: 'Manager approval',
       label: 'Approve',
       message: <>Approve {formatWeight(r.approvedQtyKg ?? r.quantityKg)} of {r.item} for {r.estateName}?</>,
-      go: () => onRun(() => fertilizerService.managerDecide(r.id, { decision: 'approve', reason: reason.trim() || undefined }), 'Approved by the Factory Manager'),
+      go: () =>
+        onRun(
+          () => fertilizerService.managerDecide(r.id, { decision: 'approve', reason: reason.trim() || undefined }),
+          'Approved by the Factory Manager',
+          true,
+        ),
     },
     mgrReject: {
       title: 'Reject as Factory Manager',
       label: 'Reject',
       tone: 'danger',
       message: <>The committed stock goes back to Available. The reason is shown to the owner.</>,
-      go: () => onRun(() => fertilizerService.managerDecide(r.id, { decision: 'reject', reason: reason.trim() }), 'Rejected — stock released'),
+      go: () =>
+        onRun(() => fertilizerService.managerDecide(r.id, { decision: 'reject', reason: reason.trim() }), 'Rejected — stock released', true),
     },
     ready: {
       title: 'Mark ready for dispatch',
@@ -468,6 +629,21 @@ function ActionDialog({
       message={c.message}
     >
       <div className="flex flex-col gap-3">
+        {action === 'partial' && (
+          <Input
+            label="Quantity to approve (kg)"
+            type="number"
+            min="1"
+            max={String(Math.max(0, partialMax))}
+            value={partialQty}
+            onChange={(e) => setPartialQty(e.target.value)}
+            error={
+              partialQty !== '' && partialInvalid
+                ? `Enter more than 0 and at most ${formatWeight(Math.max(0, partialMax))}.`
+                : undefined
+            }
+          />
+        )}
         {action === 'handover' && (
           <Input label="Quantity handed over (kg)" type="number" value={handover} onChange={(e) => setHandover(e.target.value)} />
         )}
@@ -813,6 +989,44 @@ function NoticesCard({ r }: { r: FertilizerRequestDetail }) {
         registered device.
       </p>
     </Card>
+  )
+}
+
+/** The same owner's recent requests — context for the decision (FERT-06 review). */
+function PreviousRequests({
+  rows,
+  estateName,
+  onOpen,
+}: {
+  rows: FertilizerRequest[]
+  estateName: string
+  onOpen: (id: string) => void
+}) {
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-text-muted">{estateName}’s previous requests</p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-text-muted">None — this is the first.</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-border rounded-[var(--radius-md)] border border-border">
+          {rows.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => onOpen(p.id)}
+                className="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-surface-hover"
+              >
+                <span className="text-text">
+                  <span className="id text-xs text-text-muted">{p.id}</span> · {p.item} · {formatWeight(p.quantityKg)} ·{' '}
+                  {formatDate(p.requestedDate)}
+                </span>
+                <StatusBadge tone={REQUEST_TONE[p.status]}>{p.status}</StatusBadge>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
