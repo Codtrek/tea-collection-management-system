@@ -1,3 +1,5 @@
+import { ImageBackground } from "react-native";
+
 export const colors = {
   // Brand
   primary: "#53CF81",
@@ -8,6 +10,7 @@ export const colors = {
   // Backgrounds
   background: "#FFFFFF",
   surface: "#F9FAFB",
+  ImageBackground: "#d8dde2",
 
   // Text
   text: {

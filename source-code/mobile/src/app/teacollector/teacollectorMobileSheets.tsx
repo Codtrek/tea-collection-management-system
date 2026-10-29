@@ -39,7 +39,7 @@ export const FertDetailsSheet = ({
   onClose,
   onAccept,
   onLoad,
-  onDeliver,
+  onNavigate,
   onCancel,
 }: any) => {
   const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
@@ -102,7 +102,7 @@ export const FertDetailsSheet = ({
               <Btn variant="danger" block onPress={onCancel}>Cancel</Btn>
             </View>
             <View style={{ flex: 1 }}>
-              <Btn variant="primary" block onPress={onDeliver}>Deliver</Btn>
+              <Btn variant="primary" block onPress={onNavigate}>Navigate to Estate</Btn>
             </View>
           </View>
         )}
@@ -125,7 +125,6 @@ export const FertDetailsSheet = ({
 };
 
 export const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
-  const [notes, setNotes] = useState('');
   if (!request) return null;
   return (
     <Sheet open={open} onClose={onClose}>
@@ -160,26 +159,6 @@ export const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
         <DetailRow k="Destination" v={request.estateName} />
       </View>
 
-      <Field label="Loading Notes (optional)">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: c.line,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Any loading details..."
-          value={notes}
-          onChangeText={setNotes}
-        />
-      </Field>
-
       <Btn variant="primary" block onPress={onConfirm}>
         Confirm Loaded
       </Btn>
@@ -187,7 +166,7 @@ export const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
   );
 };
 
-export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => {
+export const FertilizerNavigateSheet = ({ open, request, onClose, onDeliver }: any) => {
   if (!request) return null;
   return (
     <Sheet open={open} onClose={onClose}>
@@ -199,7 +178,7 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
         fontSize: 11,
         color: c.sageDeep,
       }}>
-        Deliver to Estates
+        Navigate to Estate
       </Text>
       <Text style={{
         fontFamily: fontDisplay.fontFamily,
@@ -210,6 +189,57 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
       }}>{request.estateName}</Text>
       
       <View style={{
+        height: 200,
+        borderRadius: 14,
+        padding: 16,
+        marginBottom: 14,
+        backgroundColor: "#E8F1E7",
+        borderWidth: 1,
+        borderColor: c.line,
+        overflow: "hidden",
+        justifyContent: "center",
+        alignItems: "center",
+      }}>
+        <View style={{
+          position: "absolute",
+          width: "130%",
+          height: 18,
+          backgroundColor: "#FFFFFF",
+          transform: [{ rotate: "-18deg" }],
+        }} />
+        <View style={{
+          position: "absolute",
+          width: "130%",
+          height: 10,
+          backgroundColor: "#D5E3D1",
+          transform: [{ rotate: "32deg" }],
+        }} />
+        <View style={{
+          width: 82,
+          height: 82,
+          borderRadius: 41,
+          backgroundColor: "rgba(83, 207, 129, 0.2)",
+          alignItems: "center",
+          justifyContent: "center",
+        }}>
+          <Ionicons name="location" size={38} color={colors.primary} />
+        </View>
+        <Text style={{
+          marginTop: 8,
+          paddingHorizontal: 10,
+          paddingVertical: 5,
+          borderRadius: 12,
+          overflow: "hidden",
+          backgroundColor: colors.white,
+          color: colors.text.primary,
+          fontSize: 12,
+          fontWeight: "600",
+        }}>
+          {request.estateName}
+        </Text>
+      </View>
+
+      <View style={{
         borderRadius: 14,
         padding: 14,
         marginBottom: 14,
@@ -219,10 +249,13 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
       }}>
         <DetailRow k="Fertilizer" v={request.fertilizerType} />
         <DetailRow k="Quantity" v={`${request.quantity} kg`} />
+        {request.estimatedDistanceKm != null && (
+          <DetailRow k="Estimated distance" v={`~${request.estimatedDistanceKm} km`} />
+        )}
       </View>
 
-      <Btn variant="primary" block onPress={onConfirm}>
-        Confirm Delivered
+      <Btn variant="primary" block onPress={onDeliver}>
+        Deliver
       </Btn>
     </Sheet>
   );
@@ -468,10 +501,17 @@ export const CancelPickupSheet = ({ open, onBack, onConfirm, requestLabel = "pic
   );
 };
 
-export const BatchCancelRequestsSheet = ({ open, requestCount, onClose, onConfirm }: any) => {
+export const BatchCancelRequestsSheet = ({
+  open,
+  requestCount,
+  onClose,
+  onConfirm,
+  requestLabel = "pickup request",
+}: any) => {
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [showWarning, setShowWarning] = useState(false);
+  const pluralRequestLabel = `${requestLabel}${requestCount === 1 ? '' : 's'}`;
 
   useEffect(() => {
     if (open) {
@@ -489,9 +529,9 @@ export const BatchCancelRequestsSheet = ({ open, requestCount, onClose, onConfir
           fontWeight: '600',
           marginBottom: 4,
           fontSize: 20,
-        }}>Cancel selected requests</Text>
+        }}>Cancel selected {pluralRequestLabel}</Text>
         <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
-          This will cancel {requestCount} selected pickup request{requestCount === 1 ? '' : 's'}. Select a reason.
+          This will cancel {requestCount} selected {pluralRequestLabel}. Select a reason.
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {PICKUP_REASONS.map((pickupReason) => (
@@ -536,8 +576,8 @@ export const BatchCancelRequestsSheet = ({ open, requestCount, onClose, onConfir
       </Sheet>
       <ConfirmationWarning
         visible={showWarning}
-        title={`Cancel ${requestCount} request${requestCount === 1 ? '' : 's'}?`}
-        message="These pickup requests will be cancelled. This action cannot be undone."
+        title={`Cancel ${requestCount} ${pluralRequestLabel}?`}
+        message={`These ${pluralRequestLabel} will be cancelled. This action cannot be undone.`}
         confirmLabel="Cancel requests"
         onCancel={() => setShowWarning(false)}
         onConfirm={() => {
