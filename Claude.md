@@ -963,6 +963,18 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Fertilizer approval** (Fertilizer-Delivery-Addendum §10):
   - **FERT-05:** filters in the URL (`readQueueFilters` / `queueParams` / `queueRows` in `fertilizer/lib.ts`); no bulk approve; Reject from a row through a reason modal.
   - **FERT-06:** review facts (next collection day, asked for *tomorrow*, because Mark ready books strictly after today; price; balance; previous requests), then Approve / Partial approve / Reject modals, then "Next request" (`nextInQueue`, following the `?from=` queue).
+- **One stock-position service** (Fertilizer-Delivery-Addendum §5.1):
+  - **Where:** `backend/src/fertilizer/fertilizer-position.service.ts` is the only place stock is computed.
+  - **Figures:** On Hand (live only), expired kg, committed (+ value), available, pending, expiring soon (`system_settings.fertilizer.expiringSoonDays`, default 30), nearest expiry and status.
+  - **Status, worst first:** Out of stock / Short X kg / Fully committed / Expiring soon / Healthy. "Tight" is gone.
+  - **Batches:** they carry their server `status`, `daysToExpiry` and `freeKg`.
+  - **Requested requests:** they carry `availability` (a verdict and the FEFO plan over **free** stock).
+  - **Portal:** `fertilizer/lib.ts` only formats (`coverageDisplay` caps at ">999%", `availabilityLabel`, `fefoPrefix`). It must never compute stock again.
+  - **Root cause it fixed:** a server status that ignored availability and expiry, plus portal-side request and FEFO math. On Hand never included expired stock.
+- **Request review is visible:**
+  - FERT-05 rows have a **Review** (or **View**) text button.
+  - FERT-06 puts Approve / Partial approve / Reject at the top (`DecisionBar`).
+  - With nothing free, it offers only Reject or "Keep pending until stock arrives" (no server call).
 - **Payroll by month** (`docs/specs/Payroll-Month-History-Addendum.md`):
   - **Month:** `?month=YYYY-MM`, helpers in `employees/payroll-month.ts` ('2026-10' ↔ the backend period 'October 2026').
   - **Statuses:** In progress / Ready to process / Processed / No payroll. There is no "Paid".

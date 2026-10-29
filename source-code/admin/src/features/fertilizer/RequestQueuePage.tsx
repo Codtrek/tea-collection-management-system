@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PhoneCall, Check, X, Eye, Loader2, AlertTriangle } from 'lucide-react'
+import { PhoneCall, Check, X, Loader2, AlertTriangle } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Tabs } from '@/components/ui/Tabs'
 import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
@@ -233,7 +233,10 @@ export function RequestQueuePage() {
         }
         actions={(r) => (
           <>
-            <RowAction icon={<Eye className="size-4" />} label="Review" onClick={() => openRequest(r.id)} />
+            {/* a visible word, not just an eye icon — approving happens on the page it opens */}
+            <Button size="sm" variant="secondary" onClick={() => openRequest(r.id)}>
+              {filters.tab === 'decide' ? 'Review' : 'View'}
+            </Button>
             {canApprove && r.status === 'Requested' && (
               <RowAction
                 icon={<X className="size-4" />}

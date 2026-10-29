@@ -200,6 +200,23 @@ export function RequestDetailPage() {
       )}
 
       {/* its own row, not the header's action slot — several buttons must wrap on narrow screens */}
+      {status === 'Requested' && canDecide && (
+        // the decision sits at the top of the page, where people look for it (Fertilizer-Delivery-Addendum §10)
+        <DecisionBar
+          requestedKg={r.quantityKg}
+          available={available}
+          partialMax={partialMax}
+          onAction={setAction}
+          onKeepPending={() => {
+            toast(`${r.id} stays pending until stock arrives`)
+            const following = allRequests.data
+              ? nextInQueue(queueRows(allRequests.data, readQueueFilters(new URLSearchParams(from))), r.id)
+              : null
+            if (following) openRequest(following.id)
+            else navigate(queueHref)
+          }}
+        />
+      )}
       <ActionBar r={r} canEdit={canEdit} preDispatch={preDispatch} onAction={setAction} />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -253,22 +270,6 @@ export function RequestDetailPage() {
                   />
                 </dl>
                 <PreviousRequests rows={previous} estateName={r.estateName} onOpen={openRequest} />
-                {available < r.quantityKg && (
-                  <p className="text-xs text-warning-fg">
-                    Only {formatWeight(Math.max(0, available))} is free — approve partially or reject. Stock is never promised twice.
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-                  <Button onClick={() => setAction('approve')} disabled={available < r.quantityKg}>
-                    <Check className="size-4" /> Approve
-                  </Button>
-                  <Button variant="secondary" onClick={() => setAction('partial')} disabled={partialMax <= 0}>
-                    <Scissors className="size-4" /> Partial approve
-                  </Button>
-                  <Button variant="danger" onClick={() => setAction('reject')}>
-                    <X className="size-4" /> Reject
-                  </Button>
-                </div>
               </div>
             </Card>
           )}
@@ -327,6 +328,60 @@ export function RequestDetailPage() {
           onClose={() => setAction(null)}
           onRun={do_}
         />
+      )}
+    </div>
+  )
+}
+
+/* ── The Officer's decision: Approve / Partial approve / Reject, each confirmed in a modal ── */
+
+function DecisionBar({
+  requestedKg,
+  available,
+  partialMax,
+  onAction,
+  onKeepPending,
+}: {
+  requestedKg: number
+  available: number
+  partialMax: number
+  onAction: (a: Action) => void
+  onKeepPending: () => void
+}) {
+  // nothing free at all: approving is impossible, so offer only Reject or waiting for stock
+  if (available <= 0) {
+    return (
+      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-border bg-surface px-4 py-3">
+        <p className="flex-1 text-sm text-text-muted">
+          No free stock of this item — it can’t be approved now. Reject it, or keep it pending until stock arrives (it stays
+          in “To decide”).
+        </p>
+        <Button variant="secondary" onClick={onKeepPending}>
+          Keep pending until stock arrives
+        </Button>
+        <Button variant="danger" onClick={() => onAction('reject')}>
+          <X className="size-4" /> Reject
+        </Button>
+      </div>
+    )
+  }
+  const short = available < requestedKg
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-border bg-surface px-4 py-3">
+      <Button onClick={() => onAction('approve')} disabled={short}>
+        <Check className="size-4" /> Approve
+      </Button>
+      <Button variant="secondary" onClick={() => onAction('partial')} disabled={partialMax <= 0}>
+        <Scissors className="size-4" /> Partial approve
+      </Button>
+      <Button variant="danger" onClick={() => onAction('reject')}>
+        <X className="size-4" /> Reject
+      </Button>
+      {short && (
+        <p className="text-xs text-warning-fg">
+          Approve is off: only {formatWeight(available)} of {formatWeight(requestedKg)} is free — partial approve (up to{' '}
+          {formatWeight(partialMax)}) or reject.
+        </p>
       )}
     </div>
   )
