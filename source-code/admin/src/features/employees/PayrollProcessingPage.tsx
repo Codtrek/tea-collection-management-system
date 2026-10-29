@@ -1,25 +1,26 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, AlertTriangle, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorState } from '@/components/data/ErrorState'
 import { HighStakesConfirmFlow } from '@/components/patterns/HighStakesConfirmFlow'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as employeesService from '@/services/employees'
 import { netPay } from './calc'
+import { currentMonth, periodOf, readMonth } from './payroll-month'
 import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/cn'
-
-const PERIOD = 'July 2026'
 
 /* EMP-12 — first build of HighStakesConfirmFlow. Employees missing bank details
    are excluded and flagged (UC-054 exception flow); confirmation requires the
    user to re-type the total before the irreversible run. No per-transaction
-   bank charge is deducted — resolved 2026-07-26, see Claude.md. */
+   bank charge is deducted — resolved 2026-07-26, see Claude.md.
+   Runs for `?month=YYYY-MM` (Payroll-Month-History-Addendum): never the month in progress. */
 export function PayrollProcessingPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -28,8 +29,14 @@ export function PayrollProcessingPage() {
   const [confirming, setConfirming] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
 
+  const [searchParams] = useSearchParams()
+  const thisMonth = currentMonth()
+  const month = readMonth(searchParams.get('month'), thisMonth)
+  const PERIOD = periodOf(month)
+  const backHref = `/employees/payroll?month=${month}`
+
   const { data: payroll, isPending, isError, refetch } = useQuery({
-    queryKey: ['employees', 'payroll', PERIOD],
+    queryKey: ['employees', 'payroll', PERIOD, 'Pending'],
     queryFn: () => employeesService.listPayroll(PERIOD, 'Pending'),
   })
 
@@ -40,10 +47,18 @@ export function PayrollProcessingPage() {
       toast(`Processed by ${user?.name ?? 'you'} — ${formatCurrency(total)} across ${processed.length} employees`)
       setConfirming(false)
       void queryClient.invalidateQueries({ queryKey: ['employees', 'payroll'] })
-      navigate('/employees/payroll')
+      navigate(backHref)
     },
     onError: (err) => toast(err instanceof Error ? err.message : 'Could not process payroll', 'danger'),
   })
+
+  // the month in progress, or one with nothing pending (processed / never generated), can't be run
+  const blocked =
+    month === thisMonth
+      ? `${PERIOD} is still in progress — it can be processed once the month has ended.`
+      : payroll && payroll.length === 0
+        ? `Nothing to process for ${PERIOD} — it is already processed or has no payroll yet.`
+        : null
 
   if (isPending) {
     return (
@@ -62,12 +77,33 @@ export function PayrollProcessingPage() {
   const excluded = rows.filter((r) => r.missingBank)
   const total = included.reduce((sum, r) => sum + netPay(r), 0)
 
+  const header = (
+    <PageHeader
+      title="Process Payroll"
+      breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Payroll', to: backHref }, { label: 'Process' }]}
+    />
+  )
+
+  if (blocked) {
+    return (
+      <div>
+        {header}
+        <EmptyState
+          title={`Can’t process ${PERIOD}`}
+          description={blocked}
+          action={
+            <Button size="sm" variant="secondary" onClick={() => navigate(backHref)}>
+              Back to payroll
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
+
   return (
     <div>
-      <PageHeader
-        title="Process Payroll"
-        breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Payroll', to: '/employees/payroll' }, { label: 'Process' }]}
-      />
+      {header}
 
       {/* Period header */}
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
@@ -117,7 +153,7 @@ export function PayrollProcessingPage() {
       </Card>
 
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="secondary" onClick={() => navigate('/employees/payroll')}>Cancel</Button>
+        <Button variant="secondary" onClick={() => navigate(backHref)}>Cancel</Button>
         <Button size="lg" onClick={() => setConfirming(true)} disabled={included.length === 0}>
           Process {included.length} Payslips
         </Button>

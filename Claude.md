@@ -951,6 +951,24 @@ below on real rows → re-run is a no-op → new seed → API booted and the who
   **Gotcha:** the fakes don't enforce column lengths — two VARCHAR overflows were only caught on a real DB; keep timeline `action`
   ≤ 80 chars. **Mobile UI for the agent flow is NOT built** (origin/dev not merged) — only the API.
 
+## Portal fixes: dispatch layout, approval UX, payroll months (2026-10-29, `fix/dispatch-fert-payroll`)
+
+Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so; kept separable as three commits.
+- **Dispatch board overlap:**
+  - **Cause:** `StatusBadge` was a fixed-height pill (`h-[22px]`) whose text wrapped and spilled onto the row above. It is now `whitespace-nowrap`, so pills never wrap anywhere.
+  - **`DataTable`:** gained three opt-in props, `Column.minWidth`, `valign="top"` and `stickyFirstColumn`.
+  - **Route cell:** `otherRoutesNote` ("Also holds …" under a route, "Holds: …" when none runs; "Not scheduled" lives only in Status).
+  - **Last seen:** `freshnessShort` keeps it on one line, with the full text as the tooltip.
+  - **Map:** beside the table only at `2xl`.
+- **Fertilizer approval** (Fertilizer-Delivery-Addendum §10):
+  - **FERT-05:** filters in the URL (`readQueueFilters` / `queueParams` / `queueRows` in `fertilizer/lib.ts`); no bulk approve; Reject from a row through a reason modal.
+  - **FERT-06:** review facts (next collection day, asked for *tomorrow*, because Mark ready books strictly after today; price; balance; previous requests), then Approve / Partial approve / Reject modals, then "Next request" (`nextInQueue`, following the `?from=` queue).
+- **Payroll by month** (`docs/specs/Payroll-Month-History-Addendum.md`):
+  - **Month:** `?month=YYYY-MM`, helpers in `employees/payroll-month.ts` ('2026-10' ↔ the backend period 'October 2026').
+  - **Statuses:** In progress / Ready to process / Processed / No payroll. There is no "Paid".
+  - **Processing:** the current month can't be processed until it ends.
+  - **Audit and calculation:** Generate and Process were *already* audited; the calculation is unchanged.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React
