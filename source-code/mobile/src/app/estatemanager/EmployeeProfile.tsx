@@ -3,11 +3,11 @@ import React from "react";
 import {
   Alert,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -19,6 +19,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 
 export default function EmployeeProfile() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // Replace these sample values with the employee's real data.
   const employee = {
@@ -144,9 +145,13 @@ export default function EmployeeProfile() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: spacing.xl + insets.bottom },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
@@ -434,6 +439,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  scrollView: {
+    flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.md,
