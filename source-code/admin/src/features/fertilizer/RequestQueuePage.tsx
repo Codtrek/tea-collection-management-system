@@ -16,17 +16,16 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as fertilizerService from '@/services/fertilizer'
 import {
-  availableForItem,
+  availabilityLabel,
   QUEUE_TAB_STATUSES,
   QUEUE_TABS,
   queueParams,
   queueRows,
   readQueueFilters,
-  requestAvailability,
   type QueueFilters,
 } from './lib'
 import { PAYMENT_METHOD_LABEL, PAYMENT_TONE, REQUEST_TONE } from './status'
-import type { FertilizerBatch, FertilizerRequest, ItemPosition } from './types'
+import type { FertilizerRequest } from './types'
 import { formatCurrency, formatDate, formatWeight } from '@/lib/format'
 
 /*
@@ -62,18 +61,6 @@ export function RequestQueuePage() {
     isError: requestsError,
     refetch: refetchRequests,
   } = useQuery({ queryKey: ['fertilizer', 'requests'], queryFn: fertilizerService.listRequests })
-  const {
-    data: positions,
-    isPending: positionsPending,
-    isError: positionsError,
-    refetch: refetchPositions,
-  } = useQuery({ queryKey: ['fertilizer', 'positions'], queryFn: fertilizerService.listPositions })
-  const {
-    data: batches,
-    isPending: batchesPending,
-    isError: batchesError,
-    refetch: refetchBatches,
-  } = useQuery({ queryKey: ['fertilizer', 'batches'], queryFn: fertilizerService.listBatches })
 
   const rejectMutation = useMutation({
     mutationFn: ({ id, why }: { id: string; why: string }) => fertilizerService.decideRequest(id, { decision: 'reject', reason: why }),
@@ -95,7 +82,7 @@ export function RequestQueuePage() {
     navigate(`/fertilizer/requests/${id}${from ? `?from=${encodeURIComponent(from)}` : ''}`)
   }
 
-  if (requestsPending || positionsPending || batchesPending) {
+  if (requestsPending) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
@@ -103,16 +90,12 @@ export function RequestQueuePage() {
     )
   }
 
-  if (requestsError || positionsError || batchesError || !requests || !positions || !batches) {
+  if (requestsError || !requests) {
     return (
       <ErrorState
         title="Couldn't load fertilizer requests"
         description="Something went wrong fetching request and stock data."
-        onRetry={() => {
-          void refetchRequests()
-          void refetchPositions()
-          void refetchBatches()
-        }}
+        onRetry={() => void refetchRequests()}
       />
     )
   }
@@ -150,7 +133,7 @@ export function RequestQueuePage() {
       header: 'Stock / delivery',
       render: (r) =>
         r.status === 'Requested' ? (
-          <AvailabilityCell req={r} positions={positions} batches={batches} />
+          <AvailabilityCell req={r} />
         ) : r.attempt && !r.attempt.cancelled && r.attemptLabel ? (
           <div className="text-xs">
             <p className="font-medium text-text">{r.attemptLabel}</p>
@@ -290,26 +273,9 @@ export function RequestQueuePage() {
   )
 }
 
-function AvailabilityCell({
-  req,
-  positions,
-  batches,
-}: {
-  req: FertilizerRequest
-  positions: ItemPosition[]
-  batches: FertilizerBatch[]
-}) {
-  const verdict = requestAvailability(req, positions, batches)
-  const want = req.quantityKg
-  const available = availableForItem(req.item, positions)
-
-  const map = {
-    covered: { cls: 'text-success-fg', text: '✓ Covered' },
-    'covered-expiring': { cls: 'text-warning-fg', text: '⚠ Covered · expiring stock' },
-    partial: { cls: 'text-warning-fg', text: `⚠ ${formatWeight(Math.max(0, available))} of ${formatWeight(want)}` },
-    none: { cls: 'text-danger-fg', text: '✕ Not available' },
-  } as const
-
-  const v = map[verdict]
-  return <span className={`text-xs font-medium ${v.cls}`}>{v.text}</span>
+/** The server's verdict (same stock-position service as FERT-01) in words — "expiring" names the batch. */
+function AvailabilityCell({ req }: { req: FertilizerRequest }) {
+  const { text, tone } = availabilityLabel(req.availability, req.quantityKg)
+  const cls = { success: 'text-success-fg', warning: 'text-warning-fg', danger: 'text-danger-fg' }[tone]
+  return <span className={`text-xs font-medium ${cls}`}>{text}</span>
 }

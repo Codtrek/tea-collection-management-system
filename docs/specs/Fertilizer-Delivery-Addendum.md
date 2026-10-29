@@ -134,6 +134,44 @@ Requested … Rescheduled / Needs review ─▶ Cancelled   (anything not with a
 - **FERT-02 amended:** Outgoing movements are **ad-hoc only**. A request's fertilizer leaves
   through its handover. An ad-hoc movement can't take a batch's committed stock.
 
+### 5.1 One stock-position service (decided 2026-10-29)
+
+`FertilizerPositionService` (backend) is the **only** place stock figures, status and expiry are computed. FERT-01, its summary cards, the batch list and detail, Expiry Alerts, FERT-05 and FERT-06 all read it; the portal computes none of them.
+
+**Per item:**
+
+| Figure | Meaning |
+|---|---|
+| On Hand | **Live** batches only (not expired, not discarded) |
+| Expired | Expired and not yet written off. **Never part of On Hand.** Shown on FERT-01 as "N kg expired", which links to Expiry Alerts to be written off with an Outgoing movement. |
+| Committed | Σ ACTIVE allocations (value = each request's snapshot rate) |
+| Available | On Hand − Committed |
+| Pending | Σ Requested quantities, and how many requests |
+| Expiring soon | Live stock expiring within the window |
+| Nearest expiry | The earliest expiry among live batches |
+
+- **The window:** `system_settings.fertilizer.expiringSoonDays`, default **30**. The same window marks batches "Expiring soon" (on the factory calendar).
+- **Status, worst condition first:**
+  1. **Out of stock:** Available ≤ 0 and Pending > 0.
+  2. **Short X kg:** Pending > Available (or Available < 0), with X = Pending − Available.
+  3. **Fully committed:** Available = 0 and nothing pending.
+  4. **Expiring soon:** some live stock expires within the window.
+  5. **Healthy:** otherwise.
+
+  "Tight" is gone. Available 0 is never "Healthy".
+- **Coverage column:** Available ÷ Pending. It prints `N%`, or `>999%` for very large values, and the bar is drawn from the value capped at 100%. With nothing pending it shows "No demand" and no bar.
+- **A request's availability** (Requested only) comes from the same service. Available is the item's figure, and the batches are FEFO over **free** stock. A batch that is already promised to other requests doesn't count for this one.
+
+  | Label | When |
+  |---|---|
+  | Covered | — |
+  | **Covered · uses batch expiring 12 Nov (14 days)** | The plan takes a batch inside the window |
+  | Partial: X of Y free | — |
+  | Not available | — |
+  | **Not available (stock expired)** | Available ≤ 0 and the item has expired stock |
+
+  FERT-06 shows that plan, and a partial approval previews its first N kg.
+
 ## 6. Dispatch, pickup and delivery
 
 - **Mark ready** (`fertilizer: edit`):

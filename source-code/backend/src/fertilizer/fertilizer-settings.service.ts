@@ -8,11 +8,14 @@ export interface FertilizerSettings {
   managerApprovalAboveKg: number;
   /** failed attempts before a request goes to Needs review */
   maxDeliveryAttempts: number;
+  /** live stock expiring within this many days is "Expiring soon" (FERT-01, batches, requests, alerts) */
+  expiringSoonDays: number;
 }
 
 export const DEFAULT_FERTILIZER_SETTINGS: FertilizerSettings = {
   managerApprovalAboveKg: 500,
   maxDeliveryAttempts: 3,
+  expiringSoonDays: 30,
 };
 
 /** Reads `system_settings.fertilizer`, falling back per field — same pattern as CollectionSettingsService. */
@@ -41,6 +44,11 @@ export class FertilizerSettingsService {
         v.maxDeliveryAttempts,
         (n) => Number.isInteger(n) && n >= 1,
         d.maxDeliveryAttempts,
+      ),
+      expiringSoonDays: num(
+        v.expiringSoonDays,
+        (n) => Number.isInteger(n) && n >= 1,
+        d.expiringSoonDays,
       ),
     };
   }

@@ -16,6 +16,7 @@ import { FertilizerDeliveryEntity } from '../fertilizer-delivery.entity';
 import { FertilizerDeliveryService } from '../fertilizer-delivery.service';
 import { FertilizerItemPriceEntity } from '../fertilizer-item-price.entity';
 import { FertilizerNotificationEntity } from '../fertilizer-notification.entity';
+import { FertilizerPositionService } from '../fertilizer-position.service';
 import { FertilizerNotificationService } from '../fertilizer-notification.service';
 import { FertilizerPaymentEntity } from '../fertilizer-payment.entity';
 import { FertilizerRequestEventEntity } from '../fertilizer-request-event.entity';
@@ -131,11 +132,18 @@ export function buildFertilizerHarness(
     get: jest.fn().mockResolvedValue({
       managerApprovalAboveKg: 500,
       maxDeliveryAttempts: 3,
+      expiringSoonDays: 30,
       ...settings,
     }),
   } as unknown as FertilizerSettingsService;
   const access = new DispatchAccessService(cast<RolePermissionEntity>(perms));
   const ledger = new FertilizerStockLedger();
+  const positions = new FertilizerPositionService(
+    cast(batches),
+    cast(requests),
+    cast(allocations),
+    settingsSvc,
+  );
   const view = new FertilizerViewService(
     cast(requests),
     cast(deliveries),
@@ -151,6 +159,7 @@ export function buildFertilizerHarness(
     d.schedule,
     d.directory,
     settingsSvc,
+    positions,
   );
   const requestService = new FertilizerRequestService(
     cast(requests),
@@ -201,6 +210,7 @@ export function buildFertilizerHarness(
     cast(allocations),
     access,
     audit as unknown as AuditService,
+    positions,
   );
 
   let batchSeq = 0;
@@ -221,6 +231,7 @@ export function buildFertilizerHarness(
     audit,
     settingsSvc,
     ledger,
+    positions,
     view,
     requestService,
     delivery,

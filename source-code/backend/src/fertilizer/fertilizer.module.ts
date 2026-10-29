@@ -22,6 +22,7 @@ import { FertilizerItemPriceEntity } from './fertilizer-item-price.entity';
 import { FertilizerNotificationEntity } from './fertilizer-notification.entity';
 import { FertilizerNotificationService } from './fertilizer-notification.service';
 import { FertilizerNotificationTasks } from './fertilizer-notification.tasks';
+import { FertilizerPositionService } from './fertilizer-position.service';
 import { FertilizerPaymentEntity } from './fertilizer-payment.entity';
 import { FertilizerRequestEventEntity } from './fertilizer-request-event.entity';
 import { FertilizerRequestEntity } from './fertilizer-request.entity';
@@ -67,6 +68,7 @@ import { StockMovementEntity } from './stock-movement.entity';
   providers: [
     FertilizerService,
     FertilizerStockLedger,
+    FertilizerPositionService,
     FertilizerSettingsService,
     FertilizerViewService,
     FertilizerRequestService,

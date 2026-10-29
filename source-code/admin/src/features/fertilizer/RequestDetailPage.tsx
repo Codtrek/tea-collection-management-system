@@ -31,9 +31,9 @@ import { factoryToday } from '@/features/dispatch/status'
 import * as dispatchService from '@/services/dispatch'
 import * as estatesService from '@/services/estates'
 import * as fertilizerService from '@/services/fertilizer'
-import { availableForItem, fefoAllocation, nextInQueue, queueRows, readQueueFilters } from './lib'
+import { availableForItem, fefoPrefix, nextInQueue, queueRows, readQueueFilters, shortDate } from './lib'
 import { NOTICE_TONE, PAYMENT_METHOD_LABEL, PAYMENT_TONE, REQUEST_TONE } from './status'
-import type { DeliveryAttempt, FertilizerBatch, FertilizerRequest, FertilizerRequestDetail, PaymentMethod } from './types'
+import type { DeliveryAttempt, FertilizerRequest, FertilizerRequestDetail, PaymentMethod, RequestAvailability } from './types'
 import { formatCurrency, formatDate, formatDateTime, formatWeight } from '@/lib/format'
 
 type Action =
@@ -89,7 +89,6 @@ export function RequestDetailPage() {
     enabled: !!id,
   })
   const positions = useQuery({ queryKey: ['fertilizer', 'positions'], queryFn: fertilizerService.listPositions })
-  const batches = useQuery({ queryKey: ['fertilizer', 'batches'], queryFn: fertilizerService.listBatches })
   const allRequests = useQuery({ queryKey: ['fertilizer', 'requests'], queryFn: fertilizerService.listRequests })
 
   // the facts an Officer reviews before deciding — only fetched while there is a decision to make
@@ -126,14 +125,14 @@ export function RequestDetailPage() {
     onError: (err) => toast(err instanceof Error ? err.message : 'That didn’t work', 'danger'),
   })
 
-  if (request.isPending || positions.isPending || batches.isPending) {
+  if (request.isPending || positions.isPending) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
       </div>
     )
   }
-  if (request.isError || !request.data || !positions.data || !batches.data) {
+  if (request.isError || !request.data || !positions.data) {
     return (
       <ErrorState
         title="Request not found"
@@ -223,7 +222,7 @@ export function RequestDetailPage() {
                     danger={available - r.quantityKg < 0}
                   />
                 </div>
-                <FefoPreview allocation={fefoAllocation(r.item, Math.max(0, Math.min(r.quantityKg, available)), batches.data)} />
+                <FefoPreview allocation={r.availability?.fefo ?? []} />
                 <dl className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
                   <Field
                     label="Route · next collection day"
@@ -318,9 +317,8 @@ export function RequestDetailPage() {
           key={action}
           action={action}
           r={r}
-          available={available}
           partialMax={partialMax}
-          batches={batches.data}
+          plan={r.availability?.fefo ?? []}
           price={currentPrice}
           nextDate={nextDate}
           committed={r.committedKg}
@@ -400,9 +398,8 @@ function ActionBar({
 function ActionDialog({
   action,
   r,
-  available,
   partialMax,
-  batches,
+  plan,
   price,
   nextDate,
   committed,
@@ -413,9 +410,9 @@ function ActionDialog({
 }: {
   action: Action
   r: FertilizerRequestDetail
-  available: number
   partialMax: number
-  batches: FertilizerBatch[]
+  /** the server's FEFO plan over free stock for min(requested, available) */
+  plan: RequestAvailability['fefo']
   /** today's Rs./kg for the item — what approval will snapshot */
   price: number | null
   /** the route's next collection day (the delivery date is set when it's marked ready) */
@@ -459,7 +456,7 @@ function ActionDialog({
         <dd className="text-right text-text">{nextDate ? formatDate(nextDate) : 'Next collection day'}</dd>
       </dl>
       <div className="mt-3">
-        <FefoPreview allocation={fefoAllocation(r.item, partialInvalid ? 0 : Math.min(qty, available), batches)} />
+        <FefoPreview allocation={fefoPrefix(plan, partialInvalid ? 0 : qty)} />
       </div>
       {overLimit && !partialInvalid && (
         <span className="mt-2 block text-warning-fg">
@@ -1030,20 +1027,22 @@ function PreviousRequests({
   )
 }
 
-function FefoPreview({ allocation }: { allocation: { batchId: string; take: number }[] }) {
+function FefoPreview({ allocation }: { allocation: RequestAvailability['fefo'] }) {
   return (
     <div>
-      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-text-muted">Batches it will take (first-expiring first)</p>
+      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-text-muted">
+        Batches it will take (first-expiring free stock first)
+      </p>
       {allocation.length ? (
         <ul className="flex flex-wrap gap-2">
           {allocation.map((a) => (
             <li key={a.batchId} className="id rounded-[var(--radius-sm)] bg-surface-sunken px-2 py-1 text-xs text-text">
-              {a.batchId} · {formatWeight(a.take)}
+              {a.batchId} · {formatWeight(a.take)} · expires {shortDate(a.expiryDate)} ({a.daysToExpiry} d)
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-text-muted">No live stock to commit.</p>
+        <p className="text-sm text-text-muted">No free live stock to commit.</p>
       )}
     </div>
   )

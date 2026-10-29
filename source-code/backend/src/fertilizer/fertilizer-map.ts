@@ -151,6 +151,12 @@ export interface PublicBatch {
   discarded?: boolean;
   lastUpdatedBy?: string;
   lastUpdatedOn?: string;
+  /** server-computed on the factory calendar with the expiring-soon window */
+  status: BatchStatus;
+  /** days until expiry (negative once past) */
+  daysToExpiry: number;
+  /** kg not promised to any request (quantity − active allocations, never below 0) */
+  freeKg: number;
 }
 
 export interface PublicMovement {
@@ -258,6 +264,8 @@ export interface PublicRequest {
   pickupMismatch: boolean;
   /** status of the latest owner notice */
   noticeStatus: NoticeStatus | null;
+  /** only while Requested: whether stock covers it now (FertilizerPositionService) */
+  availability: PublicRequestAvailability | null;
 }
 
 export interface PublicAllocation {
@@ -377,15 +385,61 @@ export interface PublicAgentFertilizerRow {
   note: string | null;
 }
 
-export type CoverageStatus = 'Healthy' | 'Tight' | 'Short';
+/** FERT-01 status, worst first (Fertilizer-Delivery-Addendum §5) — computed only in FertilizerPositionService. */
+export type CoverageStatus =
+  | 'Out of stock'
+  | 'Short'
+  | 'Fully committed'
+  | 'Expiring soon'
+  | 'Healthy';
 
 export interface PublicItemPosition {
   item: string;
   category: DbItemCategory;
+  /** live (unexpired, not discarded) stock only */
   onHand: number;
+  /** expired, not yet written off — never part of On Hand */
+  expiredKg: number;
   committed: number;
+  /** Rs. value of the committed stock at each request's snapshot rate */
+  committedValueRs: number;
   available: number;
   pendingDemand: number;
+  pendingCount: number;
+  /** live stock expiring within the expiring-soon window */
+  expiringSoonKg: number;
+  /** earliest expiry among live batches */
+  nearestExpiry: string | null;
+  /** Available ÷ Pending; null when nothing is pending */
   coverageRatio: number | null;
   status: CoverageStatus;
+  /** "Short X kg": how much more is needed (Pending − Available); 0 otherwise */
+  shortKg: number;
+  /** the window behind "Expiring soon" (system_settings.fertilizer.expiringSoonDays) */
+  expiringSoonDays: number;
+}
+
+export type BatchStatus = 'Fresh' | 'Expiring soon' | 'Expired' | 'Discarded';
+
+export type RequestVerdict =
+  | 'covered'
+  | 'covered-expiring'
+  | 'partial'
+  | 'none'
+  | 'none-expired';
+
+/** Can a Requested request be met now? Same service and window as FERT-01's status. */
+export interface PublicRequestAvailability {
+  verdict: RequestVerdict;
+  available: number;
+  /** the FEFO plan over free stock for min(requested, available) — what approval would take */
+  fefo: Array<{
+    batchId: string;
+    lotNumber: string;
+    expiryDate: string;
+    daysToExpiry: number;
+    take: number;
+  }>;
+  /** the first batch in that plan that expires within the window, if any */
+  expiringBatch: { expiryDate: string; daysToExpiry: number } | null;
 }

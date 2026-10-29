@@ -6,7 +6,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { CoverageBar } from '@/components/data/CoverageBar'
 import { RowAction } from '@/components/data/DataTable'
 import * as fertilizerService from '@/services/fertilizer'
-import { batchStatus } from './lib'
+import { batchStatus, coverageDisplay, positionLabel, shortDate } from './lib'
 import { BATCH_TONE, COVERAGE_TONE } from './status'
 import type { ItemPosition } from './types'
 import { formatDate, formatWeight } from '@/lib/format'
@@ -36,7 +36,7 @@ export function StockPositionTable({ positions, canLog }: { positions: ItemPosit
   return (
     <div className="rounded-[var(--radius-lg)] bg-surface shadow-[var(--shadow-1)]">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] border-collapse">
+        <table className="w-full min-w-[960px] border-collapse">
           <thead className="bg-surface-sunken">
             <tr className="border-b border-border">
               <th className="w-8 px-2 py-2.5" />
@@ -71,7 +71,23 @@ export function StockPositionTable({ positions, canLog }: { positions: ItemPosit
                     </td>
                     <td className="px-4 py-3 text-sm font-medium text-text">{p.item}</td>
                     <td className="px-4 py-3 text-sm text-text-muted">{p.category}</td>
-                    <td className="tabular px-4 py-3 text-right text-sm text-text">{formatWeight(p.onHand)}</td>
+                    <td className="tabular px-4 py-3 text-right text-sm text-text">
+                      {formatWeight(p.onHand)}
+                      {p.expiredKg > 0 && (
+                        // expired stock is never On Hand — shown apart, to be written off from Expiry Alerts
+                        <button
+                          type="button"
+                          title="Expired, not yet written off — open Expiry Alerts"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate('/fertilizer/alerts')
+                          }}
+                          className="mt-1 block w-full text-right text-xs font-medium text-danger-fg underline-offset-2 hover:underline"
+                        >
+                          {formatWeight(p.expiredKg)} expired
+                        </button>
+                      )}
+                    </td>
                     <td className="tabular px-4 py-3 text-right text-sm text-text">{formatWeight(p.committed)}</td>
                     <td
                       className={cn(
@@ -83,12 +99,15 @@ export function StockPositionTable({ positions, canLog }: { positions: ItemPosit
                     </td>
                     <td className="tabular px-4 py-3 text-right text-sm text-text-muted">{formatWeight(p.pendingDemand)}</td>
                     <td className="px-4 py-3">
-                      <CoverageBar onHand={p.onHand} committed={p.committed} available={p.available} ratio={p.coverageRatio} />
+                      <CoverageBar {...coverageDisplay(p.coverageRatio)} />
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge tone={COVERAGE_TONE[p.status]}>
-                        {p.status === 'Short' ? `Short ${formatWeight(Math.max(0, -p.available) || p.pendingDemand - p.available)}` : p.status}
-                      </StatusBadge>
+                      <StatusBadge tone={COVERAGE_TONE[p.status]}>{positionLabel(p)}</StatusBadge>
+                      {p.expiringSoonKg > 0 && p.nearestExpiry && (
+                        <p className="mt-1 whitespace-nowrap text-xs text-text-muted">
+                          {formatWeight(p.expiringSoonKg)} expires within {p.expiringSoonDays} days · first {shortDate(p.nearestExpiry)}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">

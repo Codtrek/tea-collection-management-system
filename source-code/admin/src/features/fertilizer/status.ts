@@ -50,8 +50,11 @@ export const NOTICE_TONE: Record<NoticeStatus, BadgeTone> = {
   Cancelled: 'neutral',
 }
 
+/* FERT-01 status (worst first) → badge tone. The status itself comes from the server only. */
 export const COVERAGE_TONE: Record<CoverageStatus, BadgeTone> = {
-  Healthy: 'success',
-  Tight: 'warning',
+  'Out of stock': 'danger',
   Short: 'danger',
+  'Fully committed': 'neutral',
+  'Expiring soon': 'warning',
+  Healthy: 'success',
 }

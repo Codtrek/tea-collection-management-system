@@ -8,7 +8,6 @@ import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { DispatchAccessService } from '../dispatch/dispatch-access.service';
-import { localDate } from '../dispatch/dispatch-map';
 import { parseEstateId } from '../estates/estate-map';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { RecordMovementDto } from './dto/record-movement.dto';
@@ -20,13 +19,16 @@ import {
   formatMovementId,
   formatRequestId,
   parseBatchId,
-  type CoverageStatus,
   type PublicBatch,
   type PublicItemPosition,
   type PublicMovement,
 } from './fertilizer-map';
 import { FertilizerRequestEntity } from './fertilizer-request.entity';
-import { isLive, round2 } from './fertilizer-stock-ledger.service';
+import {
+  FertilizerPositionService,
+  type StockSnapshot,
+} from './fertilizer-position.service';
+import { round2 } from './fertilizer-stock-ledger.service';
 import { StockMovementEntity } from './stock-movement.entity';
 
 export interface Actor {
@@ -49,17 +51,22 @@ export class FertilizerService {
     private readonly allocationRepo: Repository<FertilizerAllocationEntity>,
     private readonly access: DispatchAccessService,
     private readonly audit: AuditService,
+    private readonly stock: FertilizerPositionService,
   ) {}
 
   // ── Batches ──────────────────────────────────────────────────────
 
   async listBatches(): Promise<PublicBatch[]> {
-    const batches = await this.batchRepo.find({ order: { item: 'ASC' } });
-    return batches.map((b) => this.toPublicBatch(b));
+    const [batches, snap] = await Promise.all([
+      this.batchRepo.find({ order: { item: 'ASC' } }),
+      this.stock.snapshot(),
+    ]);
+    return batches.map((b) => this.toPublicBatch(b, snap));
   }
 
   async getBatch(id: string): Promise<PublicBatch> {
-    return this.toPublicBatch(await this.findBatch(id));
+    const batch = await this.findBatch(id);
+    return this.toPublicBatch(batch, await this.stock.snapshot());
   }
 
   /** FERT-01/03 — direct registration; also reached implicitly via an Incoming movement with no `batchId`. */
@@ -73,7 +80,7 @@ export class FertilizerService {
       recordHref: `/fertilizer/${formatBatchId(batch.id)}`,
       details: `${dto.item} — ${dto.quantityKg} kg`,
     });
-    return this.toPublicBatch(batch);
+    return this.toPublicBatch(batch, await this.stock.snapshot());
   }
 
   /** FERT-03 — marks a batch discarded; excluded from on-hand from that point on. */
@@ -90,56 +97,14 @@ export class FertilizerService {
       record: formatBatchId(saved.id),
       recordHref: `/fertilizer/${formatBatchId(saved.id)}`,
     });
-    return this.toPublicBatch(saved);
+    return this.toPublicBatch(saved, await this.stock.snapshot());
   }
 
   // ── Positions (FERT-01 — the single source of stock arithmetic) ────
 
-  /**
-   * On Hand = Σ live batch stock; Committed = Σ ACTIVE FEFO allocations (the stock promised
-   * to approved requests — Fertilizer-Delivery-Addendum §5); Available = On Hand − Committed,
-   * negative when commitments sit on stock that has since expired (a shortfall).
-   */
-  async listPositions(now: Date = new Date()): Promise<PublicItemPosition[]> {
-    const today = localDate(now);
-    const [batches, requests, active] = await Promise.all([
-      this.batchRepo.find(),
-      this.requestRepo.find(),
-      this.allocationRepo.find({ where: { state: 'active' } }),
-    ]);
-    const itemOfBatch = new Map(batches.map((b) => [b.id, b.item]));
-    const items = [...new Set(batches.map((b) => b.item))];
-
-    return items.map((item) => {
-      const category = batches.find((b) => b.item === item)!.category;
-      const onHand = round2(
-        batches
-          .filter((b) => b.item === item && isLive(b, today))
-          .reduce((sum, b) => sum + Number(b.quantityKg), 0),
-      );
-      const committed = round2(
-        active
-          .filter((a) => itemOfBatch.get(a.batchId) === item)
-          .reduce((sum, a) => sum + Number(a.qtyKg), 0),
-      );
-      const available = round2(onHand - committed);
-      const pendingDemand = round2(
-        requests
-          .filter((r) => r.item === item && r.status === 'Requested')
-          .reduce((sum, r) => sum + Number(r.quantityKg), 0),
-      );
-
-      return {
-        item,
-        category,
-        onHand,
-        committed,
-        available,
-        pendingDemand,
-        coverageRatio: pendingDemand > 0 ? available / pendingDemand : null,
-        status: this.coverageStatus(available, pendingDemand),
-      };
-    });
+  /** Stock figures and status come from the one stock-position service (FERT-01, cards, alerts, requests). */
+  listPositions(now: Date = new Date()): Promise<PublicItemPosition[]> {
+    return this.stock.listPositions(now);
   }
 
   // ── Movements ────────────────────────────────────────────────────
@@ -359,13 +324,6 @@ export class FertilizerService {
     return batch;
   }
 
-  private coverageStatus(available: number, pending: number): CoverageStatus {
-    if (pending <= 0) return available < 0 ? 'Short' : 'Healthy';
-    if (available >= pending) return 'Healthy';
-    if (available >= pending * 0.5) return 'Tight';
-    return 'Short';
-  }
-
   /** Data-driven (`role_permissions`): writes need `fertilizer: edit`. */
   private async assertCanWrite(actor: Actor): Promise<void> {
     await this.access.require(
@@ -376,8 +334,12 @@ export class FertilizerService {
     );
   }
 
-  private toPublicBatch(entity: FertilizerBatchEntity): PublicBatch {
+  private toPublicBatch(
+    entity: FertilizerBatchEntity,
+    snap: StockSnapshot,
+  ): PublicBatch {
     return {
+      ...this.stock.batchView(entity, snap),
       id: formatBatchId(entity.id),
       item: entity.item,
       category: entity.category,

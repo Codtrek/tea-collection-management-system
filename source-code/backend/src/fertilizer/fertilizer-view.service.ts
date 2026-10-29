@@ -28,6 +28,10 @@ import { noticeStatusOf } from './fertilizer-notification.service';
 import { FertilizerPaymentEntity } from './fertilizer-payment.entity';
 import { FertilizerRequestEventEntity } from './fertilizer-request-event.entity';
 import { FertilizerRequestEntity } from './fertilizer-request.entity';
+import {
+  FertilizerPositionService,
+  type StockSnapshot,
+} from './fertilizer-position.service';
 import { FertilizerSettingsService } from './fertilizer-settings.service';
 import { round2 } from './fertilizer-stock-ledger.service';
 
@@ -40,6 +44,8 @@ interface Context {
   agentNames: Map<number, string>;
   maxAttempts: number;
   managerApprovalAboveKg: number;
+  /** the stock-position snapshot — the same figures FERT-01 shows */
+  stock: StockSnapshot;
 }
 
 /**
@@ -73,13 +79,14 @@ export class FertilizerViewService {
     private readonly schedule: RouteScheduleService,
     private readonly directory: AgentDirectoryService,
     private readonly settings: FertilizerSettingsService,
+    private readonly stock: FertilizerPositionService,
   ) {}
 
-  async list(): Promise<PublicRequest[]> {
+  async list(now: Date = new Date()): Promise<PublicRequest[]> {
     const [rows, ctx, deliveries, allocations, charges, payments, notices] =
       await Promise.all([
         this.requests.find(),
-        this.context(),
+        this.context(now),
         this.deliveries.find(),
         this.allocations.find({ where: { state: 'active' } }),
         this.charges.find(),
@@ -103,12 +110,15 @@ export class FertilizerViewService {
     return out;
   }
 
-  async detail(formattedOrId: string | number): Promise<PublicRequestDetail> {
+  async detail(
+    formattedOrId: string | number,
+    now: Date = new Date(),
+  ): Promise<PublicRequestDetail> {
     const request = await this.find(formattedOrId);
     const id = request.id;
     const [ctx, deliveries, allocations, charges, payments, notices, events] =
       await Promise.all([
-        this.context(),
+        this.context(now),
         this.deliveries.find({ where: { requestId: id } }),
         this.allocations.find({ where: { requestId: id } }),
         this.charges.find({ where: { fertilizerRequestId: id } }),
@@ -210,14 +220,16 @@ export class FertilizerViewService {
     return request;
   }
 
-  private async context(): Promise<Context> {
-    const [estates, routes, agentNames, settings] = await Promise.all([
+  private async context(now: Date): Promise<Context> {
+    const [estates, routes, agentNames, settings, stock] = await Promise.all([
       this.estates.find(),
       this.routes.find(),
       this.directory.names(),
       this.settings.get(),
+      this.stock.snapshot(now),
     ]);
     return {
+      stock,
       estates: new Map(estates.map((e) => [e.id, e])),
       routes: new Map(routes.map((r) => [r.id, r])),
       agentNames,
@@ -287,6 +299,10 @@ export class FertilizerViewService {
       attemptLabel: attemptLabel(r.status, r.cycleFailures, ctx.maxAttempts),
       pickupMismatch: rel.deliveries.some((d) => d.pickupMismatch),
       noticeStatus: lastNotice ? noticeStatusOf(lastNotice) : null,
+      availability:
+        r.status === 'Requested'
+          ? this.stock.availabilityOf(r, ctx.stock)
+          : null,
     };
   }
 

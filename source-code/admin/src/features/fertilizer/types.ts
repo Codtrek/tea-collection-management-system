@@ -20,6 +20,12 @@ export interface FertilizerBatch {
   discarded?: boolean
   lastUpdatedBy?: string
   lastUpdatedOn?: string
+  /** server-computed on the factory calendar with the expiring-soon window — never recomputed here */
+  status: BatchStatus
+  /** days until expiry (negative once past) */
+  daysToExpiry: number
+  /** kg not promised to any request */
+  freeKg: number
 }
 
 export type MovementType = 'Incoming' | 'Outgoing'
@@ -162,6 +168,8 @@ export interface FertilizerRequest {
   attemptLabel: string | null
   pickupMismatch: boolean
   noticeStatus: NoticeStatus | null
+  /** only while Requested: can stock meet it now — same figures as FERT-01 */
+  availability: RequestAvailability | null
 }
 
 export interface RequestEvent {
@@ -205,7 +213,18 @@ export interface FertilizerPrice {
 }
 
 /** Coverage health of an item's available stock against its pending demand. */
-export type CoverageStatus = 'Healthy' | 'Tight' | 'Short'
+/** FERT-01 status, worst first — computed by the backend's stock-position service only. */
+export type CoverageStatus = 'Out of stock' | 'Short' | 'Fully committed' | 'Expiring soon' | 'Healthy'
+
+export type RequestVerdict = 'covered' | 'covered-expiring' | 'partial' | 'none' | 'none-expired'
+
+export interface RequestAvailability {
+  verdict: RequestVerdict
+  available: number
+  /** FEFO over free stock for min(requested, available) — what approval would take */
+  fefo: Array<{ batchId: string; lotNumber: string; expiryDate: string; daysToExpiry: number; take: number }>
+  expiringBatch: { expiryDate: string; daysToExpiry: number } | null
+}
 
 /**
  * Per-item stock position (addendum §5.2). Computed only in position.ts — never
@@ -215,11 +234,21 @@ export type CoverageStatus = 'Healthy' | 'Tight' | 'Short'
 export interface ItemPosition {
   item: string
   category: ItemCategory
+  /** live (unexpired, not discarded) stock only */
   onHand: number
+  /** expired, not yet written off — never part of On Hand */
+  expiredKg: number
   committed: number
+  committedValueRs: number
   available: number
   pendingDemand: number
+  pendingCount: number
+  expiringSoonKg: number
+  nearestExpiry: string | null
   /** available ÷ pendingDemand, as a fraction; null when there is no pending demand. */
   coverageRatio: number | null
   status: CoverageStatus
+  /** "Short X kg" — how much more is needed */
+  shortKg: number
+  expiringSoonDays: number
 }

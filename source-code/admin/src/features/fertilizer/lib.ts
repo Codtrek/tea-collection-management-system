@@ -1,93 +1,101 @@
-import type { BatchStatus, FertilizerBatch, FertilizerRequest, ItemPosition, RequestStatus } from './types'
+import { formatWeight } from '@/lib/format'
+import type { BatchStatus, FertilizerBatch, FertilizerRequest, ItemPosition, RequestAvailability, RequestStatus } from './types'
 
 /*
-  Pure, presentation-only helpers that operate on data already fetched from
-  the backend (`src/services/fertilizer.ts`). Unlike the former `position.ts`,
-  none of this recomputes stock arithmetic — on-hand/committed/available/
-  coverage all come from `GET /fertilizer/positions` and are never
-  recalculated here. What's left is genuinely derived from a single already-
-  fetched record (expiry math, remainder) or a display-only suggestion
-  (FEFO allocation) that never feeds back into the authoritative numbers.
+  Pure, presentation-only helpers over data already fetched from the backend
+  (`src/services/fertilizer.ts`). Nothing here computes stock: On Hand, expired,
+  committed, available, expiring-soon, item status, batch status and a request's
+  availability (with its FEFO plan) all come from the backend's one stock-position
+  service, so FERT-01, its cards, Expiry Alerts, FERT-05 and FERT-06 can't disagree.
+  What's left only formats those figures for display.
 */
 
-/** Days from today until the batch expires (negative when already past). */
+/** Days until the batch expires (negative once past) — server-computed on the factory calendar. */
 export function daysToExpiry(batch: FertilizerBatch): number {
-  return Math.ceil((new Date(batch.expiryDate).getTime() - Date.now()) / 86_400_000)
+  return batch.daysToExpiry
 }
 
-/** Status derives from expiry so list and alerts can never disagree (§5). */
+/** Fresh / Expiring soon / Expired / Discarded — server-computed with the same window as FERT-01. */
 export function batchStatus(batch: FertilizerBatch): BatchStatus {
-  if (batch.discarded) return 'Discarded'
-  const days = daysToExpiry(batch)
-  if (days < 0) return 'Expired'
-  if (days <= 30) return 'Expiring soon'
-  return 'Fresh'
+  return batch.status
 }
-
-const isLiveBatch = (item: string) => (b: FertilizerBatch) => b.item === item && batchStatus(b) !== 'Expired' && batchStatus(b) !== 'Discarded'
 
 /** Looks up the server-computed `available` figure for an item — never recomputed client-side. */
 export function availableForItem(item: string, positions: ItemPosition[]): number {
   return positions.find((p) => p.item === item)?.available ?? 0
 }
 
-export type RequestAvailability = 'covered' | 'partial' | 'none' | 'covered-expiring'
-
-/** Can this request be fulfilled right now? Evaluated at decision time (FERT-05/06). */
-export function requestAvailability(
-  req: FertilizerRequest,
-  positions: ItemPosition[],
-  batches: FertilizerBatch[],
-): RequestAvailability {
-  const available = availableForItem(req.item, positions)
-  const want = req.quantityKg
-  if (available <= 0) return 'none'
-  if (available < want) return 'partial'
-  const leansOnExpiring = batches.some(
-    (b) => b.item === req.item && batchStatus(b) === 'Expiring soon' && daysToExpiry(b) >= 0,
-  )
-  return leansOnExpiring ? 'covered-expiring' : 'covered'
-}
-
-/** FEFO (first-expiring-first-out) allocation suggestion for a quantity of an item — a display suggestion, not authoritative. */
-export function fefoAllocation(
-  item: string,
-  qty: number,
-  batches: FertilizerBatch[],
-): { batchId: string; take: number }[] {
-  const live = batches.filter(isLiveBatch(item)).sort((a, b) => daysToExpiry(a) - daysToExpiry(b))
-  const out: { batchId: string; take: number }[] = []
-  let remaining = qty
-  for (const b of live) {
-    if (remaining <= 0) break
-    const take = Math.min(b.quantityKg, remaining)
-    out.push({ batchId: b.id, take })
-    remaining -= take
+/**
+ * The first `qty` kg of the server's FEFO plan — a partial approval takes the same batches in
+ * the same order, just less (a FEFO prefix is the FEFO plan for the smaller amount).
+ */
+export function fefoPrefix(plan: RequestAvailability['fefo'], qty: number): RequestAvailability['fefo'] {
+  const out: RequestAvailability['fefo'] = []
+  let left = qty
+  for (const step of plan) {
+    if (left <= 0) break
+    const take = Math.min(step.take, left)
+    out.push({ ...step, take })
+    left -= take
   }
   return out
 }
 
-/** Requests awaiting the Officer's decision, oldest first (FERT-05 default order). */
-export function pendingRequests(requests: FertilizerRequest[]): FertilizerRequest[] {
-  return requests.filter((r) => r.status === 'Requested').sort((a, b) => a.requestedDate.localeCompare(b.requestedDate))
+/** "12 Nov" — the short date the request labels use. */
+export function shortDate(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 }
 
-/**
- * Committed kg / value / count for the FERT-01 "awaiting dispatch" card. Reads the
- * server-computed `committedKg` and the approval-time `ratePerKg` — nothing recomputed.
- */
-export function committedSummary(requests: FertilizerRequest[]): { kg: number; valueRs: number; count: number } {
-  const committed = requests.filter((r) => r.committedKg > 0)
-  return {
-    kg: committed.reduce((sum, r) => sum + r.committedKg, 0),
-    valueRs: committed.reduce((sum, r) => sum + r.committedKg * (r.ratePerKg ?? 0), 0),
-    count: committed.length,
+/** FERT-05/06 wording for a request's server verdict — "expiring" always names the batch and days left. */
+export function availabilityLabel(
+  a: RequestAvailability | null,
+  quantityKg: number,
+): { text: string; tone: 'success' | 'warning' | 'danger' } {
+  if (!a) return { text: '—', tone: 'warning' }
+  switch (a.verdict) {
+    case 'covered':
+      return { text: '✓ Covered', tone: 'success' }
+    case 'covered-expiring': {
+      const b = a.expiringBatch!
+      const days = b.daysToExpiry === 0 ? 'today' : `${b.daysToExpiry} day${b.daysToExpiry === 1 ? '' : 's'}`
+      return { text: `✓ Covered · uses batch expiring ${shortDate(b.expiryDate)} (${days})`, tone: 'warning' }
+    }
+    case 'partial':
+      return { text: `⚠ ${formatWeight(Math.max(0, a.available))} of ${formatWeight(quantityKg)} free`, tone: 'warning' }
+    case 'none-expired':
+      return { text: '✕ Not available (stock expired)', tone: 'danger' }
+    default:
+      return { text: '✕ Not available', tone: 'danger' }
   }
 }
 
-/** Items whose available stock cannot meet their pending demand (FERT-01 card 1). */
+/**
+ * The Coverage column (Available ÷ Pending). Very large ratios read ">999%" instead of "4333%",
+ * and the bar is drawn from the capped value; with nothing pending there's nothing to cover.
+ */
+export function coverageDisplay(ratio: number | null): { text: string; barPct: number | null } {
+  if (ratio === null) return { text: 'No demand', barPct: null }
+  const pct = ratio * 100
+  return { text: pct > 999 ? '>999%' : `${Math.max(0, Math.round(pct))}%`, barPct: Math.min(100, Math.max(0, pct)) }
+}
+
+/** The FERT-01 badge text — "Short 77 kg" carries its amount. */
+export function positionLabel(p: ItemPosition): string {
+  return p.status === 'Short' ? `Short ${formatWeight(p.shortKg)}` : p.status
+}
+
+/** Committed kg / value (from positions) and how many requests hold it, for the FERT-01 card. */
+export function committedSummary(positions: ItemPosition[], requests: FertilizerRequest[]): { kg: number; valueRs: number; count: number } {
+  return {
+    kg: positions.reduce((sum, p) => sum + p.committed, 0),
+    valueRs: positions.reduce((sum, p) => sum + p.committedValueRs, 0),
+    count: requests.filter((r) => r.committedKg > 0).length,
+  }
+}
+
+/** Items whose pending requests can't all be met — the server status says so (FERT-01 card 1). */
 export function itemsBelowDemand(positions: ItemPosition[]): ItemPosition[] {
-  return positions.filter((p) => p.available < p.pendingDemand)
+  return positions.filter((p) => p.status === 'Out of stock' || p.status === 'Short')
 }
 
 /** Per-item shortfall to fulfil already-approved commitments = negative available (FERT-01 card 4 + ShortfallPanel). */
