@@ -1,4 +1,20 @@
-const API_URL = "http://localhost:3001";
+import Constants from "expo-constants";
+
+const API_PORT = 3001;
+
+// On a physical device "localhost" is the phone itself, so the request never reaches the
+// backend. Prefer an explicit EXPO_PUBLIC_API_URL, otherwise reuse the host the Expo dev
+// server is served from (the dev machine's LAN IP).
+function resolveApiUrl(): string {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  const devHost = Constants.expoConfig?.hostUri?.split(":")[0];
+  return `http://${devHost ?? "localhost"}:${API_PORT}`;
+}
+
+const API_URL = resolveApiUrl();
 
 export class ApiError extends Error {
   readonly messages: string[];
