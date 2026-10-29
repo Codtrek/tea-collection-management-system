@@ -2,7 +2,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import type { Column } from '@/components/data/DataTable'
 import { formatWeight } from '@/lib/format'
 import { FreshnessCell } from './FreshnessCell'
-import { BOARD_STATUS_TONE } from './status'
+import { BOARD_STATUS_TONE, otherRoutesNote } from './status'
 import type { BoardAgent } from './types'
 
 /*
@@ -17,18 +17,20 @@ export function agentColumns(): Column<BoardAgent>[] {
       header: 'Agent',
       sortable: true,
       sortValue: (a) => a.name,
+      minWidth: 160,
       render: (a) => <span className="font-medium text-text">{a.name}</span>,
     },
     {
       key: 'route',
       header: 'Route',
-      // What the agent runs on the board's date; a route he holds but that doesn't run that
-      // day is listed muted underneath (Route-Schedule-Addendum §5).
+      minWidth: 190,
+      // Line 1: what the agent runs on the board's date. Line 2: the routes he holds that don't
+      // run that day (Route-Schedule-Addendum §5). "Not scheduled" itself lives only in Status.
       render: (a) => {
-        const offToday = a.ownRoutes.filter((r) => r.routeId !== a.routeId)
+        const note = otherRoutesNote(a)
         return (
           <div className="flex flex-col items-start gap-1">
-            {a.scheduledRoutes.length > 0 ? (
+            {a.scheduledRoutes.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {a.scheduledRoutes.map((r) =>
                   r.covering ? (
@@ -42,14 +44,8 @@ export function agentColumns(): Column<BoardAgent>[] {
                   ),
                 )}
               </div>
-            ) : a.ownRoutes.length > 0 ? (
-              <StatusBadge tone="neutral">Not scheduled today</StatusBadge>
-            ) : (
-              <span className="text-text-muted">Unassigned</span>
             )}
-            {offToday.length > 0 && (
-              <span className="text-xs text-text-muted">Also holds {offToday.map((r) => r.name).join(', ')}</span>
-            )}
+            {note && <span className="text-xs text-text-muted">{note}</span>}
           </div>
         )
       },
@@ -57,6 +53,7 @@ export function agentColumns(): Column<BoardAgent>[] {
     {
       key: 'status',
       header: 'Status',
+      minWidth: 130,
       render: (a) => <StatusBadge tone={BOARD_STATUS_TONE[a.status]}>{a.status}</StatusBadge>,
     },
     {
@@ -65,8 +62,9 @@ export function agentColumns(): Column<BoardAgent>[] {
       align: 'right',
       sortable: true,
       sortValue: (a) => a.kgCollected,
+      minWidth: 120,
       render: (a) => (
-        <div>
+        <div className="whitespace-nowrap">
           <p className="tabular">{formatWeight(a.kgCollected)}</p>
           <p className="tabular text-xs text-text-muted">
             {a.stopsDone}/{a.stopsTotal} stops
@@ -77,6 +75,7 @@ export function agentColumns(): Column<BoardAgent>[] {
     {
       key: 'lastSeen',
       header: 'Last seen',
+      minWidth: 130,
       render: (a) => <FreshnessCell agent={a} />,
     },
   ]

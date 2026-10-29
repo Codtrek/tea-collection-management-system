@@ -17,6 +17,8 @@ export interface Column<T> {
   sortValue?: (row: T) => string | number
   /** shows this column in the "Columns" visibility popover (default columns not marked hideable are always shown) */
   hideable?: boolean
+  /** px — the column never squeezes below this; a narrow viewport scrolls the table instead */
+  minWidth?: number
 }
 
 type SortDirection = 'asc' | 'desc' | null
@@ -45,6 +47,10 @@ export interface DataTableProps<T> {
   initialHidden?: string[]
   /** rowKey of a single row to visually highlight (e.g. a deep-linked record) — same tint the bulk-select path uses */
   highlightRowKey?: string
+  /** 'top' for tables whose cells stack several lines; default 'middle' */
+  valign?: 'middle' | 'top'
+  /** keeps the first column in view while the table scrolls sideways (ignored with `selectable`) */
+  stickyFirstColumn?: boolean
 }
 
 /*
@@ -66,6 +72,8 @@ export function DataTable<T>({
   columnPrefsKey,
   initialHidden,
   highlightRowKey,
+  valign = 'middle',
+  stickyFirstColumn,
 }: DataTableProps<T>) {
   const [page, setPage] = useState(0)
   const [compact, setCompact] = useState(() => localStorage.getItem('harboost.table.compact') === '1')
@@ -151,7 +159,9 @@ export function DataTable<T>({
 
   if (rows.length === 0 && emptyState) return <>{emptyState}</>
 
-  const rowPad = compact ? 'h-11' : 'h-[52px]'
+  // a height on a table cell is a minimum — rows still grow with multi-line content
+  const rowPad = cn(compact ? 'h-11' : 'h-[52px]', valign === 'top' && 'py-3 align-top')
+  const stickyKey = stickyFirstColumn && !selectable ? visibleColumns[0]?.key : undefined
 
   return (
     <div className="overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface">
@@ -216,9 +226,11 @@ export function DataTable<T>({
                   <th
                     key={c.key}
                     aria-sort={isSorted ? (sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
+                    style={c.minWidth ? { minWidth: c.minWidth } : undefined}
                     className={cn(
                       'px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-text-muted',
                       c.align === 'right' ? 'text-right' : 'text-left',
+                      c.key === stickyKey && 'sticky left-0 z-[1] bg-surface-sunken',
                     )}
                   >
                     {c.sortable ? (
@@ -259,7 +271,7 @@ export function DataTable<T>({
                   key={key}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={cn(
-                    'border-b border-[#eff2ed] transition-colors last:border-0',
+                    'group border-b border-[#eff2ed] transition-colors last:border-0',
                     onRowClick && 'cursor-pointer',
                     'hover:bg-surface-hover',
                     (selected.has(key) || key === highlightRowKey) && 'bg-brand-soft/50',
@@ -273,10 +285,17 @@ export function DataTable<T>({
                   {visibleColumns.map((c) => (
                     <td
                       key={c.key}
+                      style={c.minWidth ? { minWidth: c.minWidth } : undefined}
                       className={cn(
                         'px-4 text-sm text-text',
                         rowPad,
                         c.align === 'right' && 'tabular text-right',
+                        // opaque so scrolled cells pass underneath; follows the row's hover/highlight tint
+                        c.key === stickyKey &&
+                          cn(
+                            'sticky left-0 z-[1] group-hover:bg-surface-hover',
+                            key === highlightRowKey ? 'bg-brand-soft' : 'bg-surface',
+                          ),
                         c.className,
                       )}
                     >

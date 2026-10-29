@@ -225,7 +225,8 @@ export function DispatchBoardPage() {
             </p>
           )}
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+          {/* map beside the table only on wide screens — below that the table would have to scroll */}
+          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <DataTable
               columns={columns}
               rows={data.agents}
@@ -233,6 +234,8 @@ export function DispatchBoardPage() {
               pageSize={8}
               onRowClick={(a) => setSelectedId(a.agentId)}
               highlightRowKey={selectedId !== null ? String(selectedId) : undefined}
+              valign="top"
+              stickyFirstColumn
               emptyState={
                 <EmptyState
                   icon={<Users className="size-6" strokeWidth={1.5} />}
@@ -273,7 +276,7 @@ export function DispatchBoardPage() {
 
             <section
               aria-label="Agent locations map"
-              className="relative h-[420px] overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface xl:sticky xl:top-4 xl:h-[560px]"
+              className="relative h-[420px] overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface 2xl:sticky 2xl:top-4 2xl:h-[560px]"
             >
               <Suspense
                 fallback={
