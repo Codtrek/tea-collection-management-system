@@ -74,10 +74,6 @@ export class AuthService {
     }
 
     await this.usersService.markLogin(user.id);
-    const publicUser = await this.buildPublicUser(
-      user.id,
-      user.phone,
-      user.role,
     switch (user.role) {
       case 'estate_owner': {
         const estateOwnerPublicUser = await this.buildEstateOwnerPublicUser(
