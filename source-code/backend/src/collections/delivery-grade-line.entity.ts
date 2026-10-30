@@ -1,13 +1,10 @@
 import {
-  Check,
   Column,
   Entity,
-  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
   type Relation,
-  Unique,
 } from 'typeorm';
 import type { DbGrade } from './collection-map';
 import { CollectionRecordEntity } from './collection-record.entity';
@@ -19,36 +16,29 @@ import { CollectionRecordEntity } from './collection-record.entity';
  * there is deliberately no stored total.
  */
 @Entity('delivery_grade_lines')
-@Check('delivery_grade_lines_grade_check', `"grade" IN ('super', 'normal')`)
-@Check('delivery_grade_lines_weight_kg_check', `"weight_kg" > 0`)
-@Unique('delivery_grade_lines_delivery_id_grade_key', ['deliveryId', 'grade'])
-@Index('idx_grade_lines_delivery', ['deliveryId'])
 export class DeliveryGradeLineEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'delivery_id', type: 'varchar', length: 20 })
+  @Column({ name: 'delivery_id' })
   deliveryId: string;
 
-  @Column({ type: 'varchar', length: 10 })
+  @Column({ type: 'varchar' })
   grade: DbGrade;
 
   @Column({ name: 'weight_kg', type: 'decimal', precision: 10, scale: 2 })
   weightKg: string;
 
-  @Column({ name: 'graded_by', type: 'varchar', length: 100 })
+  @Column({ name: 'graded_by' })
   gradedBy: string;
 
-  @Column({ name: 'graded_at', type: 'timestamp', default: () => 'now()' })
+  @Column({ name: 'graded_at', type: 'timestamp' })
   gradedAt: Date;
 
   @ManyToOne(() => CollectionRecordEntity, (r) => r.gradeLines, {
     onDelete: 'CASCADE',
     orphanedRowAction: 'delete',
   })
-  @JoinColumn({
-    name: 'delivery_id',
-    foreignKeyConstraintName: 'delivery_grade_lines_delivery_id_fkey',
-  })
+  @JoinColumn({ name: 'delivery_id' })
   delivery: Relation<CollectionRecordEntity>;
 }

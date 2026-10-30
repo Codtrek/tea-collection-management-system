@@ -1,33 +1,13 @@
-import {
-  Check,
-  Column,
-  Entity,
-  ForeignKey,
-  Index,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
-import { CollectionRecordEntity } from './collection-record.entity';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import type { PublicRevisionLine } from './collection-map';
 
 /** A request to change the grade lines of a LOCKED or SETTLED delivery. One pending per delivery. */
 @Entity('grade_correction_requests')
-@Check(
-  'grade_correction_requests_status_check',
-  `"status" IN ('pending', 'approved', 'rejected')`,
-)
-@Index('uq_correction_one_pending', ['deliveryId'], {
-  unique: true,
-  where: `"status" = 'pending'`,
-})
 export class GradeCorrectionRequestEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'delivery_id', type: 'varchar', length: 20 })
-  @ForeignKey(() => CollectionRecordEntity, {
-    name: 'grade_correction_requests_delivery_id_fkey',
-    onDelete: 'CASCADE',
-  })
+  @Column({ name: 'delivery_id' })
   deliveryId: string;
 
   @Column({ type: 'jsonb' })
@@ -36,25 +16,16 @@ export class GradeCorrectionRequestEntity {
   @Column({ type: 'text' })
   reason: string;
 
-  @Column({ type: 'varchar', length: 10, default: 'pending' })
+  @Column({ type: 'varchar', default: 'pending' })
   status: 'pending' | 'approved' | 'rejected';
 
-  @Column({ name: 'requested_by', type: 'varchar', length: 100 })
+  @Column({ name: 'requested_by' })
   requestedBy: string;
 
-  @Column({
-    name: 'requested_at',
-    type: 'timestamptz',
-    default: () => 'now()',
-  })
+  @Column({ name: 'requested_at', type: 'timestamptz' })
   requestedAt: Date;
 
-  @Column({
-    name: 'decided_by',
-    type: 'varchar',
-    length: 100,
-    nullable: true,
-  })
+  @Column({ name: 'decided_by', type: 'varchar', nullable: true })
   decidedBy: string | null;
 
   @Column({ name: 'decided_at', type: 'timestamptz', nullable: true })

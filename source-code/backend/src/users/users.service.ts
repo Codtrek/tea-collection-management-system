@@ -5,8 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { FactoryEmployee } from './factory-employee.entity';
 import { type DbRole, User } from './user.entity';
-import { EstateEntity } from '../estates/estate.entity';
-import { EstateOwnerEntity } from '../estates/estate-owner.entity';
+import { EstateOwner } from './estate-owner.entity';
 import { EstateManager } from './estate-manager.entity';
 
 export interface UserProfile {
@@ -22,10 +21,8 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(FactoryEmployee)
     private readonly factoryEmployeesRepository: Repository<FactoryEmployee>,
-    @InjectRepository(EstateOwnerEntity)
-    private readonly estateOwnersRepository: Repository<EstateOwnerEntity>,
-    @InjectRepository(EstateEntity)
-    private readonly estatesRepository: Repository<EstateEntity>,
+    @InjectRepository(EstateOwner)
+    private readonly estateOwnersRepository: Repository<EstateOwner>,
     @InjectRepository(EstateManager)
     private readonly estateManagersRepository: Repository<EstateManager>,
   ) {}
@@ -92,8 +89,8 @@ export class UsersService {
       });
       const savedUser = await manager.save(user);
 
-      await manager.save(EstateOwnerEntity, {
-        userId: savedUser.id,
+      await manager.save(EstateOwner, {
+        user_id: savedUser.id,
         name,
         contact: phone,
         nic,
@@ -114,12 +111,11 @@ export class UsersService {
 
   async getEstateOwnerProfile(userId: number): Promise<UserProfile | null> {
     const estateOwner = await this.estateOwnersRepository.findOne({
-      where: { userId },
+      where: { user_id: userId },
+      relations: { estate: true },
     });
     if (!estateOwner) return null;
-    const estate = await this.estatesRepository.findOne({
-      where: { ownerId: estateOwner.id },
-    });
+    const estate = estateOwner.estate[0];
     if (!estate) return null;
     return { name: estateOwner.name, estate: estate.name };
   }

@@ -1,11 +1,4 @@
-import {
-  Check,
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  PrimaryColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 import type { ExpenseCategory } from './reports-map';
 
 /**
@@ -15,20 +8,15 @@ import type { ExpenseCategory } from './reports-map';
  * never stored here.
  */
 @Entity('expense_entries')
-@Check(
-  'expense_entries_category_check',
-  `"category" IN ('Utilities', 'Maintenance', 'Miscellaneous', 'Other')`,
-)
-@Index('idx_expense_entries_date', ['entryDate'])
 export class ExpenseEntryEntity {
   /** Business key, e.g. 'EXP-2026-0001' — not a generated id. */
-  @PrimaryColumn({ type: 'varchar', length: 20 })
+  @PrimaryColumn()
   id: string;
 
-  @Column({ type: 'varchar', length: 20 })
+  @Column({ type: 'varchar' })
   category: ExpenseCategory;
 
-  @Column({ type: 'varchar', length: 200 })
+  @Column()
   description: string;
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
@@ -37,10 +25,9 @@ export class ExpenseEntryEntity {
   @Column({ name: 'entry_date', type: 'date' })
   entryDate: string;
 
-  @Column({ name: 'entered_by', type: 'varchar', length: 100 })
+  @Column({ name: 'entered_by' })
   enteredBy: string;
 
-  /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
-  @CreateDateColumn({ name: 'created_at', nullable: true })
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

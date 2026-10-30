@@ -6,7 +6,7 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { EstateEntity } from '../estates/estate.entity';
+import { Estate } from './estate.entity';
 import { User } from './user.entity';
 
 /**
@@ -32,7 +32,7 @@ export class EstateEmployee {
   user_id: number;
 
   @Column({ type: 'integer' })
-  @ForeignKey(() => EstateEntity, { name: 'estate_employees_estate_id_fkey' })
+  @ForeignKey(() => Estate, { name: 'estate_employees_estate_id_fkey' })
   @Index('idx_estate_employees_estate')
   estate_id: number;
 

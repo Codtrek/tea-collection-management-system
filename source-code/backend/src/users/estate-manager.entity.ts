@@ -5,7 +5,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { EstateEntity } from '../estates/estate.entity';
+import { Estate } from './estate.entity';
 import { EstateEmployee } from './estate-employee.entity';
 
 /**
@@ -38,10 +38,10 @@ export class EstateManager {
   })
   employee: EstateEmployee;
 
-  @ManyToOne(() => EstateEntity)
+  @ManyToOne(() => Estate)
   @JoinColumn({
     name: 'estate_id',
     foreignKeyConstraintName: 'tea_estate_managers_estate_id_fkey',
   })
-  estate: EstateEntity;
+  estate: Estate;
 }

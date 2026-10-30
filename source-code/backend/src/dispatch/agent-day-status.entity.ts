@@ -1,33 +1,27 @@
-import { Check, Column, Entity, ForeignKey, PrimaryColumn } from 'typeorm';
-import { CollectionAgentEntity } from './collection-agent.entity';
+import { Column, Entity, PrimaryColumn } from 'typeorm';
 
 export type DayStatus = 'AVAILABLE' | 'ABSENT';
 
 /** One row per agent per day: availability plus when the shift started/ended. */
 @Entity('agent_day_status')
-@Check('agent_day_status_source_check', `"source" IN ('self', 'officer')`)
-@Check('agent_day_status_status_check', `"status" IN ('AVAILABLE', 'ABSENT')`)
 export class AgentDayStatusEntity {
-  @PrimaryColumn({ name: 'agent_id', type: 'int' })
-  @ForeignKey(() => CollectionAgentEntity, {
-    name: 'agent_day_status_agent_id_fkey',
-  })
+  @PrimaryColumn({ name: 'agent_id' })
   agentId: number;
 
   /** 'YYYY-MM-DD' */
   @PrimaryColumn({ type: 'date' })
   day: string;
 
-  @Column({ type: 'varchar', length: 10, default: 'AVAILABLE' })
+  @Column({ type: 'varchar' })
   status: DayStatus;
 
-  @Column({ type: 'varchar', length: 10, nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   source: 'self' | 'officer' | null;
 
   @Column({ type: 'text', nullable: true })
   reason: string | null;
 
-  @Column({ name: 'marked_by', type: 'varchar', length: 100, nullable: true })
+  @Column({ name: 'marked_by', type: 'varchar', nullable: true })
   markedBy: string | null;
 
   @Column({ name: 'shift_started_at', type: 'timestamptz', nullable: true })
