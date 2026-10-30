@@ -46,7 +46,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   } catch {
     // fetch rejects at the network layer (server down, DNS, CORS) — surface it as a
     // typed ApiError so callers' `instanceof ApiError` handling gives a clear message.
-    throw new ApiError(0, 'Unable to reach the server. Please make sure the backend is running and try again.')
+    throw new ApiError(0, `Unable to reach the server at ${API_URL}. Please make sure the backend is running and try again.`)
   }
 
   if (res.status === 401) {
@@ -62,6 +62,9 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     throw new ApiError(res.status, message)
   }
 
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
+  // A void endpoint (e.g. markAttendance) returns 201/200 with an empty body;
+  // calling res.json() on that throws "Unexpected end of JSON input". Read as
+  // text first and only parse when a body is actually present.
+  const text = await res.text()
+  return (text ? JSON.parse(text) : undefined) as T
 }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Upload, RouteIcon } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -11,6 +12,7 @@ import { Select } from '@/components/ui/Select'
 import { Toggle } from '@/components/ui/Toggle'
 import { MultiStepWizard } from '@/components/patterns/MultiStepWizard'
 import { useToast } from '@/components/ui/Toast'
+import * as estatesService from '@/services/estates'
 import { estateOwnerSchema, type EstateOwnerForm, BANKS, BRANCHES } from './schema'
 
 const STEPS = [
@@ -26,8 +28,8 @@ const STEPS = [
 export function EstateRegistrationPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [step, setStep] = useState(0)
-  const [saving, setSaving] = useState(false)
 
   const {
     register,
@@ -49,13 +51,18 @@ export function EstateRegistrationPage() {
     if (ok) setStep((s) => Math.min(STEPS.length - 1, s + 1))
   }
 
-  const onSubmit = (data: EstateOwnerForm) => {
-    setSaving(true)
-    setTimeout(() => {
+  const createMutation = useMutation({
+    mutationFn: (data: EstateOwnerForm) => estatesService.create({ ...data, email: data.email || undefined }),
+    onSuccess: (estate) => {
       toast('Estate owner registered')
-      void data
-      navigate('/estates/EST-0001')
-    }, 600)
+      void queryClient.invalidateQueries({ queryKey: ['estates'] })
+      navigate(`/estates/${estate.id}`)
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not register this estate owner', 'danger'),
+  })
+
+  const onSubmit = (data: EstateOwnerForm) => {
+    createMutation.mutate(data)
   }
 
   return (
@@ -154,7 +161,12 @@ export function EstateRegistrationPage() {
             )}
 
             <div className="flex justify-between border-t border-border pt-4">
-              <Button type="button" variant="secondary" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0 || saving}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setStep((s) => Math.max(0, s - 1))}
+                disabled={step === 0 || createMutation.isPending}
+              >
                 Back
               </Button>
               {step < STEPS.length - 1 ? (
@@ -162,7 +174,7 @@ export function EstateRegistrationPage() {
                   Continue
                 </Button>
               ) : (
-                <Button type="submit" loading={saving}>
+                <Button type="submit" loading={createMutation.isPending}>
                   Register Estate Owner
                 </Button>
               )}

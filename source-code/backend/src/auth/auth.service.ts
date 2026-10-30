@@ -4,10 +4,23 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { RolePermissionEntity } from '../admin/role-permission.entity';
+import {
+  roleMapFromRows,
+  type ModuleKey,
+  type PermissionLevel,
+} from '../admin/admin-map';
 import type { DbRole } from '../users/user.entity';
 import { UsersService } from '../users/users.service';
-import type { JwtPayload } from './jwt-payload.interface';
+import { AgentDirectoryService } from '../dispatch/agent-directory.service';
+import {
+  AGENT_ROLE,
+  type AgentJwtPayload,
+  type JwtPayload,
+} from './jwt-payload.interface';
 import { toAppRole, type AppRole } from './role-map';
 
 export interface PublicUser {
@@ -15,6 +28,9 @@ export interface PublicUser {
   name: string;
   role: AppRole;
   phone: string;
+  factory: string;
+  /** The role's server-stored permission map — the portal's `can()` reads this. */
+  permissions: Record<ModuleKey, PermissionLevel>;
   factory?: string;
   estate?: string;
 }
@@ -24,11 +40,21 @@ export interface LoginResult {
   user: PublicUser;
 }
 
+export interface AgentLoginResult {
+  accessToken: string;
+  agent: { id: number; name: string; phone: string };
+  /** true while the one-time temporary password is still in use — the app must force a change */
+  mustChangePassword: boolean;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    @InjectRepository(RolePermissionEntity)
+    private readonly permissionRepo: Repository<RolePermissionEntity>,
+    private readonly agentDirectory: AgentDirectoryService,
   ) {}
 
   async login(phone: string, password: string): Promise<LoginResult> {
@@ -41,6 +67,17 @@ export class AuthService {
     if (!(await bcrypt.compare(password, user.password_hash))) {
       throw new UnauthorizedException('The password is incorrect.');
     }
+    if (user.status === 'suspended') {
+      throw new UnauthorizedException(
+        'This account has been suspended. Contact an administrator.',
+      );
+    }
+
+    await this.usersService.markLogin(user.id);
+    const publicUser = await this.buildPublicUser(
+      user.id,
+      user.phone,
+      user.role,
     switch (user.role) {
       case 'estate_owner': {
         const estateOwnerPublicUser = await this.buildEstateOwnerPublicUser(
@@ -133,6 +170,69 @@ export class AuthService {
     };
   }
 
+  /**
+   * Mobile sign-in for collection agents (phone + password). Issues an AGENT-role
+   * token that the portal API refuses; only `/dispatch/me/*` accepts it.
+   */
+  async agentLogin(phone: string, password: string): Promise<AgentLoginResult> {
+    const user = await this.usersService.findByPhone(phone);
+    if (!user) {
+      throw new UnauthorizedException(
+        'No account found with this phone number.',
+      );
+    }
+    if (!(await bcrypt.compare(password, user.password_hash))) {
+      throw new UnauthorizedException('The password is incorrect.');
+    }
+    if (user.status === 'suspended') {
+      throw new UnauthorizedException(
+        'This account has been suspended. Contact your factory.',
+      );
+    }
+    const agent =
+      user.role === 'collection_agent'
+        ? await this.agentDirectory.byUserId(user.id)
+        : null;
+    if (!agent) {
+      throw new UnauthorizedException(
+        'This account is not a collection agent.',
+      );
+    }
+    await this.usersService.markLogin(user.id);
+    const payload: AgentJwtPayload = { sub: String(user.id), role: AGENT_ROLE };
+    return {
+      accessToken: this.jwtService.sign(payload),
+      agent: { id: agent.agentId, name: agent.name, phone: user.phone },
+      mustChangePassword: user.must_change_password,
+    };
+  }
+
+  /** First sign-in: swap the one-time temporary password for the agent's own. */
+  async changeAgentPassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.usersService.findById(userId);
+    if (!user || user.role !== 'collection_agent') {
+      throw new UnauthorizedException(
+        'This account is not a collection agent.',
+      );
+    }
+    if (!(await bcrypt.compare(currentPassword, user.password_hash))) {
+      throw new UnauthorizedException('The current password is incorrect.');
+    }
+    if (currentPassword === newPassword) {
+      throw new ConflictException(
+        'Choose a new password different from the current one.',
+      );
+    }
+    await this.usersService.setPassword(
+      userId,
+      await bcrypt.hash(newPassword, 10),
+    );
+  }
+
   async me(userId: number): Promise<PublicUser> {
     const user = await this.usersService.findById(userId);
     if (!user) {
@@ -200,12 +300,16 @@ export class AuthService {
         'No employee profile found for this account.',
       );
     }
+    // Server-driven permissions: the role's map from `role_permissions`. Empty
+    // if unseeded — the portal falls back to its DEFAULT_PERMISSIONS constant.
+    const permRows = await this.permissionRepo.find({ where: { role } });
     return {
       id: String(id),
       name: profile.name,
       role,
       phone,
       factory: profile.factory,
+      permissions: roleMapFromRows(permRows, role),
     };
   }
 }

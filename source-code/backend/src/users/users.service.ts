@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { FactoryEmployee } from './factory-employee.entity';
+import { type DbRole, User } from './user.entity';
 import { EstateOwner } from './estate-owner.entity';
 import { EstateManager } from './estate-manager.entity';
 import { User } from './user.entity';
@@ -31,6 +34,40 @@ export class UsersService {
 
   findById(id: number): Promise<User | null> {
     return this.usersRepository.findOne({ where: { id } });
+  }
+
+  /** Sets a new password and clears the temporary-password flag. */
+  async setPassword(userId: number, passwordHash: string): Promise<void> {
+    await this.usersRepository.update(
+      { id: userId },
+      { password_hash: passwordHash, must_change_password: false },
+    );
+  }
+
+  /** Stamp a successful login so ADM-02 can show a real "last login". */
+  async markLogin(userId: number): Promise<void> {
+    await this.usersRepository.update(
+      { id: userId },
+      { last_login_at: new Date() },
+    );
+  }
+
+  /**
+   * Provisions a login row for a non-portal user registered through the
+   * portal (e.g. an estate owner via EST-02). No password is issued through
+   * this flow — mobile login/reset is deferred to PLAN.md Phase 3, so a
+   * random hash is stored to satisfy the schema in the meantime. Reuses the
+   * existing row if this phone is already registered.
+   */
+  async createUser(phone: string, role: DbRole): Promise<User> {
+    const existing = await this.findByPhone(phone);
+    if (existing) return existing;
+    const password_hash = await bcrypt.hash(
+      randomBytes(24).toString('hex'),
+      10,
+    );
+    const user = this.usersRepository.create({ phone, password_hash, role });
+    return this.usersRepository.save(user);
   }
 
   findByNic(nic: string): Promise<User | null> {

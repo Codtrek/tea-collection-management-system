@@ -2,10 +2,18 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AdminModule } from './admin/admin.module';
+import { AuditModule } from './audit/audit.module';
 import { ThrottlerModule, seconds } from '@nestjs/throttler';
 import { IdentityThrottlerGuard } from './auth/identity-throttler.guard';
 
 import { AuthModule } from './auth/auth.module';
+import { CollectionsModule } from './collections/collections.module';
+import { DispatchModule } from './dispatch/dispatch.module';
+import { EmployeesModule } from './employees/employees.module';
+import { EstatesModule } from './estates/estates.module';
+import { FertilizerModule } from './fertilizer/fertilizer.module';
+import { ReportsModule } from './reports/reports.module';
 import { UsersModule } from './users/users.module';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 
@@ -69,6 +77,14 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
 
     UsersModule,
     AuthModule,
+    CollectionsModule,
+    DispatchModule,
+    EstatesModule,
+    EmployeesModule,
+    FertilizerModule,
+    ReportsModule,
+    AuditModule,
+    AdminModule,
   ],
 
   providers: [
