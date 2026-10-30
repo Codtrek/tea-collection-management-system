@@ -42,16 +42,13 @@ import { JwtStrategy } from './jwt.strategy';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, AuthMobileController],
   providers: [
     AuthService,
     JwtStrategy,
     AgentJwtStrategy,
     AgentDirectoryService,
   ],
-  exports: [AuthService],
-  controllers: [AuthController, AuthMobileController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService , JwtModule],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

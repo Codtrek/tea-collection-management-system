@@ -7,7 +7,6 @@ import { FactoryEmployee } from './factory-employee.entity';
 import { type DbRole, User } from './user.entity';
 import { EstateOwner } from './estate-owner.entity';
 import { EstateManager } from './estate-manager.entity';
-import { User } from './user.entity';
 
 export interface UserProfile {
   name: string;
