@@ -62,8 +62,6 @@ export class User {
   /** Stamped on each successful login; shown as "last login" in Users & Roles. */
   @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
   last_login_at: Date | null;
-  @Column()
-  nic: string;
 
   /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
   @CreateDateColumn({ type: 'timestamp', nullable: true })
