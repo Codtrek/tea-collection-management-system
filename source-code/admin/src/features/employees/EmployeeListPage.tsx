@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Eye, Pencil, UserX, Users } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Plus, Eye, Pencil, UserX, Users, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
+import { ErrorState } from '@/components/data/ErrorState'
 import { StatusBadge, type BadgeTone } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -11,7 +13,7 @@ import { Select } from '@/components/ui/Select'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { EMPLOYEES } from './data'
+import * as employeesService from '@/services/employees'
 import type { Employee, EmployeeStatus } from './types'
 import { formatDate, initials } from '@/lib/format'
 
@@ -25,16 +27,34 @@ export function EmployeeListPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { can } = useAuth()
-  const canManage = can('employees', 'edit') // Add / Deactivate are Administrator-only (§8.1.5)
+  const queryClient = useQueryClient()
+  const canManage = can('employees', 'approve') // Add / Edit / Deactivate are Administrator-only (§8.1.5)
 
   const [search, setSearch] = useState('')
   const [role, setRole] = useState('')
   const [status, setStatus] = useState('')
   const [deactivating, setDeactivating] = useState<Employee | null>(null)
 
+  const {
+    data: employees,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({ queryKey: ['employees'], queryFn: employeesService.list })
+
+  const deactivateMutation = useMutation({
+    mutationFn: (id: string) => employeesService.deactivate(id),
+    onSuccess: (updated) => {
+      toast(`${updated.name} deactivated`, 'warning')
+      setDeactivating(null)
+      void queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not deactivate this employee', 'danger'),
+  })
+
   const rows = useMemo(
     () =>
-      EMPLOYEES.filter((e) => {
+      (employees ?? []).filter((e) => {
         const q = search.toLowerCase()
         return (
           (e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)) &&
@@ -42,8 +62,20 @@ export function EmployeeListPage() {
           (!status || e.status === status)
         )
       }),
-    [search, role, status],
+    [employees, search, role, status],
   )
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return <ErrorState title="Couldn't load employees" description="Something went wrong fetching the employee roster." onRetry={() => void refetch()} />
+  }
 
   const columns: Column<Employee>[] = [
     {
@@ -87,7 +119,7 @@ export function EmployeeListPage() {
           placeholder="All roles"
           value={role}
           onChange={(e) => setRole(e.target.value)}
-          options={[...new Set(EMPLOYEES.map((e) => e.role))].map((r) => ({ value: r, label: r }))}
+          options={[...new Set((employees ?? []).map((e) => e.role))].map((r) => ({ value: r, label: r }))}
         />
         <Select
           placeholder="All statuses"
@@ -124,10 +156,8 @@ export function EmployeeListPage() {
       <LightConfirmModal
         open={!!deactivating}
         onClose={() => setDeactivating(null)}
-        onConfirm={() => {
-          toast(`${deactivating?.name} deactivated`, 'warning')
-          setDeactivating(null)
-        }}
+        onConfirm={() => deactivating && deactivateMutation.mutate(deactivating.id)}
+        loading={deactivateMutation.isPending}
         tone="danger"
         title="Deactivate employee"
         confirmLabel="Deactivate"

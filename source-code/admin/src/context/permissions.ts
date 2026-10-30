@@ -4,8 +4,14 @@ import type { ModuleKey, PermissionLevel, Role } from '@/types'
   Data-driven permission model (visual-foundations open-item #11).
 
   The §4 three-role model is only the DEFAULT. Real checks read this map rather
-  than hardcoding `if (role === 'Officer')`, so when ADM-02 (Users & Roles) lets
-  an Administrator customise privileges, only this table changes — no screen does.
+  than hardcoding `if (role === 'Officer')`.
+
+  As of the Administration slice (2.6), the RUNTIME source of truth is the
+  server's `role_permissions` table: login/`/auth/me` attach the user's role
+  map onto `User.permissions`, and `AuthContext.level()` reads that first.
+  This constant is now the FALLBACK default — used only when the backend didn't
+  supply a map (older token, unseeded table) — and the seed for that table
+  (backend `seed.ts` PERMISSION_MATRIX) is kept in sync with it.
 */
 
 const LEVEL_RANK: Record<PermissionLevel, number> = {
@@ -29,6 +35,12 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     attendance: 'approve',
     performance: 'approve',
     reports: 'approve',
+    dispatch: 'approve',
+    // Grading is a separation-of-duties control: an Officer grades, a Manager approves corrections,
+    // the Administrator audits (view). `gradingApproval` is its own module because the `approve`
+    // tier implies `edit` — a Manager can approve a correction without being able to grade.
+    grading: 'view',
+    gradingApproval: 'view',
     administration: 'approve',
   },
   Officer: {
@@ -41,7 +53,14 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     employees: 'view',
     attendance: 'edit',
     performance: 'view',
-    reports: 'view',
+    // RPT-04 (log a daily expense) is a real write path once Reports is
+    // backend-wired — Officer edits like every other module's `edit` tier,
+    // Manager stays read-only (§4 three-role model).
+    reports: 'edit',
+    // Agent Dispatch: view the board · edit = mark absent / send cover · approve = permanent reassignment.
+    dispatch: 'edit',
+    grading: 'edit',
+    gradingApproval: 'view',
     administration: 'none',
   },
   Manager: {
@@ -55,6 +74,9 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     attendance: 'view',
     performance: 'approve',
     reports: 'view',
+    dispatch: 'approve',
+    grading: 'view',
+    gradingApproval: 'approve',
     administration: 'none',
   },
 }
