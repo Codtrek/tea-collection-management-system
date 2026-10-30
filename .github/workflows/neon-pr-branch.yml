@@ -101,6 +101,17 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Check for missing migrations
+        env:
+          DATABASE_URL_DIRECT: ${{ steps.neon.outputs.db_url }}
+        run: |
+          set -o pipefail
+
+            echo "Checking schema differences..."
+
+            npx typeorm-ts-node-commonjs \
+            schema:log -d src/data-source.ts
+
   delete-branch:
     if: >
       github.event.action == 'closed' &&
