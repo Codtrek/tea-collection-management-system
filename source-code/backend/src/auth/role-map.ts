@@ -1,5 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import type { DbRole } from '../users/user.entity';
+import { PORTAL_ROLES, type PortalRole } from '../admin/admin-map';
 
 /** Roles the factory web portal's permission model (`AppRole`) is built around. */
 export type AppRole = 'Administrator' | 'Officer' | 'Manager' | 'Estate Owner' | 'Estate Manager';
@@ -25,4 +26,18 @@ export function toAppRole(dbRole: DbRole): AppRole {
     );
   }
   return appRole;
+}
+
+/**
+ * Like `toAppRole`, but narrowed to the three factory-portal roles — for code
+ * keyed on the portal permission model (`role_permissions`, ADM-02 users).
+ */
+export function toPortalRole(dbRole: DbRole): PortalRole {
+  const appRole = toAppRole(dbRole);
+  if (!(PORTAL_ROLES as string[]).includes(appRole)) {
+    throw new UnauthorizedException(
+      'This account cannot access the factory portal.',
+    );
+  }
+  return appRole as PortalRole;
 }

@@ -56,7 +56,7 @@ export class User {
   status: 'active' | 'suspended';
 
   /** A login provisioned by registration starts with a one-time temporary password; mobile blocks until it is changed. */
-  @Column({ name: 'must_change_password', default: false })
+  @Column({ name: 'must_change_password', type: 'boolean' ,default: false })
   must_change_password: boolean;
 
   /** Stamped on each successful login; shown as "last login" in Users & Roles. */
@@ -71,6 +71,4 @@ export class User {
   @Column({ type: 'varchar', length: 12, nullable: true, unique: true })
   nic: string | null;
 
-  @Column({ type: 'boolean', default: false })
-  must_change_password: boolean;
 }
