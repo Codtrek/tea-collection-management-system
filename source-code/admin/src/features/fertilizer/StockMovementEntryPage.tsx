@@ -1,85 +1,92 @@
-import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpFromLine, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Toggle } from '@/components/ui/Toggle'
+import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
-import { BATCHES, REQUESTS, batchStatus } from './data'
-import { dispatchableRequests, remainderOf } from './position'
+import * as fertilizerService from '@/services/fertilizer'
+import { batchStatus, dispatchableRequests, remainderOf } from './lib'
+import type { FertilizerBatch, FertilizerRequest } from './types'
 import { formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
-/* FERT-02 validation rules (fertilizer doc + addendum §7). Conditional on movement type. */
-const movementSchema = z
-  .object({
-    type: z.enum(['Incoming', 'Outgoing']),
-    batchId: z.string().min(1, 'Select a batch'),
-    quantity: z.number({ message: 'Quantity is required' }).positive('Quantity must be a positive number'),
-    unit: z.enum(['kg', 'bags']),
-    date: z.string().min(1, 'Date is required'),
-    // Incoming
-    supplier: z.string().optional(),
-    lotNumber: z.string().optional(),
-    receivedDate: z.string().optional(),
-    expiryDate: z.string().optional(),
-    // Outgoing
-    destination: z.string().optional(),
-    linkedRequest: z.string().optional(),
-    adHoc: z.boolean().optional(),
-    adHocReason: z.string().optional(),
-    notes: z.string().optional(),
-  })
-  .superRefine((v, ctx) => {
-    if (v.type === 'Incoming') {
-      if (v.batchId === 'new') {
-        if (!v.supplier) ctx.addIssue({ code: 'custom', path: ['supplier'], message: 'Supplier is required' })
-        if (!v.lotNumber) ctx.addIssue({ code: 'custom', path: ['lotNumber'], message: 'Batch/lot number is required' })
-        else if (BATCHES.some((b) => b.lotNumber.toLowerCase() === v.lotNumber!.toLowerCase()))
-          ctx.addIssue({ code: 'custom', path: ['lotNumber'], message: 'Lot number already exists — must be unique' })
-      }
-      if (!v.expiryDate) ctx.addIssue({ code: 'custom', path: ['expiryDate'], message: 'Expiry date is required' })
-      else if (v.expiryDate <= v.date)
-        ctx.addIssue({ code: 'custom', path: ['expiryDate'], message: 'Expiry must be after the received date' })
-    } else {
-      if (!v.destination) ctx.addIssue({ code: 'custom', path: ['destination'], message: 'Destination is required' })
-      if (v.batchId === 'new') {
-        ctx.addIssue({ code: 'custom', path: ['batchId'], message: 'Outgoing movements must come from an existing batch' })
+/* FERT-02 validation rules (fertilizer doc + addendum §7). Conditional on movement type.
+   Takes the live batch/request lists as arguments — the uniqueness/remainder checks read
+   whatever was last fetched from the backend, never a module-level fixture. */
+function buildMovementSchema(batches: FertilizerBatch[], requests: FertilizerRequest[]) {
+  return z
+    .object({
+      type: z.enum(['Incoming', 'Outgoing']),
+      batchId: z.string().min(1, 'Select a batch'),
+      quantity: z.number({ message: 'Quantity is required' }).positive('Quantity must be a positive number'),
+      unit: z.enum(['kg', 'bags']),
+      date: z.string().min(1, 'Date is required'),
+      // Incoming
+      item: z.string().optional(),
+      supplier: z.string().optional(),
+      lotNumber: z.string().optional(),
+      expiryDate: z.string().optional(),
+      // Outgoing
+      destination: z.string().optional(),
+      linkedRequest: z.string().optional(),
+      adHoc: z.boolean().optional(),
+      adHocReason: z.string().optional(),
+      notes: z.string().optional(),
+    })
+    .superRefine((v, ctx) => {
+      if (v.type === 'Incoming') {
+        if (v.batchId === 'new') {
+          if (!v.item) ctx.addIssue({ code: 'custom', path: ['item'], message: 'Item is required' })
+          if (!v.supplier) ctx.addIssue({ code: 'custom', path: ['supplier'], message: 'Supplier is required' })
+          if (!v.lotNumber) ctx.addIssue({ code: 'custom', path: ['lotNumber'], message: 'Batch/lot number is required' })
+          else if (batches.some((b) => b.lotNumber.toLowerCase() === v.lotNumber!.toLowerCase()))
+            ctx.addIssue({ code: 'custom', path: ['lotNumber'], message: 'Lot number already exists — must be unique' })
+        }
+        if (!v.expiryDate) ctx.addIssue({ code: 'custom', path: ['expiryDate'], message: 'Expiry date is required' })
+        else if (v.expiryDate <= v.date)
+          ctx.addIssue({ code: 'custom', path: ['expiryDate'], message: 'Expiry must be after the received date' })
       } else {
-        const batch = BATCHES.find((b) => b.id === v.batchId)
-        if (batch && v.quantity > batch.quantityKg)
-          ctx.addIssue({
-            code: 'custom',
-            path: ['quantity'],
-            message: `Cannot exceed available stock (${formatWeight(batch.quantityKg)})`,
-          })
-      }
-      // §7 — dispatch must fulfil an approved request, unless explicitly ad-hoc.
-      if (!v.adHoc) {
-        if (!v.linkedRequest)
-          ctx.addIssue({ code: 'custom', path: ['linkedRequest'], message: 'Select an approved request, or mark this dispatch ad-hoc' })
-        else {
-          const req = REQUESTS.find((r) => r.id === v.linkedRequest)
-          if (req && v.quantity > remainderOf(req))
+        if (!v.destination) ctx.addIssue({ code: 'custom', path: ['destination'], message: 'Destination is required' })
+        if (v.batchId === 'new') {
+          ctx.addIssue({ code: 'custom', path: ['batchId'], message: 'Outgoing movements must come from an existing batch' })
+        } else {
+          const batch = batches.find((b) => b.id === v.batchId)
+          if (batch && v.quantity > batch.quantityKg)
             ctx.addIssue({
               code: 'custom',
               path: ['quantity'],
-              message: `Cannot exceed the approved remainder (${formatWeight(remainderOf(req))})`,
+              message: `Cannot exceed available stock (${formatWeight(batch.quantityKg)})`,
             })
         }
-      } else if (!v.adHocReason?.trim()) {
-        ctx.addIssue({ code: 'custom', path: ['adHocReason'], message: 'A reason is required for an ad-hoc dispatch' })
+        // §7 — dispatch must fulfil an approved request, unless explicitly ad-hoc.
+        if (!v.adHoc) {
+          if (!v.linkedRequest)
+            ctx.addIssue({ code: 'custom', path: ['linkedRequest'], message: 'Select an approved request, or mark this dispatch ad-hoc' })
+          else {
+            const req = requests.find((r) => r.id === v.linkedRequest)
+            if (req && v.quantity > remainderOf(req))
+              ctx.addIssue({
+                code: 'custom',
+                path: ['quantity'],
+                message: `Cannot exceed the approved remainder (${formatWeight(remainderOf(req))})`,
+              })
+          }
+        } else if (!v.adHocReason?.trim()) {
+          ctx.addIssue({ code: 'custom', path: ['adHocReason'], message: 'A reason is required for an ad-hoc dispatch' })
+        }
       }
-    }
-  })
+    })
+}
 
-type MovementForm = z.infer<typeof movementSchema>
+type MovementForm = z.infer<ReturnType<typeof buildMovementSchema>>
 
 const DESTINATIONS = [
   'Green Valley Estate',
@@ -91,10 +98,48 @@ const DESTINATIONS = [
 ]
 
 export function StockMovementEntryPage() {
+  const {
+    data: batches,
+    isPending: batchesPending,
+    isError: batchesError,
+    refetch: refetchBatches,
+  } = useQuery({ queryKey: ['fertilizer', 'batches'], queryFn: fertilizerService.listBatches })
+  const {
+    data: requests,
+    isPending: requestsPending,
+    isError: requestsError,
+    refetch: refetchRequests,
+  } = useQuery({ queryKey: ['fertilizer', 'requests'], queryFn: fertilizerService.listRequests })
+
+  if (batchesPending || requestsPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (batchesError || requestsError || !batches || !requests) {
+    return (
+      <ErrorState
+        title="Couldn't load stock data"
+        description="Something went wrong fetching batches and requests."
+        onRetry={() => {
+          void refetchBatches()
+          void refetchRequests()
+        }}
+      />
+    )
+  }
+
+  return <MovementForm batches={batches} requests={requests} />
+}
+
+function MovementForm({ batches, requests }: { batches: FertilizerBatch[]; requests: FertilizerRequest[] }) {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [params] = useSearchParams()
-  const [saving, setSaving] = useState(false)
 
   const {
     register,
@@ -103,7 +148,7 @@ export function StockMovementEntryPage() {
     setValue,
     formState: { errors },
   } = useForm<MovementForm>({
-    resolver: zodResolver(movementSchema),
+    resolver: zodResolver(buildMovementSchema(batches, requests)),
     mode: 'onBlur',
     defaultValues: {
       type: 'Incoming',
@@ -116,20 +161,56 @@ export function StockMovementEntryPage() {
   const values = useWatch({ control })
   const type = values.type ?? 'Incoming'
   const adHoc = values.adHoc ?? false
-  const selectedBatch = BATCHES.find((b) => b.id === values.batchId)
-  const openRequests = dispatchableRequests()
+  const selectedBatch = batches.find((b) => b.id === values.batchId)
+  const openRequests = dispatchableRequests(requests)
+
+  const recordMutation = useMutation({
+    mutationFn: (input: fertilizerService.RecordMovementInput) => fertilizerService.recordMovement(input),
+    onSuccess: () => {
+      toast('Stock movement recorded')
+      void queryClient.invalidateQueries({ queryKey: ['fertilizer'] })
+      navigate('/fertilizer')
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not record this movement', 'danger'),
+  })
 
   const onSubmit = (data: MovementForm) => {
-    setSaving(true)
-    // Mock save; the typed API layer swaps this for a POST later.
-    setTimeout(() => {
-      toast('Stock movement recorded')
-      void data
-      navigate('/fertilizer')
-    }, 600)
+    if (data.type === 'Incoming') {
+      recordMutation.mutate({
+        type: 'Incoming',
+        quantityKg: data.quantity,
+        date: data.date,
+        notes: data.notes || undefined,
+        supplier: data.supplier || undefined,
+        ...(data.batchId === 'new'
+          ? {
+              // Category has no field in this quick-entry form — new batches
+              // default to Fertilizer; Beneficiary items are registered
+              // directly via `POST /fertilizer/batches` for now.
+              item: data.item,
+              category: 'Fertilizer' as const,
+              unit: data.unit,
+              lotNumber: data.lotNumber,
+              expiryDate: data.expiryDate,
+            }
+          : { batchId: data.batchId }),
+      })
+    } else {
+      recordMutation.mutate({
+        type: 'Outgoing',
+        quantityKg: data.quantity,
+        date: data.date,
+        batchId: data.batchId,
+        destination: data.destination,
+        linkedRequest: data.adHoc ? undefined : data.linkedRequest,
+        notes: data.adHoc
+          ? `Ad-hoc dispatch — ${data.adHocReason}${data.notes ? ` · ${data.notes}` : ''}`
+          : data.notes || undefined,
+      })
+    }
   }
 
-  const activeBatches = BATCHES.filter((b) => !b.discarded)
+  const activeBatches = batches.filter((b) => !b.discarded)
 
   return (
     <div>
@@ -207,6 +288,9 @@ export function StockMovementEntryPage() {
           {type === 'Incoming' ? (
             <fieldset className="grid gap-4 rounded-[var(--radius-md)] border border-border p-4 sm:grid-cols-2">
               <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">Incoming details</legend>
+              {values.batchId === 'new' && (
+                <Input label="Item" error={errors.item?.message} {...register('item')} />
+              )}
               <Input label="Supplier" error={errors.supplier?.message} {...register('supplier')} />
               <Input label="Batch / lot number" hint="Must be unique." error={errors.lotNumber?.message} {...register('lotNumber')} />
               <Input label="Expiry date" type="date" error={errors.expiryDate?.message} {...register('expiryDate')} />
@@ -256,10 +340,10 @@ export function StockMovementEntryPage() {
           <Input label="Notes" placeholder="Optional" {...register('notes')} />
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button type="button" variant="secondary" onClick={() => navigate('/fertilizer')} disabled={saving}>
+            <Button type="button" variant="secondary" onClick={() => navigate('/fertilizer')} disabled={recordMutation.isPending}>
               Cancel
             </Button>
-            <Button type="submit" loading={saving}>
+            <Button type="submit" loading={recordMutation.isPending}>
               Save Movement
             </Button>
           </div>

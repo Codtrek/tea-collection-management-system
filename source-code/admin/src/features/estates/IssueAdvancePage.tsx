@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -8,7 +9,7 @@ import { Select } from '@/components/ui/Select'
 import { HighStakesConfirmFlow } from '@/components/patterns/HighStakesConfirmFlow'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { ESTATES } from './data'
+import * as estatesService from '@/services/estates'
 import { formatCurrency } from '@/lib/format'
 
 /*
@@ -20,16 +21,18 @@ export function IssueAdvancePage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const [params] = useSearchParams()
+
+  const { data: estates } = useQuery({ queryKey: ['estates'], queryFn: estatesService.list })
 
   const [estateId, setEstateId] = useState(params.get('estate') ?? '')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [errors, setErrors] = useState<{ estate?: string; amount?: string; reason?: string }>({})
   const [confirming, setConfirming] = useState(false)
-  const [issuing, setIssuing] = useState(false)
 
-  const estate = ESTATES.find((e) => e.id === estateId)
+  const estate = (estates ?? []).find((e) => e.id === estateId)
   const parsedAmount = Number(amount)
 
   const validate = () => {
@@ -41,14 +44,19 @@ export function IssueAdvancePage() {
     return Object.keys(next).length === 0
   }
 
-  const issue = () => {
-    setIssuing(true)
-    setTimeout(() => {
+  const issueMutation = useMutation({
+    mutationFn: () => estatesService.issueAdvance({ estateId, amount: parsedAmount, reason }),
+    onSuccess: () => {
       // Audit trail entry per the module doc.
       toast(`Advance of ${formatCurrency(parsedAmount)} issued to ${estate?.estateName} by ${user?.name}`)
+      void queryClient.invalidateQueries({ queryKey: ['estates', 'advances'] })
       navigate('/estates/advances')
-    }, 600)
-  }
+    },
+    onError: (err) => {
+      setConfirming(false)
+      toast(err instanceof Error ? err.message : 'Could not issue this advance', 'danger')
+    },
+  })
 
   return (
     <div>
@@ -70,10 +78,12 @@ export function IssueAdvancePage() {
             value={estateId}
             error={errors.estate}
             onChange={(e) => setEstateId(e.target.value)}
-            options={ESTATES.filter((e) => e.status === 'Active').map((e) => ({
-              value: e.id,
-              label: `${e.estateName} — ${e.ownerName}`,
-            }))}
+            options={(estates ?? [])
+              .filter((e) => e.status === 'Active')
+              .map((e) => ({
+                value: e.id,
+                label: `${e.estateName} — ${e.ownerName}`,
+              }))}
           />
           <Input
             label="Amount (Rs.)"
@@ -113,8 +123,8 @@ export function IssueAdvancePage() {
       <HighStakesConfirmFlow
         open={confirming}
         onClose={() => setConfirming(false)}
-        onConfirm={issue}
-        loading={issuing}
+        onConfirm={() => issueMutation.mutate()}
+        loading={issueMutation.isPending}
         title="Confirm advance payment"
         amount={parsedAmount || 0}
         confirmLabel="Issue Advance"

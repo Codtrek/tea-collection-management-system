@@ -2,8 +2,15 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import type { SignOptions } from 'jsonwebtoken';
+import { RolePermissionEntity } from '../admin/role-permission.entity';
+import { CollectionAgentEntity } from '../dispatch/collection-agent.entity';
+import { AgentDirectoryService } from '../dispatch/agent-directory.service';
+import { EmployeeEntity } from '../employees/employee.entity';
+import { User } from '../users/user.entity';
 import { UsersModule } from '../users/users.module';
+import { AgentJwtStrategy } from './agent-jwt.strategy';
 import { AuthController } from './auth.controller';
 import { AuthMobileController } from './auth.mobile.controller';
 import { AuthService } from './auth.service';
@@ -12,6 +19,14 @@ import { JwtStrategy } from './jwt.strategy';
 @Module({
   imports: [
     UsersModule,
+    // Read-only binding so login/`/auth/me` can attach the role's permission
+    // map (the AdminModule owns writes to this table).
+    TypeOrmModule.forFeature([
+      RolePermissionEntity,
+      CollectionAgentEntity,
+      EmployeeEntity,
+      User,
+    ]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -27,6 +42,14 @@ import { JwtStrategy } from './jwt.strategy';
       }),
     }),
   ],
+  controllers: [AuthController],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    AgentJwtStrategy,
+    AgentDirectoryService,
+  ],
+  exports: [AuthService],
   controllers: [AuthController, AuthMobileController],
   providers: [AuthService, JwtStrategy],
   exports: [AuthService , JwtModule],

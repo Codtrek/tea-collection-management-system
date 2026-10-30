@@ -51,11 +51,19 @@ export class User {
   @Column({ type: 'varchar', length: 30 })
   role: DbRole;
 
-  @Column({ type: 'varchar', length: 20, default: 'active' })
-  status: UserStatus;
+  /** ADM-02 — a suspended account is rejected at login. */
+  @Column({ default: 'active' })
+  status: 'active' | 'suspended';
 
-  @Column({ type: 'timestamp', nullable: true })
+  /** A login provisioned by registration starts with a one-time temporary password; mobile blocks until it is changed. */
+  @Column({ name: 'must_change_password', default: false })
+  must_change_password: boolean;
+
+  /** Stamped on each successful login; shown as "last login" in Users & Roles. */
+  @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
   last_login_at: Date | null;
+  @Column()
+  nic: string;
 
   /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
   @CreateDateColumn({ type: 'timestamp', nullable: true })
