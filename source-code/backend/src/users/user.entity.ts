@@ -25,6 +25,9 @@ export class User {
   phone: string;
 
   @Column()
+  name: string;
+
+  @Column()
   password_hash: string;
 
   @Column()
@@ -41,6 +44,8 @@ export class User {
   /** Stamped on each successful login; shown as "last login" in Users & Roles. */
   @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
   last_login_at: Date | null;
+  @Column()
+  nic: string;
 
   @CreateDateColumn()
   created_at: Date;

@@ -12,6 +12,7 @@ import { User } from '../users/user.entity';
 import { UsersModule } from '../users/users.module';
 import { AgentJwtStrategy } from './agent-jwt.strategy';
 import { AuthController } from './auth.controller';
+import { AuthMobileController } from './auth.mobile.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 
@@ -49,5 +50,8 @@ import { JwtStrategy } from './jwt.strategy';
     AgentDirectoryService,
   ],
   exports: [AuthService],
+  controllers: [AuthController, AuthMobileController],
+  providers: [AuthService, JwtStrategy],
+  exports: [AuthService , JwtModule],
 })
 export class AuthModule {}

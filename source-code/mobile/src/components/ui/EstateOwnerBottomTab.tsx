@@ -16,15 +16,20 @@ const tabs: BottomTabItem[] = [
     icon: "leaf-outline",
   },
   {
-    key: "collectings",
-    label: "Collectings",
-    icon: "basket-outline",
+    key: "requests",
+    label: "Requests",
+    icon: "document-text-outline",
   },
   {
-    key: "factories",
-    label: "Factories",
-    icon: "business-outline",
+    key: "insights",
+    label: "Insights",
+    icon: "analytics-outline",
   },
+  {
+    key: "profile",
+    label: "Profile",
+    icon: "person-outline",
+  }
 ];
 
 interface Props {

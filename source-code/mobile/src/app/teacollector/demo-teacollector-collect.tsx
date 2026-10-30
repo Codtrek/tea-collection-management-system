@@ -7,8 +7,8 @@ import {
   StyleSheet,
 } from "react-native";
 import {
+  collectionFilters,
   RequestFilterTabs,
-  RequestFilter,
 } from "@/components/ui/demo-teacollector-requestfilter";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -56,6 +56,9 @@ export default function DemoTeaCollectorCollect({
       sum + (s.actualWeight || 0),
     0
   );
+  const deliveredToday = stops.filter(
+    (s: any) => s.status === "delivered"
+  );
 
   /*
    * ========================================================
@@ -86,6 +89,11 @@ export default function DemoTeaCollectorCollect({
       ),
     },
     {
+      key: "delivered",
+      label: "Delivered",
+      items: deliveredToday,
+    },
+    {
       key: "cancelled",
       label: "Cancelled",
       items: stops.filter(
@@ -100,9 +108,6 @@ export default function DemoTeaCollectorCollect({
    * ========================================================
    */
 
-  const deliveredToday = stops.filter(
-    (s: any) => s.status === "delivered"
-  );
   const visibleSelectableRequests = stops.filter(
     (stop: any) =>
       (stop.status === "pending" || stop.status === "accepted") &&
@@ -118,6 +123,7 @@ export default function DemoTeaCollectorCollect({
       <RequestFilterTabs
         filter={filter}
         setFilter={setFilter}
+        filters={collectionFilters}
       />
       </View>
     <ScrollView
@@ -154,7 +160,7 @@ export default function DemoTeaCollectorCollect({
           LOADED / FACTORY
       =================================================== */}
 
-      {filter !== "history" && loaded.length > 0 && (
+      {filter !== "history" && (
         <Card style={styles.loadedCard}>
           <View style={styles.loadedHeader}>
             <View style={styles.factoryIconContainer}>
@@ -167,11 +173,15 @@ export default function DemoTeaCollectorCollect({
 
             <View style={styles.loadedTextContainer}>
               <Text style={styles.loadedTitle}>
-                {loaded.length} stop{loaded.length > 1 ? "s" : ""} loaded · {totalLoaded} kg
+                {loaded.length > 0
+                  ? `${loaded.length} stop${loaded.length > 1 ? "s" : ""} loaded · ${totalLoaded} kg`
+                  : "No tea currently loaded"}
               </Text>
 
               <Text style={styles.loadedSubtitle}>
-                Ready whenever you head to Kotmale MPT
+                {loaded.length > 0
+                  ? "Ready whenever you head to Kotmale MPT"
+                  : "Load a tea request to prepare a factory delivery"}
               </Text>
             </View>
           </View>
@@ -179,6 +189,7 @@ export default function DemoTeaCollectorCollect({
           <Btn
             variant="forest"
             block
+            disabled={loaded.length === 0}
             style={styles.factoryButton}
             onPress={onGoToFactory}
           >
@@ -283,7 +294,13 @@ export default function DemoTeaCollectorCollect({
 
                     <Text style={styles.historySubtitle}>
                       Today · {s.actualWeight || 0} kg
+                      {s.receivingOfficer ? ` · Received by ${s.receivingOfficer}` : ""}
                     </Text>
+                    {s.collectionNote?.trim() && (
+                      <Text style={styles.historySubtitle}>
+                        Note: {s.collectionNote.trim()}
+                      </Text>
+                    )}
                   </View>
 
                   <Pill
