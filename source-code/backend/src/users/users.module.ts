@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FactoryEmployee } from './factory-employee.entity';
 import { Factory } from './factory.entity';
+import { Estate } from './estate.entity';
+import { EstateOwner } from './estate-owner.entity';
 import { EstateManager } from './estate-manager.entity';
 import { EstateEmployee } from './estate-employee.entity';
 import { User } from './user.entity';
 import { UsersService } from './users.service';
-import { EstateEntity } from '../estates/estate.entity';
-import { EstateOwnerEntity } from '../estates/estate-owner.entity';
+import { Route } from '../routes/route.entity';
 
 @Module({
   imports: [
@@ -15,10 +16,12 @@ import { EstateOwnerEntity } from '../estates/estate-owner.entity';
       User,
       FactoryEmployee,
       Factory,
-      EstateOwnerEntity,
+      EstateOwner,
       EstateManager,
       EstateEmployee,
-      EstateEntity,
+      Estate,
+      // Mapped only so Estate can declare its `route_id` foreign key.
+      Route,
     ]),
   ],
   providers: [UsersService],

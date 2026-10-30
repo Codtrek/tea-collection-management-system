@@ -1,13 +1,4 @@
-import {
-  Check,
-  Column,
-  Entity,
-  ForeignKey,
-  Index,
-  PrimaryGeneratedColumn,
-  Unique,
-} from 'typeorm';
-import { CollectionRecordEntity } from './collection-record.entity';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import type { PublicRevisionLine } from './collection-map';
 
 /**
@@ -16,30 +7,17 @@ import type { PublicRevisionLine } from './collection-map';
  * Rows are only ever inserted — a correction adds a revision, it never rewrites one.
  */
 @Entity('delivery_grade_revisions')
-@Check(
-  'delivery_grade_revisions_kind_check',
-  `"kind" IN ('initial', 'open_edit', 'correction')`,
-)
-@Unique('delivery_grade_revisions_delivery_id_revision_no_key', [
-  'deliveryId',
-  'revisionNo',
-])
-@Index('idx_grade_revisions_delivery', ['deliveryId'])
 export class DeliveryGradeRevisionEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'delivery_id', type: 'varchar', length: 20 })
-  @ForeignKey(() => CollectionRecordEntity, {
-    name: 'delivery_grade_revisions_delivery_id_fkey',
-    onDelete: 'CASCADE',
-  })
+  @Column({ name: 'delivery_id' })
   deliveryId: string;
 
   @Column({ name: 'revision_no', type: 'int' })
   revisionNo: number;
 
-  @Column({ type: 'varchar', length: 20 })
+  @Column({ type: 'varchar' })
   kind: 'initial' | 'open_edit' | 'correction';
 
   @Column({ type: 'jsonb' })
@@ -51,18 +29,13 @@ export class DeliveryGradeRevisionEntity {
   @Column({ type: 'text', nullable: true })
   reason: string | null;
 
-  @Column({ name: 'changed_by', type: 'varchar', length: 100 })
+  @Column({ name: 'changed_by' })
   changedBy: string;
 
-  @Column({ name: 'changed_at', type: 'timestamptz', default: () => 'now()' })
+  @Column({ name: 'changed_at', type: 'timestamptz' })
   changedAt: Date;
 
-  @Column({
-    name: 'approved_by',
-    type: 'varchar',
-    length: 100,
-    nullable: true,
-  })
+  @Column({ name: 'approved_by', type: 'varchar', nullable: true })
   approvedBy: string | null;
 
   @Column({ name: 'approved_at', type: 'timestamptz', nullable: true })

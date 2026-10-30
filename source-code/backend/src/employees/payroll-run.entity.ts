@@ -1,14 +1,4 @@
-import {
-  Check,
-  Column,
-  CreateDateColumn,
-  Entity,
-  ForeignKey,
-  Index,
-  PrimaryColumn,
-  Unique,
-} from 'typeorm';
-import { EmployeeEntity } from './employee.entity';
+import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 import type { DbPayrollStatus } from './employee-map';
 
 /**
@@ -20,23 +10,18 @@ import type { DbPayrollStatus } from './employee-map';
  * settlements — see Claude.md's Payment calculation section).
  */
 @Entity('payroll_runs')
-@Check('payroll_runs_status_check', `"status" IN ('Pending', 'Processed')`)
-@Unique('payroll_runs_employee_id_period_key', ['employeeId', 'period'])
-@Index('idx_payroll_runs_employee', ['employeeId'])
-@Index('idx_payroll_runs_status', ['status'])
 export class PayrollRunEntity {
   /** Business key, e.g. 'PR-0001' — not a generated id. */
-  @PrimaryColumn({ type: 'varchar', length: 20 })
+  @PrimaryColumn()
   id: string;
 
-  @Column({ name: 'employee_id', type: 'int' })
-  @ForeignKey(() => EmployeeEntity, { name: 'payroll_runs_employee_id_fkey' })
+  @Column({ name: 'employee_id' })
   employeeId: number;
 
-  @Column({ name: 'employee_name', type: 'varchar', length: 100 })
+  @Column({ name: 'employee_name' })
   employeeName: string;
 
-  @Column({ type: 'varchar', length: 20 })
+  @Column()
   period: string;
 
   @Column({
@@ -132,24 +117,18 @@ export class PayrollRunEntity {
   })
   deductionsOther: string;
 
-  @Column({ type: 'varchar', length: 20, default: 'Pending' })
+  @Column({ type: 'varchar' })
   status: DbPayrollStatus;
 
   @Column({ name: 'missing_bank', default: false })
   missingBank: boolean;
 
-  @Column({
-    name: 'processed_by',
-    type: 'varchar',
-    length: 100,
-    nullable: true,
-  })
+  @Column({ name: 'processed_by', type: 'varchar', nullable: true })
   processedBy: string | null;
 
   @Column({ name: 'processed_on', type: 'timestamp', nullable: true })
   processedOn: Date | null;
 
-  /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
-  @CreateDateColumn({ name: 'created_at', nullable: true })
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

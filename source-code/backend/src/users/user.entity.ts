@@ -52,11 +52,11 @@ export class User {
   role: DbRole;
 
   /** ADM-02 — a suspended account is rejected at login. */
-  @Column({ type: 'varchar', length: 20, default: 'active' })
-  status: UserStatus;
+  @Column({ default: 'active' })
+  status: 'active' | 'suspended';
 
   /** A login provisioned by registration starts with a one-time temporary password; mobile blocks until it is changed. */
-  @Column({ name: 'must_change_password', type: 'boolean', default: false })
+  @Column({ name: 'must_change_password', type: 'boolean' ,default: false })
   must_change_password: boolean;
 
   /** Stamped on each successful login; shown as "last login" in Users & Roles. */
@@ -70,4 +70,5 @@ export class User {
   /** Optional (most existing users have none); UNIQUE via `users_nic_unique`. */
   @Column({ type: 'varchar', length: 12, nullable: true, unique: true })
   nic: string | null;
+
 }

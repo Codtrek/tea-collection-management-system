@@ -1,32 +1,17 @@
-import {
-  Check,
-  Column,
-  CreateDateColumn,
-  Entity,
-  ForeignKey,
-  Index,
-  PrimaryColumn,
-} from 'typeorm';
-import { EstateEntity } from './estate.entity';
+import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 import type { DbAdvanceStatus } from './estate-map';
 
 /** EST-05/06 — money issued ahead of settlement, deducted at the next processed run. */
 @Entity('estate_advances')
-@Check(
-  'estate_advances_status_check',
-  `"status" IN ('pending_deduction', 'deducted')`,
-)
-@Index('idx_estate_advances_estate', ['estateId'])
 export class EstateAdvanceEntity {
   /** Business key, e.g. 'EADV-2026-0031' — not a generated id. */
-  @PrimaryColumn({ type: 'varchar', length: 20 })
+  @PrimaryColumn()
   id: string;
 
-  @Column({ name: 'estate_id', type: 'int' })
-  @ForeignKey(() => EstateEntity, { name: 'estate_advances_estate_id_fkey' })
+  @Column({ name: 'estate_id' })
   estateId: number;
 
-  @Column({ name: 'estate_name', type: 'varchar', length: 100 })
+  @Column({ name: 'estate_name' })
   estateName: string;
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
@@ -38,13 +23,12 @@ export class EstateAdvanceEntity {
   @Column({ name: 'date_issued', type: 'date' })
   dateIssued: string;
 
-  @Column({ name: 'issued_by', type: 'varchar', length: 100 })
+  @Column({ name: 'issued_by' })
   issuedBy: string;
 
-  @Column({ type: 'varchar', length: 20, default: 'pending_deduction' })
+  @Column({ type: 'varchar' })
   status: DbAdvanceStatus;
 
-  /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
-  @CreateDateColumn({ name: 'created_at', nullable: true })
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }
