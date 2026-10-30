@@ -1,4 +1,12 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Check,
+  Column,
+  Entity,
+  ForeignKey,
+  Index,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { CollectionAgentEntity } from './collection-agent.entity';
 
 /**
  * Location history (shift-only). `recordedAt` is the DEVICE clock — when the fix was
@@ -6,17 +14,25 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
  * Retention: rows older than 30 days are deleted nightly (DispatchTasks).
  */
 @Entity('agent_location_pings')
+@Check('agent_location_pings_lat_check', `"lat" >= -90 AND "lat" <= 90`)
+@Check('agent_location_pings_lng_check', `"lng" >= -180 AND "lng" <= 180`)
+@Check('agent_location_pings_source_check', `"source" IN ('ping', 'checkin')`)
+@Index('idx_pings_agent_time', ['agentId', 'recordedAt'])
+@Index('idx_pings_recorded', ['recordedAt'])
 export class AgentLocationPingEntity {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id: string;
 
-  @Column({ name: 'agent_id' })
+  @Column({ name: 'agent_id', type: 'int' })
+  @ForeignKey(() => CollectionAgentEntity, {
+    name: 'agent_location_pings_agent_id_fkey',
+  })
   agentId: number;
 
   @Column({ name: 'recorded_at', type: 'timestamptz' })
   recordedAt: Date;
 
-  @Column({ name: 'received_at', type: 'timestamptz' })
+  @Column({ name: 'received_at', type: 'timestamptz', default: () => 'now()' })
   receivedAt: Date;
 
   @Column({ type: 'decimal', precision: 9, scale: 6 })
@@ -34,6 +50,6 @@ export class AgentLocationPingEntity {
   })
   accuracyM: string | null;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', length: 10, default: 'ping' })
   source: 'ping' | 'checkin';
 }

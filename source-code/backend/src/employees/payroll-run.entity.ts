@@ -1,4 +1,14 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import {
+  Check,
+  Column,
+  CreateDateColumn,
+  Entity,
+  ForeignKey,
+  Index,
+  PrimaryColumn,
+  Unique,
+} from 'typeorm';
+import { EmployeeEntity } from './employee.entity';
 import type { DbPayrollStatus } from './employee-map';
 
 /**
@@ -10,18 +20,23 @@ import type { DbPayrollStatus } from './employee-map';
  * settlements — see Claude.md's Payment calculation section).
  */
 @Entity('payroll_runs')
+@Check('payroll_runs_status_check', `"status" IN ('Pending', 'Processed')`)
+@Unique('payroll_runs_employee_id_period_key', ['employeeId', 'period'])
+@Index('idx_payroll_runs_employee', ['employeeId'])
+@Index('idx_payroll_runs_status', ['status'])
 export class PayrollRunEntity {
   /** Business key, e.g. 'PR-0001' — not a generated id. */
-  @PrimaryColumn()
+  @PrimaryColumn({ type: 'varchar', length: 20 })
   id: string;
 
-  @Column({ name: 'employee_id' })
+  @Column({ name: 'employee_id', type: 'int' })
+  @ForeignKey(() => EmployeeEntity, { name: 'payroll_runs_employee_id_fkey' })
   employeeId: number;
 
-  @Column({ name: 'employee_name' })
+  @Column({ name: 'employee_name', type: 'varchar', length: 100 })
   employeeName: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 20 })
   period: string;
 
   @Column({
@@ -117,18 +132,24 @@ export class PayrollRunEntity {
   })
   deductionsOther: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', length: 20, default: 'Pending' })
   status: DbPayrollStatus;
 
   @Column({ name: 'missing_bank', default: false })
   missingBank: boolean;
 
-  @Column({ name: 'processed_by', type: 'varchar', nullable: true })
+  @Column({
+    name: 'processed_by',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   processedBy: string | null;
 
   @Column({ name: 'processed_on', type: 'timestamp', nullable: true })
   processedOn: Date | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
+  @CreateDateColumn({ name: 'created_at', nullable: true })
   createdAt: Date;
 }
