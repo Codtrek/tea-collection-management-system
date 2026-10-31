@@ -1,17 +1,12 @@
-
-import "dotenv/config";
-import { DataSource } from "typeorm";
-
-const databaseUrl = process.env.DATABASE_URL;
-
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is not configured.");
-}
+import 'dotenv/config';
+import { DataSource } from 'typeorm';
+const url = process.env.DATABASE_URL_DIRECT ?? process.env.DATABASE_URL;
 
 export default new DataSource({
-  type: "postgres",
-  url: databaseUrl,
-  entities: [],
-  migrations: [__dirname + "/migrations/*{.ts,.js}"],
+  type: 'postgres',
+  url,
+  ssl: url?.includes('neon.tech') ? true : false,
+  entities: ['src/**/*.entity.ts'],
+  migrations: ['src/migrations/*.ts'],
   synchronize: false,
 });

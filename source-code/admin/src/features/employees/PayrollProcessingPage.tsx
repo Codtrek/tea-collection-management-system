@@ -1,26 +1,65 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, AlertTriangle } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronDown, AlertTriangle, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { ErrorState } from '@/components/data/ErrorState'
 import { HighStakesConfirmFlow } from '@/components/patterns/HighStakesConfirmFlow'
 import { useToast } from '@/components/ui/Toast'
-import { PAYROLL, netPay } from './data'
+import { useAuth } from '@/context/AuthContext'
+import * as employeesService from '@/services/employees'
+import { netPay } from './calc'
 import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
+const PERIOD = 'July 2026'
+
 /* EMP-12 — first build of HighStakesConfirmFlow. Employees missing bank details
    are excluded and flagged (UC-054 exception flow); confirmation requires the
-   user to re-type the total before the irreversible run. */
+   user to re-type the total before the irreversible run. No per-transaction
+   bank charge is deducted — resolved 2026-07-26, see Claude.md. */
 export function PayrollProcessingPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  const included = PAYROLL.filter((r) => !r.missingBank)
-  const excluded = PAYROLL.filter((r) => r.missingBank)
+  const { data: payroll, isPending, isError, refetch } = useQuery({
+    queryKey: ['employees', 'payroll', PERIOD],
+    queryFn: () => employeesService.listPayroll(PERIOD, 'Pending'),
+  })
+
+  const processMutation = useMutation({
+    mutationFn: () => employeesService.processPayroll(PERIOD),
+    onSuccess: (processed) => {
+      const total = processed.reduce((sum, r) => sum + netPay(r), 0)
+      toast(`Processed by ${user?.name ?? 'you'} — ${formatCurrency(total)} across ${processed.length} employees`)
+      setConfirming(false)
+      void queryClient.invalidateQueries({ queryKey: ['employees', 'payroll'] })
+      navigate('/employees/payroll')
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not process payroll', 'danger'),
+  })
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return <ErrorState title="Couldn't load payroll" description="Something went wrong fetching this pay period." onRetry={() => void refetch()} />
+  }
+
+  const rows = payroll ?? []
+  const included = rows.filter((r) => !r.missingBank)
+  const excluded = rows.filter((r) => r.missingBank)
   const total = included.reduce((sum, r) => sum + netPay(r), 0)
 
   return (
@@ -32,7 +71,7 @@ export function PayrollProcessingPage() {
 
       {/* Period header */}
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
-        <SummaryTile label="Pay period" value="July 2026" />
+        <SummaryTile label="Pay period" value={PERIOD} />
         <SummaryTile label="Employees" value={`${included.length} included`} />
         <SummaryTile label="Total payable" value={formatCurrency(total)} highlight />
       </div>
@@ -79,17 +118,15 @@ export function PayrollProcessingPage() {
 
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="secondary" onClick={() => navigate('/employees/payroll')}>Cancel</Button>
-        <Button size="lg" onClick={() => setConfirming(true)}>Process {included.length} Payslips</Button>
+        <Button size="lg" onClick={() => setConfirming(true)} disabled={included.length === 0}>
+          Process {included.length} Payslips
+        </Button>
       </div>
 
       <HighStakesConfirmFlow
         open={confirming}
         onClose={() => setConfirming(false)}
-        onConfirm={() => {
-          toast(`Processed by A. Bandara — ${formatCurrency(total)} across ${included.length} employees`)
-          setConfirming(false)
-          navigate('/employees/payroll')
-        }}
+        onConfirm={() => processMutation.mutate()}
         title="Confirm payroll run"
         amount={total}
         confirmLabel="Process Payroll"

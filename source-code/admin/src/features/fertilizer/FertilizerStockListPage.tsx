@@ -1,14 +1,17 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, PhoneCall, BellRing, TrendingDown, ClipboardList, Truck, AlertTriangle, ShoppingCart } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Plus, PhoneCall, BellRing, TrendingDown, ClipboardList, Truck, AlertTriangle, ShoppingCart, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { EmptyState } from '@/components/data/EmptyState'
+import { ErrorState } from '@/components/data/ErrorState'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
+import * as fertilizerService from '@/services/fertilizer'
 import { StockPositionTable } from './StockPositionTable'
-import { itemPositions, itemsBelowDemand, pendingRequests, committedSummary, shortfalls } from './position'
+import { itemsBelowDemand, pendingRequests, committedSummary, shortfalls } from './lib'
 import type { CoverageStatus, ItemCategory } from './types'
 import { formatCurrency, formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
@@ -27,10 +30,22 @@ export function FertilizerStockListPage() {
   const [category, setCategory] = useState('')
   const [coverage, setCoverage] = useState('')
 
-  const positions = useMemo(() => itemPositions(), [])
+  const {
+    data: positions,
+    isPending: positionsPending,
+    isError: positionsError,
+    refetch: refetchPositions,
+  } = useQuery({ queryKey: ['fertilizer', 'positions'], queryFn: fertilizerService.listPositions })
+  const {
+    data: requests,
+    isPending: requestsPending,
+    isError: requestsError,
+    refetch: refetchRequests,
+  } = useQuery({ queryKey: ['fertilizer', 'requests'], queryFn: fertilizerService.listRequests })
+
   const rows = useMemo(
     () =>
-      positions.filter((p) => {
+      (positions ?? []).filter((p) => {
         const q = search.trim().toLowerCase()
         return (
           p.item.toLowerCase().includes(q) &&
@@ -41,11 +56,32 @@ export function FertilizerStockListPage() {
     [positions, search, category, coverage],
   )
 
-  const below = itemsBelowDemand()
-  const pending = pendingRequests()
+  if (positionsPending || requestsPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (positionsError || requestsError || !positions || !requests) {
+    return (
+      <ErrorState
+        title="Couldn't load the fertilizer stock position"
+        description="Something went wrong fetching stock and request data."
+        onRetry={() => {
+          void refetchPositions()
+          void refetchRequests()
+        }}
+      />
+    )
+  }
+
+  const below = itemsBelowDemand(positions)
+  const pending = pendingRequests(requests)
   const pendingKg = pending.reduce((s, r) => s + r.quantityKg, 0)
-  const committed = committedSummary()
-  const shortfallList = shortfalls()
+  const committed = committedSummary(requests)
+  const shortfallList = shortfalls(positions)
   const shortfallKg = shortfallList.reduce((s, r) => s + r.shortfallKg, 0)
 
   return (

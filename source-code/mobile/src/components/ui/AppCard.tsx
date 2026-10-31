@@ -1,7 +1,8 @@
-import { View, ViewStyle, StyleSheet, Pressable } from 'react-native'
+import { View, ViewStyle, StyleSheet, Pressable, ViewProps } from 'react-native'
 import { useRouter } from 'expo-router'
 import { AppText, Screen } from '@/components/ui'
 import { typography, colors, spacing } from '@/theme' 
+
 
 
 export default function AppCard({ children }: { children: React.ReactNode }) {
@@ -18,11 +19,11 @@ const styles = StyleSheet.create({
         padding: spacing.md,
         borderWidth: 1,
         borderColor: colors.border.default,
-        borderRadius: 10,
+        borderRadius: 20,
         marginVertical: spacing.sm,
     },
     cardTitle: {
-        ...typography.subheading,
+        ...typography.subHeading,
         color: colors.primary,
         marginBottom: spacing.sm,
     },
