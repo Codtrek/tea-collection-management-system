@@ -8,7 +8,7 @@ React 19 + Vite 8 + **Tailwind CSS v4** admin portal for factory staff (Administ
 - **Palette is hybrid Harboost:** `--color-brand #53cf81` (logo/accent/nav/charts/focus ring), `--color-primary #1b8b4e` (buttons/links/text, AA-safe). Status badge `-bg`/`-fg` pairs are contrast-verified — don't invent new ones; reuse `StatusBadge` tones.
 - **Permissions are data-driven.** Gate UI with `useAuth().can(module, level)` reading `src/context/permissions.ts` — never hardcode `if (role === 'Officer')`. Nav items hide (never grey out) when unpermitted.
 - **Reuse the patterns, don't rebuild them:** `components/data/DataTable`, `components/patterns/{MultiStepWizard,DetailPageWithTabs,LightConfirmModal,HighStakesConfirmFlow,AlertList,PhotoEvidenceGallery}`, `components/charts/ChartCard`, `features/reports/ReportViewer` (+`ReportActionsBar`). HighStakesConfirmFlow (re-type-amount gate) is for irreversible money actions and stays **primary green, never red**.
-- **Formatting via `src/lib/format.ts`:** `Rs. 1,245,600` · `45,780 kg` · `DD/MM/YYYY` · `tabular-nums` on every figure.
+- **Formatting via `src/lib/format.ts`:** `Rs. 1,245,600` · `45,780 kg` · `10 Jul 2026` (`formatDate` — the one date format; never DD/MM/YYYY, never a one-off `toLocaleDateString`) · `tabular-nums` on every figure.
 - **Accessibility:** `:focus-visible` rings, `aria-label` on icon-only buttons, honor `prefers-reduced-motion`, status never color-only.
 
 ## Layout

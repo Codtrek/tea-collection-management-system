@@ -39,6 +39,18 @@ export class SalaryAdvanceEntity {
   @Column({ name: 'decided_on', type: 'timestamp', nullable: true })
   decidedOn: Date | null;
 
+  /** the reason given with the decision — required to reject (Salary-Advances-Addendum) */
+  @Column({ name: 'decision_reason', type: 'text', nullable: true })
+  decisionReason: string | null;
+
+  /** the payroll month whose row deducts it — reserved at Generate so it's counted once */
+  @Column({ name: 'payroll_period', type: 'varchar', nullable: true })
+  payrollPeriod: string | null;
+
+  /** the payroll month it was recovered in — stamped at Process */
+  @Column({ name: 'recovered_period', type: 'varchar', nullable: true })
+  recoveredPeriod: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

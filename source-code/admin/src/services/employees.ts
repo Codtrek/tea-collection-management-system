@@ -4,6 +4,10 @@ import type {
   AgentFertilizerRow,
   AgentHistoryRow,
   Advance,
+  AdvanceDetail,
+  AdvanceListResult,
+  AdvanceTab,
+  EmployeeAdvances,
   AttendanceRecord,
   AttendanceStatus,
   Employee,
@@ -121,8 +125,35 @@ export function markAttendance(input: MarkAttendanceInput): Promise<void> {
   })
 }
 
-export function listAdvances(): Promise<Advance[]> {
-  return apiFetch<Advance[]>('/employees/advances')
+export interface AdvanceQuery {
+  tab: AdvanceTab
+  from?: string
+  to?: string
+  search?: string
+  role?: string
+  routeId?: number
+  min?: number
+  max?: number
+  sort?: string
+  dir?: 'asc' | 'desc'
+  page?: number
+  limit?: number
+}
+
+/** EMP-10 (Salary-Advances-Addendum) — server-side tabs, date range, filters and summary. */
+export function listAdvances(q: AdvanceQuery): Promise<AdvanceListResult> {
+  const params = new URLSearchParams()
+  for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') params.set(k, String(v))
+  return apiFetch<AdvanceListResult>(`/employees/advances?${params.toString()}`)
+}
+
+export function getAdvance(id: string): Promise<AdvanceDetail> {
+  return apiFetch<AdvanceDetail>(`/employees/advances/${encodeURIComponent(id)}`)
+}
+
+/** An employee's advances + outstanding balance — the same calculation payroll uses. */
+export function getEmployeeAdvances(employeeId: string): Promise<EmployeeAdvances> {
+  return apiFetch<EmployeeAdvances>(`/employees/${employeeId}/advances`)
 }
 
 export function requestAdvance(input: RequestAdvanceInput): Promise<Advance> {
@@ -132,10 +163,11 @@ export function requestAdvance(input: RequestAdvanceInput): Promise<Advance> {
   })
 }
 
-export function decideAdvance(id: string, decision: 'approve' | 'reject'): Promise<Advance> {
+/** A reason is required to reject (the server refuses one without). */
+export function decideAdvance(id: string, decision: 'approve' | 'reject', reason?: string): Promise<Advance> {
   return apiFetch<Advance>(`/employees/advances/${id}/decide`, {
     method: 'PATCH',
-    body: JSON.stringify({ decision }),
+    body: JSON.stringify({ decision, reason }),
   })
 }
 

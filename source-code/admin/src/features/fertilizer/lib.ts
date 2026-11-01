@@ -1,4 +1,4 @@
-import { formatWeight } from '@/lib/format'
+import { formatDayMonth, formatWeight } from '@/lib/format'
 import type { BatchStatus, FertilizerBatch, FertilizerRequest, ItemPosition, RequestAvailability, RequestStatus } from './types'
 
 /*
@@ -43,7 +43,7 @@ export function fefoPrefix(plan: RequestAvailability['fefo'], qty: number): Requ
 
 /** "12 Nov" — the short date the request labels use. */
 export function shortDate(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+  return formatDayMonth(iso)
 }
 
 /** FERT-05/06 wording for a request's server verdict — "expiring" always names the batch and days left. */

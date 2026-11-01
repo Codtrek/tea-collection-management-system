@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -30,6 +31,11 @@ import {
 } from './employee-map';
 import { EmployeeEntity } from './employee.entity';
 import { isAgentRole } from './employee-roles';
+import {
+  advancesForPeriod,
+  advancesRecoveredBy,
+  recoveryOf,
+} from './advance-balance';
 import { PayrollRunEntity } from './payroll-run.entity';
 import { SalaryAdvanceEntity } from './salary-advance.entity';
 
@@ -337,8 +343,15 @@ export class EmployeesService {
     id: string,
     decision: 'approve' | 'reject',
     actor: Actor,
+    reason?: string,
   ): Promise<PublicAdvance> {
     this.assertCanWrite(actor);
+    const why = reason?.trim() ?? '';
+    if (decision === 'reject' && !why) {
+      throw new BadRequestException(
+        'A reason is required to reject an advance.',
+      );
+    }
     const advance = await this.advanceRepo.findOne({ where: { id } });
     if (!advance) {
       throw new NotFoundException(`No advance request "${id}".`);
@@ -350,14 +363,15 @@ export class EmployeesService {
     advance.status = decision === 'approve' ? 'Approved' : 'Rejected';
     advance.decidedBy = actor.name;
     advance.decidedOn = new Date();
+    advance.decisionReason = why || null;
 
     const saved = await this.advanceRepo.save(advance);
     await this.audit.record(actor, {
       action: `${decision === 'approve' ? 'Approved' : 'Rejected'} advance Rs. ${Number(advance.amount)}`,
       module: 'Employee',
       record: saved.id,
-      recordHref: '/employees/advances',
-      details: advance.employeeName,
+      recordHref: `/employees/advances/${saved.id}`,
+      details: why ? `${advance.employeeName} — ${why}` : advance.employeeName,
     });
     return this.toPublicAdvance(saved);
   }
@@ -379,7 +393,8 @@ export class EmployeesService {
    * EMP-11 — aggregates each Active employee's `employee_attendance` rows in
    * the period into hour buckets, multiplies by the employee's *current*
    * rates (snapshotted onto the row), and sums their Approved-but-not-yet-
-   * deducted advances into `deductions.advances`. Upserts one row per
+   * deducted advances not reserved by another month into
+   * `deductions.advances`, reserving them for this period. Upserts one row per
    * (employee, period) — regenerating a period leaves already-Processed rows
    * untouched (a processed run is immutable, mirrors Estates' settlements).
    * Officer+ (portal: `payroll: 'edit'`).
@@ -430,14 +445,17 @@ export class EmployeesService {
         totals.nightHours * nightRate +
         totals.nightOtHours * nightOtRate;
 
-      const deductionsAdvances = advances
-        .filter(
-          (a) =>
-            a.employeeId === employee.id &&
-            a.status === 'Approved' &&
-            !a.deducted,
-        )
-        .reduce((sum, a) => sum + Number(a.amount), 0);
+      // Salary-Advances-Addendum: the row reserves the advances it deducts, so the same advance
+      // is never counted in a second month (advance-balance.ts is the one place this is decided)
+      const counted = advancesForPeriod(advances, employee.id, dto.period);
+      const deductionsAdvances = counted.reduce(
+        (sum, a) => sum + Number(a.amount),
+        0,
+      );
+      for (const a of counted.filter((c) => c.payrollPeriod !== dto.period)) {
+        a.payrollPeriod = dto.period;
+        await this.advanceRepo.save(a);
+      }
 
       const missingBank =
         !employee.bankName || !employee.bankBranch || !employee.bankAccount;
@@ -493,7 +511,8 @@ export class EmployeesService {
    * EMP-12 — processes every currently-Pending row (optionally scoped to one
    * period). Missing-bank employees are excluded, not blocked (mirrors
    * Estates' UC-054) — fix their bank details and they're picked up next
-   * run. Included rows' contributing advances flip to `deducted`. No
+   * run. Included rows' reserved advances flip to `deducted` (stamped with the
+   * recovered month). No
    * per-transaction bank charge is applied (resolved 2026-07-26 — see
    * Claude.md's Payment calculation section). Officer+ (portal: `payroll: 'edit'`).
    */
@@ -527,15 +546,15 @@ export class EmployeesService {
       row.processedOn = now;
       processed.push(await this.payrollRepo.save(row));
 
-      for (const advance of allAdvances) {
-        if (
-          advance.employeeId === row.employeeId &&
-          advance.status === 'Approved' &&
-          !advance.deducted
-        ) {
-          advance.deducted = true;
-          await this.advanceRepo.save(advance);
-        }
+      // only what this row deducted — an advance approved after Generate waits for the next run
+      for (const advance of advancesRecoveredBy(
+        allAdvances,
+        row.employeeId,
+        row.period,
+      )) {
+        advance.deducted = true;
+        advance.recoveredPeriod = row.period;
+        await this.advanceRepo.save(advance);
       }
     }
 
@@ -683,7 +702,7 @@ export class EmployeesService {
     };
   }
 
-  private toPublicAdvance(entity: SalaryAdvanceEntity): PublicAdvance {
+  toPublicAdvance(entity: SalaryAdvanceEntity): PublicAdvance {
     return {
       id: entity.id,
       employeeId: formatEmployeeId(entity.employeeId),
@@ -694,6 +713,8 @@ export class EmployeesService {
       status: entity.status,
       decidedBy: entity.decidedBy ?? undefined,
       decidedOn: entity.decidedOn ? entity.decidedOn.toISOString() : undefined,
+      decisionReason: entity.decisionReason ?? undefined,
+      ...recoveryOf(entity),
     };
   }
 

@@ -594,6 +594,12 @@ CREATE TABLE salary_advances (
     deducted       BOOLEAN NOT NULL DEFAULT FALSE,
     decided_by     VARCHAR(100),
     decided_on     TIMESTAMP,
+    -- Salary advances (2026-11-01): the reason given with the decision (required to reject);
+    -- payroll_period = the payroll month whose row deducts it (reserved at Generate, so it is
+    -- counted once); recovered_period = the month it was recovered (stamped at Process).
+    decision_reason  TEXT,
+    payroll_period   VARCHAR(30),
+    recovered_period VARCHAR(30),
     created_at     TIMESTAMP DEFAULT NOW()
 );
 

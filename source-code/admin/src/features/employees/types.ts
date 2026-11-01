@@ -88,6 +88,52 @@ export interface Advance {
   status: AdvanceStatus
   decidedBy?: string
   decidedOn?: string
+  /** given with the decision — required to reject */
+  decisionReason?: string
+  /** Salary-Advances-Addendum — computed server-side (advance-balance.ts), never here */
+  recovery: RecoveryStatus | null
+  remaining: number
+  /** the payroll month that deducts (or deducted) it */
+  payrollPeriod: string | null
+  recoveredPeriod: string | null
+}
+
+export type RecoveryStatus = 'Not started' | 'Recovering' | 'Recovered'
+
+export interface RouteRef {
+  id: number
+  name: string
+}
+
+export interface AdvanceRow extends Advance {
+  role: string
+  /** agents only: the routes they're responsible for today */
+  routes: RouteRef[]
+}
+
+export type AdvanceTab = 'decide' | 'approved' | 'rejected' | 'all'
+
+export interface AdvanceListResult {
+  rows: AdvanceRow[]
+  page: number
+  limit: number
+  total: number
+  hasMore: boolean
+  summary: { requested: number; approved: number; pendingCount: number; outstanding: number }
+  tabCounts: Record<AdvanceTab, number>
+  roles: string[]
+  routes: RouteRef[]
+}
+
+export interface AdvanceDetail {
+  advance: AdvanceRow
+  previous: AdvanceRow[]
+  outstanding: number
+}
+
+export interface EmployeeAdvances {
+  outstanding: number
+  advances: AdvanceRow[]
 }
 
 export type PayrollStatus = 'Pending' | 'Processed'

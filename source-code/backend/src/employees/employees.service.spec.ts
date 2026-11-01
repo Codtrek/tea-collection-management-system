@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { AGENT_JOB_ROLE } from './employee-roles';
 import type { Repository } from 'typeorm';
 import type { EmployeeAttendanceEntity } from './employee-attendance.entity';
@@ -108,6 +112,9 @@ function makeAdvance(
     deducted: false,
     decidedBy: null,
     decidedOn: null,
+    decisionReason: null,
+    payrollPeriod: null,
+    recoveredPeriod: null,
     createdAt: new Date('2026-07-05T00:00:00.000Z'),
     ...overrides,
   };
@@ -163,6 +170,7 @@ describe('EmployeesService', () => {
   let advanceRepo: FakeRepository<SalaryAdvanceEntity>;
   let payrollRepo: FakeRepository<PayrollRunEntity>;
   let service: EmployeesService;
+  let auditRecord: jest.Mock;
   let provisioning: {
     assertContactFree: jest.Mock;
     provision: jest.Mock;
@@ -188,13 +196,14 @@ describe('EmployeesService', () => {
       syncContact: jest.fn().mockResolvedValue(undefined),
     };
 
+    auditRecord = jest.fn().mockResolvedValue(undefined);
     service = new EmployeesService(
       employeeRepo as unknown as Repository<EmployeeEntity>,
       attendanceRepo as unknown as Repository<EmployeeAttendanceEntity>,
       advanceRepo as unknown as Repository<SalaryAdvanceEntity>,
       payrollRepo as unknown as Repository<PayrollRunEntity>,
       {
-        record: jest.fn().mockResolvedValue(undefined),
+        record: auditRecord,
       } as unknown as import('../audit/audit.service').AuditService,
       provisioning as unknown as import('../dispatch/agent-provisioning.service').AgentProvisioningService,
     );
@@ -432,14 +441,34 @@ describe('EmployeesService', () => {
       expect(result.decidedBy).toBe(officer.name);
     });
 
-    it('allows Administrator to decide (reject)', async () => {
+    it('allows Administrator to decide (reject) — the reason is stored and audited', async () => {
       advanceRepo.seed(makeAdvance());
       const result = await service.decideAdvance(
         'EMP-ADV-0001',
         'reject',
         admin,
+        ' Exceeds policy ',
       );
-      expect(result.status).toBe('Rejected');
+      expect(result).toMatchObject({
+        status: 'Rejected',
+        decisionReason: 'Exceeds policy',
+      });
+      expect(auditRecord).toHaveBeenCalledWith(
+        admin,
+        expect.objectContaining({
+          action: 'Rejected advance Rs. 8000',
+          record: 'EMP-ADV-0001',
+          details: 'N. Silva — Exceeds policy',
+        }),
+      );
+    });
+
+    it('a rejection without a reason is refused and nothing changes', async () => {
+      advanceRepo.seed(makeAdvance());
+      await expect(
+        service.decideAdvance('EMP-ADV-0001', 'reject', admin, '   '),
+      ).rejects.toThrow(BadRequestException);
+      expect((await advanceRepo.find())[0].status).toBe('Pending');
     });
 
     it('rejects Manager on decide', async () => {
@@ -533,6 +562,31 @@ describe('EmployeesService', () => {
       expect(row.deductions.advances).toBe(5000);
     });
 
+    it('counts an advance in ONE month — generating another Pending month does not deduct it again', async () => {
+      employeeRepo.seed(makeEmployee());
+      advanceRepo.seed(
+        makeAdvance({ id: 'A1', status: 'Approved', amount: '5000.00' }),
+      );
+
+      const [july] = await service.generatePayroll(
+        { period: 'July 2026' },
+        officer,
+      );
+      const [august] = await service.generatePayroll(
+        { period: 'August 2026' },
+        officer,
+      );
+      // recalculating the reserving month keeps it
+      const [julyAgain] = await service.generatePayroll(
+        { period: 'July 2026' },
+        officer,
+      );
+      expect(july.deductions.advances).toBe(5000);
+      expect(august.deductions.advances).toBe(0);
+      expect(julyAgain.deductions.advances).toBe(5000);
+      expect((await advanceRepo.find())[0].payrollPeriod).toBe('July 2026');
+    });
+
     it('flags missingBank when any bank field is empty', async () => {
       employeeRepo.seed(makeEmployee({ bankAccount: '' }));
       const [row] = await service.generatePayroll(
@@ -578,10 +632,15 @@ describe('EmployeesService', () => {
       expect(stillPending?.status).toBe('Pending');
     });
 
-    it('flips contributing advances to deducted', async () => {
+    it('flips the advances the row reserved to deducted, stamping the month', async () => {
       payrollRepo.seed(makePayroll({ id: 'PR-A', employeeId: 1 }));
       advanceRepo.seed(
-        makeAdvance({ id: 'A1', employeeId: 1, status: 'Approved' }),
+        makeAdvance({
+          id: 'A1',
+          employeeId: 1,
+          status: 'Approved',
+          payrollPeriod: 'July 2026',
+        }),
       );
       advanceRepo.seed(
         makeAdvance({ id: 'A2', employeeId: 2, status: 'Approved' }),
@@ -590,8 +649,23 @@ describe('EmployeesService', () => {
       await service.processPayroll({}, officer);
 
       const advances = await advanceRepo.find();
-      expect(advances.find((a) => a.id === 'A1')?.deducted).toBe(true);
+      expect(advances.find((a) => a.id === 'A1')).toMatchObject({
+        deducted: true,
+        recoveredPeriod: 'July 2026',
+      });
       expect(advances.find((a) => a.id === 'A2')?.deducted).toBe(false);
+    });
+
+    it('an advance approved after Generate is NOT marked recovered — it was never deducted', async () => {
+      payrollRepo.seed(makePayroll({ id: 'PR-A', employeeId: 1 }));
+      advanceRepo.seed(
+        makeAdvance({ id: 'LATE', employeeId: 1, status: 'Approved' }),
+      );
+
+      await service.processPayroll({}, officer);
+
+      const late = (await advanceRepo.find()).find((a) => a.id === 'LATE');
+      expect(late).toMatchObject({ deducted: false, recoveredPeriod: null });
     });
 
     it('rejects Manager', async () => {

@@ -1,3 +1,5 @@
+import type { RecoveryStatus } from './advance-balance';
+
 /**
  * DB ↔ portal mapping for the Employees module. Unlike Estates/Collections,
  * every status enum here uses the exact same string on both sides (the DB
@@ -72,6 +74,13 @@ export interface PublicAdvance {
   status: DbAdvanceStatus;
   decidedBy?: string;
   decidedOn?: string;
+  /** given with the decision — always present on a rejection made since 2026-11-01 */
+  decisionReason?: string;
+  /** Salary-Advances-Addendum — from advance-balance.ts, the one place these are computed */
+  recovery: RecoveryStatus | null;
+  remaining: number;
+  payrollPeriod: string | null;
+  recoveredPeriod: string | null;
 }
 
 export interface PublicAttendance {

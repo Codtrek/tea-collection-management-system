@@ -10,6 +10,9 @@ import { EmployeesController } from './employees.controller';
 import { EmployeesService } from './employees.service';
 import { PayrollRunEntity } from './payroll-run.entity';
 import { SalaryAdvanceEntity } from './salary-advance.entity';
+import { RouteEntity } from '../estates/route.entity';
+import { AdvanceViewService } from './advance-view.service';
+import { EmployeeRoutesService } from './employee-routes.service';
 
 @Module({
   imports: [
@@ -18,6 +21,7 @@ import { SalaryAdvanceEntity } from './salary-advance.entity';
       EmployeeAttendanceEntity,
       SalaryAdvanceEntity,
       PayrollRunEntity,
+      RouteEntity,
     ]),
     UsersModule,
     AuditModule,
@@ -27,6 +31,6 @@ import { SalaryAdvanceEntity } from './salary-advance.entity';
     FertilizerModule,
   ],
   controllers: [EmployeesController],
-  providers: [EmployeesService],
+  providers: [EmployeesService, AdvanceViewService, EmployeeRoutesService],
 })
 export class EmployeesModule {}

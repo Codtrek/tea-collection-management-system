@@ -1004,6 +1004,22 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - `lib/csv.ts`;
   - DataTable's opt-in `serverPage` / `serverSort`.
 
+### Salary advances (Part B; `docs/specs/Salary-Advances-Addendum.md`)
+
+- **Tabs:** EMP-10 has Needs decision / Approved / Rejected / All, a request-date range (default this month), and filters in the URL, all server-side.
+  - **Needs decision ignores the range,** so an old pending request is never hidden.
+- **Detail page:** Approve / Reject at the top, and **a reason is required to reject** (stored in `decision_reason` and audited). It also shows previous advances and the outstanding balance.
+- **One shared calculation:** `employees/advance-balance.ts` is the ONLY place recovery status and remaining balance are computed. It is used by:
+  - the advances pages;
+  - payroll Generate / Process;
+  - the employee page.
+- **Two payroll bugs fixed** (user-approved):
+  - **Generate:** it now reserves the advances it deducts (`payroll_period`), so one advance is never counted in two months.
+  - **Process:** it recovers only what the row reserved (`recovered_period`).
+- **Migration:** `2026-11-01-salary-advances.sql`.
+- **Dates:** **"10 Jul 2026" everywhere.** `lib/format.ts` `formatDate` is the one formatter (it was DD/MM/YYYY).
+- **Advance rules:** no max-amount or one-open-advance rules exist. They are proposed in the addendum, NOT built.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

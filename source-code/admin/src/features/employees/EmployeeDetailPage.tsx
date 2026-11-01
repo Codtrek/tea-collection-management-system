@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, UserX, CalendarPlus, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -65,6 +65,12 @@ export function EmployeeDetailPage() {
   // (dev-scale) full lists and filter client-side, same as Estates' pattern.
   const { data: allAttendance } = useQuery({ queryKey: ['employees', 'attendance'], queryFn: () => employeesService.listAttendance() })
   const { data: allPayroll } = useQuery({ queryKey: ['employees', 'payroll'], queryFn: () => employeesService.listPayroll() })
+  // the same balance the Salary Advances page and payroll use (backend advance-balance.ts)
+  const { data: advances } = useQuery({
+    queryKey: ['employees', 'advances', 'employee', id],
+    queryFn: () => employeesService.getEmployeeAdvances(id!),
+    enabled: !!id && can('advances', 'view'),
+  })
 
   const deactivateMutation = useMutation({
     mutationFn: (employeeId: string) => employeesService.deactivate(employeeId),
@@ -159,6 +165,16 @@ export function EmployeeDetailPage() {
             <Field label="Address" value={employee.address} />
             <Field label="Employment type" value={employee.employmentType} />
             <Field label="System login" value={employee.hasLogin ? 'Enabled' : 'HR record only'} />
+            {advances && (
+              <Field
+                label="Outstanding advances"
+                value={
+                  <Link to={`/employees/advances?tab=all&range=custom&q=${encodeURIComponent(employee.name)}`} className="tabular text-primary hover:underline">
+                    {formatCurrency(advances.outstanding)}
+                  </Link>
+                }
+              />
+            )}
           </dl>
         </div>
       ),

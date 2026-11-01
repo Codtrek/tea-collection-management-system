@@ -34,8 +34,31 @@ import {
   type PublicPayrollRow,
 } from './employee-map';
 import { type Actor, EmployeesService } from './employees.service';
+import type {
+  AdvanceListResult,
+  AdvanceSort,
+  AdvanceTab,
+} from './advance-view';
+import {
+  type AdvanceDetail,
+  AdvanceViewService,
+  type EmployeeAdvances,
+} from './advance-view.service';
 
 type AuthedRequest = Request & { user: JwtPayload };
+
+const ADVANCE_TABS: readonly string[] = [
+  'decide',
+  'approved',
+  'rejected',
+  'all',
+];
+const ADVANCE_SORTS: readonly string[] = [
+  'date',
+  'amount',
+  'employee',
+  'remaining',
+];
 
 @Controller('employees')
 @UseGuards(JwtAuthGuard)
@@ -46,6 +69,7 @@ export class EmployeesController {
     private readonly agentHistory: AgentHistoryService,
     private readonly access: DispatchAccessService,
     private readonly agentFertilizer: AgentFertilizerHistoryService,
+    private readonly advanceView: AdvanceViewService,
   ) {}
 
   // Static segments (attendance/advances/payroll) are registered before the
@@ -70,9 +94,51 @@ export class EmployeesController {
     );
   }
 
+  /**
+   * EMP-10 (Salary-Advances-Addendum) — tab + request-date range + filters, server-side.
+   * "Needs decision" (tab=decide) ignores the range so an old pending request is never hidden.
+   */
   @Get('advances')
-  listAdvances(): Promise<PublicAdvance[]> {
-    return this.employeesService.listAdvances();
+  listAdvances(
+    @Query('tab') tab?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('search') search?: string,
+    @Query('role') role?: string,
+    @Query('routeId') routeId?: string,
+    @Query('min') min?: string,
+    @Query('max') max?: string,
+    @Query('sort') sort?: string,
+    @Query('dir') dir?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<AdvanceListResult> {
+    const isDate = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    const num = (v?: string) =>
+      v !== undefined && v !== '' && !Number.isNaN(Number(v))
+        ? Number(v)
+        : undefined;
+    return this.advanceView.list({
+      tab: (ADVANCE_TABS.includes(tab ?? '') ? tab : 'all') as AdvanceTab,
+      from: isDate(from) ? from : undefined,
+      to: isDate(to) ? to : undefined,
+      search,
+      role: role || undefined,
+      routeId: num(routeId),
+      min: num(min),
+      max: num(max),
+      sort: ADVANCE_SORTS.includes(sort ?? '')
+        ? (sort as AdvanceSort)
+        : undefined,
+      dir: dir === 'asc' || dir === 'desc' ? dir : undefined,
+      page: num(page),
+      limit: num(limit),
+    });
+  }
+
+  @Get('advances/:id')
+  advanceDetail(@Param('id') id: string): Promise<AdvanceDetail> {
+    return this.advanceView.detail(id);
   }
 
   @Post('advances')
@@ -96,6 +162,7 @@ export class EmployeesController {
       id,
       dto.decision,
       await this.resolveActor(req),
+      dto.reason,
     );
   }
 
@@ -158,6 +225,12 @@ export class EmployeesController {
    * grade lines, plus "Covering Route X" where they covered. Paginated, last 90 days by default.
    * Needs BOTH employee and collection access.
    */
+  /** An employee's advances and outstanding balance (advance-balance.ts — same as payroll). */
+  @Get(':id/advances')
+  employeeAdvances(@Param('id') id: string): Promise<EmployeeAdvances> {
+    return this.advanceView.forEmployee(id);
+  }
+
   @Get(':id/collections')
   async collections(
     @Param('id') id: string,
