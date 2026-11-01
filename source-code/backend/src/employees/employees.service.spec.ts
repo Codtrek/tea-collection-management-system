@@ -68,6 +68,7 @@ function makeEmployee(overrides: Partial<EmployeeEntity> = {}): EmployeeEntity {
     bankName: "People's Bank",
     bankBranch: 'Kandy',
     bankAccount: '1002458800',
+    paymentMethod: 'bank',
     dayRate: '500.00',
     dayOtRate: '750.00',
     nightRate: '600.00',
@@ -143,6 +144,9 @@ function makePayroll(
     missingBank: false,
     processedBy: null,
     processedOn: null,
+    excludedReason: null,
+    excludedBy: null,
+    excludedOn: null,
     createdAt: new Date('2026-07-01T00:00:00.000Z'),
     ...overrides,
   };
@@ -614,22 +618,78 @@ describe('EmployeesService', () => {
   });
 
   describe('processPayroll — missing-bank exclusion, advance deduction flip', () => {
-    it('excludes missing-bank rows and processes the rest', async () => {
+    const noBank = { bankName: null, bankBranch: null, bankAccount: null };
+
+    it('BLOCKS the run, naming them, when a bank-paid employee has no bank details', async () => {
+      employeeRepo.seed(makeEmployee());
+      employeeRepo.seed(
+        makeEmployee({ id: 2, name: 'T. Rajapaksa', ...noBank }),
+      );
       payrollRepo.seed(makePayroll({ id: 'PR-A', employeeId: 1 }));
+      payrollRepo.seed(
+        makePayroll({
+          id: 'PR-B',
+          employeeId: 2,
+          employeeName: 'T. Rajapaksa',
+        }),
+      );
+
+      await expect(service.processPayroll({}, officer)).rejects.toThrow(
+        /T\. Rajapaksa/,
+      );
+      const rows = await payrollRepo.find();
+      expect(rows.every((r) => r.status === 'Pending')).toBe(true);
+    });
+
+    it('excluded with a reason: the rest are processed, theirs stays Pending with the reason, audited', async () => {
+      employeeRepo.seed(makeEmployee());
+      employeeRepo.seed(
+        makeEmployee({ id: 2, name: 'T. Rajapaksa', ...noBank }),
+      );
+      payrollRepo.seed(makePayroll({ id: 'PR-A', employeeId: 1 }));
+      payrollRepo.seed(
+        makePayroll({
+          id: 'PR-B',
+          employeeId: 2,
+          employeeName: 'T. Rajapaksa',
+        }),
+      );
+
+      const result = await service.processPayroll(
+        {
+          period: 'July 2026',
+          exclusions: [{ employeeId: 'EMP-0002', reason: 'Bank form pending' }],
+        },
+        officer,
+      );
+
+      expect(result.map((r) => r.id)).toEqual(['PR-A']);
+      const excluded = (await payrollRepo.find()).find((r) => r.id === 'PR-B');
+      expect(excluded).toMatchObject({
+        status: 'Pending',
+        excludedReason: 'Bank form pending',
+        excludedBy: officer.name,
+      });
+      expect(auditRecord).toHaveBeenCalledWith(
+        officer,
+        expect.objectContaining({
+          action: 'Excluded 1 employee(s) from payroll run',
+          details: 'T. Rajapaksa: Bank form pending',
+        }),
+      );
+    });
+
+    it('checks bank details LIVE: cash-paid, or fixed since Generate, is processed', async () => {
+      employeeRepo.seed(makeEmployee({ ...noBank, paymentMethod: 'cash' }));
+      employeeRepo.seed(makeEmployee({ id: 2 }));
+      payrollRepo.seed(makePayroll({ id: 'PR-A', employeeId: 1 }));
+      // the generate-time snapshot said missing; the details were added afterwards
       payrollRepo.seed(
         makePayroll({ id: 'PR-B', employeeId: 2, missingBank: true }),
       );
 
       const result = await service.processPayroll({}, officer);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('PR-A');
-      expect(result[0].status).toBe('Processed');
-
-      const stillPending = (await payrollRepo.find()).find(
-        (r) => r.id === 'PR-B',
-      );
-      expect(stillPending?.status).toBe('Pending');
+      expect(result.map((r) => r.id).sort()).toEqual(['PR-A', 'PR-B']);
     });
 
     it('flips the advances the row reserved to deducted, stamping the month', async () => {
@@ -677,7 +737,7 @@ describe('EmployeesService', () => {
 
     it('rejects when there is nothing eligible to process', async () => {
       payrollRepo.seed(makePayroll({ status: 'Processed' }));
-      payrollRepo.seed(makePayroll({ id: 'PR-B', missingBank: true }));
+      payrollRepo.seed(makePayroll({ id: 'PR-B', status: 'Processed' }));
       await expect(service.processPayroll({}, officer)).rejects.toThrow(
         ConflictException,
       );

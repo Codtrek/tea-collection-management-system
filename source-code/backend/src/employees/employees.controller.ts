@@ -39,6 +39,14 @@ import type {
   AdvanceSort,
   AdvanceTab,
 } from './advance-view';
+import { localDate } from '../dispatch/dispatch-map';
+import {
+  PAYROLL_ISSUES,
+  type PayrollIssue,
+  type PayrollMonthResult,
+  type PayrollSort,
+} from './payroll-view';
+import { PayrollViewService } from './payroll-view.service';
 import {
   type AdvanceDetail,
   AdvanceViewService,
@@ -52,6 +60,12 @@ const ADVANCE_TABS: readonly string[] = [
   'approved',
   'rejected',
   'all',
+];
+const PAYROLL_SORTS: readonly string[] = [
+  'employee',
+  'gross',
+  'deductions',
+  'net',
 ];
 const ADVANCE_SORTS: readonly string[] = [
   'date',
@@ -70,6 +84,7 @@ export class EmployeesController {
     private readonly access: DispatchAccessService,
     private readonly agentFertilizer: AgentFertilizerHistoryService,
     private readonly advanceView: AdvanceViewService,
+    private readonly payrollView: PayrollViewService,
   ) {}
 
   // Static segments (attendance/advances/payroll) are registered before the
@@ -172,6 +187,53 @@ export class EmployeesController {
     @Query('status') status?: string,
   ): Promise<PublicPayrollRow[]> {
     return this.employeesService.listPayroll(period, status);
+  }
+
+  /**
+   * Payroll by month, Part C — one month (`YYYY-MM`, default: the current month) with live data
+   * problems, server-side filters and sort, a whole-month summary and the readiness badge.
+   */
+  @Get('payroll/month')
+  payrollMonth(
+    @Query('month') month?: string,
+    @Query('search') search?: string,
+    @Query('role') role?: string,
+    @Query('routeId') routeId?: string,
+    @Query('status') status?: string,
+    @Query('issues') issues?: string,
+    @Query('method') method?: string,
+    @Query('sort') sort?: string,
+    @Query('dir') dir?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<PayrollMonthResult> {
+    const num = (v?: string) =>
+      v !== undefined && v !== '' && !Number.isNaN(Number(v))
+        ? Number(v)
+        : undefined;
+    return this.payrollView.month({
+      month:
+        month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month)
+          ? month
+          : localDate(new Date()).slice(0, 7),
+      search,
+      role: role || undefined,
+      routeId: num(routeId),
+      status:
+        status === 'Pending' || status === 'Processed' ? status : undefined,
+      issues: (issues ?? '')
+        .split(',')
+        .filter((i): i is PayrollIssue =>
+          PAYROLL_ISSUES.includes(i as PayrollIssue),
+        ),
+      method: method === 'bank' || method === 'cash' ? method : undefined,
+      sort: PAYROLL_SORTS.includes(sort ?? '')
+        ? (sort as PayrollSort)
+        : undefined,
+      dir: dir === 'asc' || dir === 'desc' ? dir : undefined,
+      page: num(page),
+      limit: num(limit),
+    });
   }
 
   @Post('payroll/generate')

@@ -22,6 +22,8 @@ export interface Employee {
   employmentType: EmploymentType
   status: EmployeeStatus
   bank: { bank: string; branch: string; account: string }
+  /** how the employee is paid — cash-paid employees need no bank details */
+  paymentMethod: EmployeePaymentMethod
   hasLogin: boolean
   lastUpdatedBy?: string
   lastUpdatedOn?: string
@@ -146,12 +148,57 @@ export interface PayrollRow {
   gross: number
   deductions: { advances: number; other: number }
   status: PayrollStatus
-  /** flagged when the employee has no bank details — excluded from a run */
+  /** generate-time snapshot of "no bank details" — the live check is `problems.noBank` */
   missingBank?: boolean
+  /** left out of a run with this reason (bank-paid, no bank details); the row stays Pending */
+  excludedReason?: string
   /** Hours aggregated from attendance, behind the stored `gross` snapshot. */
   shiftHours?: ShiftBreakdown
   /** The employee's rates at the time this row was generated. */
   rates?: ShiftBreakdown
+}
+
+export type EmployeePaymentMethod = 'bank' | 'cash'
+
+/*
+  Payroll by month, Part C (Payroll-Month-History-Addendum) — mirrors the backend's
+  `payroll-view.ts`. Problems are live employee data, kept apart from the Pending/Processed status.
+*/
+export type PayrollIssue = 'noBank' | 'zeroGross' | 'hasDeductions' | 'hasAdvance'
+
+export interface PayrollViewRow extends PayrollRow {
+  role: string
+  routes: RouteRef[]
+  paymentMethod: EmployeePaymentMethod
+  deductionsTotal: number
+  net: number
+  problems: { noBank: boolean; zeroGross: boolean }
+}
+
+export type MonthReadiness = 'In progress' | 'No payroll' | 'Issues to fix' | 'Ready to process' | 'Processed'
+
+export interface PayrollReadiness {
+  status: MonthReadiness
+  /** bank-paid with no bank details, not yet excluded — what stops "Ready to process" */
+  blocking: number
+  /** Rs. 0 gross */
+  warnings: number
+  /** Pending rows left out of a run with a reason */
+  excluded: number
+}
+
+export interface PayrollMonthResult {
+  rows: PayrollViewRow[]
+  page: number
+  limit: number
+  total: number
+  hasMore: boolean
+  /** always the WHOLE month */
+  summary: { net: number; employees: number; prev: { period: string; net: number; employees: number } }
+  readiness: PayrollReadiness
+  roles: string[]
+  routes: RouteRef[]
+  periods: string[]
 }
 
 export type AttendanceStatus = 'Present' | 'Absent' | 'Leave' | 'Half-day'

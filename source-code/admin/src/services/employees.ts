@@ -8,6 +8,7 @@ import type {
   AdvanceListResult,
   AdvanceTab,
   EmployeeAdvances,
+  PayrollMonthResult,
   AttendanceRecord,
   AttendanceStatus,
   Employee,
@@ -25,6 +26,7 @@ export interface EmployeeInput {
   department: string
   hireDate: string
   employmentType: Employee['employmentType']
+  paymentMethod: Employee['paymentMethod']
   bank: string
   branch: string
   account: string
@@ -186,9 +188,38 @@ export function generatePayroll(period: string): Promise<PayrollRow[]> {
   })
 }
 
-export function processPayroll(period?: string): Promise<PayrollRow[]> {
+export interface PayrollExclusion {
+  employeeId: string
+  reason: string
+}
+
+/** Bank-paid employees with no bank details must be listed in `exclusions`, with a reason. */
+export function processPayroll(period: string, exclusions: PayrollExclusion[] = []): Promise<PayrollRow[]> {
   return apiFetch<PayrollRow[]>('/employees/payroll/process', {
     method: 'POST',
-    body: JSON.stringify(period ? { period } : {}),
+    body: JSON.stringify({ period, exclusions }),
   })
+}
+
+export interface PayrollMonthQuery {
+  month: string
+  search?: string
+  role?: string
+  routeId?: number
+  status?: string
+  /** comma-separated PayrollIssue values (any of) */
+  issues?: string
+  method?: string
+  sort?: string
+  dir?: 'asc' | 'desc'
+  page?: number
+  /** 0 = every row */
+  limit?: number
+}
+
+/** Payroll by month, Part C — filtered server-side; summary + readiness cover the whole month. */
+export function getPayrollMonth(q: PayrollMonthQuery): Promise<PayrollMonthResult> {
+  const params = new URLSearchParams()
+  for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') params.set(k, String(v))
+  return apiFetch<PayrollMonthResult>(`/employees/payroll/month?${params.toString()}`)
 }

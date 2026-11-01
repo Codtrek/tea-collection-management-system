@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { currentMonth, monthOf, monthOptions, monthStatus, periodOf, readMonth, shiftMonth } from './payroll-month'
-import type { PayrollRow } from './types'
-
-const row = (status: PayrollRow['status']) => ({ status }) as PayrollRow
+import { canProcessMonth, currentMonth, monthOf, monthOptions, periodOf, readinessLabel, readMonth, shiftMonth } from './payroll-month'
+import type { PayrollReadiness } from './types'
 
 describe('payroll month ↔ backend period', () => {
   it('converts both ways', () => {
@@ -37,15 +35,31 @@ describe('?month= in the URL', () => {
   })
 })
 
-describe('monthStatus', () => {
-  it('is In progress for the current month, whatever its rows', () => {
-    expect(monthStatus([row('Pending')], '2026-10', '2026-10')).toBe('In progress')
-    expect(monthStatus([], '2026-10', '2026-10')).toBe('In progress')
+describe('readiness badge', () => {
+  const r = (status: PayrollReadiness['status'], extra: Partial<PayrollReadiness> = {}): PayrollReadiness => ({
+    status,
+    blocking: 0,
+    warnings: 0,
+    excluded: 0,
+    ...extra,
   })
 
-  it('past months: No payroll / Ready to process / Processed', () => {
-    expect(monthStatus([], '2026-09', '2026-10')).toBe('No payroll')
-    expect(monthStatus([row('Processed'), row('Pending')], '2026-07', '2026-10')).toBe('Ready to process')
-    expect(monthStatus([row('Processed')], '2026-06', '2026-10')).toBe('Processed')
+  it('says "N issues to fix" instead of "Ready to process" while anything blocks', () => {
+    expect(readinessLabel(r('Ready to process'))).toBe('Ready to process')
+    expect(readinessLabel(r('Issues to fix', { blocking: 6 }))).toBe('6 issues to fix')
+    expect(readinessLabel(r('Issues to fix', { blocking: 1 }))).toBe('1 issue to fix')
+  })
+
+  it('a month processed with exclusions says so', () => {
+    expect(readinessLabel(r('Processed', { excluded: 2 }))).toBe('Processed · 2 excluded')
+    expect(readinessLabel(r('Processed'))).toBe('Processed')
+  })
+
+  it('process is offered for a past month with Pending rows — issues are resolved on the process page', () => {
+    expect(canProcessMonth(r('Ready to process'))).toBe(true)
+    expect(canProcessMonth(r('Issues to fix', { blocking: 3 }))).toBe(true)
+    expect(canProcessMonth(r('In progress'))).toBe(false)
+    expect(canProcessMonth(r('Processed'))).toBe(false)
+    expect(canProcessMonth(r('No payroll'))).toBe(false)
   })
 })

@@ -1,6 +1,6 @@
 import type { BadgeTone } from '@/components/ui/StatusBadge'
 import { monthOf, monthOptionsFor } from '@/lib/month'
-import type { PayrollRow } from './types'
+import type { MonthReadiness, PayrollReadiness } from './types'
 
 /*
   Payroll by month (Payroll-Month-History-Addendum). The month ↔ period helpers live in
@@ -18,21 +18,25 @@ export function monthOptions(current: string, periods: string[]): { value: strin
   )
 }
 
-export type MonthStatus = 'In progress' | 'Ready to process' | 'Processed' | 'No payroll'
-
-export const MONTH_STATUS_TONE: Record<MonthStatus, BadgeTone> = {
+/*
+  The month badge (Part C). The server decides the readiness — "Ready to process" only when no
+  bank-paid employee is missing bank details (payroll-view.ts); this only words and colours it.
+*/
+export const READINESS_TONE: Record<MonthReadiness, BadgeTone> = {
   'In progress': 'assigned',
   'Ready to process': 'warning',
+  'Issues to fix': 'danger',
   Processed: 'success',
   'No payroll': 'neutral',
 }
 
-/**
- * The current month is "In progress" until it ends (it can be generated, not processed). A past
- * month is "Processed" once every row is, "Ready to process" while any row is still Pending.
- */
-export function monthStatus(rows: PayrollRow[], month: string, current: string): MonthStatus {
-  if (month === current) return 'In progress'
-  if (rows.length === 0) return 'No payroll'
-  return rows.every((r) => r.status === 'Processed') ? 'Processed' : 'Ready to process'
+export function readinessLabel(r: PayrollReadiness): string {
+  if (r.status === 'Issues to fix') return `${r.blocking} issue${r.blocking === 1 ? '' : 's'} to fix`
+  if (r.status === 'Processed' && r.excluded > 0) return `Processed · ${r.excluded} excluded`
+  return r.status
+}
+
+/** A past month with Pending rows can go to the process page — blocking issues are resolved there (fix, or exclude with a reason). */
+export function canProcessMonth(r: PayrollReadiness): boolean {
+  return r.status === 'Ready to process' || r.status === 'Issues to fix'
 }

@@ -31,10 +31,11 @@ export const employeeSchema = z.object({
     .refine((v) => new Date(v) <= new Date(), 'Hire date cannot be in the future'),
   employmentType: z.enum(['Permanent', 'Contract', 'Casual']),
 
-  // Bank
-  bank: z.string().min(1, 'Bank is required'),
-  branch: z.string().min(1, 'Branch is required'),
-  account: z.string().regex(/^\d+$/, 'Account number must be numeric'),
+  // Payment — a cash-paid employee needs no bank details (Payroll-Month-History-Addendum, Part C)
+  paymentMethod: z.enum(['bank', 'cash']),
+  bank: z.string(),
+  branch: z.string(),
+  account: z.string(),
 
   // Permissions
   hasLogin: z.boolean(),
@@ -46,9 +47,19 @@ export const employeeSchema = z.object({
   dayOtRate: z.number().min(0, 'Rate cannot be negative'),
   nightRate: z.number().min(0, 'Rate cannot be negative'),
   nightOtRate: z.number().min(0, 'Rate cannot be negative'),
+}).superRefine((v, ctx) => {
+  if (v.paymentMethod === 'cash') return
+  if (!v.bank) ctx.addIssue({ code: 'custom', path: ['bank'], message: 'Bank is required' })
+  if (!v.branch) ctx.addIssue({ code: 'custom', path: ['branch'], message: 'Branch is required' })
+  if (!/^\d+$/.test(v.account)) ctx.addIssue({ code: 'custom', path: ['account'], message: 'Account number must be numeric' })
 })
 
 export type EmployeeForm = z.infer<typeof employeeSchema>
+
+export const PAYMENT_METHOD_OPTIONS = [
+  { value: 'bank', label: 'Bank transfer' },
+  { value: 'cash', label: 'Cash' },
+]
 
 export const BANKS = ['Bank of Ceylon', "People's Bank", 'Commercial Bank', 'Hatton National Bank', 'Sampath Bank']
 export const BRANCHES = ['Nuwara Eliya', 'Kandy', 'Hatton', 'Colombo']

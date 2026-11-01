@@ -217,6 +217,7 @@ export function EmployeeDetailPage() {
       label: 'Bank Details',
       content: (
         <div className="rounded-[var(--radius-lg)] bg-surface p-6 shadow-[var(--shadow-1)]">
+          <p className="mb-4 text-sm text-text-muted">Paid by {employee.paymentMethod === 'cash' ? 'cash' : 'bank transfer'}</p>
           {employee.bank.account ? (
             <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="Bank" value={employee.bank.bank} />
@@ -224,7 +225,11 @@ export function EmployeeDetailPage() {
               <Field label="Account" value={<span className="id">{unmask ? employee.bank.account : maskAccount(employee.bank.account)}</span>} />
             </dl>
           ) : (
-            <p className="text-sm text-danger-fg">No bank details on file — this employee is excluded from payroll runs.</p>
+            <p className={`text-sm ${employee.paymentMethod === 'cash' ? 'text-text-muted' : 'text-danger-fg'}`}>
+              {employee.paymentMethod === 'cash'
+                ? 'No bank details on file — not needed, this employee is paid in cash.'
+                : "No bank details on file — payroll can't be processed for them until they're added (or they're excluded from a run with a reason)."}
+            </p>
           )}
         </div>
       ),

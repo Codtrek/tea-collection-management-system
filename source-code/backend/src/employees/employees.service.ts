@@ -36,6 +36,8 @@ import {
   advancesRecoveredBy,
   recoveryOf,
 } from './advance-balance';
+import { hasNoBankDetails } from './payroll-view';
+import { labelToKey } from '../reports/reports-map';
 import { PayrollRunEntity } from './payroll-run.entity';
 import { SalaryAdvanceEntity } from './salary-advance.entity';
 
@@ -103,9 +105,10 @@ export class EmployeesService {
       hireDate: dto.hireDate,
       employmentType: dto.employmentType,
       status: 'Active',
-      bankName: dto.bank,
-      bankBranch: dto.branch,
-      bankAccount: dto.account,
+      bankName: dto.bank || null,
+      bankBranch: dto.branch || null,
+      bankAccount: dto.account || null,
+      paymentMethod: dto.paymentMethod ?? 'bank',
       dayRate: String(dto.dayRate ?? 0),
       dayOtRate: String(dto.dayOtRate ?? 0),
       nightRate: String(dto.nightRate ?? 0),
@@ -165,9 +168,10 @@ export class EmployeesService {
     employee.department = dto.department;
     employee.hireDate = dto.hireDate;
     employee.employmentType = dto.employmentType;
-    employee.bankName = dto.bank;
-    employee.bankBranch = dto.branch;
-    employee.bankAccount = dto.account;
+    employee.bankName = dto.bank || null;
+    employee.bankBranch = dto.branch || null;
+    employee.bankAccount = dto.account || null;
+    employee.paymentMethod = dto.paymentMethod ?? employee.paymentMethod;
     if (dto.dayRate !== undefined) employee.dayRate = String(dto.dayRate);
     if (dto.dayOtRate !== undefined) employee.dayOtRate = String(dto.dayOtRate);
     if (dto.nightRate !== undefined) employee.nightRate = String(dto.nightRate);
@@ -380,7 +384,12 @@ export class EmployeesService {
     period?: string,
     status?: string,
   ): Promise<PublicPayrollRow[]> {
-    const all = await this.payrollRepo.find({ order: { period: 'DESC' } });
+    // newest month first by the REAL month — the label sorts "September" before "July"
+    const all = (await this.payrollRepo.find()).sort(
+      (a, b) =>
+        labelToKey(b.period).localeCompare(labelToKey(a.period)) ||
+        a.employeeName.localeCompare(b.employeeName),
+    );
     const filtered = all.filter((row) => {
       if (period && row.period !== period) return false;
       if (status && row.status !== status) return false;
@@ -457,8 +466,7 @@ export class EmployeesService {
         await this.advanceRepo.save(a);
       }
 
-      const missingBank =
-        !employee.bankName || !employee.bankBranch || !employee.bankAccount;
+      const missingBank = hasNoBankDetails(employee);
 
       if (existing) {
         existing.dayHours = String(totals.dayHours);
@@ -509,9 +517,11 @@ export class EmployeesService {
 
   /**
    * EMP-12 — processes every currently-Pending row (optionally scoped to one
-   * period). Missing-bank employees are excluded, not blocked (mirrors
-   * Estates' UC-054) — fix their bank details and they're picked up next
-   * run. Included rows' reserved advances flip to `deducted` (stamped with the
+   * period). A bank-paid employee with no bank details (checked LIVE, not the
+   * generate-time snapshot) blocks the run unless the officer excludes them
+   * with a reason (Payroll-Month-History-Addendum, Part C) — their row stays
+   * Pending with the reason, audited; fix the details and the next run picks
+   * it up. Included rows' reserved advances flip to `deducted` (stamped with the
    * recovered month). No
    * per-transaction bank charge is applied (resolved 2026-07-26 — see
    * Claude.md's Payment calculation section). Officer+ (portal: `payroll: 'edit'`).
@@ -523,20 +533,54 @@ export class EmployeesService {
     this.assertCanWrite(actor);
 
     const all = await this.payrollRepo.find();
-    const eligible = all.filter(
-      (r) =>
-        r.status === 'Pending' &&
-        !r.missingBank &&
-        (!dto.period || r.period === dto.period),
+    const employees = new Map(
+      (await this.employeeRepo.find()).map((e) => [e.id, e]),
     );
-
-    if (eligible.length === 0) {
+    const pending = all.filter(
+      (r) => r.status === 'Pending' && (!dto.period || r.period === dto.period),
+    );
+    const blocked = pending.filter((r) =>
+      hasNoBankDetails(employees.get(r.employeeId)),
+    );
+    const reasons = new Map(
+      (dto.exclusions ?? []).map((x) => [x.employeeId, x.reason.trim()]),
+    );
+    const unexplained = blocked.filter(
+      (r) => !reasons.get(formatEmployeeId(r.employeeId)),
+    );
+    if (unexplained.length > 0) {
+      throw new ConflictException(
+        `No bank details for ${unexplained.map((r) => r.employeeName).join(', ')} — ` +
+          'add them, or exclude them from this run with a reason.',
+      );
+    }
+    const eligible = pending.filter((r) => !blocked.includes(r));
+    if (eligible.length === 0 && blocked.length === 0) {
       throw new ConflictException(
         'No pending payroll rows are ready to process.',
       );
     }
 
     const now = new Date();
+    for (const row of blocked) {
+      row.missingBank = true;
+      row.excludedReason = reasons.get(formatEmployeeId(row.employeeId))!;
+      row.excludedBy = actor.name;
+      row.excludedOn = now;
+      await this.payrollRepo.save(row);
+    }
+    if (blocked.length > 0) {
+      await this.audit.record(actor, {
+        action: `Excluded ${blocked.length} employee(s) from payroll run`,
+        module: 'Employee',
+        record: dto.period ?? 'All pending periods',
+        recordHref: '/employees/payroll',
+        details: blocked
+          .map((r) => `${r.employeeName}: ${r.excludedReason}`)
+          .join('; '),
+      });
+    }
+
     const processed: PayrollRunEntity[] = [];
     const allAdvances = await this.advanceRepo.find();
 
@@ -544,6 +588,10 @@ export class EmployeesService {
       row.status = 'Processed';
       row.processedBy = actor.name;
       row.processedOn = now;
+      row.missingBank = false;
+      row.excludedReason = null;
+      row.excludedBy = null;
+      row.excludedOn = null;
       processed.push(await this.payrollRepo.save(row));
 
       // only what this row deducted — an advance approved after Generate waits for the next run
@@ -558,13 +606,15 @@ export class EmployeesService {
       }
     }
 
-    await this.audit.record(actor, {
-      action: 'Processed payroll run',
-      module: 'Employee',
-      record: dto.period ?? 'All pending periods',
-      recordHref: '/employees/payroll',
-      details: `${processed.length} employee(s)`,
-    });
+    if (processed.length > 0) {
+      await this.audit.record(actor, {
+        action: 'Processed payroll run',
+        module: 'Employee',
+        record: dto.period ?? 'All pending periods',
+        recordHref: '/employees/payroll',
+        details: `${processed.length} employee(s)`,
+      });
+    }
     return processed.map((r) => this.toPublicPayroll(r));
   }
 
@@ -671,6 +721,7 @@ export class EmployeesService {
         branch: entity.bankBranch ?? '',
         account: entity.bankAccount ?? '',
       },
+      paymentMethod: entity.paymentMethod ?? 'bank',
       hasLogin: entity.hasLogin,
       lastUpdatedBy: entity.lastUpdatedBy ?? undefined,
       lastUpdatedOn: entity.lastUpdatedOn
@@ -731,6 +782,7 @@ export class EmployeesService {
       },
       status: entity.status,
       missingBank: entity.missingBank || undefined,
+      excludedReason: entity.excludedReason ?? undefined,
       shiftHours: {
         day: Number(entity.dayHours),
         dayOt: Number(entity.dayOtHours),

@@ -9,7 +9,9 @@ import {
   Matches,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
+import type { EmployeePaymentMethod } from '../employee-map';
 
 /**
  * EMP-02 registration. Format/shape mirrors the portal's `employeeSchema`
@@ -51,14 +53,22 @@ export class CreateEmployeeDto {
   @IsIn(['Permanent', 'Contract', 'Casual'])
   employmentType: 'Permanent' | 'Contract' | 'Casual';
 
+  /** Defaults to 'bank'. A cash-paid employee may leave the bank fields empty. */
+  @IsOptional()
+  @IsIn(['bank', 'cash'])
+  paymentMethod?: EmployeePaymentMethod;
+
+  @ValidateIf((o: CreateEmployeeDto) => o.paymentMethod !== 'cash')
   @IsString()
   @MinLength(1)
   bank: string;
 
+  @ValidateIf((o: CreateEmployeeDto) => o.paymentMethod !== 'cash')
   @IsString()
   @MinLength(1)
   branch: string;
 
+  @ValidateIf((o: CreateEmployeeDto) => o.paymentMethod !== 'cash')
   @Matches(/^\d+$/, { message: 'Account number must be numeric' })
   account: string;
 

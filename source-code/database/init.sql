@@ -545,6 +545,10 @@ CREATE TABLE employees (
     bank_name        VARCHAR(100),
     bank_branch      VARCHAR(100),
     bank_account     VARCHAR(50),
+    -- Payroll filters (2026-11-01): how the employee is paid. Cash-paid employees never count
+    -- as "No bank details" and never block processing.
+    payment_method   VARCHAR(10) NOT NULL DEFAULT 'bank'
+        CHECK (payment_method IN ('bank', 'cash')),
     day_rate         DECIMAL(8,2) NOT NULL DEFAULT 0,
     day_ot_rate      DECIMAL(8,2) NOT NULL DEFAULT 0,
     night_rate       DECIMAL(8,2) NOT NULL DEFAULT 0,
@@ -630,6 +634,11 @@ CREATE TABLE payroll_runs (
     missing_bank       BOOLEAN NOT NULL DEFAULT FALSE,
     processed_by       VARCHAR(100),
     processed_on       TIMESTAMP,
+    -- Payroll filters (2026-11-01): a bank-paid row with no bank details left out of a run, with
+    -- the officer's required reason. The row stays Pending; a later run picks it up once fixed.
+    excluded_reason    TEXT,
+    excluded_by        VARCHAR(100),
+    excluded_on        TIMESTAMP,
     created_at         TIMESTAMP DEFAULT NOW(),
     UNIQUE (employee_id, period)
 );

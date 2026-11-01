@@ -13,6 +13,8 @@ export type DbEmploymentType = 'Permanent' | 'Contract' | 'Casual';
 export type DbAttendanceStatus = 'Present' | 'Absent' | 'Leave' | 'Half-day';
 export type DbAdvanceStatus = 'Pending' | 'Approved' | 'Rejected';
 export type DbPayrollStatus = 'Pending' | 'Processed';
+/** how an employee is paid (Payroll filters, 2026-11-01) */
+export type EmployeePaymentMethod = 'bank' | 'cash';
 
 /** 'EMP-0001' — formatted from the employees.id serial, not stored directly. */
 export function formatEmployeeId(id: number): string {
@@ -52,6 +54,7 @@ export interface PublicEmployee {
   employmentType: DbEmploymentType;
   status: DbEmployeeStatus;
   bank: EmployeeBank;
+  paymentMethod: EmployeePaymentMethod;
   hasLogin: boolean;
   lastUpdatedBy?: string;
   lastUpdatedOn?: string;
@@ -104,6 +107,8 @@ export interface PublicPayrollRow {
   deductions: { advances: number; other: number };
   status: DbPayrollStatus;
   missingBank?: boolean;
+  /** left out of a run with this reason (bank-paid, no bank details); the row stays Pending */
+  excludedReason?: string;
   /** Additive — shift-hours/rate breakdown behind the stored `gross` snapshot. */
   shiftHours?: ShiftHours;
   rates?: ShiftHours;

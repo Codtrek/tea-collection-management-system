@@ -13,6 +13,7 @@ import { SalaryAdvanceEntity } from './salary-advance.entity';
 import { RouteEntity } from '../estates/route.entity';
 import { AdvanceViewService } from './advance-view.service';
 import { EmployeeRoutesService } from './employee-routes.service';
+import { PayrollViewService } from './payroll-view.service';
 
 @Module({
   imports: [
@@ -31,6 +32,11 @@ import { EmployeeRoutesService } from './employee-routes.service';
     FertilizerModule,
   ],
   controllers: [EmployeesController],
-  providers: [EmployeesService, AdvanceViewService, EmployeeRoutesService],
+  providers: [
+    EmployeesService,
+    AdvanceViewService,
+    EmployeeRoutesService,
+    PayrollViewService,
+  ],
 })
 export class EmployeesModule {}

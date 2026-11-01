@@ -1020,6 +1020,20 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Dates:** **"10 Jul 2026" everywhere.** `lib/format.ts` `formatDate` is the one formatter (it was DD/MM/YYYY).
 - **Advance rules:** no max-amount or one-open-advance rules exist. They are proposed in the addendum, NOT built.
 
+### Payroll filters (Part C; `docs/specs/Payroll-Month-History-Addendum.md` §6–11)
+
+- **Endpoint:** `GET /employees/payroll/month`. Filters and sort live in the URL; the summary is always the whole month ("Showing X of Y" when filtered).
+- **Status vs problems:** Status is only Pending/Processed. Problems are live chips that link to the fix:
+  - **"No bank details"** (bank-paid only) **blocks** processing;
+  - **"Rs. 0 gross"** is a warning.
+- **New column:** `employees.payment_method`, from migration `2026-11-01-payroll-filters.sql`.
+- **Readiness badge:** "Ready to process" only with no blocking issue; otherwise "N issues to fix", which applies `?issues=noBank`.
+- **Processing:** bank-paid employees with no bank details must be **excluded with a reason**, or the run is refused (409, naming them).
+  - Excluded rows stay Pending with `excluded_reason`, and the exclusion is audited.
+  - A month whose remaining rows are all excluded counts as Processed.
+- **Why July showed:** not a bug — it comes from `?month=` links.
+- **Rs 0 agents:** expected. Gross is attendance hours × rates for every role, and the agents have rates of 0 and no attendance.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

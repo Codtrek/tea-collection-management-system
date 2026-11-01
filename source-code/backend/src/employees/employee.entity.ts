@@ -4,6 +4,7 @@ import {
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import type { EmployeePaymentMethod } from './employee-map';
 import type { DbEmployeeStatus, DbEmploymentType } from './employee-map';
 
 /**
@@ -61,6 +62,10 @@ export class EmployeeEntity {
 
   @Column({ name: 'bank_account', type: 'varchar', nullable: true })
   bankAccount: string | null;
+
+  /** how the employee is paid (Payroll filters) — cash-paid employees need no bank details */
+  @Column({ name: 'payment_method', type: 'varchar', default: 'bank' })
+  paymentMethod: EmployeePaymentMethod;
 
   @Column({ name: 'day_rate', type: 'decimal', precision: 8, scale: 2 })
   dayRate: string;

@@ -18,6 +18,7 @@ export const EMPLOYEES: Employee[] = [
     employmentType: 'Permanent',
     status: 'Active',
     bank: { bank: 'Bank of Ceylon', branch: 'Nuwara Eliya', account: '8945201233' },
+    paymentMethod: 'bank',
     hasLogin: true,
     lastUpdatedBy: 'A. Bandara',
     lastUpdatedOn: '2026-07-10',
@@ -35,6 +36,7 @@ export const EMPLOYEES: Employee[] = [
     employmentType: 'Permanent',
     status: 'Active',
     bank: { bank: "People's Bank", branch: 'Kandy', account: '1002458800' },
+    paymentMethod: 'bank',
     hasLogin: false,
   },
   {
@@ -50,6 +52,7 @@ export const EMPLOYEES: Employee[] = [
     employmentType: 'Permanent',
     status: 'Active',
     bank: { bank: 'Commercial Bank', branch: 'Nuwara Eliya', account: '7781234509' },
+    paymentMethod: 'bank',
     hasLogin: true,
   },
   {
@@ -65,6 +68,7 @@ export const EMPLOYEES: Employee[] = [
     employmentType: 'Contract',
     status: 'Active',
     bank: { bank: '', branch: '', account: '' },
+    paymentMethod: 'bank',
     hasLogin: false,
   },
   {
@@ -80,6 +84,7 @@ export const EMPLOYEES: Employee[] = [
     employmentType: 'Permanent',
     status: 'Active',
     bank: { bank: 'Sampath Bank', branch: 'Kandy', account: '1122334455' },
+    paymentMethod: 'bank',
     hasLogin: true,
   },
   {
@@ -95,6 +100,7 @@ export const EMPLOYEES: Employee[] = [
     employmentType: 'Permanent',
     status: 'Suspended',
     bank: { bank: 'Hatton National Bank', branch: 'Hatton', account: '5566778899' },
+    paymentMethod: 'bank',
     hasLogin: false,
   },
 ]
