@@ -1024,6 +1024,12 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - **Net payable is never below Rs. 0**; the rest is carried forward.
   - Process refuses negative rows generated before this rule.
   - August–November 2026 have Rs. 0 gross because **no attendance is marked** after July.
+- **Installments (2026-11-02, addendum §10):** each advance has a plan (`installment_amount` × months from `start_period`, default next month), and each month deducts at most one installment.
+  - **Approval:** the approver may change the plan (a note is required).
+  - **No self-approval, enforced on the server:** blocked for the requester (`requested_by_user_id`) and by NIC match, using `normalizeNic` (12-digit form).
+  - **Reschedules** (`advance_reschedules`) need someone else's approval.
+  - **Cash repayments** are `cash` recovery rows.
+  - **Leavers:** deactivation stores `deactivated_on`; that month's payroll is `is_final` and owes the whole balance, up to the cap.
 
 ### Payroll filters (Part C; `docs/specs/Payroll-Month-History-Addendum.md` §6–11)
 

@@ -90,6 +90,14 @@ export interface PublicAdvance {
   payrollPeriod: string | null;
   /** the latest month it was (partly) recovered in */
   recoveredPeriod: string | null;
+  /** the repayment plan (Salary-Advances-Addendum §10) */
+  plan: { installment: number; months: number; startPeriod: string | null };
+  /** the next month that deducts from it, and the month it clears (projected) */
+  nextPeriod: string | null;
+  clearedPeriod: string | null;
+  requestedBy?: string;
+  /** the approver's note when they changed the requested plan */
+  planChangeNote?: string;
 }
 
 export interface PublicAttendance {
@@ -117,6 +125,8 @@ export interface PublicPayrollRow {
   excludedReason?: string;
   /** Salary-Advances-Addendum §9 — per advance: planned / deducted / carried forward / remaining */
   advanceLines?: PayslipAdvanceLine[];
+  /** the leaving month's payroll — the whole advance balance was due (up to the cap) */
+  isFinal?: boolean;
   /** Additive — shift-hours/rate breakdown behind the stored `gross` snapshot. */
   shiftHours?: ShiftHours;
   rates?: ShiftHours;

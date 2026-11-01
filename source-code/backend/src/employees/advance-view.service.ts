@@ -4,6 +4,19 @@ import { Repository } from 'typeorm';
 import { outstandingFor } from './advance-balance';
 import { AdvanceRecoveryEntity } from './advance-recovery.entity';
 import {
+  AdvancePlanService,
+  type PublicReschedule,
+} from './advance-plan.service';
+import {
+  addMonths,
+  projectSchedule,
+  type ScheduleMonth,
+  type SelfApprovalCheck,
+  selfApprovalCheck,
+} from './advance-schedule';
+import { localDate } from '../dispatch/dispatch-map';
+import { keyToLabel } from '../reports/reports-map';
+import {
   type AdvanceListResult,
   type AdvanceQuery,
   type AdvanceRow,
@@ -12,7 +25,7 @@ import {
 import { parseEmployeeId } from './employee-map';
 import { EmployeeEntity } from './employee.entity';
 import { EmployeeRoutesService } from './employee-routes.service';
-import { EmployeesService } from './employees.service';
+import { type Actor, EmployeesService } from './employees.service';
 import { SalaryAdvanceEntity } from './salary-advance.entity';
 
 export interface AdvanceDetail {
@@ -21,6 +34,17 @@ export interface AdvanceDetail {
   previous: AdvanceRow[];
   /** everything approved and still to be recovered through payroll */
   outstanding: number;
+  /** month by month: Planned / Deducted / Carried forward (Salary-Advances-Addendum §10) */
+  schedule: ScheduleMonth[];
+  reschedules: PublicReschedule[];
+  cashRepayments: {
+    amount: number;
+    paidOn: string | null;
+    reference: string | null;
+    recordedBy: string | null;
+  }[];
+  /** for the viewer: may they approve it? (enforced again on the server) */
+  selfApproval: SelfApprovalCheck;
 }
 
 export interface EmployeeAdvances {
@@ -44,6 +68,7 @@ export class AdvanceViewService {
     private readonly employeeRepo: Repository<EmployeeEntity>,
     private readonly employees: EmployeesService,
     private readonly employeeRoutes: EmployeeRoutesService,
+    private readonly plans: AdvancePlanService,
   ) {}
 
   async list(q: AdvanceQuery): Promise<AdvanceListResult> {
@@ -54,13 +79,48 @@ export class AdvanceViewService {
     return listAdvanceView(rows, q, routes);
   }
 
-  async detail(id: string): Promise<AdvanceDetail> {
+  async detail(id: string, viewer: Actor): Promise<AdvanceDetail> {
     const entities = await this.advanceRepo.find();
     const rows = await this.rows(entities);
     const advance = rows.find((r) => r.id === id);
     if (!advance) throw new NotFoundException(`No advance request "${id}".`);
     const employeeId = parseEmployeeId(advance.employeeId);
+    const entity = entities.find((a) => a.id === id)!;
+    const recoveries = (await this.recoveryRepo.find()).filter(
+      (r) => r.advanceId === id,
+    );
+    const employee = await this.employeeRepo.findOne({
+      where: { id: employeeId },
+    });
+    const schedule =
+      entity.status === 'Rejected'
+        ? []
+        : projectSchedule(
+            {
+              amount: Number(entity.amount),
+              installment: advance.plan.installment,
+              startPeriod:
+                advance.plan.startPeriod ??
+                keyToLabel(addMonths(localDate(new Date()).slice(0, 7), 1)),
+            },
+            recoveries,
+          ).months;
     return {
+      schedule,
+      reschedules: await this.plans.reschedules(id),
+      cashRepayments: recoveries
+        .filter((r) => r.kind === 'cash')
+        .map((r) => ({
+          amount: Number(r.amount),
+          paidOn: r.paidOn,
+          reference: r.reference,
+          recordedBy: r.recordedBy,
+        })),
+      selfApproval: selfApprovalCheck(
+        entity.requestedByUserId,
+        employee?.nic ?? null,
+        viewer,
+      ),
       advance,
       previous: rows
         .filter((r) => r.employeeId === advance.employeeId && r.id !== id)

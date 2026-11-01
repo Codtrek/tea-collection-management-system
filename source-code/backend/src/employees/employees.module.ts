@@ -15,6 +15,8 @@ import { AdvanceViewService } from './advance-view.service';
 import { EmployeeRoutesService } from './employee-routes.service';
 import { PayrollViewService } from './payroll-view.service';
 import { AdvanceRecoveryEntity } from './advance-recovery.entity';
+import { AdvanceRescheduleEntity } from './advance-reschedule.entity';
+import { AdvancePlanService } from './advance-plan.service';
 import { PayrollSettingsService } from './payroll-settings.service';
 import { SystemSettingEntity } from '../admin/system-setting.entity';
 
@@ -27,6 +29,7 @@ import { SystemSettingEntity } from '../admin/system-setting.entity';
       PayrollRunEntity,
       RouteEntity,
       AdvanceRecoveryEntity,
+      AdvanceRescheduleEntity,
       SystemSettingEntity,
     ]),
     UsersModule,
@@ -43,6 +46,7 @@ import { SystemSettingEntity } from '../admin/system-setting.entity';
     EmployeeRoutesService,
     PayrollViewService,
     PayrollSettingsService,
+    AdvancePlanService,
   ],
 })
 export class EmployeesModule {}

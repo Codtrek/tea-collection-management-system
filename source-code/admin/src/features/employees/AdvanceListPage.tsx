@@ -25,6 +25,7 @@ import {
   type DatePreset,
 } from './advance-filters'
 import { ADVANCE_TONE, RECOVERY_TONE } from './advance-status'
+import { planLabel } from './advance-plan'
 import type { AdvanceRow } from './types'
 import { formatCurrency, formatDate } from '@/lib/format'
 
@@ -94,19 +95,30 @@ export function AdvanceListPage() {
       render: (a) => (a.recovery ? <StatusBadge tone={RECOVERY_TONE[a.recovery]}>{a.recovery}</StatusBadge> : <span className="text-text-muted">—</span>),
     },
     {
-      key: 'payrollPeriod',
-      header: 'Payroll month',
+      key: 'plan',
+      header: 'Plan',
+      render: (a) => (
+        <span className="text-sm">
+          {planLabel(a.plan)}
+          {a.plan.startPeriod && a.status !== 'Rejected' && <span className="block text-xs text-text-muted">from {a.plan.startPeriod}</span>}
+        </span>
+      ),
+    },
+    { key: 'recovered', header: 'Recovered', align: 'right', render: (a) => (a.status === 'Approved' ? formatCurrency(a.recovered) : '—') },
+    { key: 'remaining', header: 'Remaining', align: 'right', render: (a) => (a.status === 'Approved' ? formatCurrency(a.remaining) : '—') },
+    {
+      key: 'nextPeriod',
+      header: 'Next deduction',
       render: (a) =>
-        a.recoveredPeriod ?? a.payrollPeriod ? (
+        a.status === 'Approved' && a.nextPeriod ? (
           <span>
-            {a.recoveredPeriod ?? a.payrollPeriod}
-            {!a.recoveredPeriod && <span className="text-xs text-text-muted"> (pending)</span>}
+            {a.nextPeriod}
+            {a.carriedForward > 0 && <span className="block text-xs text-warning-fg">{formatCurrency(a.carriedForward)} carried forward</span>}
           </span>
         ) : (
           <span className="text-text-muted">—</span>
         ),
     },
-    { key: 'remaining', header: 'Remaining', align: 'right', render: (a) => (a.status === 'Approved' ? formatCurrency(a.remaining) : '—') },
   ]
 
   const { summary } = data

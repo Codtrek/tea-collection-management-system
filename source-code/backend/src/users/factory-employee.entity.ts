@@ -25,6 +25,10 @@ export class FactoryEmployee {
   @Column()
   name: string;
 
+  /** the person's NIC — Salary Advances' no-self-approval check matches it to the HR record */
+  @Column({ type: 'varchar', nullable: true })
+  nic: string | null;
+
   @ManyToOne(() => Factory)
   @JoinColumn({ name: 'factory_id' })
   factory: Factory;

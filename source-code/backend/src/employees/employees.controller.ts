@@ -48,6 +48,19 @@ import {
 } from './payroll-view';
 import { PayrollViewService } from './payroll-view.service';
 import {
+  type PayrollSettings,
+  PayrollSettingsService,
+} from './payroll-settings.service';
+import {
+  AdvancePlanService,
+  type PublicReschedule,
+} from './advance-plan.service';
+import {
+  CashRepaymentDto,
+  DecideRescheduleDto,
+  RescheduleAdvanceDto,
+} from './dto/advance-change.dto';
+import {
   type AdvanceDetail,
   AdvanceViewService,
   type EmployeeAdvances,
@@ -85,6 +98,8 @@ export class EmployeesController {
     private readonly agentFertilizer: AgentFertilizerHistoryService,
     private readonly advanceView: AdvanceViewService,
     private readonly payrollView: PayrollViewService,
+    private readonly advancePlans: AdvancePlanService,
+    private readonly payrollSettings: PayrollSettingsService,
   ) {}
 
   // Static segments (attendance/advances/payroll) are registered before the
@@ -151,9 +166,61 @@ export class EmployeesController {
     });
   }
 
+  /** The repayment rules the request form validates against (the server checks again). */
+  @Get('advances/settings')
+  advanceSettings(): Promise<PayrollSettings> {
+    return this.payrollSettings.get();
+  }
+
   @Get('advances/:id')
-  advanceDetail(@Param('id') id: string): Promise<AdvanceDetail> {
-    return this.advanceView.detail(id);
+  async advanceDetail(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+  ): Promise<AdvanceDetail> {
+    return this.advanceView.detail(id, await this.resolveActor(req));
+  }
+
+  /** Ask to change an approved plan — someone else approves (Salary-Advances-Addendum §10). */
+  @Post('advances/:id/reschedules')
+  async requestReschedule(
+    @Param('id') id: string,
+    @Body() dto: RescheduleAdvanceDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicReschedule> {
+    return this.advancePlans.requestReschedule(
+      id,
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
+  @Patch('advances/:id/reschedules/:rid/decide')
+  async decideReschedule(
+    @Param('id') id: string,
+    @Param('rid') rid: string,
+    @Body() dto: DecideRescheduleDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicAdvance> {
+    return this.advancePlans.decideReschedule(
+      id,
+      Number(rid),
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
+  /** An early repayment in cash, recorded by an officer. */
+  @Post('advances/:id/repayments')
+  async recordRepayment(
+    @Param('id') id: string,
+    @Body() dto: CashRepaymentDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicAdvance> {
+    return this.advancePlans.recordCashRepayment(
+      id,
+      dto,
+      await this.resolveActor(req),
+    );
   }
 
   @Post('advances')
@@ -175,9 +242,8 @@ export class EmployeesController {
   ): Promise<PublicAdvance> {
     return this.employeesService.decideAdvance(
       id,
-      dto.decision,
+      dto,
       await this.resolveActor(req),
-      dto.reason,
     );
   }
 
@@ -383,7 +449,11 @@ export class EmployeesController {
 
   /** Resolves the JWT's `sub` to the acting user's display name + role for stamping. */
   private async resolveActor(req: AuthedRequest): Promise<Actor> {
-    const profile = await this.usersService.getProfile(Number(req.user.sub));
-    return { name: profile?.name ?? 'Unknown', role: req.user.role };
+    const sub = Number(req.user.sub);
+    const [profile, nic] = await Promise.all([
+      this.usersService.getProfile(sub),
+      this.usersService.getNic(sub),
+    ]);
+    return { name: profile?.name ?? 'Unknown', role: req.user.role, sub, nic };
   }
 }

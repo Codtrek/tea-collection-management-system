@@ -82,6 +82,7 @@ function makeEmployee(overrides: Partial<EmployeeEntity> = {}): EmployeeEntity {
     bankBranch: 'Kandy',
     bankAccount: '1002458800',
     paymentMethod: 'bank',
+    deactivatedOn: null,
     dayRate: '500.00',
     dayOtRate: '750.00',
     nightRate: '600.00',
@@ -129,6 +130,12 @@ function makeAdvance(
     decisionReason: null,
     payrollPeriod: null,
     recoveredPeriod: null,
+    installmentAmount: null,
+    installmentMonths: null,
+    startPeriod: null,
+    requestedByUserId: null,
+    requestedByName: null,
+    planChangeNote: null,
     createdAt: new Date('2026-07-05T00:00:00.000Z'),
     ...overrides,
   };
@@ -160,6 +167,7 @@ function makePayroll(
     excludedReason: null,
     excludedBy: null,
     excludedOn: null,
+    isFinal: false,
     createdAt: new Date('2026-07-01T00:00:00.000Z'),
     ...overrides,
   };
@@ -480,7 +488,7 @@ describe('EmployeesService', () => {
       advanceRepo.seed(makeAdvance());
       const result = await service.decideAdvance(
         'EMP-ADV-0001',
-        'approve',
+        { decision: 'approve' },
         officer,
       );
       expect(result.status).toBe('Approved');
@@ -491,9 +499,8 @@ describe('EmployeesService', () => {
       advanceRepo.seed(makeAdvance());
       const result = await service.decideAdvance(
         'EMP-ADV-0001',
-        'reject',
+        { decision: 'reject', reason: ' Exceeds policy ' },
         admin,
-        ' Exceeds policy ',
       );
       expect(result).toMatchObject({
         status: 'Rejected',
@@ -512,7 +519,11 @@ describe('EmployeesService', () => {
     it('a rejection without a reason is refused and nothing changes', async () => {
       advanceRepo.seed(makeAdvance());
       await expect(
-        service.decideAdvance('EMP-ADV-0001', 'reject', admin, '   '),
+        service.decideAdvance(
+          'EMP-ADV-0001',
+          { decision: 'reject', reason: '   ' },
+          admin,
+        ),
       ).rejects.toThrow(BadRequestException);
       expect((await advanceRepo.find())[0].status).toBe('Pending');
     });
@@ -520,14 +531,14 @@ describe('EmployeesService', () => {
     it('rejects Manager on decide', async () => {
       advanceRepo.seed(makeAdvance());
       await expect(
-        service.decideAdvance('EMP-ADV-0001', 'approve', manager),
+        service.decideAdvance('EMP-ADV-0001', { decision: 'approve' }, manager),
       ).rejects.toThrow(ForbiddenException);
     });
 
     it('rejects deciding an already-decided advance', async () => {
       advanceRepo.seed(makeAdvance({ status: 'Approved' }));
       await expect(
-        service.decideAdvance('EMP-ADV-0001', 'approve', officer),
+        service.decideAdvance('EMP-ADV-0001', { decision: 'approve' }, officer),
       ).rejects.toThrow(ConflictException);
     });
   });
@@ -846,6 +857,207 @@ describe('EmployeesService', () => {
       await expect(service.processPayroll({}, officer)).rejects.toThrow(
         ConflictException,
       );
+    });
+  });
+
+  describe('installments — plan, approval changes, no self-approval (§10)', () => {
+    const asUser = (
+      a: Actor,
+      sub: number,
+      nic: string | null = null,
+    ): Actor => ({
+      ...a,
+      sub,
+      nic,
+    });
+
+    it('stores the plan: an amount per month fills in the months, from the given start month', async () => {
+      employeeRepo.seed(makeEmployee());
+      const a = await service.requestAdvance(
+        {
+          employeeId: 'EMP-0001',
+          amount: 20000,
+          reason: 'School fees',
+          repayment: 'installments',
+          installmentAmount: 6000,
+          startMonth: '2026-12',
+        },
+        asUser(officer, 2),
+      );
+      expect(a.plan).toEqual({
+        installment: 6000,
+        months: 4,
+        startPeriod: 'December 2026',
+      });
+      expect(a.clearedPeriod).toBe('March 2027');
+      expect(a.requestedBy).toBe(officer.name);
+    });
+
+    it('a number of months fills in the installment; one deduction is amount × 1', async () => {
+      employeeRepo.seed(makeEmployee());
+      const byMonths = await service.requestAdvance(
+        {
+          employeeId: 'EMP-0001',
+          amount: 20000,
+          reason: 'x',
+          repayment: 'installments',
+          months: 6,
+          startMonth: '2027-01',
+        },
+        officer,
+      );
+      expect(byMonths.plan).toMatchObject({ installment: 3334, months: 6 });
+      const single = await service.requestAdvance(
+        {
+          employeeId: 'EMP-0001',
+          amount: 8000,
+          reason: 'x',
+          startMonth: '2027-01',
+        },
+        officer,
+      );
+      expect(single.plan).toMatchObject({ installment: 8000, months: 1 });
+    });
+
+    it('refuses an installment above the advance or a plan longer than the maximum (6)', async () => {
+      employeeRepo.seed(makeEmployee());
+      const req = (installmentAmount: number) =>
+        service.requestAdvance(
+          {
+            employeeId: 'EMP-0001',
+            amount: 20000,
+            reason: 'x',
+            repayment: 'installments',
+            installmentAmount,
+          },
+          officer,
+        );
+      await expect(req(25000)).rejects.toThrow(BadRequestException);
+      await expect(req(3000)).rejects.toThrow(/most allowed is 6/);
+    });
+
+    it('SELF-APPROVAL IS BLOCKED ON THE SERVER — the requester can’t approve it', async () => {
+      advanceRepo.seed(makeAdvance({ requestedByUserId: 2 }));
+      await expect(
+        service.decideAdvance(
+          'EMP-ADV-0001',
+          { decision: 'approve' },
+          asUser(officer, 2),
+        ),
+      ).rejects.toThrow(/You requested this advance/);
+      expect((await advanceRepo.find())[0].status).toBe('Pending');
+      // someone else can
+      const ok = await service.decideAdvance(
+        'EMP-ADV-0001',
+        { decision: 'approve' },
+        asUser(admin, 1),
+      );
+      expect(ok.status).toBe('Approved');
+    });
+
+    it('…nor the employee themself — NICs compared in the 12-digit form (old 853202937V = 198532002937)', async () => {
+      employeeRepo.seed(makeEmployee({ nic: '853202937V' }));
+      advanceRepo.seed(makeAdvance({ requestedByUserId: 7 }));
+      await expect(
+        service.decideAdvance(
+          'EMP-ADV-0001',
+          { decision: 'approve' },
+          asUser(officer, 2, '198532002937'),
+        ),
+      ).rejects.toThrow(/This advance is for you/);
+    });
+
+    it('an approver may change the plan, but only with a note', async () => {
+      advanceRepo.seed(
+        makeAdvance({
+          amount: '20000',
+          installmentAmount: '20000',
+          installmentMonths: 1,
+          startPeriod: 'December 2026',
+        }),
+      );
+      await expect(
+        service.decideAdvance(
+          'EMP-ADV-0001',
+          { decision: 'approve', installmentAmount: 5000 },
+          admin,
+        ),
+      ).rejects.toThrow(/note is required/);
+      const ok = await service.decideAdvance(
+        'EMP-ADV-0001',
+        {
+          decision: 'approve',
+          installmentAmount: 5000,
+          note: 'Spread over 4 months',
+        },
+        admin,
+      );
+      expect(ok).toMatchObject({
+        plan: { installment: 5000, months: 4, startPeriod: 'December 2026' },
+        planChangeNote: 'Spread over 4 months',
+      });
+    });
+  });
+
+  describe('installments in payroll — one installment a month from the start month (§10)', () => {
+    it('deducts nothing before the start month, then one installment a month', async () => {
+      employeeRepo.seed(makeEmployee());
+      seedJulyAttendance(100); // Rs. 50,000 gross — the cap isn't the limit here
+      attendanceRepo.seed(
+        makeAttendance({ id: 98, date: '2026-08-10', dayHours: '100' }),
+      );
+      advanceRepo.seed(
+        makeAdvance({
+          id: 'A1',
+          status: 'Approved',
+          amount: '20000',
+          installmentAmount: '6000',
+          installmentMonths: 4,
+          startPeriod: 'August 2026',
+        }),
+      );
+      const [july] = await service.generatePayroll(
+        { period: 'July 2026' },
+        officer,
+      );
+      const [august] = await service.generatePayroll(
+        { period: 'August 2026' },
+        officer,
+      );
+      expect(july.deductions.advances).toBe(0);
+      expect(august.deductions.advances).toBe(6000);
+    });
+
+    it('a leaver’s final payroll owes the whole balance, up to the cap — the rest is reported', async () => {
+      employeeRepo.seed(
+        makeEmployee({ status: 'Inactive', deactivatedOn: '2026-07-20' }),
+      );
+      seedJulyAttendance(20); // Rs. 10,000 → cap Rs. 5,000
+      advanceRepo.seed(
+        makeAdvance({
+          id: 'A1',
+          status: 'Approved',
+          amount: '20000',
+          installmentAmount: '2000',
+          installmentMonths: 10,
+          startPeriod: 'September 2026',
+        }),
+      );
+      const [row] = await service.generatePayroll(
+        { period: 'July 2026' },
+        officer,
+      );
+      expect(row.isFinal).toBe(true);
+      expect(row.deductions.advances).toBe(5000);
+      expect(row.advanceLines?.[0]).toMatchObject({
+        planned: 20000,
+        deducted: 5000,
+        remainingAfter: 15000,
+      });
+      // no row for a month after they left
+      expect(
+        await service.generatePayroll({ period: 'August 2026' }, officer),
+      ).toHaveLength(0);
     });
   });
 

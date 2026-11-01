@@ -83,6 +83,12 @@ export function PayslipPage() {
           </div>
         </div>
 
+        {row.isFinal && (
+          <p className="mb-4 rounded-[var(--radius-md)] bg-surface-sunken px-3 py-2 text-xs text-text">
+            Final payroll — the employee left in {row.period}. The whole advance balance was due, deducted up to the cap; any remaining
+            balance below is unrecovered.
+          </p>
+        )}
         {/* Salary-Advances-Addendum §9 — what each advance planned, what the gross allowed */}
         {row.advanceLines && row.advanceLines.length > 0 && (
           <div className="mb-5 overflow-x-auto rounded-[var(--radius-md)] border border-border">

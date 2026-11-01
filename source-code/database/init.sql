@@ -549,6 +549,8 @@ CREATE TABLE employees (
     -- as "No bank details" and never block processing.
     payment_method   VARCHAR(10) NOT NULL DEFAULT 'bank'
         CHECK (payment_method IN ('bank', 'cash')),
+    -- Installments (2026-11-02): when the employee left — their final payroll month
+    deactivated_on   DATE,
     day_rate         DECIMAL(8,2) NOT NULL DEFAULT 0,
     day_ot_rate      DECIMAL(8,2) NOT NULL DEFAULT 0,
     night_rate       DECIMAL(8,2) NOT NULL DEFAULT 0,
@@ -604,6 +606,15 @@ CREATE TABLE salary_advances (
     decision_reason  TEXT,
     payroll_period   VARCHAR(30),
     recovered_period VARCHAR(30),
+    -- Installments (2026-11-02): the repayment plan (one deduction = installment = amount, 1 month),
+    -- the first payroll month, who requested it (no self-approval), and the approver's note when
+    -- they changed the plan.
+    installment_amount   DECIMAL(12,2),
+    installment_months   INTEGER CHECK (installment_months IS NULL OR installment_months >= 1),
+    start_period         VARCHAR(30),
+    requested_by_user_id INTEGER REFERENCES users(id),
+    requested_by_name    VARCHAR(100),
+    plan_change_note     TEXT,
     created_at     TIMESTAMP DEFAULT NOW()
 );
 
@@ -639,6 +650,8 @@ CREATE TABLE payroll_runs (
     excluded_reason    TEXT,
     excluded_by        VARCHAR(100),
     excluded_on        TIMESTAMP,
+    -- Installments (2026-11-02): the leaving month's payroll — the whole advance balance is due
+    is_final           BOOLEAN NOT NULL DEFAULT FALSE,
     created_at         TIMESTAMP DEFAULT NOW(),
     UNIQUE (employee_id, period)
 );
@@ -662,6 +675,23 @@ CREATE TABLE advance_recoveries (
     created_at     TIMESTAMP DEFAULT NOW()
 );
 CREATE UNIQUE INDEX uq_advance_recoveries_month ON advance_recoveries(advance_id, period) WHERE kind = 'payroll';
+
+-- A change to an approved plan (new installment / start month): needs approval by someone other
+-- than the requester; processed months are never changed (they're recovery rows).
+CREATE TABLE advance_reschedules (
+    id                   SERIAL PRIMARY KEY,
+    advance_id           VARCHAR(20) NOT NULL REFERENCES salary_advances(id) ON DELETE CASCADE,
+    installment_amount   DECIMAL(12,2) NOT NULL CHECK (installment_amount > 0),
+    start_period         VARCHAR(30) NOT NULL,
+    note                 TEXT NOT NULL,
+    status               VARCHAR(10) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected')),
+    requested_by_user_id INTEGER REFERENCES users(id),
+    requested_by_name    VARCHAR(100),
+    decided_by           VARCHAR(100),
+    decided_on           TIMESTAMP,
+    decision_reason      TEXT,
+    created_at           TIMESTAMP DEFAULT NOW()
+);
 
 -- ─── REPORTS ──────────────────────────────────────────────────────
 -- Added 2026-07-27 (Reports vertical slice, 2.5). Only holds the *manual*
@@ -776,6 +806,7 @@ CREATE INDEX idx_employee_attendance_employee ON employee_attendance(employee_id
 CREATE INDEX idx_employee_attendance_date ON employee_attendance(date);
 CREATE INDEX idx_salary_advances_employee ON salary_advances(employee_id);
 CREATE INDEX idx_advance_recoveries_advance ON advance_recoveries(advance_id);
+CREATE INDEX idx_advance_reschedules_advance ON advance_reschedules(advance_id);
 CREATE INDEX idx_payroll_runs_employee ON payroll_runs(employee_id);
 CREATE INDEX idx_payroll_runs_status ON payroll_runs(status);
 CREATE INDEX idx_expense_entries_date ON expense_entries(entry_date);

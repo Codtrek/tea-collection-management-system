@@ -73,6 +73,7 @@ export class PayrollViewService {
         status: r.status,
         missingBank: r.missingBank || undefined,
         excludedReason: r.excludedReason ?? undefined,
+        isFinal: r.isFinal || undefined,
         role: e?.role ?? '',
         routes: routesByEmployee.get(r.employeeId) ?? [],
         paymentMethod: e?.paymentMethod ?? 'bank',

@@ -51,6 +51,34 @@ export class SalaryAdvanceEntity {
   @Column({ name: 'recovered_period', type: 'varchar', nullable: true })
   recoveredPeriod: string | null;
 
+  /** the repayment plan (Salary-Advances-Addendum §10) — one deduction = amount × 1 */
+  @Column({
+    name: 'installment_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
+  installmentAmount: string | null;
+
+  @Column({ name: 'installment_months', type: 'int', nullable: true })
+  installmentMonths: number | null;
+
+  /** the first payroll month that deducts it ('December 2026') */
+  @Column({ name: 'start_period', type: 'varchar', nullable: true })
+  startPeriod: string | null;
+
+  /** who requested it — never the person who approves it */
+  @Column({ name: 'requested_by_user_id', type: 'int', nullable: true })
+  requestedByUserId: number | null;
+
+  @Column({ name: 'requested_by_name', type: 'varchar', nullable: true })
+  requestedByName: string | null;
+
+  /** required when the approver changed the requested plan */
+  @Column({ name: 'plan_change_note', type: 'text', nullable: true })
+  planChangeNote: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

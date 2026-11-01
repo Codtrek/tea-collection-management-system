@@ -101,6 +101,49 @@ export interface Advance {
   /** the payroll month that deducts (or deducted) it */
   payrollPeriod: string | null
   recoveredPeriod: string | null
+  /** the repayment plan (Salary-Advances-Addendum §10) */
+  plan: { installment: number; months: number; startPeriod: string | null }
+  /** the next month that deducts from it, and the month it clears (projected server-side) */
+  nextPeriod: string | null
+  clearedPeriod: string | null
+  requestedBy?: string
+  /** the approver's note when they changed the requested plan */
+  planChangeNote?: string
+}
+
+export type ScheduleStatus = 'Deducted' | 'Reserved' | 'Planned'
+
+export interface ScheduleMonth {
+  period: string
+  planned: number
+  deducted: number
+  carried: number
+  status: ScheduleStatus
+}
+
+export interface AdvanceReschedule {
+  id: number
+  installmentAmount: number
+  startPeriod: string
+  note: string
+  status: 'Pending' | 'Approved' | 'Rejected'
+  requestedBy: string | null
+  decidedBy: string | null
+  decidedOn: string | null
+  decisionReason: string | null
+  requestedOn: string
+}
+
+export interface SelfApprovalCheck {
+  blocked: boolean
+  reason: string | null
+  /** false when a NIC was missing on either side — only the requester rule could run */
+  identityChecked: boolean
+}
+
+export interface PayrollRules {
+  advanceDeductionCapPct: number
+  maxInstallmentMonths: number
 }
 
 export type RecoveryStatus = 'Not started' | 'Recovering' | 'Recovered'
@@ -134,6 +177,11 @@ export interface AdvanceDetail {
   advance: AdvanceRow
   previous: AdvanceRow[]
   outstanding: number
+  schedule: ScheduleMonth[]
+  reschedules: AdvanceReschedule[]
+  cashRepayments: { amount: number; paidOn: string | null; reference: string | null; recordedBy: string | null }[]
+  /** for the logged-in user — Approve is disabled when blocked (the server enforces it too) */
+  selfApproval: SelfApprovalCheck
 }
 
 export interface EmployeeAdvances {
@@ -157,6 +205,8 @@ export interface PayrollRow {
   excludedReason?: string
   /** per advance this month: planned / deducted / carried forward / remaining (server-computed) */
   advanceLines?: PayslipAdvanceLine[]
+  /** the leaving month's payroll — the whole advance balance was due (up to the cap) */
+  isFinal?: boolean
   /** Hours aggregated from attendance, behind the stored `gross` snapshot. */
   shiftHours?: ShiftBreakdown
   /** The employee's rates at the time this row was generated. */

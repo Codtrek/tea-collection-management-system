@@ -294,7 +294,8 @@ export function PayrollListPage() {
 
 /** Data problems — each links to where it's fixed. Never the payroll status. */
 function ProblemChips({ row }: { row: PayrollViewRow }) {
-  if (!row.problems.noBank && !row.problems.zeroGross && !row.problems.carriedForward) return null
+  if (!row.problems.noBank && !row.problems.zeroGross && !row.problems.carriedForward && !row.isFinal) return null
+  const unrecovered = row.isFinal ? (row.advanceLines ?? []).reduce((s, l) => s + l.remainingAfter, 0) : 0
   const chip = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium hover:underline'
   return (
     <div className="mt-1 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
@@ -308,7 +309,16 @@ function ProblemChips({ row }: { row: PayrollViewRow }) {
           Rs. 0 gross
         </Link>
       )}
-      {row.problems.carriedForward > 0 && (
+      {row.isFinal && (
+        <Link
+          to={`/employees/payroll/${row.id}/payslip`}
+          className={`${chip} ${unrecovered > 0 ? 'bg-danger-bg text-danger-fg' : 'bg-surface-sunken text-text-muted'}`}
+          title="The employee left this month — their whole advance balance was due, up to the cap"
+        >
+          Final payroll{unrecovered > 0 ? ` · ${formatCurrency(unrecovered)} unrecovered` : ''}
+        </Link>
+      )}
+      {row.problems.carriedForward > 0 && !row.isFinal && (
         <Link
           to={`/employees/payroll/${row.id}/payslip`}
           className={`${chip} bg-warning-bg text-warning-fg`}

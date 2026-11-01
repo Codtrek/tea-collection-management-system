@@ -63,6 +63,14 @@ export class UsersService {
   }
 
   /** Name + factory affiliation for a factory-side user (Administrator/Officer/Manager). */
+  /** The portal user's NIC (null when none is on file) — for the no-self-approval check. */
+  async getNic(userId: number): Promise<string | null> {
+    const employee = await this.factoryEmployeesRepository.findOne({
+      where: { user_id: userId },
+    });
+    return employee?.nic ?? null;
+  }
+
   async getProfile(userId: number): Promise<UserProfile | null> {
     const employee = await this.factoryEmployeesRepository.findOne({
       where: { user_id: userId },

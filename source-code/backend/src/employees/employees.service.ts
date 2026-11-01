@@ -40,13 +40,26 @@ import {
 import { AdvanceRecoveryEntity } from './advance-recovery.entity';
 import { PayrollSettingsService } from './payroll-settings.service';
 import { hasNoBankDetails } from './payroll-view';
-import { labelToKey } from '../reports/reports-map';
+import { keyToLabel, labelToKey } from '../reports/reports-map';
+import { localDate } from '../dispatch/dispatch-map';
+import {
+  addMonths,
+  installmentForMonths,
+  monthsForInstallment,
+  planError,
+  projectSchedule,
+  selfApprovalCheck,
+} from './advance-schedule';
 import { PayrollRunEntity } from './payroll-run.entity';
 import { SalaryAdvanceEntity } from './salary-advance.entity';
 
 export interface Actor {
   name: string;
   role: AppRole;
+  /** users.id — the no-self-approval check (Salary-Advances-Addendum §10) */
+  sub?: number;
+  /** the portal user's NIC, when on file */
+  nic?: string | null;
 }
 
 @Injectable()
@@ -223,6 +236,8 @@ export class EmployeesService {
     const employee = await this.findEntity(id);
     const wasAgent = isAgentRole(employee.role);
     employee.status = 'Inactive';
+    // their payroll for this month is the final one (outstanding advances flagged there)
+    employee.deactivatedOn = localDate(new Date());
     employee.lastUpdatedBy = actor.name;
     employee.lastUpdatedOn = new Date();
     const saved = await this.employeeRepo.save(employee);
@@ -326,6 +341,13 @@ export class EmployeesService {
   ): Promise<PublicAdvance> {
     this.assertCanWrite(actor);
     const employee = await this.findEntity(dto.employeeId);
+    const plan = await this.resolvePlan(
+      dto.amount,
+      dto.repayment === 'installments'
+        ? { installment: dto.installmentAmount, months: dto.months }
+        : { installment: dto.amount },
+      dto.startMonth,
+    );
 
     const advance = this.advanceRepo.create({
       id: this.businessId('EMP-ADV'),
@@ -336,6 +358,11 @@ export class EmployeesService {
       dateRequested: new Date().toISOString().slice(0, 10),
       status: 'Pending',
       deducted: false,
+      installmentAmount: String(plan.installment),
+      installmentMonths: plan.months,
+      startPeriod: plan.startPeriod,
+      requestedByUserId: actor.sub ?? null,
+      requestedByName: actor.name,
     });
 
     const saved = await this.advanceRepo.save(advance);
@@ -343,8 +370,8 @@ export class EmployeesService {
       action: `Requested advance Rs. ${dto.amount}`,
       module: 'Employee',
       record: saved.id,
-      recordHref: '/employees/advances',
-      details: `${employee.name} — ${dto.reason}`,
+      recordHref: `/employees/advances/${saved.id}`,
+      details: `${employee.name} — ${dto.reason} — ${planText(plan)}`,
     });
     return this.toPublicAdvance(saved, []);
   }
@@ -352,12 +379,19 @@ export class EmployeesService {
   /** EMP-10 (approval side) — Officer or Administrator (portal: `advances: 'approve'` for both). */
   async decideAdvance(
     id: string,
-    decision: 'approve' | 'reject',
+    input: {
+      decision: 'approve' | 'reject';
+      reason?: string;
+      installmentAmount?: number;
+      months?: number;
+      startMonth?: string;
+      note?: string;
+    },
     actor: Actor,
-    reason?: string,
   ): Promise<PublicAdvance> {
     this.assertCanWrite(actor);
-    const why = reason?.trim() ?? '';
+    const { decision } = input;
+    const why = input.reason?.trim() ?? '';
     if (decision === 'reject' && !why) {
       throw new BadRequestException(
         'A reason is required to reject an advance.',
@@ -371,6 +405,58 @@ export class EmployeesService {
       throw new ConflictException(`Advance "${id}" has already been decided.`);
     }
 
+    let details = why
+      ? `${advance.employeeName} — ${why}`
+      : advance.employeeName;
+    if (decision === 'approve') {
+      // enforced here, not only by the disabled button
+      const employee = await this.employeeRepo.findOne({
+        where: { id: advance.employeeId },
+      });
+      const check = selfApprovalCheck(
+        advance.requestedByUserId,
+        employee?.nic ?? null,
+        actor,
+      );
+      if (check.blocked) throw new ForbiddenException(check.reason);
+
+      const amount = Number(advance.amount);
+      const requested = {
+        installment: Number(advance.installmentAmount ?? amount),
+        startPeriod: advance.startPeriod,
+      };
+      const changing =
+        input.installmentAmount !== undefined ||
+        input.months !== undefined ||
+        input.startMonth !== undefined;
+      if (changing) {
+        const plan = await this.resolvePlan(
+          amount,
+          { installment: input.installmentAmount, months: input.months },
+          input.startMonth ??
+            (requested.startPeriod
+              ? labelToKey(requested.startPeriod)
+              : undefined),
+        );
+        const changed =
+          plan.installment !== requested.installment ||
+          plan.startPeriod !== requested.startPeriod;
+        if (changed) {
+          const note = input.note?.trim() ?? '';
+          if (!note) {
+            throw new BadRequestException(
+              'A note is required when you change the repayment plan.',
+            );
+          }
+          advance.installmentAmount = String(plan.installment);
+          advance.installmentMonths = plan.months;
+          advance.startPeriod = plan.startPeriod;
+          advance.planChangeNote = note;
+          details += ` — plan changed to ${planText(plan)}: ${note}`;
+        }
+      }
+    }
+
     advance.status = decision === 'approve' ? 'Approved' : 'Rejected';
     advance.decidedBy = actor.name;
     advance.decidedOn = new Date();
@@ -382,12 +468,36 @@ export class EmployeesService {
       module: 'Employee',
       record: saved.id,
       recordHref: `/employees/advances/${saved.id}`,
-      details: why ? `${advance.employeeName} — ${why}` : advance.employeeName,
+      details,
     });
     return this.toPublicAdvance(
       saved,
       await this.recoveryRepo.find({ where: { advanceId: saved.id } }),
     );
+  }
+
+  /**
+   * A repayment plan from what was typed (Salary-Advances-Addendum §10): an installment, or a
+   * number of months (fills in the installment), from `startMonth` (default: next calendar
+   * month). Installment ≤ advance; months ≤ the configured maximum.
+   */
+  private async resolvePlan(
+    amount: number,
+    typed: { installment?: number; months?: number },
+    startMonth?: string,
+  ): Promise<{ installment: number; months: number; startPeriod: string }> {
+    const { maxInstallmentMonths } = await this.payrollSettings.get();
+    const installment =
+      typed.installment ??
+      (typed.months ? installmentForMonths(amount, typed.months) : amount);
+    const error = planError(amount, installment, maxInstallmentMonths);
+    if (error) throw new BadRequestException(error);
+    const start = startMonth ?? addMonths(localDate(new Date()).slice(0, 7), 1);
+    return {
+      installment,
+      months: monthsForInstallment(amount, installment),
+      startPeriod: keyToLabel(start),
+    };
   }
 
   async listPayroll(
@@ -437,7 +547,16 @@ export class EmployeesService {
 
     const results: PayrollRunEntity[] = [];
 
-    for (const employee of employees.filter((e) => e.status === 'Active')) {
+    // Active employees, plus anyone who left during this month — their FINAL payroll
+    const leftThisMonth = (e: EmployeeEntity) =>
+      e.status !== 'Active' &&
+      !!e.deactivatedOn &&
+      this.inPeriod(e.deactivatedOn, dto.period);
+    const periodKey = labelToKey(dto.period);
+    for (const employee of employees.filter(
+      (e) => e.status === 'Active' || leftThisMonth(e),
+    )) {
+      const isFinal = leftThisMonth(employee);
       const existing = existingRuns.find(
         (r) => r.employeeId === employee.id && r.period === dto.period,
       );
@@ -482,6 +601,17 @@ export class EmployeesService {
         gross,
         deductionsOther,
         advanceDeductionCapPct,
+        // one installment a month from the plan's start month; a final payroll owes it all
+        (a) => {
+          const adv = a as SalaryAdvanceEntity;
+          if (adv.startPeriod && periodKey < labelToKey(adv.startPeriod)) {
+            return isFinal ? null : 0;
+          }
+          if (isFinal) return null;
+          return adv.installmentAmount === null
+            ? null
+            : Number(adv.installmentAmount);
+        },
       );
       const deductionsAdvances = plan.total;
 
@@ -499,6 +629,7 @@ export class EmployeesService {
         existing.gross = String(gross);
         existing.deductionsAdvances = String(deductionsAdvances);
         existing.missingBank = missingBank;
+        existing.isFinal = isFinal;
         const saved = await this.payrollRepo.save(existing);
         await this.reserveMonth(saved, plan.lines, advances, recoveries);
         results.push(saved);
@@ -521,6 +652,7 @@ export class EmployeesService {
           deductionsOther: '0',
           status: 'Pending',
           missingBank,
+          isFinal,
         });
         const saved = await this.payrollRepo.save(created);
         await this.reserveMonth(saved, plan.lines, advances, recoveries);
@@ -875,6 +1007,45 @@ export class EmployeesService {
       decidedOn: entity.decidedOn ? entity.decidedOn.toISOString() : undefined,
       decisionReason: entity.decisionReason ?? undefined,
       ...recoveryOf(entity, recoveries),
+      ...this.planOf(entity, recoveries),
+      requestedBy: entity.requestedByName ?? undefined,
+      planChangeNote: entity.planChangeNote ?? undefined,
+    };
+  }
+
+  /** The plan and its projection (advance-schedule.ts) — a Pending request shows the requested plan. */
+  planOf(
+    entity: SalaryAdvanceEntity,
+    recoveries: AdvanceRecoveryEntity[],
+  ): Pick<PublicAdvance, 'plan' | 'nextPeriod' | 'clearedPeriod'> {
+    const amount = Number(entity.amount);
+    const installment = Number(entity.installmentAmount ?? amount);
+    const own = recoveries.filter((r) => r.advanceId === entity.id);
+    // an advance from before plans existed starts in the first month that reserved it
+    const startPeriod =
+      entity.startPeriod ??
+      own
+        .filter((r) => r.kind === 'payroll' && r.period)
+        .map((r) => r.period!)
+        .sort((a, b) => labelToKey(a).localeCompare(labelToKey(b)))[0] ??
+      null;
+    const plan = {
+      installment,
+      months:
+        entity.installmentMonths ?? monthsForInstallment(amount, installment),
+      startPeriod,
+    };
+    if (entity.status === 'Rejected' || !startPeriod) {
+      return { plan, nextPeriod: null, clearedPeriod: null };
+    }
+    const projection = projectSchedule(
+      { amount, installment, startPeriod },
+      own,
+    );
+    return {
+      plan,
+      nextPeriod: projection.nextPeriod,
+      clearedPeriod: projection.clearedPeriod,
     };
   }
 
@@ -886,6 +1057,7 @@ export class EmployeesService {
     },
   ): PublicPayrollRow {
     return {
+      isFinal: entity.isFinal || undefined,
       advanceLines: ctx
         ? payslipAdvanceLines(
             entity.employeeId,
@@ -927,4 +1099,15 @@ export class EmployeesService {
       `${Date.now()}`.slice(-4) + String(Math.floor(Math.random() * 10));
     return `${prefix}-${suffix}`;
   }
+}
+
+/** 'Rs. 5,000 × 4 from December 2026' (one deduction: 'one deduction in December 2026') */
+export function planText(plan: {
+  installment: number;
+  months: number;
+  startPeriod: string;
+}): string {
+  return plan.months === 1
+    ? `one deduction in ${plan.startPeriod}`
+    : `Rs. ${plan.installment.toLocaleString('en-US')} × ${plan.months} from ${plan.startPeriod}`;
 }

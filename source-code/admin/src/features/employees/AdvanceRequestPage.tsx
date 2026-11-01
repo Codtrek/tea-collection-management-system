@@ -11,6 +11,9 @@ import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as employeesService from '@/services/employees'
 import { formatCurrency } from '@/lib/format'
+import { currentMonth } from '@/lib/month'
+import { defaultStartMonth, planInstallment, planValueError, type PlanValue } from './advance-plan'
+import { RepaymentPlanFields } from './RepaymentPlanFields'
 
 /*
   New salary advance request, entered by staff on an employee's behalf
@@ -28,13 +31,25 @@ export function AdvanceRequestPage() {
   const [employeeId, setEmployeeId] = useState('')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
-  const [errors, setErrors] = useState<{ employee?: string; amount?: string; reason?: string }>({})
+  const [errors, setErrors] = useState<{ employee?: string; amount?: string; reason?: string; plan?: string }>({})
+  const thisMonth = currentMonth()
+  const [plan, setPlan] = useState<PlanValue>({ mode: 'single', installment: '', months: '', startMonth: defaultStartMonth(thisMonth) })
+  const { data: rules } = useQuery({ queryKey: ['employees', 'advances', 'rules'], queryFn: employeesService.getAdvanceRules })
+  const maxMonths = rules?.maxInstallmentMonths ?? 6
 
   const employee = (employees ?? []).find((e) => e.id === employeeId)
   const parsedAmount = Number(amount)
 
   const requestMutation = useMutation({
-    mutationFn: () => employeesService.requestAdvance({ employeeId, amount: parsedAmount, reason }),
+    mutationFn: () =>
+      employeesService.requestAdvance({
+        employeeId,
+        amount: parsedAmount,
+        reason,
+        repayment: plan.mode,
+        installmentAmount: plan.mode === 'installments' ? planInstallment(parsedAmount, plan) : undefined,
+        startMonth: plan.startMonth,
+      }),
     onSuccess: () => {
       toast(`Advance request of ${formatCurrency(parsedAmount)} for ${employee?.name} submitted for approval`)
       void queryClient.invalidateQueries({ queryKey: ['employees', 'advances'] })
@@ -48,6 +63,8 @@ export function AdvanceRequestPage() {
     if (!employeeId) next.employee = 'Select an employee'
     if (!amount || Number.isNaN(parsedAmount) || parsedAmount <= 0) next.amount = 'Enter a positive amount'
     if (!reason.trim()) next.reason = 'Reason is required'
+    const planProblem = parsedAmount > 0 ? planValueError(parsedAmount, plan, maxMonths) : null
+    if (planProblem) next.plan = planProblem
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -110,8 +127,10 @@ export function AdvanceRequestPage() {
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g. Medical expenses"
           />
+          <RepaymentPlanFields amount={parsedAmount} value={plan} onChange={setPlan} maxMonths={maxMonths} firstMonth={thisMonth} />
           <p className="text-xs text-text-muted">
-            The request is recorded as Pending and deducted from salary only after approval at month-end payroll.
+            The request is recorded as Pending and deducted from salary only after approval. Each month deducts at most{' '}
+            {rules?.advanceDeductionCapPct ?? 50}% of that month's gross; anything it can't take carries forward.
           </p>
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">

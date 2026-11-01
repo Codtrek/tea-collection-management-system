@@ -139,6 +139,10 @@ export class PayrollRunEntity {
   @Column({ name: 'excluded_on', type: 'timestamp', nullable: true })
   excludedOn: Date | null;
 
+  /** the leaving month's payroll — the whole advance balance is due (up to the cap) */
+  @Column({ name: 'is_final', default: false })
+  isFinal: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

@@ -152,3 +152,91 @@ Whatever couldn't be deducted stays in the remaining balance and is deducted in 
 - **Settlement process page:** the same money-colour rule.
 
 **Validation.** Process refuses a row whose net is below Rs. 0, naming the employees and asking to recalculate first. These are rows generated before this rule, such as August 2026 on the local data. Recalculating August deducts Rs. 0 from S. Fernando and carries Rs. 15,000 forward.
+
+## 10. Repayment in installments (2026-11-02)
+
+### Request
+The New Advance Request form has a **repayment plan**:
+- **One deduction in the next payroll:** the earlier behaviour.
+- **Monthly installments:** typed either as an amount per month or as a number of months; entering one fills in the other. When months are typed, the installment is rounded up to a whole rupee.
+- **Start month:** defaults to the **next calendar month**, so a request made in November starts in December.
+
+**Validation** runs both in the form and on the server:
+- **Installment** ≤ advance.
+- **Months** ≤ `system_settings.payroll.maxInstallmentMonths` (default 6).
+- **Last installment:** takes the remainder. Rs. 20,000 at Rs. 6,000 is 6,000 / 6,000 / 6,000 / 2,000.
+
+**Preview:** the form shows the schedule as you type, e.g. "Dec 2026: Rs. 5,000 · … · cleared Mar 2027".
+
+**Endpoint:** `GET /employees/advances/settings` serves the cap and the maximum number of months.
+
+### Approval
+- **The approver's choice:** approve the requested plan, or change the installment / months / start month first. **A change requires a note**; the note is stored (`plan_change_note`) and recorded in the audit log.
+- **Nobody approves their own advance.** It is blocked **on the server** (403), and the Approve button is disabled with the reason shown, when either of these is true:
+  - the approver **requested** it (`requested_by_user_id`, now stored on every request);
+  - the approver's login NIC (`factory_employees.nic`) is the employee's NIC (`employees.nic`).
+- **NIC comparison:** both NICs are first converted to the **12-digit form**. The old format `YYDDDSSSC+V/X` becomes `19YY DDD 0SSS C`, so `853202937V` = `198532002937`.
+- **Missing NIC:** if either NIC is missing, the requester rule still applies. The detail page then notes that the identity check couldn't run.
+- **Seed data:** the Officer login "S. Fernando" (NIC 199012345602) and HR employee "S. Fernando" (198834567890) are different people. So EMP-ADV-0231 is not blocked by the NIC rule.
+
+### Data
+- **The plan on the advance:** `installment_amount`, `installment_months` and `start_period`.
+  - Existing advances become one deduction of the whole amount.
+  - They start in the month that already reserved them.
+- **Each month's recovery is its own row** in `advance_recoveries` (§9), so each month row reserves at most one installment.
+- **Remaining balance** = approved amount − Σ recovered, from the shared `advance-balance.ts`.
+- **Generate:**
+  - deducts nothing before `start_period`, then one installment a month;
+  - each month's deduction is still capped by §9;
+  - a short month **extends** the schedule; a later installment is never doubled.
+- **Migration:** `2026-11-02-advance-installments.sql`.
+
+### Changes after approval
+- **Reschedule** (a new installment and/or start month for the remaining balance):
+  - a request (`advance_reschedules`) with a required reason;
+  - approved by **someone other than the requester or the employee** (the same server check);
+  - audited when requested, approved and rejected;
+  - it must start after the last processed month. **Processed months are never changed**, because they are recovery rows.
+- **Early repayment in cash:**
+  - an officer records the amount, the date and a reference; it is audited;
+  - stored as a `cash` recovery row, so it reduces the balance and **shortens the schedule**;
+  - it can't exceed what isn't already reserved by a Pending payroll month.
+- **Leavers:**
+  - deactivating an employee stores `deactivated_on`;
+  - Generate for that month includes them once, as their **final payroll** (`payroll_runs.is_final`);
+  - their whole remaining balance is due, deducted **only up to the cap**; installments and start months don't apply;
+  - whatever is left is reported. The payroll row shows a "Final payroll · Rs X unrecovered" chip, and the payslip explains it.
+
+### Screens
+- **Salary Advances list:**
+  - Plan ("Rs. 5,000 × 4", from <month>);
+  - recovered so far, remaining;
+  - next deduction month (with any amount carried forward).
+- **Detail page:**
+  - the plan and its cleared month;
+  - the full schedule (Planned / Deducted / Carried forward / status Deducted · Reserved · Planned);
+  - reschedules (approve or reject, each with a reason), cash repayments, and recovered / remaining / next deduction.
+
+### Tests
+- **Backend `advance-schedule.spec.ts`:**
+  - schedule with the last-installment remainder;
+  - amount ↔ months;
+  - validation;
+  - a partial month extends the schedule;
+  - a reschedule keeps processed months;
+  - cash shortens the schedule;
+  - NIC normalisation.
+- **Backend `employees.service.spec.ts`:**
+  - the request stores the plan;
+  - the plan is validated;
+  - **self-approval blocked on the server** (as requester, and by NIC in the old vs new format);
+  - a changed plan needs a note;
+  - an installment from the start month;
+  - a leaver's final payroll.
+- **Backend `advance-plan.service.spec.ts`:**
+  - reschedule approval by someone else;
+  - processed months unchanged;
+  - no start in a processed month;
+  - cash repayment shortens the schedule;
+  - the repayment limit.
+- **Portal `advance-plan.test.ts`:** remainder, amount ↔ months, the preview text, validation, the default start month.

@@ -9,6 +9,8 @@ import type {
   AdvanceTab,
   EmployeeAdvances,
   PayrollMonthResult,
+  PayrollRules,
+  AdvanceReschedule,
   AttendanceRecord,
   AttendanceStatus,
   Employee,
@@ -55,6 +57,12 @@ export interface RequestAdvanceInput {
   employeeId: string
   amount: number
   reason: string
+  /** Salary-Advances-Addendum §10 — default: one deduction */
+  repayment?: 'single' | 'installments'
+  installmentAmount?: number
+  months?: number
+  /** 'YYYY-MM' — default: next calendar month */
+  startMonth?: string
 }
 
 export function list(): Promise<Employee[]> {
@@ -165,11 +173,56 @@ export function requestAdvance(input: RequestAdvanceInput): Promise<Advance> {
   })
 }
 
-/** A reason is required to reject (the server refuses one without). */
-export function decideAdvance(id: string, decision: 'approve' | 'reject', reason?: string): Promise<Advance> {
+export interface AdvanceDecision {
+  decision: 'approve' | 'reject'
+  /** required to reject */
+  reason?: string
+  /** a changed plan — needs `note` */
+  installmentAmount?: number
+  months?: number
+  startMonth?: string
+  note?: string
+}
+
+/** A reason is required to reject; changing the plan needs a note (the server refuses otherwise). */
+export function decideAdvance(id: string, input: AdvanceDecision): Promise<Advance> {
   return apiFetch<Advance>(`/employees/advances/${id}/decide`, {
     method: 'PATCH',
-    body: JSON.stringify({ decision, reason }),
+    body: JSON.stringify(input),
+  })
+}
+
+export function getAdvanceRules(): Promise<PayrollRules> {
+  return apiFetch<PayrollRules>('/employees/advances/settings')
+}
+
+/** Ask to change an approved plan — someone else approves it. */
+export function requestReschedule(
+  id: string,
+  input: { installmentAmount: number; startMonth: string; note: string },
+): Promise<AdvanceReschedule> {
+  return apiFetch<AdvanceReschedule>(`/employees/advances/${id}/reschedules`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function decideReschedule(
+  id: string,
+  rescheduleId: number,
+  input: { decision: 'approve' | 'reject'; reason?: string },
+): Promise<Advance> {
+  return apiFetch<Advance>(`/employees/advances/${id}/reschedules/${rescheduleId}/decide`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })
+}
+
+/** An early repayment in cash — reduces the balance, shortens the schedule. */
+export function recordRepayment(id: string, input: { amount: number; paidOn: string; reference: string }): Promise<Advance> {
+  return apiFetch<Advance>(`/employees/advances/${id}/repayments`, {
+    method: 'POST',
+    body: JSON.stringify(input),
   })
 }
 

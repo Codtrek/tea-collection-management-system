@@ -67,6 +67,10 @@ export class EmployeeEntity {
   @Column({ name: 'payment_method', type: 'varchar', default: 'bank' })
   paymentMethod: EmployeePaymentMethod;
 
+  /** when the employee left — that month's payroll is their final one (Salary-Advances-Addendum §10) */
+  @Column({ name: 'deactivated_on', type: 'date', nullable: true })
+  deactivatedOn: string | null;
+
   @Column({ name: 'day_rate', type: 'decimal', precision: 8, scale: 2 })
   dayRate: string;
 
