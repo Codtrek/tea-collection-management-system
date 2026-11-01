@@ -2,6 +2,9 @@ import { apiFetch } from '@/lib/api'
 import type { CollectionRecord } from '@/features/collections/types'
 import type {
   EstateAdvance,
+  EstateAdvanceDetail,
+  EstateAdvanceListResult,
+  EstateAdvanceRecovery,
   EstateAnalytics,
   EstateDirectoryRow,
   EstateFertilizerRecord,
@@ -72,8 +75,24 @@ export function deactivate(id: string): Promise<EstateOwner> {
   return apiFetch<EstateOwner>(`/estates/${id}/deactivate`, { method: 'PATCH' })
 }
 
-export function listAdvances(): Promise<EstateAdvance[]> {
-  return apiFetch<EstateAdvance[]>('/estates/advances')
+export interface EstateAdvanceQuery {
+  search?: string
+  routeId?: number
+  status?: EstateAdvanceRecovery
+  issuedBy?: string
+  /** date issued, inclusive — advances still pending deduction show whatever the dates */
+  from?: string
+  to?: string
+  page?: number
+  limit?: number
+}
+
+export function listAdvances(q: EstateAdvanceQuery): Promise<EstateAdvanceListResult> {
+  return apiFetch<EstateAdvanceListResult>(`/estates/advances${toQueryString(q)}`)
+}
+
+export function getAdvance(id: string): Promise<EstateAdvanceDetail> {
+  return apiFetch<EstateAdvanceDetail>(`/estates/advances/${encodeURIComponent(id)}`)
 }
 
 export function issueAdvance(input: IssueAdvanceInput): Promise<EstateAdvance> {

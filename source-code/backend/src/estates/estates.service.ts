@@ -12,6 +12,8 @@ import { UsersService } from '../users/users.service';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { SettlementAdjustmentEntity } from '../collections/settlement-adjustment.entity';
 import { labelToKey } from '../reports/reports-map';
+import { remainingOf } from './estate-advance-balance';
+import { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
 import { EstateAdvanceEntity } from './estate-advance.entity';
 import { EstateDocumentEntity } from './estate-document.entity';
 import {
@@ -57,6 +59,8 @@ export class EstatesService {
     private readonly collectionRepo: Repository<CollectionRecordEntity>,
     @InjectRepository(SettlementAdjustmentEntity)
     private readonly adjustmentRepo: Repository<SettlementAdjustmentEntity>,
+    @InjectRepository(EstateAdvanceRecoveryEntity)
+    private readonly recoveryRepo: Repository<EstateAdvanceRecoveryEntity>,
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
   ) {}
@@ -188,13 +192,6 @@ export class EstatesService {
     return this.toPublicOne(saved);
   }
 
-  async listAdvances(): Promise<PublicAdvance[]> {
-    const advances = await this.advanceRepo.find({
-      order: { dateIssued: 'DESC' },
-    });
-    return advances.map((a) => this.toPublicAdvance(a));
-  }
-
   /** EST-06 — money moves immediately; deducted at the estate's next processed settlement. */
   async issueAdvance(
     dto: IssueAdvanceDto,
@@ -279,6 +276,7 @@ export class EstatesService {
     const now = new Date();
     const processed: SettlementEntity[] = [];
     const allAdvances = await this.advanceRepo.find();
+    const allRecoveries = await this.recoveryRepo.find();
     const pendingAdjustments = (await this.adjustmentRepo.find()).filter(
       (a) => a.status === 'pending',
     );
@@ -332,6 +330,22 @@ export class EstatesService {
         ) {
           advance.status = 'deducted';
           await this.advanceRepo.save(advance);
+          // Estate-Owner-Advances-Addendum §3: record what this run already treats as recovered
+          // (the whole remaining balance), so the advance's schedule names its settlement. Which
+          // advances flip — and every settlement amount — is unchanged (the §4 fix awaits approval).
+          const left = remainingOf(advance, allRecoveries);
+          if (left > 0) {
+            allRecoveries.push(
+              await this.recoveryRepo.save(
+                this.recoveryRepo.create({
+                  advanceId: advance.id,
+                  settlementId: settlement.id,
+                  amount: String(left),
+                  recoveredAt: now,
+                }),
+              ),
+            );
+          }
         }
       }
     }
@@ -460,7 +474,7 @@ export class EstatesService {
     };
   }
 
-  private toPublicAdvance(entity: EstateAdvanceEntity): PublicAdvance {
+  toPublicAdvance(entity: EstateAdvanceEntity): PublicAdvance {
     return {
       id: entity.id,
       estateId: formatEstateId(entity.estateId),

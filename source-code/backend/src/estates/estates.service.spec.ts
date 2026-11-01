@@ -12,6 +12,7 @@ import { type Actor, EstatesService } from './estates.service';
 import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import type { RouteEntity } from './route.entity';
 import type { SettlementEntity } from './settlement.entity';
+import type { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
 
 /** Minimal in-memory stand-in for the TypeORM Repository surface the service uses. */
 class FakeRepository<T extends { id: string | number }> {
@@ -44,6 +45,10 @@ class FakeRepository<T extends { id: string | number }> {
   }
 
   save(record: T): Promise<T> {
+    // a SERIAL id, like the DB, for rows created without one
+    if (record.id === undefined) {
+      (record as { id: number }).id = this.store.size + 1000;
+    }
     this.store.set(record.id, record);
     return Promise.resolve(record);
   }
@@ -140,6 +145,7 @@ describe('EstatesService', () => {
   let routeRepo: FakeRepository<RouteEntity>;
   let collectionRepo: FakeRepository<CollectionRecordEntity>;
   let adjustmentRepo: FakeRepository<SettlementAdjustmentEntity>;
+  let recoveryRepo: FakeRepository<EstateAdvanceRecoveryEntity>;
   let service: EstatesService;
 
   const admin: Actor = { name: 'A. Bandara', role: 'Administrator' };
@@ -155,6 +161,7 @@ describe('EstatesService', () => {
     routeRepo = new FakeRepository();
     collectionRepo = new FakeRepository();
     adjustmentRepo = new FakeRepository();
+    recoveryRepo = new FakeRepository();
     ownerRepo.seed(makeOwner());
     routeRepo.seed({ id: 3, factoryId: 1, name: 'Route 3' });
 
@@ -167,6 +174,7 @@ describe('EstatesService', () => {
       routeRepo as unknown as Repository<RouteEntity>,
       collectionRepo as unknown as Repository<CollectionRecordEntity>,
       adjustmentRepo as unknown as Repository<SettlementAdjustmentEntity>,
+      recoveryRepo as unknown as Repository<EstateAdvanceRecoveryEntity>,
       {} as UsersService,
       { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
     );
@@ -302,6 +310,38 @@ describe('EstatesService', () => {
 
       const advances = await advanceRepo.find();
       expect(advances.find((a) => a.id === 'EADV-1')?.status).toBe('deducted');
+    });
+
+    it('records the remaining balance it marks deducted as a recovery by that settlement', async () => {
+      settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
+      advanceRepo.seed(makeAdvance({ id: 'EADV-1', estateId: 1 }));
+      advanceRepo.seed(
+        makeAdvance({ id: 'EADV-3', estateId: 1, amount: '30000.00' }),
+      );
+      // part already recovered earlier → only the rest is recorded now
+      recoveryRepo.seed({
+        id: 1,
+        advanceId: 'EADV-3',
+        settlementId: 'SET-OLD',
+        amount: '10000.00',
+        recoveredAt: new Date('2026-06-01T00:00:00Z'),
+        createdAt: new Date('2026-06-01T00:00:00Z'),
+      });
+      const before = (await settlementRepo.find()).map((s) => ({ ...s }));
+
+      await service.processSettlements(officer);
+
+      const rows = (await recoveryRepo.find()).filter(
+        (r) => r.settlementId === 'SET-A',
+      );
+      expect(rows.map((r) => [r.advanceId, Number(r.amount)]).sort()).toEqual([
+        ['EADV-1', 50000],
+        ['EADV-3', 20000],
+      ]);
+      // nothing about the settlement's own amounts changed
+      const after = (await settlementRepo.find())[0];
+      expect(after.advanceDeduction).toBe(before[0].advanceDeduction);
+      expect(after.fertilizerDeduction).toBe(before[0].fertilizerDeduction);
     });
 
     it('rejects Manager', async () => {

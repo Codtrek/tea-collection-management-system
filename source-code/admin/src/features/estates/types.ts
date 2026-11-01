@@ -38,6 +38,40 @@ export interface EstateAdvance {
   status: EstateAdvanceStatus
 }
 
+/** EST-05 (Estate-Owner-Advances-Addendum §3) — balances from the server's estate-advance-balance.ts */
+export type EstateAdvanceRecovery = 'Pending deduction' | 'Partly deducted' | 'Deducted'
+
+export interface EstateAdvanceRow extends EstateAdvance {
+  ownerName: string
+  routeId: number | null
+  route: string
+  recovered: number
+  remaining: number
+  recovery: EstateAdvanceRecovery
+}
+
+export interface EstateAdvanceListResult extends PaginatedResult<EstateAdvanceRow> {
+  summary: {
+    /** issued in the range */
+    issued: number
+    issuedCount: number
+    /** recovered by settlements processed in the range */
+    deducted: number
+    /** every remaining balance, any date */
+    pendingDeduction: number
+    pendingCount: number
+  }
+  routes: { id: number; name: string }[]
+  issuers: string[]
+}
+
+export interface EstateAdvanceDetail {
+  advance: EstateAdvanceRow
+  recoveries: { settlementId: string; period: string; amount: number; recoveredAt: string }[]
+  /** the estate's pending settlement carrying an advance deduction — planned, not yet recovered */
+  planned: { settlementId: string; period: string; advanceDeduction: number } | null
+}
+
 export type SettlementStatus = 'Pending' | 'Processed'
 
 /*

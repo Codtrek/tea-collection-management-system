@@ -10,6 +10,8 @@ import { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
 import { FertilizerRequestEntity } from '../fertilizer/fertilizer-request.entity';
 import { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import { UsersModule } from '../users/users.module';
+import { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
+import { EstateAdvanceViewService } from './estate-advance-view.service';
 import { EstateAdvanceEntity } from './estate-advance.entity';
 import { EstateDocumentEntity } from './estate-document.entity';
 import { EstateOwnerEntity } from './estate-owner.entity';
@@ -28,6 +30,7 @@ import { SettlementViewService } from './settlement-view.service';
       EstateOwnerEntity,
       EstateDocumentEntity,
       EstateAdvanceEntity,
+      EstateAdvanceRecoveryEntity,
       SettlementEntity,
       RouteEntity,
       // Read-only lookups for the Estate Owner Lifetime History slice
@@ -48,6 +51,11 @@ import { SettlementViewService } from './settlement-view.service';
     AuditModule,
   ],
   controllers: [EstatesController],
-  providers: [EstatesService, EstateLifetimeService, SettlementViewService],
+  providers: [
+    EstatesService,
+    EstateLifetimeService,
+    SettlementViewService,
+    EstateAdvanceViewService,
+  ],
 })
 export class EstatesModule {}

@@ -1049,6 +1049,18 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Why July showed:** not a bug — it comes from `?month=` links.
 - **Rs 0 agents:** expected. Gross is attendance hours × rates for every role, and the agents have rates of 0 and no attendance.
 
+### Estate Owner Advances (`docs/specs/Estate-Owner-Advances-Addendum.md`)
+
+- **Sidebar:** Finance → Estate Owner Advances (`/estates/advances`), gated by its own data-driven module **`estateAdvances`**. It was seeded at each role's Estate Owner level (migration `2026-11-03-estate-advances.sql`).
+- **Active link:** the sidebar lights only the **most specific** match (`components/layout/nav-match.ts`). Don't bring back `NavLink` `end` lists.
+- **Recoveries:** `estate_advance_recoveries` records which settlement recovered how much (migration `2026-11-03-estate-advance-recoveries.sql`).
+  - `backend/src/estates/estate-advance-balance.ts` is the ONLY remaining-balance rule for estate advances.
+  - The list (`GET /estates/advances`, filtered and paged) and the detail page (`GET /estates/advances/:aid`) use it.
+- **Not fixed yet (addendum §4, awaiting approval):**
+  - Process still marks every pending advance of the estate "deducted" and records the full remaining balance as recovered;
+  - /estates and EST-10 Outstanding count fertilizer only;
+  - there are no estate-advance installments.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

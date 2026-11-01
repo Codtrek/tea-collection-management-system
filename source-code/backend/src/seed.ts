@@ -2583,6 +2583,15 @@ async function seed() {
       );
     }
     console.log(`Seeded ${SETTLEMENT_SEEDS.length} settlements`);
+    // Which settlement recovered which advance (Estate-Owner-Advances-Addendum §3) — the one
+    // deducted seed advance was taken in full by Mount Rest's June 2026 settlement.
+    await client.query(
+      `INSERT INTO estate_advance_recoveries (advance_id, settlement_id, amount, recovered_at)
+       SELECT a.id, s.id, a.amount, COALESCE(s.processed_on, NOW())
+       FROM estate_advances a JOIN settlements s ON s.id = 'SET-2026-06-003'
+       WHERE a.id = 'EADV-2026-0022' AND a.status = 'deducted'
+       ON CONFLICT (advance_id, settlement_id) DO NOTHING`,
+    );
 
     // ── Employees + Payroll (EMP-01..14) ──
 

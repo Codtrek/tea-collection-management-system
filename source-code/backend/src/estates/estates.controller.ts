@@ -21,6 +21,12 @@ import type {
   PublicSettlement,
 } from './estate-map';
 import { CreateEstateDto } from './dto/create-estate.dto';
+import type { EstateAdvanceRecoveryStatus } from './estate-advance-balance';
+import type { EstateAdvanceListResult } from './estate-advance-view';
+import {
+  type EstateAdvanceDetail,
+  EstateAdvanceViewService,
+} from './estate-advance-view.service';
 import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import { ProcessSettlementsDto } from './dto/process-settlements.dto';
 import { UpdateEstateDto } from './dto/update-estate.dto';
@@ -55,6 +61,12 @@ const SETTLEMENT_SORTS: readonly string[] = [
   'net',
 ];
 
+const ESTATE_ADVANCE_STATUSES: EstateAdvanceRecoveryStatus[] = [
+  'Pending deduction',
+  'Partly deducted',
+  'Deducted',
+];
+
 @Controller('estates')
 @UseGuards(JwtAuthGuard)
 export class EstatesController {
@@ -62,15 +74,50 @@ export class EstatesController {
     private readonly estatesService: EstatesService,
     private readonly lifetimeService: EstateLifetimeService,
     private readonly settlementView: SettlementViewService,
+    private readonly advanceView: EstateAdvanceViewService,
     private readonly usersService: UsersService,
   ) {}
 
   // Static segments (advances/settlements) are registered before the `:id`
   // catch-all so they don't get swallowed by it.
 
+  /**
+   * EST-05 (Estate-Owner-Advances-Addendum §3) — filtered + paged; `from`/`to` are the date
+   * issued, but advances still pending deduction always show. `summary` covers the range only.
+   */
   @Get('advances')
-  listAdvances(): Promise<PublicAdvance[]> {
-    return this.estatesService.listAdvances();
+  listAdvances(
+    @Query('search') search?: string,
+    @Query('routeId') routeId?: string,
+    @Query('status') status?: string,
+    @Query('issuedBy') issuedBy?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<EstateAdvanceListResult> {
+    const day = (d?: string) =>
+      d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined;
+    return this.advanceView.list({
+      search,
+      routeId: routeId ? Number(routeId) : undefined,
+      status: ESTATE_ADVANCE_STATUSES.includes(
+        status as EstateAdvanceRecoveryStatus,
+      )
+        ? (status as EstateAdvanceRecoveryStatus)
+        : undefined,
+      issuedBy: issuedBy || undefined,
+      from: day(from),
+      to: day(to),
+      page: page ? Number(page) : undefined,
+      pageSize: limit !== undefined ? Number(limit) : undefined,
+    });
+  }
+
+  /** One advance: its deduction schedule and which settlement recovered each part. */
+  @Get('advances/:aid')
+  advanceDetail(@Param('aid') aid: string): Promise<EstateAdvanceDetail> {
+    return this.advanceView.detail(aid);
   }
 
   @Post('advances')

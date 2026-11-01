@@ -37,6 +37,7 @@ import { EstateDetailPage } from './features/estates/EstateDetailPage'
 import { EstateEditPage } from './features/estates/EstateEditPage'
 import { EstateAdvanceListPage } from './features/estates/EstateAdvanceListPage'
 import { IssueAdvancePage } from './features/estates/IssueAdvancePage'
+import { EstateAdvanceDetailPage } from './features/estates/EstateAdvanceDetailPage'
 import { SettlementListPage } from './features/estates/SettlementListPage'
 import { SettlementProcessPage } from './features/estates/SettlementProcessPage'
 import { SettlementDetailPage } from './features/estates/SettlementDetailPage'
@@ -85,6 +86,7 @@ export const router = createBrowserRouter([
       { path: 'estates/new', element: <EstateRegistrationPage /> },
       { path: 'estates/advances', element: <EstateAdvanceListPage /> },
       { path: 'estates/advances/new', element: <IssueAdvancePage /> },
+      { path: 'estates/advances/:id', element: <EstateAdvanceDetailPage /> },
       { path: 'estates/settlements', element: <SettlementListPage /> },
       { path: 'estates/settlements/process', element: <SettlementProcessPage /> },
       { path: 'estates/settlements/unsettled', element: <UnsettledOwnersPage /> },

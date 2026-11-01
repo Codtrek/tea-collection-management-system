@@ -233,7 +233,8 @@ export class SettlementViewService {
     return unsettledEstateIds(facts, deliveries, periodRows, month);
   }
 
-  private async estateFacts(): Promise<Map<number, EstateFacts>> {
+  /** Owner / route / method per estate — also used by EstateAdvanceViewService. */
+  async estateFacts(): Promise<Map<number, EstateFacts>> {
     const [estates, owners] = await Promise.all([
       this.estateRepo.find(),
       this.ownerRepo.find(),

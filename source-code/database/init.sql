@@ -497,6 +497,19 @@ CREATE TABLE settlements (
     created_at           TIMESTAMP DEFAULT NOW()
 );
 
+-- Which settlement recovered how much of an estate advance (Estate-Owner-Advances-Addendum §3).
+-- remaining = estate_advances.amount − Σ amount — the shared estate-advance-balance.ts rule.
+CREATE TABLE estate_advance_recoveries (
+    id            SERIAL PRIMARY KEY,
+    advance_id    VARCHAR(20) NOT NULL REFERENCES estate_advances(id),
+    settlement_id VARCHAR(20) NOT NULL REFERENCES settlements(id),
+    amount        DECIMAL(12,2) NOT NULL CHECK (amount > 0),
+    recovered_at  TIMESTAMP NOT NULL,
+    created_at    TIMESTAMP DEFAULT NOW(),
+    UNIQUE (advance_id, settlement_id)
+);
+CREATE INDEX estate_advance_recoveries_advance_idx ON estate_advance_recoveries (advance_id);
+
 -- Redefined 2026-07-28 (Estate Owner Lifetime History slice). The original
 -- shape (one row per fertilizer_request_id, UNIQUE) couldn't hold an ad-hoc
 -- dispatch (no request behind it) or the repeated partial dispatches one
