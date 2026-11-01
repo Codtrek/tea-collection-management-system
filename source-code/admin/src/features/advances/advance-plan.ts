@@ -4,7 +4,8 @@ import { formatCurrency } from '@/lib/format'
 /*
   The New Advance Request form's repayment plan (Salary-Advances-Addendum §10): fill in months
   from an installment (and back), validate, and preview the schedule. A preview only — the server
-  validates again and owns the real schedule (advance-schedule.ts). Pure; tested in
+  validates again and owns the real schedule (backend advances/installments.ts). Shared by
+  salary and estate owner advances. Pure; tested in
   advance-plan.test.ts.
 */
 

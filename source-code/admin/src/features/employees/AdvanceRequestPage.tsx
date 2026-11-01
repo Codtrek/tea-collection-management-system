@@ -12,8 +12,8 @@ import { useToast } from '@/components/ui/Toast'
 import * as employeesService from '@/services/employees'
 import { formatCurrency } from '@/lib/format'
 import { currentMonth } from '@/lib/month'
-import { defaultStartMonth, planInstallment, planValueError, type PlanValue } from './advance-plan'
-import { RepaymentPlanFields } from './RepaymentPlanFields'
+import { defaultStartMonth, planInstallment, planValueError, type PlanValue } from '@/features/advances/advance-plan'
+import { RepaymentPlanFields } from '@/features/advances/RepaymentPlanFields'
 
 /*
   New salary advance request, entered by staff on an employee's behalf

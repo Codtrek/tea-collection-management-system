@@ -13,14 +13,25 @@ interface RepaymentPlanFieldsProps {
   firstMonth: string
   /** hides the single / installments choice (the approver edits installments only) */
   installmentsOnly?: boolean
+  /** the single-deduction choice's wording, e.g. "One deduction from the next settlement" */
+  singleLabel?: string
 }
 
 /*
-  Repayment plan (Salary-Advances-Addendum §10) — one deduction in the next payroll, or monthly
+  Repayment plan (Salary-Advances-Addendum §10, Estate-Owner-Advances-Addendum §4) — shared by
+  salary and estate owner advances: one deduction in the next payroll / settlement, or monthly
   installments typed as an amount per month OR a number of months (either fills in the other),
   from a start month. Shows the schedule as you type. The server validates again.
 */
-export function RepaymentPlanFields({ amount, value, onChange, maxMonths, firstMonth, installmentsOnly }: RepaymentPlanFieldsProps) {
+export function RepaymentPlanFields({
+  amount,
+  value,
+  onChange,
+  maxMonths,
+  firstMonth,
+  installmentsOnly,
+  singleLabel = 'One deduction in the next payroll',
+}: RepaymentPlanFieldsProps) {
   const set = (patch: Partial<PlanValue>) => onChange({ ...value, ...patch })
   const installment = planInstallment(amount, value)
   const error = amount > 0 ? planValueError(amount, value, maxMonths) : null
@@ -37,7 +48,7 @@ export function RepaymentPlanFields({ amount, value, onChange, maxMonths, firstM
         <div className="flex flex-col gap-2 sm:flex-row sm:gap-4" role="radiogroup">
           {(
             [
-              ['single', 'One deduction in the next payroll'],
+              ['single', singleLabel],
               ['installments', 'Monthly installments'],
             ] as const
           ).map(([mode, label]) => (

@@ -10,7 +10,11 @@
  * A month deducts the smallest of: its planned installment, what's still free of the balance,
  * and what the gross allows (the cap % of gross, after other deductions). The rest is carried
  * forward — net payable never goes below Rs. 0.
+ *
+ * The arithmetic is the shared ../advances/installments.ts (estate owner advances use it too);
+ * this file adds the salary specifics — only APPROVED advances count, grouped by employee.
  */
+import * as shared from '../advances/installments';
 import { labelToKey } from '../reports/reports-map';
 import type { AdvanceRecoveryEntity } from './advance-recovery.entity';
 import type { SalaryAdvanceEntity } from './salary-advance.entity';
@@ -36,16 +40,13 @@ const recoveriesOf = (a: AdvanceFacts, recs: RecoveryFacts[]) =>
 
 /** Σ actually recovered (processed payroll months + cash repayments). */
 export function recoveredOf(a: AdvanceFacts, recs: RecoveryFacts[]): number {
-  return sum(
-    recoveriesOf(a, recs).filter((r) => r.status === 'recovered'),
-    (r) => Number(r.amount),
-  );
+  return shared.recoveredOf(a, recs);
 }
 
 /** Still to recover — 0 for a Pending or Rejected request. */
 export function remainingOf(a: AdvanceFacts, recs: RecoveryFacts[]): number {
   if (a.status !== 'Approved') return 0;
-  return Math.max(0, round2(Number(a.amount) - recoveredOf(a, recs)));
+  return shared.remainingOf(a, recs);
 }
 
 /**
@@ -57,13 +58,8 @@ export function freeForPeriod(
   recs: RecoveryFacts[],
   period: string,
 ): number {
-  const reservedElsewhere = sum(
-    recoveriesOf(a, recs).filter(
-      (r) => r.status === 'reserved' && r.period !== period,
-    ),
-    (r) => Number(r.amount),
-  );
-  return Math.max(0, round2(remainingOf(a, recs) - reservedElsewhere));
+  if (a.status !== 'Approved') return 0;
+  return shared.freeForPeriod(a, recs, period);
 }
 
 export interface AdvanceRecovery {
@@ -137,22 +133,8 @@ export function outstandingFor(
   );
 }
 
-export interface MonthDeductionLine {
-  advanceId: string;
-  /** what this month meant to deduct (its installment, or what's left) */
-  planned: number;
-  /** what the gross allowed */
-  amount: number;
-}
-
-export interface MonthDeductions {
-  lines: MonthDeductionLine[];
-  total: number;
-  /** planned − deducted: stays in the balance for later months */
-  carried: number;
-  /** the most advance deductions could take this month */
-  room: number;
-}
+export type MonthDeductionLine = shared.PeriodDeductionLine;
+export type MonthDeductions = shared.PeriodDeductions;
 
 /**
  * One payroll month's advance deductions for one employee. Oldest advance first. Each advance
@@ -170,34 +152,15 @@ export function planMonthDeductions(
   capPct: number,
   installmentOf: (a: AdvanceFacts) => number | null = () => null,
 ): MonthDeductions {
-  const room = Math.max(
-    0,
-    round2(Math.min((gross * capPct) / 100, gross - otherDeductions)),
-  );
-  let left = room;
-  const lines: MonthDeductionLine[] = [];
-  const own = advances
+  const room = Math.min((gross * capPct) / 100, gross - otherDeductions);
+  const open = advances
     .filter((a) => a.employeeId === employeeId && a.status === 'Approved')
     .sort(
       (a, b) =>
         a.dateRequested.localeCompare(b.dateRequested) ||
         a.id.localeCompare(b.id),
     );
-  for (const a of own) {
-    const free = freeForPeriod(a, recs, period);
-    if (free <= 0) continue;
-    const installment = installmentOf(a);
-    const planned = round2(
-      installment === null ? free : Math.min(installment, free),
-    );
-    if (planned <= 0) continue;
-    const amount = round2(Math.min(planned, left));
-    left = round2(left - amount);
-    lines.push({ advanceId: a.id, planned, amount });
-  }
-  const total = round2(lines.reduce((s, l) => s + l.amount, 0));
-  const plannedTotal = round2(lines.reduce((s, l) => s + l.planned, 0));
-  return { lines, total, carried: round2(plannedTotal - total), room };
+  return shared.planPeriodDeductions(open, recs, period, room, installmentOf);
 }
 
 const byPeriod = (a: string, b: string) =>

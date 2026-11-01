@@ -8,15 +8,16 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
-import { keyToLabel, labelToKey } from '../reports/reports-map';
+import {
+  earlyRepayable,
+  lastProcessedKey,
+  rescheduleError,
+} from '../advances/installments';
+import { keyToLabel } from '../reports/reports-map';
 import { remainingOf } from './advance-balance';
 import { AdvanceRecoveryEntity } from './advance-recovery.entity';
 import { AdvanceRescheduleEntity } from './advance-reschedule.entity';
-import {
-  monthsForInstallment,
-  planError,
-  selfApprovalCheck,
-} from './advance-schedule';
+import { monthsForInstallment, selfApprovalCheck } from './advance-schedule';
 import type {
   CashRepaymentDto,
   DecideRescheduleDto,
@@ -40,8 +41,6 @@ export interface PublicReschedule {
   decisionReason: string | null;
   requestedOn: string;
 }
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * Changes to an APPROVED advance (Salary-Advances-Addendum §10): a reschedule (new installment /
@@ -92,24 +91,14 @@ export class AdvancePlanService {
       );
     }
     const { maxInstallmentMonths } = await this.payrollSettings.get();
-    const error = planError(
+    const error = rescheduleError(
       remaining,
       dto.installmentAmount,
       maxInstallmentMonths,
+      dto.startMonth,
+      lastProcessedKey(advance, recoveries),
     );
     if (error) throw new BadRequestException(error);
-    const lastProcessed = recoveries
-      .filter(
-        (r) => r.kind === 'payroll' && r.status === 'recovered' && r.period,
-      )
-      .map((r) => labelToKey(r.period!))
-      .sort()
-      .at(-1);
-    if (lastProcessed && dto.startMonth <= lastProcessed) {
-      throw new BadRequestException(
-        `${keyToLabel(lastProcessed)} is already processed — start the new plan after it.`,
-      );
-    }
     const saved = await this.rescheduleRepo.save(
       this.rescheduleRepo.create({
         advanceId: id,
@@ -210,10 +199,7 @@ export class AdvancePlanService {
     this.assertCanWrite(actor);
     const { advance, recoveries } = await this.approved(id);
     // what isn't already earmarked by a Pending payroll month
-    const reserved = recoveries
-      .filter((r) => r.kind === 'payroll' && r.status === 'reserved')
-      .reduce((s, r) => s + Number(r.amount), 0);
-    const payable = round2(remainingOf(advance, recoveries) - reserved);
+    const payable = earlyRepayable(advance, recoveries);
     if (dto.amount > payable) {
       throw new BadRequestException(
         payable <= 0

@@ -25,7 +25,7 @@ import {
   type DatePreset,
 } from './advance-filters'
 import { ADVANCE_TONE, RECOVERY_TONE } from './advance-status'
-import { planLabel } from './advance-plan'
+import { planLabel } from '@/features/advances/advance-plan'
 import type { AdvanceRow } from './types'
 import { formatCurrency, formatDate } from '@/lib/format'
 
