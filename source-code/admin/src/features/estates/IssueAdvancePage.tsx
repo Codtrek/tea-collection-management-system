@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Select } from '@/components/ui/Select'
+import { Combobox } from '@/components/ui/Combobox'
 import { HighStakesConfirmFlow } from '@/components/patterns/HighStakesConfirmFlow'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
@@ -72,18 +72,17 @@ export function IssueAdvancePage() {
 
       <Card className="max-w-xl">
         <div className="flex flex-col gap-5">
-          <Select
+          <Combobox
             label="Estate owner"
-            placeholder="Select estate"
+            placeholder="Search estate, owner or EST- number…"
+            noun="estates"
+            items={(estates ?? []).filter((e) => e.status === 'Active').sort((a, b) => a.estateName.localeCompare(b.estateName))}
             value={estateId}
+            onChange={setEstateId}
+            getKey={(e) => e.id}
+            getLabel={(e) => `${e.estateName} — ${e.ownerName}`}
+            getMeta={(e) => `${e.id} · ${e.route || 'No route'}`}
             error={errors.estate}
-            onChange={(e) => setEstateId(e.target.value)}
-            options={(estates ?? [])
-              .filter((e) => e.status === 'Active')
-              .map((e) => ({
-                value: e.id,
-                label: `${e.estateName} — ${e.ownerName}`,
-              }))}
           />
           <Input
             label="Amount (Rs.)"

@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
+import { Combobox } from '@/components/ui/Combobox'
 import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as estatesService from '@/services/estates'
@@ -133,15 +134,17 @@ export function LogRequestPage() {
 
       <Card className="max-w-2xl">
         <div className="flex flex-col gap-5">
-          <Select
+          <Combobox
             label="Estate owner"
-            placeholder="Select estate owner"
+            placeholder="Search owner, estate or EST- number…"
+            noun="estate owners"
+            items={estates.filter((o) => o.status === 'Active').sort((a, b) => a.ownerName.localeCompare(b.ownerName))}
             value={estateId}
+            onChange={setEstateId}
+            getKey={(o) => o.id}
+            getLabel={(o) => `${o.ownerName} — ${o.estateName}`}
+            getMeta={(o) => `${o.id} · ${o.route || 'No route'}`}
             error={errors.estate}
-            onChange={(e) => setEstateId(e.target.value)}
-            options={estates
-              .filter((o) => o.status === 'Active')
-              .map((o) => ({ value: o.id, label: `${o.ownerName} — ${o.estateName}` }))}
           />
           {estate && (
             <p className="-mt-2 flex items-center gap-1.5 text-[13px] text-text-muted">

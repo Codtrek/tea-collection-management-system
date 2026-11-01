@@ -240,3 +240,30 @@ The New Advance Request form has a **repayment plan**:
   - cash repayment shortens the schedule;
   - the repayment limit.
 - **Portal `advance-plan.test.ts`:** remainder, amount ↔ months, the preview text, validation, the default start month.
+
+## 11. Searchable employee / estate picker (2026-11-02)
+
+`components/ui/Combobox` is the **one** searchable picker for long lists of people or estates. It follows the ARIA 1.2 combobox pattern.
+
+**Behaviour:**
+- **On focus:** lists every option in alphabetical order; the caller does the sorting.
+- **Long lists:** 50 rows at a time, with "Showing 50 of N — keep typing, or show more".
+- **Typing:** filters case-insensitively, matching anywhere in the name or ID ("pere" finds K. Perera and N. Perera).
+- **Each option:** shows the name plus a second line, e.g. "EMP-0042 · Tea Collecting Agent", so similar names can be told apart.
+- **Keyboard:** ↑ ↓ move (and wrap), Enter selects, Esc closes.
+- **No match:** shows "No employees match '…'".
+- **Clearing:** a clear button resets a filter to "All".
+- **Tests:** the filtering and the keyboard live in `combobox-logic.ts` and are unit-tested (`combobox-logic.test.ts`). The portal has no DOM test setup (jsdom / Testing Library), so the component itself isn't tested in a browser.
+
+**Where it's used:**
+
+| Page | Picker |
+|---|---|
+| New Advance Request | Employee (active employees). After a pick it shows the **outstanding advance balance**, and warns if the employee already has an open advance (Pending, or approved with a balance left). |
+| COL-02 exception entry | Estate (`EstatePicker`, now built on it, still with the route filter) |
+| Log Fertilizer Request | Estate owner |
+| Issue Estate Advance | Estate owner |
+| Estate Analytics | Estate |
+| Collection and Revenue reports | Estate filter |
+
+**Not changed:** Payroll and Settlements keep their free-text search, which already matches anywhere (decided 2026-11-02).

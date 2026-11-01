@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Select } from '@/components/ui/Select'
+import { Combobox } from '@/components/ui/Combobox'
 import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as employeesService from '@/services/employees'
@@ -38,6 +38,14 @@ export function AdvanceRequestPage() {
   const maxMonths = rules?.maxInstallmentMonths ?? 6
 
   const employee = (employees ?? []).find((e) => e.id === employeeId)
+  const activeEmployees = (employees ?? []).filter((e) => e.status === 'Active').sort((a, b) => a.name.localeCompare(b.name))
+  // the same balance payroll recovers from (backend advance-balance.ts)
+  const { data: balance } = useQuery({
+    queryKey: ['employees', 'advances', 'employee', employeeId],
+    queryFn: () => employeesService.getEmployeeAdvances(employeeId),
+    enabled: !!employeeId,
+  })
+  const openAdvance = balance?.advances.find((a) => a.status === 'Pending' || (a.status === 'Approved' && a.remaining > 0))
   const parsedAmount = Number(amount)
 
   const requestMutation = useMutation({
@@ -99,16 +107,26 @@ export function AdvanceRequestPage() {
 
       <Card className="max-w-xl">
         <div className="flex flex-col gap-5">
-          <Select
+          <Combobox
             label="Employee"
-            placeholder="Select employee"
+            placeholder="Search by name or employee ID…"
+            noun="employees"
+            items={activeEmployees}
             value={employeeId}
+            onChange={setEmployeeId}
+            getKey={(e) => e.id}
+            getLabel={(e) => e.name}
+            getMeta={(e) => `${e.id} · ${e.role}`}
             error={errors.employee}
-            onChange={(e) => setEmployeeId(e.target.value)}
-            options={(employees ?? []).filter((e) => e.status === 'Active').map((e) => ({
-              value: e.id,
-              label: `${e.name} — ${e.role}`,
-            }))}
+            hint={
+              employeeId && balance ? (
+                <span className={openAdvance ? 'text-warning-fg' : undefined}>
+                  Outstanding advances: {formatCurrency(balance.outstanding)}
+                  {openAdvance &&
+                    ` — they already have an open advance (${openAdvance.id}, ${openAdvance.status === 'Pending' ? 'waiting for a decision' : `${formatCurrency(openAdvance.remaining)} left`}).`}
+                </span>
+              ) : undefined
+            }
           />
           <Input
             label="Amount (Rs.)"

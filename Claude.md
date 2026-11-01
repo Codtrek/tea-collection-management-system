@@ -1030,6 +1030,10 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - **Reschedules** (`advance_reschedules`) need someone else's approval.
   - **Cash repayments** are `cash` recovery rows.
   - **Leavers:** deactivation stores `deactivated_on`; that month's payroll is `is_final` and owes the whole balance, up to the cap.
+- **Searchable picker (addendum §11):** `components/ui/Combobox` is the one searchable picker for long lists of people or estates.
+  - Logic is in `combobox-logic.ts` (tested).
+  - Used by: Advance request (employee, with balance and open-advance warning), COL-02's `EstatePicker`, Log Fertilizer Request, Issue Estate Advance, Estate Analytics, and the report estate filters.
+  - Reuse it; don't build another per page.
 
 ### Payroll filters (Part C; `docs/specs/Payroll-Month-History-Addendum.md` §6–11)
 
