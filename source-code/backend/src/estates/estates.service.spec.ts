@@ -64,6 +64,7 @@ function makeEstate(overrides: Partial<EstateEntity> = {}): EstateEntity {
     bankName: 'Bank of Ceylon',
     bankBranch: 'Nuwara Eliya',
     bankAccount: '8802345671',
+    paymentMethod: 'bank',
     lastUpdatedBy: null,
     lastUpdatedOn: null,
     lat: null,
@@ -316,6 +317,15 @@ describe('EstatesService', () => {
       await expect(service.processSettlements(officer)).rejects.toThrow(
         ConflictException,
       );
+    });
+
+    it('with a period, processes only that month — other pending months stay pending', async () => {
+      settlementRepo.seed(makeSettlement());
+      settlementRepo.seed(makeSettlement({ id: 'SET-2026-06-009', period: 'June 2026' }));
+      const processed = await service.processSettlements(officer, 'July 2026');
+      expect(processed.map((s) => s.id)).toEqual(['SET-2026-07-001']);
+      const june = (await settlementRepo.find()).find((s) => s.id === 'SET-2026-06-009');
+      expect(june?.status).toBe('pending');
     });
   });
 

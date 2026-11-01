@@ -1,13 +1,13 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, PlayCircle, RefreshCw, FileSpreadsheet, FileText, Loader2 } from 'lucide-react'
+import { PlayCircle, RefreshCw, FileSpreadsheet, FileText, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorState } from '@/components/data/ErrorState'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
-import { Select } from '@/components/ui/Select'
+import { MonthPicker } from '@/components/patterns/MonthPicker'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { factoryToday } from '@/features/dispatch/status'
@@ -87,7 +87,6 @@ export function PayrollListPage() {
   const prevRows = all.filter((r) => r.period === periodOf(prevMonth))
   const status = monthStatus(rows, month, thisMonth)
   const options = monthOptions(thisMonth, all.map((r) => r.period))
-  const earliest = options[options.length - 1].value
   // a Processed month is read-only; the current month can't be processed until it ends
   const canGenerate = canProcess && status !== 'Processed'
   const canRunProcess = canProcess && status === 'Ready to process'
@@ -118,30 +117,13 @@ export function PayrollListPage() {
       />
 
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div className="flex items-end gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            aria-label="Previous month"
-            title="Previous month"
-            onClick={() => setMonth(prevMonth)}
-            disabled={month <= earliest}
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Select aria-label="Pay month" value={month} onChange={(e) => setMonth(e.target.value)} options={options} />
-          <Button
-            variant="secondary"
-            size="sm"
-            aria-label="Next month"
-            title="Next month"
-            onClick={() => setMonth(shiftMonth(month, 1))}
-            disabled={month >= thisMonth}
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-          <StatusBadge tone={MONTH_STATUS_TONE[status]}>{status}</StatusBadge>
-        </div>
+        <MonthPicker
+          month={month}
+          options={options}
+          onChange={setMonth}
+          ariaLabel="Pay month"
+          badge={<StatusBadge tone={MONTH_STATUS_TONE[status]}>{status}</StatusBadge>}
+        />
         <MonthComparison rows={rows} prevRows={prevRows} prevLabel={periodOf(prevMonth)} />
       </div>
 

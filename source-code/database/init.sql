@@ -55,6 +55,10 @@ CREATE TABLE estates (
     bank_name          VARCHAR(100),
     bank_branch        VARCHAR(100),
     bank_account       VARCHAR(30),
+    -- Settlement period view (2026-11-01): how the owner is paid. Cash owners never count as
+    -- "missing bank details"; prepares the bank payment file.
+    payment_method     VARCHAR(10) NOT NULL DEFAULT 'bank'
+        CHECK (payment_method IN ('bank', 'cash')),
     last_updated_by    VARCHAR(100),
     last_updated_on    TIMESTAMP,
     -- Added 2026-07-28 (Estate Owner Lifetime History slice). The tenure

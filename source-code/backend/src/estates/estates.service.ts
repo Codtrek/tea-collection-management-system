@@ -111,9 +111,10 @@ export class EstatesService {
       selfDelivery: dto.selfDelivery,
       status: 'active',
       ytdDeliveriesKg: '0',
-      bankName: dto.bank,
-      bankBranch: dto.branch,
-      bankAccount: dto.account,
+      bankName: dto.bank || null,
+      bankBranch: dto.branch || null,
+      bankAccount: dto.account || null,
+      paymentMethod: dto.paymentMethod ?? 'bank',
       lastUpdatedBy: actor.name,
       lastUpdatedOn: now,
     });
@@ -153,9 +154,10 @@ export class EstatesService {
     estate.location = dto.location;
     estate.address = dto.address;
     estate.selfDelivery = dto.selfDelivery;
-    estate.bankName = dto.bank;
-    estate.bankBranch = dto.branch;
-    estate.bankAccount = dto.account;
+    estate.bankName = dto.bank || null;
+    estate.bankBranch = dto.branch || null;
+    estate.bankAccount = dto.account || null;
+    estate.paymentMethod = dto.paymentMethod ?? estate.paymentMethod;
     estate.lastUpdatedBy = actor.name;
     estate.lastUpdatedOn = new Date();
 
@@ -244,20 +246,28 @@ export class EstatesService {
   }
 
   /**
-   * EST-08 — processes every currently-Pending settlement in one run
-   * (matches the portal's single "Process N Settlements" action; there's no
-   * per-settlement targeting). Missing-bank estates are excluded, not
+   * EST-08 — processes every currently-Pending settlement of `period` (or of
+   * every period when omitted) in one run (matches the portal's single
+   * "Process N Settlements" action; there's no per-settlement targeting). Missing-bank estates are excluded, not
    * blocked (UC-054) — flip their bank details and they're picked up next
    * run. Included estates' pending advances flip to Deducted. No
    * per-transaction bank charge is applied (resolved 2026-07-26 — see
    * Claude.md's Payment calculation section).
    */
-  async processSettlements(actor: Actor): Promise<PublicSettlement[]> {
+  async processSettlements(
+    actor: Actor,
+    period?: string,
+  ): Promise<PublicSettlement[]> {
     this.assertCanWrite(actor);
 
     const all = await this.settlementRepo.find();
+    // Settlement-Period-View-Addendum: the period view processes ITS month only; no period =
+    // every pending row, as before.
     const eligible = all.filter(
-      (s) => s.status === 'pending' && !s.missingBank,
+      (s) =>
+        s.status === 'pending' &&
+        !s.missingBank &&
+        (!period || s.period === period),
     );
 
     if (eligible.length === 0) {
@@ -329,7 +339,7 @@ export class EstatesService {
     await this.audit.record(actor, {
       action: 'Processed settlement run',
       module: 'Estate Owner',
-      record: `${processed.length} settlement(s)`,
+      record: `${processed.length} settlement(s)${period ? ` · ${period}` : ''}`,
       recordHref: '/estates/settlements',
       details:
         `${linked} deliver${linked === 1 ? 'y' : 'ies'} linked as paid` +
@@ -438,6 +448,7 @@ export class EstatesService {
         branch: estate.bankBranch ?? '',
         account: estate.bankAccount ?? '',
       },
+      paymentMethod: estate.paymentMethod ?? 'bank',
       documents: documents.map((d) => ({
         name: d.name,
         uploadedOn: d.uploadedOn,

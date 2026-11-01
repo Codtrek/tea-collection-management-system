@@ -72,6 +72,7 @@ function makeEstate(overrides: Partial<EstateEntity> = {}): EstateEntity {
     bankName: null,
     bankBranch: null,
     bankAccount: null,
+    paymentMethod: 'bank',
     lastUpdatedBy: null,
     lastUpdatedOn: null,
     registeredOn: '2021-03-01',

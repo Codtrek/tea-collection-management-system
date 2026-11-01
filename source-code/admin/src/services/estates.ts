@@ -7,9 +7,13 @@ import type {
   EstateFertilizerRecord,
   EstateLifetimeMetrics,
   EstateOwner,
+  OwnerPaymentMethod,
   PaginatedResult,
   Settlement,
+  SettlementDetail,
+  SettlementListResult,
   TimelinePage,
+  UnsettledOwner,
 } from '@/features/estates/types'
 
 export interface EstateInput {
@@ -21,6 +25,7 @@ export interface EstateInput {
   address: string
   location: string
   selfDelivery: boolean
+  paymentMethod: OwnerPaymentMethod
   bank: string
   branch: string
   account: string
@@ -78,12 +83,39 @@ export function issueAdvance(input: IssueAdvanceInput): Promise<EstateAdvance> {
   })
 }
 
-export function listSettlements(): Promise<Settlement[]> {
-  return apiFetch<Settlement[]>('/estates/settlements')
+export interface SettlementQuery {
+  month: string // 'YYYY-MM' | 'all'
+  search?: string
+  routeId?: number
+  status?: string
+  method?: string
+  nonPositive?: boolean
+  sort?: string
+  dir?: 'asc' | 'desc'
+  page?: number
+  /** 0 = every filtered row (CSV export) */
+  limit?: number
 }
 
-export function processSettlements(): Promise<Settlement[]> {
-  return apiFetch<Settlement[]>('/estates/settlements/process', { method: 'POST' })
+/** EST-07 period view — filtered, sorted and paged server-side; `summary` is the whole period. */
+export function listSettlements(q: SettlementQuery): Promise<SettlementListResult> {
+  return apiFetch<SettlementListResult>(`/estates/settlements${toQueryString(q)}`)
+}
+
+export function getSettlement(id: string): Promise<SettlementDetail> {
+  return apiFetch<SettlementDetail>(`/estates/settlements/${encodeURIComponent(id)}`)
+}
+
+export function listUnsettledOwners(month: string): Promise<UnsettledOwner[]> {
+  return apiFetch<UnsettledOwner[]>(`/estates/settlements/unsettled?month=${month}`)
+}
+
+/** EST-08 — processes the Pending settlements of one period ('July 2026'). */
+export function processSettlements(period: string): Promise<Settlement[]> {
+  return apiFetch<Settlement[]>('/estates/settlements/process', {
+    method: 'POST',
+    body: JSON.stringify({ period }),
+  })
 }
 
 /* ── Estate Owner Lifetime History (EST-03 amended + EST-10) ───────── */
@@ -97,8 +129,8 @@ export interface DateRangeQuery {
 
 function toQueryString(q: object): string {
   const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(q as Record<string, string | number | undefined>)) {
-    if (value !== undefined) params.set(key, String(value))
+  for (const [key, value] of Object.entries(q as Record<string, string | number | boolean | undefined>)) {
+    if (value !== undefined && value !== '' && value !== false) params.set(key, String(value))
   }
   const s = params.toString()
   return s ? `?${s}` : ''

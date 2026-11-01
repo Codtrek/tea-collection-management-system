@@ -981,6 +981,29 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - **Processing:** the current month can't be processed until it ends.
   - **Audit and calculation:** Generate and Process were *already* audited; the calculation is unchanged.
 
+## Settlements, salary advances, payroll filters (2026-11-01, `fix/dispatch-fert-payroll`)
+
+### Settlement period view (Part A; `docs/specs/Settlement-Period-View-Addendum.md`)
+
+- **Opening month:** EST-07 opens on **last month**.
+  - `?month=YYYY-MM|all` plus every filter and the sort are in the URL.
+  - Filtering, sorting and paging run server-side (`GET /estates/settlements` → `{rows, total, summary, months, routes}`).
+  - The summary is always the whole period.
+- **Sort order:** by the *real* month (`settlement-view.ts`), never the period label. The label sort was why only the "September 20xx" rows showed.
+- **New screens:**
+  - "Owners not yet settled": active owners with confirmed deliveries that month but no settlement row.
+  - Settlement detail at `/estates/settlements/:id`.
+  - CSV export.
+- **New column:** `estates.payment_method` (bank/cash), from migration `2026-11-01-settlement-period-view.sql`.
+  - It is caught by the `.gitignore` "database" rule, so commit it with `git add -f`.
+- **Processing:** Process Settlement now takes the viewed period. There is still **no settlement generator**.
+- **Bank file:** "Generate Bank Payment File" is disabled with "Coming soon".
+- **Shared portal pieces:**
+  - `lib/month.ts` (month helpers);
+  - `components/patterns/MonthPicker` (also used by Payroll);
+  - `lib/csv.ts`;
+  - DataTable's opt-in `serverPage` / `serverSort`.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

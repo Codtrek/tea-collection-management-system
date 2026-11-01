@@ -19,6 +19,7 @@ import { EstatesController } from './estates.controller';
 import { EstatesService } from './estates.service';
 import { RouteEntity } from './route.entity';
 import { SettlementEntity } from './settlement.entity';
+import { SettlementViewService } from './settlement-view.service';
 
 @Module({
   imports: [
@@ -47,6 +48,6 @@ import { SettlementEntity } from './settlement.entity';
     AuditModule,
   ],
   controllers: [EstatesController],
-  providers: [EstatesService, EstateLifetimeService],
+  providers: [EstatesService, EstateLifetimeService, SettlementViewService],
 })
 export class EstatesModule {}

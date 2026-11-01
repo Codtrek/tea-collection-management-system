@@ -16,10 +16,14 @@ export interface EstateOwner {
   status: EstateStatus
   ytdDeliveriesKg: number
   bank: { bank: string; branch: string; account: string }
+  /** how the owner is paid — cash owners need no bank details */
+  paymentMethod: OwnerPaymentMethod
   documents: Array<{ name: string; uploadedOn: string }>
   lastUpdatedBy?: string
   lastUpdatedOn?: string
 }
+
+export type OwnerPaymentMethod = 'bank' | 'cash'
 
 export type EstateAdvanceStatus = 'Pending deduction' | 'Deducted'
 
@@ -63,6 +67,71 @@ export interface Settlement {
   missingBank?: boolean
   processedBy?: string
   processedOn?: string
+}
+
+/*
+  Settlement period view (Settlement-Period-View-Addendum) — mirrors the backend's
+  `settlement-view.ts`. Every figure, the summary and the filtering are server-side.
+*/
+export interface SettlementDeductions {
+  fertilizer: number
+  advances: number
+  /** transport */
+  other: number
+}
+
+export interface SettlementRow extends Settlement {
+  month: string // 'YYYY-MM'
+  ownerName: string
+  routeId: number | null
+  route: string
+  paymentMethod: OwnerPaymentMethod
+  gross: number
+  deductions: SettlementDeductions
+  deductionsTotal: number
+  net: number
+}
+
+export interface SettlementSummary {
+  month: string | null
+  ownersSettled: number
+  processed: number
+  pending: number
+  activeOwners: number
+  gross: number
+  deductions: SettlementDeductions
+  deductionsTotal: number
+  net: number
+  notYetSettled: number | null
+  latestMonth: string | null
+}
+
+export interface SettlementListResult {
+  rows: SettlementRow[]
+  page: number
+  limit: number
+  total: number
+  hasMore: boolean
+  summary: SettlementSummary
+  months: string[]
+  routes: { id: number; name: string }[]
+}
+
+export interface UnsettledOwner {
+  estateId: string
+  estateName: string
+  ownerName: string
+  route: string
+  paymentMethod: OwnerPaymentMethod
+  deliveries: number
+  gradedKg: number
+}
+
+export interface SettlementDetail {
+  settlement: SettlementRow
+  deliveries: { id: string; date: string; superKg: number; normalKg: number; paid: boolean }[]
+  fertilizerCharges: { id: string; date: string; quantityKg: number; ratePerKg: number; totalCharge: number; recovered: boolean }[]
+  advances: { id: string; dateIssued: string; amount: number; reason: string; status: EstateAdvanceStatus }[]
 }
 
 /*

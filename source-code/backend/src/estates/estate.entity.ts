@@ -4,7 +4,7 @@ import {
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import type { DbEstateStatus } from './estate-map';
+import type { DbEstateStatus, OwnerPaymentMethod } from './estate-map';
 
 /** EST-01..04, EST-09. Route is system-assigned and never edited after registration. */
 @Entity('estates')
@@ -52,6 +52,10 @@ export class EstateEntity {
 
   @Column({ name: 'bank_account', type: 'varchar', nullable: true })
   bankAccount: string | null;
+
+  /** How the owner is paid (Settlement-Period-View-Addendum). Cash owners need no bank details. */
+  @Column({ name: 'payment_method', type: 'varchar', default: 'bank' })
+  paymentMethod: OwnerPaymentMethod;
 
   @Column({ name: 'last_updated_by', type: 'varchar', nullable: true })
   lastUpdatedBy: string | null;

@@ -22,6 +22,7 @@ import type {
 } from './estate-map';
 import { CreateEstateDto } from './dto/create-estate.dto';
 import { IssueAdvanceDto } from './dto/issue-advance.dto';
+import { ProcessSettlementsDto } from './dto/process-settlements.dto';
 import { UpdateEstateDto } from './dto/update-estate.dto';
 import type {
   EstateAnalytics,
@@ -33,8 +34,26 @@ import type {
 } from './estate-lifetime-map';
 import { EstateLifetimeService } from './estate-lifetime.service';
 import { type Actor, EstatesService } from './estates.service';
+import {
+  ALL_PERIODS,
+  type SettlementListResult,
+  type SettlementSort,
+} from './settlement-view';
+import {
+  type SettlementDetail,
+  SettlementViewService,
+  type UnsettledOwner,
+} from './settlement-view.service';
 
 type AuthedRequest = Request & { user: JwtPayload };
+
+const SETTLEMENT_SORTS: readonly string[] = [
+  'period',
+  'estate',
+  'gross',
+  'deductions',
+  'net',
+];
 
 @Controller('estates')
 @UseGuards(JwtAuthGuard)
@@ -42,6 +61,7 @@ export class EstatesController {
   constructor(
     private readonly estatesService: EstatesService,
     private readonly lifetimeService: EstateLifetimeService,
+    private readonly settlementView: SettlementViewService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -61,9 +81,52 @@ export class EstatesController {
     return this.estatesService.issueAdvance(dto, await this.resolveActor(req));
   }
 
+  /**
+   * EST-07 period view (Settlement-Period-View-Addendum) — `month` is 'YYYY-MM' or 'all'
+   * (default: all). Filtered, sorted and paged here; `summary` is always the whole period.
+   * `limit=0` returns every filtered row (the CSV export).
+   */
   @Get('settlements')
-  listSettlements(): Promise<PublicSettlement[]> {
-    return this.estatesService.listSettlements();
+  listSettlements(
+    @Query('month') month?: string,
+    @Query('search') search?: string,
+    @Query('routeId') routeId?: string,
+    @Query('status') status?: string,
+    @Query('method') method?: string,
+    @Query('nonPositive') nonPositive?: string,
+    @Query('sort') sort?: string,
+    @Query('dir') dir?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<SettlementListResult> {
+    return this.settlementView.list({
+      month:
+        month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? month : ALL_PERIODS,
+      search,
+      routeId: routeId ? Number(routeId) : undefined,
+      status:
+        status === 'Pending' || status === 'Processed' ? status : undefined,
+      method: method === 'bank' || method === 'cash' ? method : undefined,
+      nonPositive: nonPositive === 'true' || nonPositive === '1',
+      sort: SETTLEMENT_SORTS.includes(sort as SettlementSort)
+        ? (sort as SettlementSort)
+        : undefined,
+      dir: dir === 'asc' || dir === 'desc' ? dir : undefined,
+      page: page ? Number(page) : undefined,
+      limit: limit !== undefined ? Number(limit) : undefined,
+    });
+  }
+
+  /** "Owners not yet settled" — active owners who delivered in `month` with no settlement row. */
+  @Get('settlements/unsettled')
+  unsettledOwners(@Query('month') month: string): Promise<UnsettledOwner[]> {
+    return this.settlementView.unsettled(month);
+  }
+
+  /** One settlement: deliveries + grade lines, each deduction line, net. */
+  @Get('settlements/:sid')
+  settlementDetail(@Param('sid') sid: string): Promise<SettlementDetail> {
+    return this.settlementView.detail(sid);
   }
 
   /**
@@ -79,9 +142,13 @@ export class EstatesController {
 
   @Post('settlements/process')
   async processSettlements(
+    @Body() dto: ProcessSettlementsDto,
     @Req() req: AuthedRequest,
   ): Promise<PublicSettlement[]> {
-    return this.estatesService.processSettlements(await this.resolveActor(req));
+    return this.estatesService.processSettlements(
+      await this.resolveActor(req),
+      dto.period,
+    );
   }
 
   @Get()

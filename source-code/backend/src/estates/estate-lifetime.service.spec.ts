@@ -55,6 +55,7 @@ function makeEstate(overrides: Partial<EstateEntity> = {}): EstateEntity {
     bankName: 'Bank of Ceylon',
     bankBranch: 'Nuwara Eliya',
     bankAccount: '8802345671',
+    paymentMethod: 'bank',
     lastUpdatedBy: null,
     lastUpdatedOn: null,
     registeredOn: '2021-03-01',

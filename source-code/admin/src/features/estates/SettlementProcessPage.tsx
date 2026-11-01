@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ChevronDown, Info, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -10,6 +10,7 @@ import { HighStakesConfirmFlow } from '@/components/patterns/HighStakesConfirmFl
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as estatesService from '@/services/estates'
+import { currentMonth, periodOf, readMonth, shiftMonth } from '@/lib/month'
 import { grossRevenue, netPayable } from './calc'
 import { formatCurrency, formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
@@ -28,27 +29,31 @@ export function SettlementProcessPage() {
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
+  // the period the list was showing (Settlement-Period-View-Addendum) — only its rows are processed
+  const [searchParams] = useSearchParams()
+  const thisMonth = currentMonth()
+  const month = readMonth(searchParams.get('month'), thisMonth, shiftMonth(thisMonth, -1))
+  const period = periodOf(month)
+  const backHref = `/estates/settlements?month=${month}`
 
-  const {
-    data: settlements,
-    isPending,
-    isError,
-    refetch,
-  } = useQuery({ queryKey: ['estates', 'settlements'], queryFn: estatesService.listSettlements })
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: ['estates', 'settlements', 'process', month],
+    queryFn: () => estatesService.listSettlements({ month, status: 'Pending', limit: 0 }),
+  })
 
-  const pending = (settlements ?? []).filter((s) => s.status === 'Pending')
+  const pending = data?.rows ?? []
   const included = pending.filter((s) => !s.missingBank)
   const excluded = pending.filter((s) => s.missingBank)
   const total = included.reduce((sum, s) => sum + netPayable(s), 0)
 
   const processMutation = useMutation({
-    mutationFn: () => estatesService.processSettlements(),
+    mutationFn: () => estatesService.processSettlements(period),
     onSuccess: (processed) => {
       const processedTotal = processed.reduce((sum, s) => sum + netPayable(s), 0)
       toast(`Settlement processed by ${user?.name} — ${formatCurrency(processedTotal)} across ${processed.length} estates`)
       void queryClient.invalidateQueries({ queryKey: ['estates', 'settlements'] })
       void queryClient.invalidateQueries({ queryKey: ['estates', 'advances'] })
-      navigate('/estates/settlements')
+      navigate(backHref)
     },
     onError: (err) => {
       setConfirming(false)
@@ -75,14 +80,14 @@ export function SettlementProcessPage() {
         breadcrumb={[
           { label: 'Home', to: '/dashboard' },
           { label: 'Estate Owners', to: '/estates' },
-          { label: 'Settlements', to: '/estates/settlements' },
+          { label: 'Settlements', to: backHref },
           { label: 'Process' },
         ]}
       />
 
       {/* Settlement period header */}
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
-        <SummaryTile label="Settlement period" value="July 2026" />
+        <SummaryTile label="Settlement period" value={period} />
         <SummaryTile label="Estates" value={`${included.length} included`} />
         <SummaryTile label="Total payable" value={formatCurrency(total)} highlight />
       </div>
@@ -169,7 +174,7 @@ export function SettlementProcessPage() {
       </div>
 
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="secondary" onClick={() => navigate('/estates/settlements')}>
+        <Button variant="secondary" onClick={() => navigate(backHref)}>
           Cancel
         </Button>
         <Button size="lg" onClick={() => setConfirming(true)}>
