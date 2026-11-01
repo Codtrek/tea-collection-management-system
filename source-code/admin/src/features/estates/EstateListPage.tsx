@@ -33,7 +33,8 @@ function viewFor(level: 'none' | 'view' | 'edit' | 'approve'): DirectoryView {
 export function EstateListPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { level } = useAuth()
+  const { level, can } = useAuth()
+  const canIssueAdvance = can('estateAdvances', 'edit')
   const queryClient = useQueryClient()
   const view = viewFor(level('estateOwners'))
   const config = DIRECTORY_VIEWS[view]
@@ -112,7 +113,7 @@ export function EstateListPage() {
       <Button onClick={() => navigate('/estates/new')}>
         <Plus className="size-4" /> Register Estate Owner
       </Button>
-    ) : config.primaryAction === 'issueAdvance' ? (
+    ) : config.primaryAction === 'issueAdvance' && canIssueAdvance ? (
       <Button onClick={() => navigate('/estates/advances/new')}>
         <HandCoins className="size-4" /> Issue Advance Payment
       </Button>
@@ -181,11 +182,13 @@ export function EstateListPage() {
             <RowAction icon={<Eye className="size-4" />} label="View" onClick={() => navigate(`/estates/${e.id}`)} />
             {view === 'payments' && (
               <>
-                <RowAction
-                  icon={<HandCoins className="size-4" />}
-                  label="Issue Advance"
-                  onClick={() => navigate(`/estates/advances/new?estate=${e.id}`)}
-                />
+                {canIssueAdvance && (
+                  <RowAction
+                    icon={<HandCoins className="size-4" />}
+                    label="Issue Advance"
+                    onClick={() => navigate(`/estates/advances/new?estate=${e.id}`)}
+                  />
+                )}
                 <RowAction
                   icon={<Wallet className="size-4" />}
                   label="View payments"

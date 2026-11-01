@@ -8,6 +8,7 @@ export type ModuleKey =
   | 'collection'
   | 'fertilizer'
   | 'estateOwners'
+  | 'estateAdvances'
   | 'payroll'
   | 'advances'
   | 'employees'

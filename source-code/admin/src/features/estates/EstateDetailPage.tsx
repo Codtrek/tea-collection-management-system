@@ -40,6 +40,7 @@ export function EstateDetailPage() {
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const canEdit = can('estateOwners', 'edit')
+  const canIssueAdvance = can('estateAdvances', 'edit')
   const canManage = can('estateOwners', 'approve')
 
   const [deactivating, setDeactivating] = useState(false)
@@ -225,7 +226,7 @@ export function EstateDetailPage() {
                 <Pencil className="size-4" /> Edit
               </Button>
             )}
-            {canEdit && (
+            {canIssueAdvance && (
               <Button variant="secondary" onClick={() => navigate(`/estates/advances/new?estate=${estate.id}`)}>
                 <HandCoins className="size-4" /> Issue Advance
               </Button>
@@ -410,7 +411,7 @@ export function EstateDetailPage() {
                     <EmptyState
                       title="No advances issued"
                       description="Advance payments issued to this estate appear here and deduct at the next settlement."
-                      action={canEdit ? <Button size="sm" onClick={() => navigate(`/estates/advances/new?estate=${estate.id}`)}>Issue Advance</Button> : undefined}
+                      action={canIssueAdvance ? <Button size="sm" onClick={() => navigate(`/estates/advances/new?estate=${estate.id}`)}>Issue Advance</Button> : undefined}
                     />
                   }
                 />

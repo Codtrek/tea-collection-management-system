@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -23,6 +23,10 @@ export function IssueAdvancePage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [params] = useSearchParams()
+  const location = useLocation()
+  // Back to wherever the form was opened from (/estates, EST-03, the advances list); a direct
+  // link with no in-app history falls back to the list.
+  const cancel = () => (location.key !== 'default' ? navigate(-1) : navigate('/estates/advances'))
 
   const { data: estates } = useQuery({ queryKey: ['estates'], queryFn: estatesService.list })
 
@@ -32,12 +36,16 @@ export function IssueAdvancePage() {
   const [errors, setErrors] = useState<{ estate?: string; amount?: string; reason?: string }>({})
   const [confirming, setConfirming] = useState(false)
 
-  const estate = (estates ?? []).find((e) => e.id === estateId)
+  const activeEstates = (estates ?? []).filter((e) => e.status === 'Active').sort((a, b) => a.estateName.localeCompare(b.estateName))
+  const estate = activeEstates.find((e) => e.id === estateId)
+  // a pre-filled (?estate=) owner the picker can't offer — say so rather than show a silent blank
+  const inactive = !estate ? (estates ?? []).find((e) => e.id === estateId) : undefined
+  const estateError = errors.estate ?? (inactive ? `${inactive.estateName} is ${inactive.status} — advances go to active estate owners only` : undefined)
   const parsedAmount = Number(amount)
 
   const validate = () => {
     const next: typeof errors = {}
-    if (!estateId) next.estate = 'Select an estate owner'
+    if (!estate) next.estate = 'Select an estate owner'
     if (!amount || Number.isNaN(parsedAmount) || parsedAmount <= 0) next.amount = 'Enter a positive amount'
     if (!reason.trim()) next.reason = 'Reason is required'
     setErrors(next)
@@ -46,11 +54,11 @@ export function IssueAdvancePage() {
 
   const issueMutation = useMutation({
     mutationFn: () => estatesService.issueAdvance({ estateId, amount: parsedAmount, reason }),
-    onSuccess: () => {
+    onSuccess: (issued) => {
       // Audit trail entry per the module doc.
       toast(`Advance of ${formatCurrency(parsedAmount)} issued to ${estate?.estateName} by ${user?.name}`)
       void queryClient.invalidateQueries({ queryKey: ['estates', 'advances'] })
-      navigate('/estates/advances')
+      navigate(`/estates/advances?highlight=${encodeURIComponent(issued.id)}`)
     },
     onError: (err) => {
       setConfirming(false)
@@ -64,9 +72,8 @@ export function IssueAdvancePage() {
         title="Issue Advance Payment"
         breadcrumb={[
           { label: 'Home', to: '/dashboard' },
-          { label: 'Estate Owners', to: '/estates' },
-          { label: 'Advances', to: '/estates/advances' },
-          { label: 'Issue' },
+          { label: 'Estate Owner Advances', to: '/estates/advances' },
+          { label: 'New' },
         ]}
       />
 
@@ -76,13 +83,13 @@ export function IssueAdvancePage() {
             label="Estate owner"
             placeholder="Search estate, owner or EST- number…"
             noun="estates"
-            items={(estates ?? []).filter((e) => e.status === 'Active').sort((a, b) => a.estateName.localeCompare(b.estateName))}
+            items={activeEstates}
             value={estateId}
             onChange={setEstateId}
             getKey={(e) => e.id}
             getLabel={(e) => `${e.estateName} — ${e.ownerName}`}
             getMeta={(e) => `${e.id} · ${e.route || 'No route'}`}
-            error={errors.estate}
+            error={estateError}
           />
           <Input
             label="Amount (Rs.)"
@@ -109,7 +116,7 @@ export function IssueAdvancePage() {
           )}
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button variant="secondary" onClick={() => navigate('/estates/advances')}>
+            <Button variant="secondary" onClick={cancel}>
               Cancel
             </Button>
             <Button size="lg" onClick={() => validate() && setConfirming(true)}>

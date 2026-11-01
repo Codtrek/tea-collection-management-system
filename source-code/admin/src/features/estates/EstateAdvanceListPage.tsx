@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Eye, HandCoins, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -16,7 +16,10 @@ import { formatCurrency, formatDate } from '@/lib/format'
 export function EstateAdvanceListPage() {
   const navigate = useNavigate()
   const { can } = useAuth()
-  const canIssue = can('estateOwners', 'edit')
+  const canIssue = can('estateAdvances', 'edit')
+  // ?highlight=EADV-… — set by the Issue form so the new advance stands out
+  const [searchParams] = useSearchParams()
+  const highlight = searchParams.get('highlight') ?? undefined
 
   const {
     data: advances,
@@ -61,8 +64,8 @@ export function EstateAdvanceListPage() {
   return (
     <div>
       <PageHeader
-        title="Estate Advance Payments"
-        breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Estate Owners', to: '/estates' }, { label: 'Advances' }]}
+        title="Estate Owner Advances"
+        breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Estate Owner Advances' }]}
         actions={
           canIssue ? (
             <Button onClick={() => navigate('/estates/advances/new')}>
@@ -76,6 +79,7 @@ export function EstateAdvanceListPage() {
         columns={columns}
         rows={advances}
         rowKey={(a) => a.id}
+        highlightRowKey={highlight}
         onRowClick={(a) => navigate(`/estates/${a.estateId}`)}
         emptyState={
           <EmptyState

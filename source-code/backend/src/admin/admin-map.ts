@@ -15,6 +15,7 @@ export type ModuleKey =
   | 'collection'
   | 'fertilizer'
   | 'estateOwners'
+  | 'estateAdvances'
   | 'payroll'
   | 'advances'
   | 'employees'
@@ -35,6 +36,7 @@ export const MODULE_KEYS: ModuleKey[] = [
   'collection',
   'fertilizer',
   'estateOwners',
+  'estateAdvances',
   'payroll',
   'advances',
   'employees',

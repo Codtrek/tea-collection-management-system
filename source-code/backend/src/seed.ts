@@ -2101,6 +2101,7 @@ const PERMISSION_MATRIX: Record<
   Administrator: {
     dashboard: 'approve', collection: 'approve', fertilizer: 'approve',
     estateOwners: 'approve', payroll: 'approve', advances: 'approve',
+    estateAdvances: 'approve',
     employees: 'approve', attendance: 'approve', performance: 'approve',
     reports: 'approve', administration: 'approve', dispatch: 'approve',
     grading: 'view', gradingApproval: 'view',
@@ -2109,6 +2110,7 @@ const PERMISSION_MATRIX: Record<
   Officer: {
     dashboard: 'view', collection: 'edit', fertilizer: 'edit',
     estateOwners: 'edit', payroll: 'edit', advances: 'approve',
+    estateAdvances: 'edit',
     employees: 'view', attendance: 'edit', performance: 'view',
     reports: 'edit', administration: 'none', dispatch: 'edit',
     grading: 'edit', gradingApproval: 'view',
@@ -2117,6 +2119,7 @@ const PERMISSION_MATRIX: Record<
   Manager: {
     dashboard: 'view', collection: 'view', fertilizer: 'view',
     estateOwners: 'view', payroll: 'view', advances: 'view',
+    estateAdvances: 'view',
     employees: 'view', attendance: 'view', performance: 'approve',
     reports: 'view', administration: 'none', dispatch: 'approve',
     grading: 'view', gradingApproval: 'approve',

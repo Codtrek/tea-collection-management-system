@@ -1138,5 +1138,10 @@ INSERT INTO role_permissions (role, module, level) VALUES
     ('Administrator',    'fertilizerManagerApproval', 'view'),
     ('Officer',          'fertilizerManagerApproval', 'view'),
     ('Manager',          'fertilizerManagerApproval', 'approve'),
-    ('ReceivingOfficer', 'fertilizerManagerApproval', 'none')
+    ('ReceivingOfficer', 'fertilizerManagerApproval', 'none'),
+    -- Estate Owner Advances (EST-05) — its own sidebar entry, seeded at each role's Estate Owner level
+    ('Administrator',    'estateAdvances',            'approve'),
+    ('Officer',          'estateAdvances',            'edit'),
+    ('Manager',          'estateAdvances',            'view'),
+    ('ReceivingOfficer', 'estateAdvances',            'none')
 ON CONFLICT (role, module) DO NOTHING;
