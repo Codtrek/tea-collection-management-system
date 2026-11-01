@@ -6,6 +6,7 @@
  * Status (Pending / Processed) and PROBLEMS are kept apart. A problem is live employee data:
  *   noBank    — paid by bank with no bank details. BLOCKS processing (exclude with a reason).
  *   zeroGross — Rs. 0 gross. A warning only.
+ *   carriedForward — an advance deduction the gross couldn't take, left for later months. A warning.
  */
 import type { PaginatedResult } from '../estates/estate-lifetime-map';
 import { paginate } from '../estates/settlement-view';
@@ -28,11 +29,13 @@ export function hasNoBankDetails(e: BankFacts | undefined): boolean {
 export type PayrollIssue =
   | 'noBank'
   | 'zeroGross'
+  | 'carriedForward'
   | 'hasDeductions'
   | 'hasAdvance';
 export const PAYROLL_ISSUES: readonly PayrollIssue[] = [
   'noBank',
   'zeroGross',
+  'carriedForward',
   'hasDeductions',
   'hasAdvance',
 ];
@@ -44,7 +47,12 @@ export interface PayrollViewRow extends PublicPayrollRow {
   deductionsTotal: number;
   net: number;
   /** the data problems shown as chips — never the status */
-  problems: { noBank: boolean; zeroGross: boolean };
+  problems: {
+    noBank: boolean;
+    zeroGross: boolean;
+    /** Rs. carried forward — an advance deduction the gross couldn't take this month */
+    carriedForward: number;
+  };
 }
 
 export type PayrollSort = 'employee' | 'gross' | 'deductions' | 'net';
@@ -102,6 +110,8 @@ const hasIssue = (r: PayrollViewRow, issue: PayrollIssue): boolean => {
       return r.problems.noBank;
     case 'zeroGross':
       return r.problems.zeroGross;
+    case 'carriedForward':
+      return r.problems.carriedForward > 0;
     case 'hasDeductions':
       return r.deductionsTotal > 0;
     case 'hasAdvance':

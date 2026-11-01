@@ -643,6 +643,26 @@ CREATE TABLE payroll_runs (
     UNIQUE (employee_id, period)
 );
 
+-- Advance recoveries (2026-11-02): one row per advance per payroll month (and one per cash
+-- repayment). A payroll month's row is RESERVED at Generate (amount = what that month deducts,
+-- planned = what it meant to deduct; the difference is carried forward) and RECOVERED at Process.
+-- Remaining balance = approved amount − Σ recovered (advance-balance.ts).
+CREATE TABLE advance_recoveries (
+    id             SERIAL PRIMARY KEY,
+    advance_id     VARCHAR(20) NOT NULL REFERENCES salary_advances(id) ON DELETE CASCADE,
+    kind           VARCHAR(10) NOT NULL DEFAULT 'payroll' CHECK (kind IN ('payroll', 'cash')),
+    period         VARCHAR(30),            -- payroll month ('August 2026'); null for cash
+    payroll_run_id VARCHAR(20) REFERENCES payroll_runs(id) ON DELETE SET NULL,
+    status         VARCHAR(10) NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved', 'recovered')),
+    planned_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    amount         DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (amount >= 0),
+    reference      VARCHAR(100),           -- cash repayment receipt / reference
+    paid_on        DATE,                   -- cash repayment date
+    recorded_by    VARCHAR(100),
+    created_at     TIMESTAMP DEFAULT NOW()
+);
+CREATE UNIQUE INDEX uq_advance_recoveries_month ON advance_recoveries(advance_id, period) WHERE kind = 'payroll';
+
 -- ─── REPORTS ──────────────────────────────────────────────────────
 -- Added 2026-07-27 (Reports vertical slice, 2.5). Only holds the *manual*
 -- daily operational expenses (RPT-04: utilities/maintenance/misc) that no
@@ -755,6 +775,7 @@ CREATE INDEX idx_settlements_status ON settlements(status);
 CREATE INDEX idx_employee_attendance_employee ON employee_attendance(employee_id);
 CREATE INDEX idx_employee_attendance_date ON employee_attendance(date);
 CREATE INDEX idx_salary_advances_employee ON salary_advances(employee_id);
+CREATE INDEX idx_advance_recoveries_advance ON advance_recoveries(advance_id);
 CREATE INDEX idx_payroll_runs_employee ON payroll_runs(employee_id);
 CREATE INDEX idx_payroll_runs_status ON payroll_runs(status);
 CREATE INDEX idx_expense_entries_date ON expense_entries(entry_date);

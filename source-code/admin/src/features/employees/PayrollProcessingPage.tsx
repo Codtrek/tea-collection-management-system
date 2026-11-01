@@ -69,6 +69,11 @@ export function PayrollProcessingPage() {
   const excluded = rows.filter((r) => r.problems.noBank)
   const total = included.reduce((sum, r) => sum + netPay(r), 0)
   const needsReason = excluded.length > 0 && !excludeReason.trim()
+  // warnings only — an empty payslip is easy to process by mistake
+  const zeroGross = included.filter((r) => r.gross === 0)
+  const carried = included.filter((r) => r.problems.carriedForward > 0)
+  // rows generated before the Rs. 0 floor: the server refuses them until recalculated
+  const negative = included.filter((r) => netPay(r) < 0)
 
   // the month in progress, or one with nothing pending (processed / never generated), can't be run
   const blocked =
@@ -123,8 +128,39 @@ export function PayrollProcessingPage() {
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <SummaryTile label="Pay period" value={PERIOD} />
         <SummaryTile label="Employees" value={`${included.length} included`} />
-        <SummaryTile label="Total payable" value={formatCurrency(total)} highlight />
+        <SummaryTile label="Total payable" value={formatCurrency(total)} highlight={total > 0} />
       </div>
+
+      {negative.length > 0 && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-[var(--radius-md)] border border-danger-fg/20 bg-danger-bg/60 p-4">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger-fg" />
+          <p className="text-sm text-text">
+            <span className="font-medium text-danger-fg">Net payable below Rs. 0</span> for{' '}
+            {negative.map((r) => r.employeeName).join(', ')} — these rows were generated before deductions were capped.
+            Go back and <strong>Recalculate from Attendance</strong> for {PERIOD}; the shortfall is then carried forward instead.
+          </p>
+        </div>
+      )}
+
+      {zeroGross.length > 0 && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-[var(--radius-md)] border border-warning-fg/20 bg-warning-bg/60 p-4">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning-fg" />
+          <p className="text-sm text-text">
+            <span className="font-medium text-warning-fg">
+              {zeroGross.length} employee{zeroGross.length === 1 ? '' : 's'} with Rs. 0 gross
+            </span>{' '}
+            — {zeroGross.map((r) => r.employeeName).join(', ')}. Usually no attendance is marked for {PERIOD} (or no pay
+            rates). Check before processing; this doesn't block the run.
+          </p>
+        </div>
+      )}
+
+      {carried.length > 0 && (
+        <p className="mb-4 text-xs text-text-muted">
+          Advance deductions carried forward for {carried.map((r) => r.employeeName).join(', ')} — the gross couldn't cover the
+          installment; the rest is deducted in later months.
+        </p>
+      )}
 
       {excluded.length > 0 && (
         <div className="mb-4 rounded-[var(--radius-md)] border border-danger-fg/20 bg-danger-bg/60 p-4">
@@ -197,7 +233,7 @@ export function PayrollProcessingPage() {
         <Button
           size="lg"
           onClick={() => setConfirming(true)}
-          disabled={needsReason || (included.length === 0 && excluded.length === 0)}
+          disabled={needsReason || negative.length > 0 || (included.length === 0 && excluded.length === 0)}
           title={needsReason ? 'Give a reason for excluding the employees with no bank details' : undefined}
         >
           Process {included.length} Payslips

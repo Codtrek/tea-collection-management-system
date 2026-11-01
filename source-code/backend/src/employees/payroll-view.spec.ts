@@ -21,7 +21,7 @@ const row = (
   paymentMethod: 'bank',
   deductionsTotal: 0,
   net: 80000,
-  problems: { noBank: false, zeroGross: false },
+  problems: { noBank: false, zeroGross: false, carriedForward: 0 },
   ...over,
 });
 
@@ -38,7 +38,7 @@ describe('payroll month view', () => {
     }),
     row('2', {
       employeeName: 'T. Rajapaksa',
-      problems: { noBank: true, zeroGross: false },
+      problems: { noBank: true, zeroGross: false, carriedForward: 0 },
     }),
     row('3', {
       employeeName: 'R. Senanayake',
@@ -46,7 +46,7 @@ describe('payroll month view', () => {
       routes: [{ id: 2, name: 'Route 3' }],
       gross: 0,
       net: 0,
-      problems: { noBank: true, zeroGross: true },
+      problems: { noBank: true, zeroGross: true, carriedForward: 0 },
     }),
     row('4', {
       employeeName: 'N. Silva',
@@ -110,7 +110,12 @@ describe('readiness badge', () => {
       excluded: 0,
     });
     const blocked = readinessOf(
-      [row('1'), row('2', { problems: { noBank: true, zeroGross: true } })],
+      [
+        row('1'),
+        row('2', {
+          problems: { noBank: true, zeroGross: true, carriedForward: 0 },
+        }),
+      ],
       JULY,
       NOW,
     );
@@ -124,7 +129,11 @@ describe('readiness badge', () => {
   it('Rs. 0 gross is a warning, not a block', () => {
     expect(
       readinessOf(
-        [row('1', { problems: { noBank: false, zeroGross: true } })],
+        [
+          row('1', {
+            problems: { noBank: false, zeroGross: true, carriedForward: 0 },
+          }),
+        ],
         JULY,
         NOW,
       ).status,
@@ -137,7 +146,7 @@ describe('readiness badge', () => {
         row('1', { status: 'Processed' }),
         row('2', {
           excludedReason: 'Bank form pending',
-          problems: { noBank: true, zeroGross: false },
+          problems: { noBank: true, zeroGross: false, carriedForward: 0 },
         }),
       ],
       JULY,

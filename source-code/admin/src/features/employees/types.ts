@@ -95,6 +95,9 @@ export interface Advance {
   /** Salary-Advances-Addendum — computed server-side (advance-balance.ts), never here */
   recovery: RecoveryStatus | null
   remaining: number
+  recovered: number
+  /** what the gross couldn't take in earlier months, still in the balance */
+  carriedForward: number
   /** the payroll month that deducts (or deducted) it */
   payrollPeriod: string | null
   recoveredPeriod: string | null
@@ -152,6 +155,8 @@ export interface PayrollRow {
   missingBank?: boolean
   /** left out of a run with this reason (bank-paid, no bank details); the row stays Pending */
   excludedReason?: string
+  /** per advance this month: planned / deducted / carried forward / remaining (server-computed) */
+  advanceLines?: PayslipAdvanceLine[]
   /** Hours aggregated from attendance, behind the stored `gross` snapshot. */
   shiftHours?: ShiftBreakdown
   /** The employee's rates at the time this row was generated. */
@@ -160,11 +165,20 @@ export interface PayrollRow {
 
 export type EmployeePaymentMethod = 'bank' | 'cash'
 
+export interface PayslipAdvanceLine {
+  advanceId: string
+  planned: number
+  deducted: number
+  /** planned − deducted, left in the balance for later months */
+  carried: number
+  remainingAfter: number
+}
+
 /*
   Payroll by month, Part C (Payroll-Month-History-Addendum) — mirrors the backend's
   `payroll-view.ts`. Problems are live employee data, kept apart from the Pending/Processed status.
 */
-export type PayrollIssue = 'noBank' | 'zeroGross' | 'hasDeductions' | 'hasAdvance'
+export type PayrollIssue = 'noBank' | 'zeroGross' | 'carriedForward' | 'hasDeductions' | 'hasAdvance'
 
 export interface PayrollViewRow extends PayrollRow {
   role: string
@@ -172,7 +186,7 @@ export interface PayrollViewRow extends PayrollRow {
   paymentMethod: EmployeePaymentMethod
   deductionsTotal: number
   net: number
-  problems: { noBank: boolean; zeroGross: boolean }
+  problems: { noBank: boolean; zeroGross: boolean; carriedForward: number }
 }
 
 export type MonthReadiness = 'In progress' | 'No payroll' | 'Issues to fix' | 'Ready to process' | 'Processed'

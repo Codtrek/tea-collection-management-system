@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Download, Printer, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -82,6 +82,43 @@ export function PayslipPage() {
             <Line label="Other" value={formatCurrency(row.deductions.other)} />
           </div>
         </div>
+
+        {/* Salary-Advances-Addendum §9 — what each advance planned, what the gross allowed */}
+        {row.advanceLines && row.advanceLines.length > 0 && (
+          <div className="mb-5 overflow-x-auto rounded-[var(--radius-md)] border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-sunken text-[11px] uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-3 py-2 text-left">Advance</th>
+                  <th className="px-3 py-2 text-right">Planned installment</th>
+                  <th className="px-3 py-2 text-right">Deducted this month</th>
+                  <th className="px-3 py-2 text-right">Carried forward</th>
+                  <th className="px-3 py-2 text-right">Remaining balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {row.advanceLines.map((l) => (
+                  <tr key={l.advanceId} className="border-t border-border">
+                    <td className="px-3 py-2">
+                      <Link to={`/employees/advances/${l.advanceId}`} className="id text-primary hover:underline">
+                        {l.advanceId}
+                      </Link>
+                    </td>
+                    <td className="tabular px-3 py-2 text-right">{formatCurrency(l.planned)}</td>
+                    <td className="tabular px-3 py-2 text-right">{formatCurrency(l.deducted)}</td>
+                    <td className={`tabular px-3 py-2 text-right ${l.carried > 0 ? 'text-warning-fg' : ''}`}>{formatCurrency(l.carried)}</td>
+                    <td className="tabular px-3 py-2 text-right">{formatCurrency(l.remainingAfter)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {row.advanceLines.some((l) => l.carried > 0) && (
+              <p className="border-t border-border px-3 py-2 text-xs text-text-muted">
+                The gross couldn't cover the full installment — the rest stays in the balance and is deducted in later months.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center justify-between border-t border-border pt-4">
           <span className="text-sm font-medium text-text">Net Pay</span>

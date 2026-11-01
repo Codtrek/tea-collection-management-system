@@ -14,6 +14,9 @@ import { RouteEntity } from '../estates/route.entity';
 import { AdvanceViewService } from './advance-view.service';
 import { EmployeeRoutesService } from './employee-routes.service';
 import { PayrollViewService } from './payroll-view.service';
+import { AdvanceRecoveryEntity } from './advance-recovery.entity';
+import { PayrollSettingsService } from './payroll-settings.service';
+import { SystemSettingEntity } from '../admin/system-setting.entity';
 
 @Module({
   imports: [
@@ -23,6 +26,8 @@ import { PayrollViewService } from './payroll-view.service';
       SalaryAdvanceEntity,
       PayrollRunEntity,
       RouteEntity,
+      AdvanceRecoveryEntity,
+      SystemSettingEntity,
     ]),
     UsersModule,
     AuditModule,
@@ -37,6 +42,7 @@ import { PayrollViewService } from './payroll-view.service';
     AdvanceViewService,
     EmployeeRoutesService,
     PayrollViewService,
+    PayrollSettingsService,
   ],
 })
 export class EmployeesModule {}

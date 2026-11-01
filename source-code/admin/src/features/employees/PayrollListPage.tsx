@@ -294,7 +294,7 @@ export function PayrollListPage() {
 
 /** Data problems — each links to where it's fixed. Never the payroll status. */
 function ProblemChips({ row }: { row: PayrollViewRow }) {
-  if (!row.problems.noBank && !row.problems.zeroGross) return null
+  if (!row.problems.noBank && !row.problems.zeroGross && !row.problems.carriedForward) return null
   const chip = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium hover:underline'
   return (
     <div className="mt-1 flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
@@ -306,6 +306,15 @@ function ProblemChips({ row }: { row: PayrollViewRow }) {
       {row.problems.zeroGross && (
         <Link to={`/employees/${row.employeeId}?tab=attendance`} className={`${chip} bg-warning-bg text-warning-fg`}>
           Rs. 0 gross
+        </Link>
+      )}
+      {row.problems.carriedForward > 0 && (
+        <Link
+          to={`/employees/payroll/${row.id}/payslip`}
+          className={`${chip} bg-warning-bg text-warning-fg`}
+          title={`${formatCurrency(row.problems.carriedForward)} of advance deductions carried to later months`}
+        >
+          Deduction carried forward
         </Link>
       )}
     </div>

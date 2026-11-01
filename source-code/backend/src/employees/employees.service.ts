@@ -32,10 +32,13 @@ import {
 import { EmployeeEntity } from './employee.entity';
 import { isAgentRole } from './employee-roles';
 import {
-  advancesForPeriod,
-  advancesRecoveredBy,
+  payslipAdvanceLines,
+  planMonthDeductions,
   recoveryOf,
+  remainingOf,
 } from './advance-balance';
+import { AdvanceRecoveryEntity } from './advance-recovery.entity';
+import { PayrollSettingsService } from './payroll-settings.service';
 import { hasNoBankDetails } from './payroll-view';
 import { labelToKey } from '../reports/reports-map';
 import { PayrollRunEntity } from './payroll-run.entity';
@@ -59,6 +62,9 @@ export class EmployeesService {
     private readonly payrollRepo: Repository<PayrollRunEntity>,
     private readonly audit: AuditService,
     private readonly agentProvisioning: AgentProvisioningService,
+    @InjectRepository(AdvanceRecoveryEntity)
+    private readonly recoveryRepo: Repository<AdvanceRecoveryEntity>,
+    private readonly payrollSettings: PayrollSettingsService,
   ) {}
 
   async findAll(): Promise<PublicEmployee[]> {
@@ -309,7 +315,8 @@ export class EmployeesService {
     const advances = await this.advanceRepo.find({
       order: { dateRequested: 'DESC' },
     });
-    return advances.map((a) => this.toPublicAdvance(a));
+    const recoveries = await this.recoveryRepo.find();
+    return advances.map((a) => this.toPublicAdvance(a, recoveries));
   }
 
   /** EMP-09/10 (request side) — Officer+ (portal: `advances: 'edit'`). No money moves yet. */
@@ -339,7 +346,7 @@ export class EmployeesService {
       recordHref: '/employees/advances',
       details: `${employee.name} — ${dto.reason}`,
     });
-    return this.toPublicAdvance(saved);
+    return this.toPublicAdvance(saved, []);
   }
 
   /** EMP-10 (approval side) — Officer or Administrator (portal: `advances: 'approve'` for both). */
@@ -377,7 +384,10 @@ export class EmployeesService {
       recordHref: `/employees/advances/${saved.id}`,
       details: why ? `${advance.employeeName} — ${why}` : advance.employeeName,
     });
-    return this.toPublicAdvance(saved);
+    return this.toPublicAdvance(
+      saved,
+      await this.recoveryRepo.find({ where: { advanceId: saved.id } }),
+    );
   }
 
   async listPayroll(
@@ -395,7 +405,11 @@ export class EmployeesService {
       if (status && row.status !== status) return false;
       return true;
     });
-    return filtered.map((r) => this.toPublicPayroll(r));
+    const ctx = {
+      advances: await this.advanceRepo.find(),
+      recoveries: await this.recoveryRepo.find(),
+    };
+    return filtered.map((r) => this.toPublicPayroll(r, ctx));
   }
 
   /**
@@ -418,6 +432,8 @@ export class EmployeesService {
     const attendance = await this.attendanceRepo.find();
     const advances = await this.advanceRepo.find();
     const existingRuns = await this.payrollRepo.find();
+    const recoveries = await this.recoveryRepo.find();
+    const { advanceDeductionCapPct } = await this.payrollSettings.get();
 
     const results: PayrollRunEntity[] = [];
 
@@ -454,17 +470,20 @@ export class EmployeesService {
         totals.nightHours * nightRate +
         totals.nightOtHours * nightOtRate;
 
-      // Salary-Advances-Addendum: the row reserves the advances it deducts, so the same advance
-      // is never counted in a second month (advance-balance.ts is the one place this is decided)
-      const counted = advancesForPeriod(advances, employee.id, dto.period);
-      const deductionsAdvances = counted.reduce(
-        (sum, a) => sum + Number(a.amount),
-        0,
+      // Salary-Advances-Addendum §9: deduct only what the gross allows (the cap % of gross, after
+      // other deductions) — the rest is carried forward, so net is never below Rs. 0. The row
+      // reserves what it deducts, so the same money is never counted in a second month.
+      const deductionsOther = Number(existing?.deductionsOther ?? 0);
+      const plan = planMonthDeductions(
+        advances,
+        recoveries,
+        employee.id,
+        dto.period,
+        gross,
+        deductionsOther,
+        advanceDeductionCapPct,
       );
-      for (const a of counted.filter((c) => c.payrollPeriod !== dto.period)) {
-        a.payrollPeriod = dto.period;
-        await this.advanceRepo.save(a);
-      }
+      const deductionsAdvances = plan.total;
 
       const missingBank = hasNoBankDetails(employee);
 
@@ -480,7 +499,9 @@ export class EmployeesService {
         existing.gross = String(gross);
         existing.deductionsAdvances = String(deductionsAdvances);
         existing.missingBank = missingBank;
-        results.push(await this.payrollRepo.save(existing));
+        const saved = await this.payrollRepo.save(existing);
+        await this.reserveMonth(saved, plan.lines, advances, recoveries);
+        results.push(saved);
       } else {
         const created = this.payrollRepo.create({
           id: this.businessId('PR'),
@@ -501,7 +522,9 @@ export class EmployeesService {
           status: 'Pending',
           missingBank,
         });
-        results.push(await this.payrollRepo.save(created));
+        const saved = await this.payrollRepo.save(created);
+        await this.reserveMonth(saved, plan.lines, advances, recoveries);
+        results.push(saved);
       }
     }
 
@@ -512,7 +535,9 @@ export class EmployeesService {
       recordHref: '/employees/payroll',
       details: `${results.length} employee row(s)`,
     });
-    return results.map((r) => this.toPublicPayroll(r));
+    return results.map((r) =>
+      this.toPublicPayroll(r, { advances, recoveries }),
+    );
   }
 
   /**
@@ -561,6 +586,21 @@ export class EmployeesService {
       );
     }
 
+    // a row generated before the Rs. 0 floor could still be negative — never pay one out
+    const negative = eligible.filter(
+      (r) =>
+        Number(r.gross) -
+          Number(r.deductionsAdvances) -
+          Number(r.deductionsOther) <
+        0,
+    );
+    if (negative.length > 0) {
+      throw new ConflictException(
+        `Net payable is below Rs. 0 for ${negative.map((r) => r.employeeName).join(', ')} — ` +
+          `recalculate ${dto.period ?? 'the month'} from attendance first.`,
+      );
+    }
+
     const now = new Date();
     for (const row of blocked) {
       row.missingBank = true;
@@ -583,6 +623,7 @@ export class EmployeesService {
 
     const processed: PayrollRunEntity[] = [];
     const allAdvances = await this.advanceRepo.find();
+    const allRecoveries = await this.recoveryRepo.find();
 
     for (const row of eligible) {
       row.status = 'Processed';
@@ -594,15 +635,27 @@ export class EmployeesService {
       row.excludedOn = null;
       processed.push(await this.payrollRepo.save(row));
 
-      // only what this row deducted — an advance approved after Generate waits for the next run
-      for (const advance of advancesRecoveredBy(
-        allAdvances,
-        row.employeeId,
-        row.period,
+      // only what this row reserved — an advance approved after Generate waits for the next run
+      const own = new Set(
+        allAdvances
+          .filter((a) => a.employeeId === row.employeeId)
+          .map((a) => a.id),
+      );
+      for (const rec of allRecoveries.filter(
+        (r) =>
+          r.kind === 'payroll' &&
+          r.status === 'reserved' &&
+          r.period === row.period &&
+          own.has(r.advanceId),
       )) {
-        advance.deducted = true;
-        advance.recoveredPeriod = row.period;
-        await this.advanceRepo.save(advance);
+        rec.status = 'recovered';
+        rec.payrollRunId = row.id;
+        await this.recoveryRepo.save(rec);
+        const advance = allAdvances.find((a) => a.id === rec.advanceId)!;
+        if (remainingOf(advance, allRecoveries) === 0 && !advance.deducted) {
+          advance.deducted = true; // fully recovered
+          await this.advanceRepo.save(advance);
+        }
       }
     }
 
@@ -615,7 +668,12 @@ export class EmployeesService {
         details: `${processed.length} employee(s)`,
       });
     }
-    return processed.map((r) => this.toPublicPayroll(r));
+    return processed.map((r) =>
+      this.toPublicPayroll(r, {
+        advances: allAdvances,
+        recoveries: allRecoveries,
+      }),
+    );
   }
 
   private async findEntity(formattedId: string): Promise<EmployeeEntity> {
@@ -753,7 +811,58 @@ export class EmployeesService {
     };
   }
 
-  toPublicAdvance(entity: SalaryAdvanceEntity): PublicAdvance {
+  /**
+   * Reserves `run`'s month of advance deductions (Salary-Advances-Addendum §9): one recovery row
+   * per advance it plans for — `planned` vs `amount` is what's carried forward. Replaces this
+   * month's earlier reservations (a Recalculate); recovered months are never touched.
+   */
+  private async reserveMonth(
+    run: PayrollRunEntity,
+    lines: { advanceId: string; planned: number; amount: number }[],
+    advances: SalaryAdvanceEntity[],
+    recoveries: AdvanceRecoveryEntity[],
+  ): Promise<void> {
+    const own = new Set(
+      advances.filter((a) => a.employeeId === run.employeeId).map((a) => a.id),
+    );
+    const mine = recoveries.filter(
+      (r) =>
+        r.kind === 'payroll' &&
+        r.period === run.period &&
+        r.status === 'reserved' &&
+        own.has(r.advanceId),
+    );
+    for (const old of mine.filter(
+      (r) => !lines.some((l) => l.advanceId === r.advanceId),
+    )) {
+      await this.recoveryRepo.remove(old);
+      recoveries.splice(recoveries.indexOf(old), 1);
+    }
+    for (const line of lines) {
+      let rec = mine.find((r) => r.advanceId === line.advanceId);
+      if (!rec) {
+        rec = this.recoveryRepo.create({
+          advanceId: line.advanceId,
+          kind: 'payroll',
+          period: run.period,
+          status: 'reserved',
+          reference: null,
+          paidOn: null,
+          recordedBy: null,
+        });
+        recoveries.push(rec);
+      }
+      rec.payrollRunId = run.id;
+      rec.plannedAmount = String(line.planned);
+      rec.amount = String(line.amount);
+      Object.assign(rec, await this.recoveryRepo.save(rec));
+    }
+  }
+
+  toPublicAdvance(
+    entity: SalaryAdvanceEntity,
+    recoveries: AdvanceRecoveryEntity[],
+  ): PublicAdvance {
     return {
       id: entity.id,
       employeeId: formatEmployeeId(entity.employeeId),
@@ -765,12 +874,26 @@ export class EmployeesService {
       decidedBy: entity.decidedBy ?? undefined,
       decidedOn: entity.decidedOn ? entity.decidedOn.toISOString() : undefined,
       decisionReason: entity.decisionReason ?? undefined,
-      ...recoveryOf(entity),
+      ...recoveryOf(entity, recoveries),
     };
   }
 
-  private toPublicPayroll(entity: PayrollRunEntity): PublicPayrollRow {
+  private toPublicPayroll(
+    entity: PayrollRunEntity,
+    ctx?: {
+      advances: SalaryAdvanceEntity[];
+      recoveries: AdvanceRecoveryEntity[];
+    },
+  ): PublicPayrollRow {
     return {
+      advanceLines: ctx
+        ? payslipAdvanceLines(
+            entity.employeeId,
+            entity.period,
+            ctx.advances,
+            ctx.recoveries,
+          )
+        : undefined,
       id: entity.id,
       employeeId: formatEmployeeId(entity.employeeId),
       employeeName: entity.employeeName,

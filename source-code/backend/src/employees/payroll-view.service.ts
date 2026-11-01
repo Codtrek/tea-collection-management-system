@@ -7,6 +7,9 @@ import { formatEmployeeId } from './employee-map';
 import { EmployeeEntity } from './employee.entity';
 import { EmployeeRoutesService } from './employee-routes.service';
 import { PayrollRunEntity } from './payroll-run.entity';
+import { payslipAdvanceLines } from './advance-balance';
+import { AdvanceRecoveryEntity } from './advance-recovery.entity';
+import { SalaryAdvanceEntity } from './salary-advance.entity';
 import {
   hasNoBankDetails,
   type PayrollMonthResult,
@@ -27,6 +30,10 @@ export class PayrollViewService {
     private readonly payrollRepo: Repository<PayrollRunEntity>,
     @InjectRepository(EmployeeEntity)
     private readonly employeeRepo: Repository<EmployeeEntity>,
+    @InjectRepository(SalaryAdvanceEntity)
+    private readonly advanceRepo: Repository<SalaryAdvanceEntity>,
+    @InjectRepository(AdvanceRecoveryEntity)
+    private readonly recoveryRepo: Repository<AdvanceRecoveryEntity>,
     private readonly employeeRoutes: EmployeeRoutesService,
   ) {}
 
@@ -34,19 +41,29 @@ export class PayrollViewService {
     q: PayrollQuery,
     now: Date = new Date(),
   ): Promise<PayrollMonthResult> {
-    const [runs, employees, routesByEmployee, routes] = await Promise.all([
-      this.payrollRepo.find(),
-      this.employeeRepo.find(),
-      this.employeeRoutes.routesByEmployee(now),
-      this.employeeRoutes.routes(),
-    ]);
+    const [runs, employees, routesByEmployee, routes, allAdvances, recoveries] =
+      await Promise.all([
+        this.payrollRepo.find(),
+        this.employeeRepo.find(),
+        this.employeeRoutes.routesByEmployee(now),
+        this.employeeRoutes.routes(),
+        this.advanceRepo.find(),
+        this.recoveryRepo.find(),
+      ]);
     const byId = new Map(employees.map((e) => [e.id, e]));
     const toRow = (r: PayrollRunEntity): PayrollViewRow => {
       const e = byId.get(r.employeeId);
       const gross = Number(r.gross);
       const advances = Number(r.deductionsAdvances);
       const other = Number(r.deductionsOther);
+      const advanceLines = payslipAdvanceLines(
+        r.employeeId,
+        r.period,
+        allAdvances,
+        recoveries,
+      );
       return {
+        advanceLines,
         id: r.id,
         employeeId: formatEmployeeId(r.employeeId),
         employeeName: r.employeeName,
@@ -65,6 +82,7 @@ export class PayrollViewService {
         problems: {
           noBank: r.status === 'Pending' && hasNoBankDetails(e),
           zeroGross: gross === 0,
+          carriedForward: advanceLines.reduce((s, l) => s + l.carried, 0),
         },
       };
     };

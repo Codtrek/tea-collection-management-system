@@ -1,4 +1,4 @@
-import type { RecoveryStatus } from './advance-balance';
+import type { PayslipAdvanceLine, RecoveryStatus } from './advance-balance';
 
 /**
  * DB ↔ portal mapping for the Employees module. Unlike Estates/Collections,
@@ -82,7 +82,13 @@ export interface PublicAdvance {
   /** Salary-Advances-Addendum — from advance-balance.ts, the one place these are computed */
   recovery: RecoveryStatus | null;
   remaining: number;
+  /** Σ recovered so far */
+  recovered: number;
+  /** Σ (planned − deducted) over its payroll months — what the gross couldn't take */
+  carriedForward: number;
+  /** the Pending payroll month that deducts from it next, if one is reserved */
   payrollPeriod: string | null;
+  /** the latest month it was (partly) recovered in */
   recoveredPeriod: string | null;
 }
 
@@ -109,6 +115,8 @@ export interface PublicPayrollRow {
   missingBank?: boolean;
   /** left out of a run with this reason (bank-paid, no bank details); the row stays Pending */
   excludedReason?: string;
+  /** Salary-Advances-Addendum §9 — per advance: planned / deducted / carried forward / remaining */
+  advanceLines?: PayslipAdvanceLine[];
   /** Additive — shift-hours/rate breakdown behind the stored `gross` snapshot. */
   shiftHours?: ShiftHours;
   rates?: ShiftHours;

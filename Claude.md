@@ -1019,6 +1019,11 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Migration:** `2026-11-01-salary-advances.sql`.
 - **Dates:** **"10 Jul 2026" everywhere.** `lib/format.ts` `formatDate` is the one formatter (it was DD/MM/YYYY).
 - **Advance rules:** no max-amount or one-open-advance rules exist. They are proposed in the addendum, NOT built.
+- **Recoveries (2026-11-02):** each month's deduction is a row in `advance_recoveries` (reserved at Generate, recovered at Process).
+  - A month deducts the smallest of: the installment, the free balance, and `system_settings.payroll.advanceDeductionCapPct`% of gross (default 50, **not a confirmed legal figure**).
+  - **Net payable is never below Rs. 0**; the rest is carried forward.
+  - Process refuses negative rows generated before this rule.
+  - August–November 2026 have Rs. 0 gross because **no attendance is marked** after July.
 
 ### Payroll filters (Part C; `docs/specs/Payroll-Month-History-Addendum.md` §6–11)
 

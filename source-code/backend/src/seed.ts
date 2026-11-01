@@ -2746,6 +2746,20 @@ async function seed() {
           missingBank,
         ],
       );
+      // the July row reserves the advances it deducts (Salary-Advances-Addendum §9)
+      for (const a of SALARY_ADVANCE_SEEDS.filter(
+        (s) =>
+          s.employeeName === e.name && s.status === 'Approved' && !s.deducted,
+      )) {
+        await client.query(
+          `INSERT INTO advance_recoveries
+             (advance_id, kind, period, payroll_run_id, status, planned_amount, amount)
+           SELECT $1, 'payroll', $2, p.id, 'reserved', $3, $3
+             FROM payroll_runs p WHERE p.employee_id = $4 AND p.period = $2
+           ON CONFLICT DO NOTHING`,
+          [a.id, PAYROLL_PERIOD, a.amount, employeeId],
+        );
+      }
     }
     console.log(`Seeded payroll for ${PAYROLL_PERIOD}`);
 

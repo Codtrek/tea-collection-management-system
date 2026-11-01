@@ -89,7 +89,7 @@ export function SettlementProcessPage() {
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <SummaryTile label="Settlement period" value={period} />
         <SummaryTile label="Estates" value={`${included.length} included`} />
-        <SummaryTile label="Total payable" value={formatCurrency(total)} highlight />
+        <SummaryTile label="Total payable" value={formatCurrency(total)} highlight={total > 0} />
       </div>
 
       {excluded.length > 0 && (

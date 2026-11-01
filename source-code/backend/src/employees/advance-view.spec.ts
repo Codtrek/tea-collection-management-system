@@ -15,6 +15,8 @@ const row = (id: string, over: Partial<AdvanceRow>): AdvanceRow => ({
   status: 'Approved',
   recovery: 'Not started',
   remaining: 10000,
+  recovered: 0,
+  carriedForward: 0,
   payrollPeriod: null,
   recoveredPeriod: null,
   role: 'Factory Officer',

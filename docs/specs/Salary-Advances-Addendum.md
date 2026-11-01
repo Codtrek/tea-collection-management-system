@@ -112,3 +112,43 @@ The portal only displays these figures. An approved advance is recovered **in fu
 - **Portal:**
   - `lib/format.test.ts`: the date formatter, including the no-shift case in a time zone behind UTC.
   - `advance-filters.test.ts`: date presets (including a year end and a leap year), and filters in the URL.
+
+---
+
+## 9. Never a negative net payable; the shortfall is carried forward (2026-11-02)
+
+**What went wrong.** On Process Payroll for August 2026, S. Fernando had Rs. 0 gross and a Rs. 15,000 advance deduction. Her net was Rs. −15,000, and the total showed in green.
+- **Cause:** Part B deducted the whole advance with no check against gross.
+- **Why the gross was 0:** **no attendance is marked for August**. The only attendance on record is July 2026, so every month generated afterwards (August to November) has Rs. 0 gross for everyone.
+
+**The rule.** A month's advance deduction, per advance with the oldest first, is the **smallest** of:
+1. the planned installment (§10; until then, the whole balance);
+2. what is still free of the balance (minus what other Pending months have reserved);
+3. what the gross allows: **`advanceDeductionCapPct`% of gross**, and never more than gross − other deductions.
+
+Whatever couldn't be deducted stays in the remaining balance and is deducted in later months, until the balance is Rs. 0. **Net payable can never go below Rs. 0.**
+
+**Cap setting.** `system_settings.payroll.advanceDeductionCapPct`, default **50**.
+- **No existing rule:** nothing in the code or specs sets this figure.
+- **Legal limit:** Sri Lankan wage law does restrict deductions from wages, but **the figure must be confirmed by HR / legal**. 50% is a placeholder, not a legal value.
+- **Second setting:** `maxInstallmentMonths` (default 6) lives in the same place.
+
+**Data.** New table `advance_recoveries` (migration `2026-11-02-advance-recoveries.sql`), with one row per advance per payroll month:
+- **When it changes:** the row is `reserved` at Generate and `recovered` at Process.
+- **Amounts:** `planned_amount` is what the month meant to deduct; `amount` is what it deducted.
+- **Remaining balance** = approved amount − Σ recovered.
+- **Shared code:** `advance-balance.ts` computes all of this (`planMonthDeductions`, `remainingOf`, `recoveryOf`, `payslipAdvanceLines`). The Salary Advances pages, payroll and the employee page all use it.
+- **Part B still holds:** a month never plans money another Pending month has reserved.
+- **Migration:** turns Part B's single reservations into recovery rows.
+- **When an advance closes:** it is marked `deducted` only once its balance reaches Rs. 0.
+
+**What users see.**
+- **Payslip:** per advance, *planned installment / deducted this month / carried forward / remaining balance*.
+- **Payroll list:** a **"Deduction carried forward"** chip. It is also an Issues filter.
+- **Process page:**
+  - **Rs. 0 gross:** a **"N employees with Rs. 0 gross"** warning that **doesn't block** the run.
+  - **Carried forward:** a line naming the employees whose deductions roll over.
+  - **Totals:** shown in green only when positive.
+- **Settlement process page:** the same money-colour rule.
+
+**Validation.** Process refuses a row whose net is below Rs. 0, naming the employees and asking to recalculate first. These are rows generated before this rule, such as August 2026 on the local data. Recalculating August deducts Rs. 0 from S. Fernando and carries Rs. 15,000 forward.

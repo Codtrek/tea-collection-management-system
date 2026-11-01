@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { outstandingFor } from './advance-balance';
+import { AdvanceRecoveryEntity } from './advance-recovery.entity';
 import {
   type AdvanceListResult,
   type AdvanceQuery,
@@ -37,6 +38,8 @@ export class AdvanceViewService {
   constructor(
     @InjectRepository(SalaryAdvanceEntity)
     private readonly advanceRepo: Repository<SalaryAdvanceEntity>,
+    @InjectRepository(AdvanceRecoveryEntity)
+    private readonly recoveryRepo: Repository<AdvanceRecoveryEntity>,
     @InjectRepository(EmployeeEntity)
     private readonly employeeRepo: Repository<EmployeeEntity>,
     private readonly employees: EmployeesService,
@@ -62,7 +65,11 @@ export class AdvanceViewService {
       previous: rows
         .filter((r) => r.employeeId === advance.employeeId && r.id !== id)
         .sort((a, b) => b.dateRequested.localeCompare(a.dateRequested)),
-      outstanding: outstandingFor(entities, employeeId),
+      outstanding: outstandingFor(
+        entities,
+        await this.recoveryRepo.find(),
+        employeeId,
+      ),
     };
   }
 
@@ -73,7 +80,11 @@ export class AdvanceViewService {
     );
     const rows = await this.rows(entities);
     return {
-      outstanding: outstandingFor(entities, employeeId),
+      outstanding: outstandingFor(
+        entities,
+        await this.recoveryRepo.find(),
+        employeeId,
+      ),
       advances: rows.sort((a, b) =>
         b.dateRequested.localeCompare(a.dateRequested),
       ),
@@ -81,14 +92,16 @@ export class AdvanceViewService {
   }
 
   private async rows(entities?: SalaryAdvanceEntity[]): Promise<AdvanceRow[]> {
-    const [advances, employees, routesByEmployee] = await Promise.all([
-      entities ? Promise.resolve(entities) : this.advanceRepo.find(),
-      this.employeeRepo.find(),
-      this.employeeRoutes.routesByEmployee(),
-    ]);
+    const [advances, employees, routesByEmployee, recoveries] =
+      await Promise.all([
+        entities ? Promise.resolve(entities) : this.advanceRepo.find(),
+        this.employeeRepo.find(),
+        this.employeeRoutes.routesByEmployee(),
+        this.recoveryRepo.find(),
+      ]);
     const roleOf = new Map(employees.map((e) => [e.id, e.role]));
     return advances.map((a) => ({
-      ...this.employees.toPublicAdvance(a),
+      ...this.employees.toPublicAdvance(a, recoveries),
       role: roleOf.get(a.employeeId) ?? '',
       routes: routesByEmployee.get(a.employeeId) ?? [],
     }));

@@ -10,6 +10,7 @@ import type { PayrollIssue } from './types'
 export const PAYROLL_ISSUE_OPTIONS: { value: PayrollIssue; label: string }[] = [
   { value: 'noBank', label: 'No bank details' },
   { value: 'zeroGross', label: 'Rs. 0 gross' },
+  { value: 'carriedForward', label: 'Deduction carried forward' },
   { value: 'hasDeductions', label: 'Has deductions' },
   { value: 'hasAdvance', label: 'Has advance recovery' },
 ]
