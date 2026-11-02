@@ -27,6 +27,10 @@ export interface ComboboxProps<T> {
   /** lets the field be cleared back to "none" (filters: "All estates") */
   clearable?: boolean
   disabled?: boolean
+  /** opt-in: a reason the option can't be picked (listed greyed, with a tooltip) — e.g. an inactive estate */
+  getDisabledReason?: (item: T) => string | null
+  /** the badge on a disabled option (default "Unavailable") */
+  disabledBadge?: string
 }
 
 /*
@@ -51,6 +55,8 @@ export function Combobox<T>({
   pageSize = 50,
   clearable = true,
   disabled,
+  getDisabledReason,
+  disabledBadge = 'Unavailable',
 }: ComboboxProps<T>) {
   const id = useId()
   const listId = `${id}-list`
@@ -63,6 +69,8 @@ export function Combobox<T>({
   const textOf = getSearchText ?? ((i: T) => `${getLabel(i)} ${getMeta?.(i) ?? ''}`)
   const matches = filterOptions(items, query, textOf)
   const visible = matches.slice(0, shown)
+  const reasonOf = (item: T) => getDisabledReason?.(item) ?? null
+  const isDisabled = (i: number) => !!visible[i] && reasonOf(visible[i]) !== null
 
   const close = () => {
     setOpen(false)
@@ -71,6 +79,7 @@ export function Combobox<T>({
     setShown(pageSize)
   }
   const pick = (item: T) => {
+    if (reasonOf(item) !== null) return
     onChange(getKey(item))
     close()
   }
@@ -100,13 +109,15 @@ export function Combobox<T>({
           }}
           onBlur={close}
           onChange={(e) => {
-            setQuery(e.target.value)
+            const q = e.target.value
+            setQuery(q)
             setOpen(true)
-            setActive(e.target.value.trim() ? 0 : -1)
+            // typing highlights the first match that can be picked, so Enter takes it
+            setActive(q.trim() ? filterOptions(items, q, textOf).slice(0, pageSize).findIndex((i) => reasonOf(i) === null) : -1)
             setShown(pageSize)
           }}
           onKeyDown={(e) => {
-            const r = comboboxKey({ open, active }, e.key, visible.length)
+            const r = comboboxKey({ open, active }, e.key, visible.length, isDisabled)
             if (!r.handled) return
             e.preventDefault()
             if (r.select) pick(visible[active])
@@ -154,26 +165,36 @@ export function Combobox<T>({
             ) : (
               visible.map((item, i) => {
                 const key = getKey(item)
+                const reason = reasonOf(item)
                 return (
                   <li
                     key={key}
                     id={`${id}-opt-${i}`}
                     role="option"
                     aria-selected={key === value}
+                    aria-disabled={reason !== null || undefined}
+                    title={reason ?? undefined}
                     ref={i === active ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
                     onMouseDown={(e) => {
                       e.preventDefault()
                       pick(item)
                     }}
-                    onMouseEnter={() => setActive(i)}
+                    onMouseEnter={() => reason === null && setActive(i)}
                     className={cn(
-                      'cursor-pointer px-3 py-2',
+                      'px-3 py-2',
+                      reason !== null ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
                       i === active ? 'bg-surface-hover' : '',
                       key === value && 'bg-brand-soft/50',
                     )}
                   >
-                    <span className="block truncate text-sm font-medium text-text">{getLabel(item)}</span>
+                    <span className="flex items-center gap-2">
+                      <span className={cn('block truncate text-sm font-medium', reason !== null ? 'text-text-muted' : 'text-text')}>{getLabel(item)}</span>
+                      {reason !== null && (
+                        <span className="shrink-0 rounded-full bg-surface-sunken px-2 py-0.5 text-[11px] font-medium text-text-muted">{disabledBadge}</span>
+                      )}
+                    </span>
                     {getMeta && <span className="block truncate text-xs text-text-muted">{getMeta(item)}</span>}
+                    {reason !== null && <span className="sr-only">{reason}</span>}
                   </li>
                 )
               })

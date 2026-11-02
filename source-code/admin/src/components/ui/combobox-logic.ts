@@ -23,20 +23,37 @@ export type ComboboxKeyResult = ComboboxState & {
   handled: boolean
 }
 
+/** The next enabled option from `from`, stepping `dir` (wrapping); -1 when none is enabled. */
+function step(from: number, dir: 1 | -1, count: number, disabled: (i: number) => boolean): number {
+  for (let n = 1; n <= count; n++) {
+    const i = (((from + dir * n) % count) + count) % count
+    if (!disabled(i)) return i
+  }
+  return -1
+}
+
 /**
  * ArrowDown / ArrowUp move through the `count` visible options (and open the list), wrapping at
- * the ends; Enter selects the highlighted one; Escape closes. Anything else is left to the input.
+ * the ends and skipping `disabled` ones (e.g. an inactive estate); Enter selects the highlighted
+ * one — never a disabled one; Escape closes. Anything else is left to the input.
  */
-export function comboboxKey(state: ComboboxState, key: string, count: number): ComboboxKeyResult {
+export function comboboxKey(
+  state: ComboboxState,
+  key: string,
+  count: number,
+  disabled: (index: number) => boolean = () => false,
+): ComboboxKeyResult {
   switch (key) {
     case 'ArrowDown':
-      if (!state.open) return { open: true, active: count > 0 ? 0 : -1, handled: true }
-      return { open: true, active: count === 0 ? -1 : (state.active + 1) % count, handled: true }
+      if (count === 0) return { open: true, active: -1, handled: true }
+      return { open: true, active: step(state.open ? state.active : -1, 1, count, disabled), handled: true }
     case 'ArrowUp':
-      if (!state.open) return { open: true, active: count - 1, handled: true }
-      return { open: true, active: count === 0 ? -1 : state.active <= 0 ? count - 1 : state.active - 1, handled: true }
+      if (count === 0) return { open: true, active: -1, handled: true }
+      return { open: true, active: step(state.open && state.active >= 0 ? state.active : 0, -1, count, disabled), handled: true }
     case 'Enter':
-      if (state.open && state.active >= 0 && state.active < count) return { open: false, active: -1, select: true, handled: true }
+      if (state.open && state.active >= 0 && state.active < count && !disabled(state.active)) {
+        return { open: false, active: -1, select: true, handled: true }
+      }
       return { ...state, handled: state.open }
     case 'Escape':
       return { open: false, active: -1, handled: state.open }

@@ -1056,10 +1056,20 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Recoveries:** `estate_advance_recoveries` records which settlement recovered how much (migration `2026-11-03-estate-advance-recoveries.sql`).
   - `backend/src/estates/estate-advance-balance.ts` is the ONLY remaining-balance rule for estate advances.
   - The list (`GET /estates/advances`, filtered and paged) and the detail page (`GET /estates/advances/:aid`) use it.
-- **Not fixed yet (addendum §4, awaiting approval):**
-  - Process still marks every pending advance of the estate "deducted" and records the full remaining balance as recovered;
-  - /estates and EST-10 Outstanding count fertilizer only;
-  - there are no estate-advance installments.
+- **Repayment plans (addendum §4):** `backend/src/advances/installments.ts` is the ONE installment model, shared by salary and estate advances.
+  - It covers schedule, validation, carry-forward, remaining balance, one period's deductions, reschedule and early repayment.
+  - Salary's `advance-schedule.ts` / `advance-balance.ts` are thin wrappers over it. Don't fork the logic again.
+- **Estate plans:**
+  - **Plan:** an estate advance has a plan (`installment_amount` / `installment_months` / `start_period`).
+  - **Recovery rows:** each settlement period it was due in is a recovery row (planned vs deducted; carry-forward extends the schedule). Cash and bank repayments are rows with no period.
+  - **Status:** Deducted only at Rs 0.
+- **Process (no settlement generator yet):** it splits each settlement's *stored* `advance_deduction` across open advances (`allocateStoredAdvanceDeduction`). It never changes settlement amounts.
+  - The future generator should call `planSettlementDeductions`: transport → fertilizer → advances, cap % of gross, net ≥ 0; `system_settings.estateAdvances`.
+- **Outstanding** on /estates and EST-10 = fertilizer + remaining advances.
+- **Inactive estates:**
+  - issuing to one is refused (409);
+  - the picker lists them disabled (`Combobox` `getDisabledReason`);
+  - a balance left on one is flagged, never written off.
 
 ## Newcomer's guide (2026-10-18)
 

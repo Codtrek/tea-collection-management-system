@@ -13,6 +13,7 @@ import * as estatesService from '@/services/estates'
 import { currentMonth } from '@/lib/month'
 import { defaultStartMonth, planInstallment, planLabel, planValueError, scheduleText, previewSchedule, type PlanValue } from '@/features/advances/advance-plan'
 import { RepaymentPlanFields } from '@/features/advances/RepaymentPlanFields'
+import { estateOptionMeta, estateSearchText, INACTIVE_REASON } from './estate-picker'
 import { formatCurrency } from '@/lib/format'
 
 /*
@@ -41,8 +42,9 @@ export function IssueAdvancePage() {
   const firstMonth = defaultStartMonth(currentMonth())
   const [plan, setPlan] = useState<PlanValue>({ mode: 'single', installment: '', months: '', startMonth: firstMonth })
 
-  const activeEstates = (estates ?? []).filter((e) => e.status === 'Active').sort((a, b) => a.estateName.localeCompare(b.estateName))
-  const estate = activeEstates.find((e) => e.id === estateId)
+  // every estate owner, A–Z by estate name; inactive ones are listed but can't be picked
+  const allEstates = [...(estates ?? [])].sort((a, b) => a.estateName.localeCompare(b.estateName))
+  const estate = allEstates.find((e) => e.id === estateId && e.status === 'Active')
   // a pre-filled (?estate=) owner the picker can't offer — say so rather than show a silent blank
   const inactive = !estate ? (estates ?? []).find((e) => e.id === estateId) : undefined
   const estateError = errors.estate ?? (inactive ? `${inactive.estateName} is ${inactive.status} — advances go to active estate owners only` : undefined)
@@ -66,7 +68,7 @@ export function IssueAdvancePage() {
 
   const validate = () => {
     const next: typeof errors = {}
-    if (!estate) next.estate = 'Select an estate owner'
+    if (!estate) next.estate = inactive ? INACTIVE_REASON : 'Select an estate owner'
     if (!amount || Number.isNaN(parsedAmount) || parsedAmount <= 0) next.amount = 'Enter a positive amount'
     if (!reason.trim()) next.reason = 'Reason is required'
     if (planProblem) next.amount = next.amount ?? planProblem
@@ -110,14 +112,17 @@ export function IssueAdvancePage() {
         <div className="flex flex-col gap-5">
           <Combobox
             label="Estate owner"
-            placeholder="Search estate, owner or EST- number…"
-            noun="estates"
-            items={activeEstates}
+            placeholder="Search estate, owner, EST- number or route…"
+            noun="estate owners"
+            items={allEstates}
             value={estateId}
             onChange={setEstateId}
             getKey={(e) => e.id}
-            getLabel={(e) => `${e.estateName} — ${e.ownerName}`}
-            getMeta={(e) => `${e.id} · ${e.route || 'No route'}`}
+            getLabel={(e) => e.estateName}
+            getMeta={estateOptionMeta}
+            getSearchText={estateSearchText}
+            getDisabledReason={(e) => (e.status === 'Active' ? null : INACTIVE_REASON)}
+            disabledBadge="Inactive"
             error={estateError}
           />
           <Input
