@@ -7,5 +7,6 @@ export { default as DeliveryListItem } from "./DeliveryListItem";
 export { default as EstateCard } from "./EstateCard";
 export { default as AddEstateButton } from "./AddEstateButton";
 export { default as ProfileFeatureCard } from "./ProfileFeatureCard";
+export { default as UserDetail } from "./UserDetail";
 
 export type { PillTone } from "./StatusPill";

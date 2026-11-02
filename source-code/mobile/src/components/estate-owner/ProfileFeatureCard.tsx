@@ -15,7 +15,7 @@ export default function ProfileFeatureCard({
 }: ProfileFeatureCardProps) {
     return(
         <>
-            <Pressable>
+            <Pressable onPress={featurePressed} accessibilityRole="button" accessibilityLabel={feature}>
                 <AppCard>
                     <View style={styles.content}>
                         <Ionicons name={iconName} size={18}/>

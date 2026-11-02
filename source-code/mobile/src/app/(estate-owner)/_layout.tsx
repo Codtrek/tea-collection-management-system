@@ -10,7 +10,7 @@ import { spacing } from "@/theme/spacing";
 
 export default function EstateOwnerLayout() {
     const pathname = usePathname();
-    const activeTab = pathname.endsWith("/estates") ? "estates" : "home";
+    const activeTab = pathname.endsWith("/estates") ? "estates" : /\/(profile|your-profile|edit-profile)$/.test(pathname) ? "profile" : "home";
 
     useEffect(() => {
         router.prefetch("/(estate-owner)/home");
