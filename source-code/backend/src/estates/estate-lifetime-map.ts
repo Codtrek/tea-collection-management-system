@@ -20,6 +20,9 @@ export interface EstateLifetimeMetrics {
   outstanding: {
     fertilizerUndeductedRs: number;
     undeductedDispatchCount: number;
+    /** Σ remaining over the estate's open advances (estate-advance-balance.ts) */
+    advancesRs: number;
+    openAdvanceCount: number;
     lastSettlementRs: number | null;
     lastSettlementDate: string | null;
   };
@@ -98,7 +101,10 @@ export interface EstateDirectoryRow {
   lastDeliveryDate: string | null;
   lastPaymentRs: number | null;
   lastPaymentDate: string | null;
+  /** owed to the factory: unpaid fertilizer + remaining advances (Estate-Owner-Advances-Addendum §4) */
   outstandingRs: number;
+  fertilizerOutstandingRs: number;
+  advanceOutstandingRs: number;
   hasOutstanding: boolean;
   lifetimeEarnedRs: number;
   lifetimeDeliveredKg: number;

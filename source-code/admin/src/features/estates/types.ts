@@ -25,7 +25,7 @@ export interface EstateOwner {
 
 export type OwnerPaymentMethod = 'bank' | 'cash'
 
-export type EstateAdvanceStatus = 'Pending deduction' | 'Deducted'
+export type EstateAdvanceStatus = 'Pending deduction' | 'Recovering' | 'Deducted'
 
 export interface EstateAdvance {
   id: string
@@ -39,7 +39,7 @@ export interface EstateAdvance {
 }
 
 /** EST-05 (Estate-Owner-Advances-Addendum §3) — balances from the server's estate-advance-balance.ts */
-export type EstateAdvanceRecovery = 'Pending deduction' | 'Partly deducted' | 'Deducted'
+export type EstateAdvanceRecovery = 'Pending deduction' | 'Recovering' | 'Deducted'
 
 export interface EstateAdvanceRow extends EstateAdvance {
   ownerName: string
@@ -48,6 +48,13 @@ export interface EstateAdvanceRow extends EstateAdvance {
   recovered: number
   remaining: number
   recovery: EstateAdvanceRecovery
+  /** one installment a settlement period */
+  plan: { installment: number; months: number; startPeriod: string }
+  nextPeriod: string | null
+  clearedPeriod: string | null
+  carriedForward: number
+  /** "Outstanding: estate inactive" — a balance left on an estate that's no longer active */
+  estateInactive: boolean
 }
 
 export interface EstateAdvanceListResult extends PaginatedResult<EstateAdvanceRow> {
@@ -65,11 +72,49 @@ export interface EstateAdvanceListResult extends PaginatedResult<EstateAdvanceRo
   issuers: string[]
 }
 
+export interface EstateAdvanceScheduleRow {
+  period: string
+  planned: number
+  deducted: number
+  carried: number
+  status: 'Deducted' | 'Reserved' | 'Planned'
+  settlementId: string | null
+  settlementStatus: 'Pending' | 'Processed' | null
+}
+
+export interface EstateAdvanceReschedule {
+  id: number
+  installmentAmount: number
+  startPeriod: string
+  note: string
+  status: 'Pending' | 'Approved' | 'Rejected'
+  requestedBy: string | null
+  decidedBy: string | null
+  decidedOn: string | null
+  decisionReason: string | null
+  requestedOn: string
+}
+
 export interface EstateAdvanceDetail {
   advance: EstateAdvanceRow
-  recoveries: { settlementId: string; period: string; amount: number; recoveredAt: string }[]
-  /** the estate's pending settlement carrying an advance deduction — planned, not yet recovered */
-  planned: { settlementId: string; period: string; advanceDeduction: number } | null
+  schedule: EstateAdvanceScheduleRow[]
+  repayments: { kind: 'cash' | 'bank'; amount: number; paidOn: string | null; reference: string | null; recordedBy: string | null }[]
+  reschedules: EstateAdvanceReschedule[]
+}
+
+/** The Issue form's helper once an estate is picked (Estate-Owner-Advances-Addendum §4–5). */
+export interface EstateAdvanceContext {
+  estateId: string
+  estateName: string
+  active: boolean
+  outstandingAdvanceRs: number
+  openAdvances: { id: string; remaining: number; nextPeriod: string | null }[]
+  /** average net over the last 3 processed settlements — null when none are processed */
+  averageNetRs: number | null
+  averagePeriods: string[]
+  deductionCapPct: number
+  netWarnPct: number
+  maxInstallmentMonths: number
 }
 
 export type SettlementStatus = 'Pending' | 'Processed'
@@ -188,6 +233,9 @@ export interface EstateLifetimeMetrics {
   }
   outstanding: {
     fertilizerUndeductedRs: number
+    /** remaining over open advances — the shared estate-advance balance */
+    advancesRs: number
+    openAdvanceCount: number
     undeductedDispatchCount: number
     lastSettlementRs: number | null
     lastSettlementDate: string | null
@@ -260,7 +308,10 @@ export interface EstateDirectoryRow {
   lastDeliveryDate: string | null
   lastPaymentRs: number | null
   lastPaymentDate: string | null
+  /** owed to the factory: unpaid fertilizer + remaining advances */
   outstandingRs: number
+  fertilizerOutstandingRs: number
+  advanceOutstandingRs: number
   hasOutstanding: boolean
   lifetimeEarnedRs: number
   lifetimeDeliveredKg: number

@@ -10,7 +10,7 @@ import { formatCompact, formatCompactCurrency, formatCurrency, formatPercent, fo
   never sums a table itself.
 */
 
-export function LifetimeSummary({ metrics }: { metrics: EstateLifetimeMetrics }) {
+export function LifetimeSummary({ metrics, inactive }: { metrics: EstateLifetimeMetrics; inactive?: boolean }) {
   const { lifetime, comparison } = metrics
   const memberSinceLabel = new Date(metrics.memberSince).toLocaleDateString('en-US', {
     month: 'long',
@@ -63,7 +63,7 @@ export function LifetimeSummary({ metrics }: { metrics: EstateLifetimeMetrics })
             )}
           </p>
         </div>
-        <OutstandingPanel outstanding={metrics.outstanding} />
+        <OutstandingPanel outstanding={metrics.outstanding} inactive={inactive} />
       </div>
     </div>
   )

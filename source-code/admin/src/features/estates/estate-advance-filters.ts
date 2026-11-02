@@ -13,11 +13,11 @@ export { DATE_PRESETS }
 
 export const ESTATE_RECOVERY_TONE: Record<EstateAdvanceRecovery, BadgeTone> = {
   'Pending deduction': 'warning',
-  'Partly deducted': 'assigned',
+  Recovering: 'assigned',
   Deducted: 'success',
 }
 
-export const RECOVERY_STATUSES: EstateAdvanceRecovery[] = ['Pending deduction', 'Partly deducted', 'Deducted']
+export const RECOVERY_STATUSES: EstateAdvanceRecovery[] = ['Pending deduction', 'Recovering', 'Deducted']
 
 export interface EstateAdvanceFilters {
   preset: DatePreset

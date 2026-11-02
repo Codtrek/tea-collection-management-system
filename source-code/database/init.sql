@@ -463,7 +463,11 @@ CREATE TABLE estate_advances (
     date_issued DATE NOT NULL,
     issued_by   VARCHAR(100) NOT NULL,
     status      VARCHAR(20) NOT NULL DEFAULT 'pending_deduction'
-        CHECK (status IN ('pending_deduction', 'deducted')),
+        CHECK (status IN ('pending_deduction', 'recovering', 'deducted')),
+    -- repayment plan (Estate-Owner-Advances-Addendum §4): one installment a settlement period
+    installment_amount DECIMAL(12,2),
+    installment_months INTEGER,
+    start_period       VARCHAR(30), -- e.g. 'December 2026'
     created_at  TIMESTAMP DEFAULT NOW()
 );
 
@@ -499,16 +503,44 @@ CREATE TABLE settlements (
 
 -- Which settlement recovered how much of an estate advance (Estate-Owner-Advances-Addendum §3).
 -- remaining = estate_advances.amount − Σ amount — the shared estate-advance-balance.ts rule.
+-- kind 'settlement' = one settlement period (planned vs deducted — a short period shows its
+-- carry-forward); 'cash' / 'bank' = an early repayment recorded by an officer (settlement_id null).
 CREATE TABLE estate_advance_recoveries (
-    id            SERIAL PRIMARY KEY,
-    advance_id    VARCHAR(20) NOT NULL REFERENCES estate_advances(id),
-    settlement_id VARCHAR(20) NOT NULL REFERENCES settlements(id),
-    amount        DECIMAL(12,2) NOT NULL CHECK (amount > 0),
-    recovered_at  TIMESTAMP NOT NULL,
-    created_at    TIMESTAMP DEFAULT NOW(),
+    id             SERIAL PRIMARY KEY,
+    advance_id     VARCHAR(20) NOT NULL REFERENCES estate_advances(id),
+    settlement_id  VARCHAR(20) REFERENCES settlements(id),
+    kind           VARCHAR(12) NOT NULL DEFAULT 'settlement'
+        CHECK (kind IN ('settlement', 'cash', 'bank')),
+    period         VARCHAR(30),
+    planned_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    amount         DECIMAL(12,2) NOT NULL CHECK (amount >= 0),
+    status         VARCHAR(10) NOT NULL DEFAULT 'recovered'
+        CHECK (status IN ('reserved', 'recovered')),
+    reference      VARCHAR(100),
+    paid_on        DATE,
+    recorded_by    VARCHAR(100),
+    recovered_at   TIMESTAMP NOT NULL,
+    created_at     TIMESTAMP DEFAULT NOW(),
     UNIQUE (advance_id, settlement_id)
 );
 CREATE INDEX estate_advance_recoveries_advance_idx ON estate_advance_recoveries (advance_id);
+
+-- A plan change on an estate advance — approved by someone other than the requester.
+CREATE TABLE estate_advance_reschedules (
+    id                   SERIAL PRIMARY KEY,
+    advance_id           VARCHAR(20) NOT NULL REFERENCES estate_advances(id) ON DELETE CASCADE,
+    installment_amount   DECIMAL(12,2) NOT NULL CHECK (installment_amount > 0),
+    start_period         VARCHAR(30) NOT NULL,
+    note                 TEXT NOT NULL,
+    status               VARCHAR(10) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected')),
+    requested_by_user_id INTEGER REFERENCES users(id),
+    requested_by_name    VARCHAR(100),
+    decided_by           VARCHAR(100),
+    decided_on           TIMESTAMP,
+    decision_reason      TEXT,
+    created_at           TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX idx_estate_advance_reschedules_advance ON estate_advance_reschedules(advance_id);
 
 -- Redefined 2026-07-28 (Estate Owner Lifetime History slice). The original
 -- shape (one row per fertilizer_request_id, UNIQUE) couldn't hold an ad-hoc
@@ -1138,6 +1170,12 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
 -- ─── Settings + permissions ─────────────────────────────────────────────────
 INSERT INTO system_settings (key, value, updated_by)
 VALUES ('fertilizer', '{"managerApprovalAboveKg": 500, "maxDeliveryAttempts": 3}'::jsonb, 'migration')
+ON CONFLICT (key) DO NOTHING;
+
+-- Estate owner advances (Estate-Owner-Advances-Addendum §4). deductionCapPct 50 is a placeholder,
+-- not a confirmed rule; deductionOrder is the order a settlement takes its deductions in.
+INSERT INTO system_settings (key, value, updated_by)
+VALUES ('estateAdvances', '{"deductionCapPct": 50, "maxInstallmentMonths": 6, "netWarnPct": 50, "deductionOrder": ["transport", "fertilizer", "advances"]}'::jsonb, 'migration')
 ON CONFLICT (key) DO NOTHING;
 
 -- fertilizerApproval        approve = approve / partially approve / reject a request

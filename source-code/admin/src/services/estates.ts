@@ -2,6 +2,8 @@ import { apiFetch } from '@/lib/api'
 import type { CollectionRecord } from '@/features/collections/types'
 import type {
   EstateAdvance,
+  EstateAdvanceContext,
+  EstateAdvanceReschedule,
   EstateAdvanceDetail,
   EstateAdvanceListResult,
   EstateAdvanceRecovery,
@@ -38,6 +40,10 @@ export interface IssueAdvanceInput {
   estateId: string
   amount: number
   reason: string
+  /** per settlement period; omitted = one deduction */
+  installmentAmount?: number
+  /** 'YYYY-MM' — the first settlement period */
+  startMonth?: string
 }
 
 export function list(): Promise<EstateOwner[]> {
@@ -93,6 +99,43 @@ export function listAdvances(q: EstateAdvanceQuery): Promise<EstateAdvanceListRe
 
 export function getAdvance(id: string): Promise<EstateAdvanceDetail> {
   return apiFetch<EstateAdvanceDetail>(`/estates/advances/${encodeURIComponent(id)}`)
+}
+
+/** Issue form helper: open advance balance, 3-period average net, plan limits. */
+export function getAdvanceContext(estateId: string): Promise<EstateAdvanceContext> {
+  return apiFetch<EstateAdvanceContext>(`/estates/${encodeURIComponent(estateId)}/advance-context`)
+}
+
+export function requestAdvanceReschedule(
+  id: string,
+  input: { installmentAmount: number; startMonth: string; note: string },
+): Promise<EstateAdvanceReschedule> {
+  return apiFetch<EstateAdvanceReschedule>(`/estates/advances/${encodeURIComponent(id)}/reschedules`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function decideAdvanceReschedule(
+  id: string,
+  rid: number,
+  input: { decision: 'approve' | 'reject'; reason?: string },
+): Promise<EstateAdvanceReschedule> {
+  return apiFetch<EstateAdvanceReschedule>(`/estates/advances/${encodeURIComponent(id)}/reschedules/${rid}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })
+}
+
+/** An early repayment, in cash or by bank transfer. */
+export function recordAdvanceRepayment(
+  id: string,
+  input: { kind: 'cash' | 'bank'; amount: number; paidOn: string; reference: string },
+): Promise<{ remaining: number }> {
+  return apiFetch<{ remaining: number }>(`/estates/advances/${encodeURIComponent(id)}/repayments`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }
 
 export function issueAdvance(input: IssueAdvanceInput): Promise<EstateAdvance> {

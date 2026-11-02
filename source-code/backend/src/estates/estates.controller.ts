@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Put,
@@ -24,9 +25,19 @@ import { CreateEstateDto } from './dto/create-estate.dto';
 import type { EstateAdvanceRecoveryStatus } from './estate-advance-balance';
 import type { EstateAdvanceListResult } from './estate-advance-view';
 import {
+  type EstateAdvanceContext,
   type EstateAdvanceDetail,
   EstateAdvanceViewService,
 } from './estate-advance-view.service';
+import {
+  EstateAdvancePlanService,
+  type PublicEstateReschedule,
+} from './estate-advance-plan.service';
+import {
+  DecideRescheduleDto,
+  EstateRepaymentDto,
+  RescheduleAdvanceDto,
+} from './dto/estate-advance-change.dto';
 import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import { ProcessSettlementsDto } from './dto/process-settlements.dto';
 import { UpdateEstateDto } from './dto/update-estate.dto';
@@ -63,7 +74,7 @@ const SETTLEMENT_SORTS: readonly string[] = [
 
 const ESTATE_ADVANCE_STATUSES: EstateAdvanceRecoveryStatus[] = [
   'Pending deduction',
-  'Partly deducted',
+  'Recovering',
   'Deducted',
 ];
 
@@ -75,6 +86,7 @@ export class EstatesController {
     private readonly lifetimeService: EstateLifetimeService,
     private readonly settlementView: SettlementViewService,
     private readonly advanceView: EstateAdvanceViewService,
+    private readonly advancePlans: EstateAdvancePlanService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -118,6 +130,49 @@ export class EstatesController {
   @Get('advances/:aid')
   advanceDetail(@Param('aid') aid: string): Promise<EstateAdvanceDetail> {
     return this.advanceView.detail(aid);
+  }
+
+  /** §4 — ask to change the plan; someone else approves. Processed periods never change. */
+  @Post('advances/:aid/reschedules')
+  async requestReschedule(
+    @Param('aid') aid: string,
+    @Body() dto: RescheduleAdvanceDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicEstateReschedule> {
+    return this.advancePlans.requestReschedule(
+      aid,
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
+  @Patch('advances/:aid/reschedules/:rid')
+  async decideReschedule(
+    @Param('aid') aid: string,
+    @Param('rid', ParseIntPipe) rid: number,
+    @Body() dto: DecideRescheduleDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicEstateReschedule> {
+    return this.advancePlans.decideReschedule(
+      aid,
+      rid,
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
+  /** §4 — an early repayment in cash or by bank transfer. */
+  @Post('advances/:aid/repayments')
+  async recordRepayment(
+    @Param('aid') aid: string,
+    @Body() dto: EstateRepaymentDto,
+    @Req() req: AuthedRequest,
+  ): Promise<{ remaining: number }> {
+    return this.advancePlans.recordRepayment(
+      aid,
+      dto,
+      await this.resolveActor(req),
+    );
   }
 
   @Post('advances')
@@ -235,6 +290,12 @@ export class EstatesController {
 
   // ── Estate Owner Lifetime History (EST-03 amended + EST-10) ──────
 
+  /** Issue form helper (§4–5): open advance balance, 3-period average net, plan limits. */
+  @Get(':id/advance-context')
+  advanceContext(@Param('id') id: string): Promise<EstateAdvanceContext> {
+    return this.advanceView.context(id);
+  }
+
   /** §3 — the shared selector every Lifetime Summary figure comes from. */
   @Get(':id/lifetime')
   lifetimeMetrics(@Param('id') id: string): Promise<EstateLifetimeMetrics> {
@@ -344,6 +405,10 @@ export class EstatesController {
   /** Resolves the JWT's `sub` to the acting user's display name + role for stamping. */
   private async resolveActor(req: AuthedRequest): Promise<Actor> {
     const profile = await this.usersService.getProfile(Number(req.user.sub));
-    return { name: profile?.name ?? 'Unknown', role: req.user.role };
+    return {
+      name: profile?.name ?? 'Unknown',
+      role: req.user.role,
+      sub: Number(req.user.sub),
+    };
   }
 }

@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { StatusBadge, type BadgeTone } from '@/components/ui/StatusBadge'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 import { ErrorState } from '@/components/data/ErrorState'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { useToast } from '@/components/ui/Toast'
@@ -16,10 +16,10 @@ import { currentMonth, monthOf } from '@/lib/month'
 import { ADVANCE_TONE, RECOVERY_TONE } from './advance-status'
 import { defaultStartMonth, planInstallment, planLabel, planValueError, type PlanValue } from '@/features/advances/advance-plan'
 import { RepaymentPlanFields } from '@/features/advances/RepaymentPlanFields'
-import type { AdvanceRow, ScheduleStatus } from './types'
+import { ReschedulesList } from '@/features/advances/ReschedulesList'
+import { ScheduleTable } from '@/features/advances/ScheduleTable'
+import type { AdvanceRow } from './types'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format'
-
-const SCHEDULE_TONE: Record<ScheduleStatus, BadgeTone> = { Deducted: 'success', Reserved: 'assigned', Planned: 'neutral' }
 
 type Dialog = 'approve' | 'reject' | 'reschedule' | 'repay' | 'rejectReschedule' | null
 
@@ -199,34 +199,7 @@ export function AdvanceDetailPage() {
                 <CardTitle>Schedule</CardTitle>
                 {advance.recovery && <StatusBadge tone={RECOVERY_TONE[advance.recovery]}>{advance.recovery}</StatusBadge>}
               </CardHeader>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-sunken text-[11px] uppercase tracking-wide text-text-muted">
-                    <tr>
-                      <th className="px-5 py-2 text-left">Payroll month</th>
-                      <th className="px-5 py-2 text-right">Planned</th>
-                      <th className="px-5 py-2 text-right">Deducted</th>
-                      <th className="px-5 py-2 text-right">Carried forward</th>
-                      <th className="px-5 py-2 text-left">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {schedule.map((m) => (
-                      <tr key={m.period} className="border-t border-border">
-                        <td className="px-5 py-2">{m.period}</td>
-                        <td className="tabular px-5 py-2 text-right">{formatCurrency(m.planned)}</td>
-                        <td className="tabular px-5 py-2 text-right">{m.status === 'Planned' ? '—' : formatCurrency(m.deducted)}</td>
-                        <td className={`tabular px-5 py-2 text-right ${m.carried > 0 ? 'text-warning-fg' : ''}`}>
-                          {m.carried > 0 ? formatCurrency(m.carried) : '—'}
-                        </td>
-                        <td className="px-5 py-2">
-                          <StatusBadge tone={SCHEDULE_TONE[m.status]}>{m.status}</StatusBadge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ScheduleTable rows={schedule} periodHeader="Payroll month" />
               <p className="border-t border-border px-5 py-2 text-xs text-text-muted">
                 Each month deducts one installment at most — less if the gross can't cover it (up to {rules?.advanceDeductionCapPct ?? 50}% of
                 gross); what's left moves to the end of the schedule.
@@ -241,42 +214,17 @@ export function AdvanceDetailPage() {
               <CardHeader className="px-5 pt-4">
                 <CardTitle>Reschedules</CardTitle>
               </CardHeader>
-              <ul className="divide-y divide-border text-sm">
-                {reschedules.map((r) => (
-                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
-                    <div>
-                      <p className="text-text">
-                        {formatCurrency(r.installmentAmount)} a month from {r.startPeriod}
-                        <span className="text-text-muted"> — “{r.note}”</span>
-                      </p>
-                      <p className="text-xs text-text-muted">
-                        Requested by {r.requestedBy ?? '—'} on {formatDate(r.requestedOn)}
-                        {r.decidedBy && ` · ${r.status} by ${r.decidedBy}${r.decisionReason ? `: ${r.decisionReason}` : ''}`}
-                      </p>
-                    </div>
-                    {r.status === 'Pending' && canApprove ? (
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          loading={decideRescheduleMutation.isPending}
-                          onClick={() => {
-                            open('rejectReschedule')
-                            setRescheduleId(r.id)
-                          }}
-                        >
-                          Reject
-                        </Button>
-                        <Button size="sm" loading={decideRescheduleMutation.isPending} onClick={() => decideRescheduleMutation.mutate({ rid: r.id, decision: 'approve' })}>
-                          Approve
-                        </Button>
-                      </div>
-                    ) : (
-                      <StatusBadge tone={r.status === 'Approved' ? 'success' : r.status === 'Rejected' ? 'danger' : 'warning'}>{r.status}</StatusBadge>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              <ReschedulesList
+                reschedules={reschedules}
+                per="a month"
+                canDecide={canApprove}
+                busy={decideRescheduleMutation.isPending}
+                onApprove={(rid) => decideRescheduleMutation.mutate({ rid, decision: 'approve' })}
+                onReject={(rid) => {
+                  open('rejectReschedule')
+                  setRescheduleId(rid)
+                }}
+              />
             </Card>
           )}
 

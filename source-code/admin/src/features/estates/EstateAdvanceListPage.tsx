@@ -1,6 +1,6 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Plus, HandCoins, Loader2 } from 'lucide-react'
+import { Plus, HandCoins, Loader2, TriangleAlert } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
@@ -24,6 +24,7 @@ import {
   RECOVERY_STATUSES,
   type EstateAdvanceFilters,
 } from './estate-advance-filters'
+import { planLabel } from '@/features/advances/advance-plan'
 import type { EstateAdvanceRecovery, EstateAdvanceRow } from './types'
 import { formatCurrency, formatDate } from '@/lib/format'
 
@@ -88,9 +89,45 @@ export function EstateAdvanceListPage() {
     { key: 'amount', header: 'Amount', align: 'right', render: (a) => formatCurrency(a.amount) },
     { key: 'dateIssued', header: 'Issued', render: (a) => formatDate(a.dateIssued) },
     { key: 'issuedBy', header: 'Issued by' },
-    { key: 'recovery', header: 'Status', render: (a) => <StatusBadge tone={ESTATE_RECOVERY_TONE[a.recovery]}>{a.recovery}</StatusBadge> },
-    { key: 'recovered', header: 'Deducted', align: 'right', render: (a) => formatCurrency(a.recovered) },
+    {
+      key: 'recovery',
+      header: 'Status',
+      render: (a) => (
+        <div className="flex flex-col items-start gap-1">
+          <StatusBadge tone={ESTATE_RECOVERY_TONE[a.recovery]}>{a.recovery}</StatusBadge>
+          {a.estateInactive && (
+            <StatusBadge tone="danger" icon={<TriangleAlert className="size-3.5" />}>
+              Outstanding: estate inactive
+            </StatusBadge>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'plan',
+      header: 'Plan',
+      render: (a) => (
+        <span className="text-sm">
+          {planLabel(a.plan)}
+          <span className="block text-xs text-text-muted">from {a.plan.startPeriod}</span>
+        </span>
+      ),
+    },
+    { key: 'recovered', header: 'Recovered', align: 'right', render: (a) => formatCurrency(a.recovered) },
     { key: 'remaining', header: 'Remaining', align: 'right', render: (a) => formatCurrency(a.remaining) },
+    {
+      key: 'nextPeriod',
+      header: 'Next deduction',
+      render: (a) =>
+        a.nextPeriod ? (
+          <span>
+            {a.nextPeriod}
+            {a.carriedForward > 0 && <span className="block text-xs text-warning-fg">{formatCurrency(a.carriedForward)} carried forward</span>}
+          </span>
+        ) : (
+          <span className="text-text-muted">—</span>
+        ),
+    },
   ]
 
   const { summary } = data

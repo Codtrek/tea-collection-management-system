@@ -4,6 +4,7 @@ import {
   type EstateAdvanceRow,
   toAdvanceRow,
 } from './estate-advance-view';
+import type { RepaymentFacts } from '../advances/installments';
 import type { PublicAdvance } from './estate-map';
 import type { EstateFacts } from './settlement-view';
 
@@ -19,13 +20,23 @@ const facts = (
   active: true,
 });
 
+type Rec = RepaymentFacts & { recoveredAt: Date };
+const rec = (advanceId: string, amount: string, recoveredAt: Date): Rec => ({
+  advanceId,
+  period: 'June 2026',
+  status: 'recovered',
+  plannedAmount: amount,
+  amount,
+  recoveredAt,
+});
+
 function row(
   id: string,
   estateId: number,
   amount: number,
   dateIssued: string,
   issuedBy: string,
-  recoveries: { advanceId: string; amount: string; recoveredAt: Date }[],
+  recoveries: Rec[],
   f: EstateFacts,
 ): EstateAdvanceRow {
   const pub: PublicAdvance = {
@@ -40,7 +51,7 @@ function row(
   };
   return toAdvanceRow(
     pub,
-    { id, estateId, amount: String(amount) },
+    { id, estateId, amount: String(amount), dateIssued },
     f,
     recoveries,
   );
@@ -48,16 +59,8 @@ function row(
 
 describe('estate-advance-view', () => {
   const recoveries = [
-    {
-      advanceId: 'EADV-0022',
-      amount: '40000',
-      recoveredAt: new Date('2026-07-01T00:00:00Z'),
-    },
-    {
-      advanceId: 'EADV-0040',
-      amount: '5000',
-      recoveredAt: new Date('2026-11-05T00:00:00Z'),
-    },
+    rec('EADV-0022', '40000', new Date('2026-07-01T00:00:00Z')),
+    rec('EADV-0040', '5000', new Date('2026-11-05T00:00:00Z')),
   ];
   const green = facts('K. Silva', 1, 'Route A');
   const mount = facts('P. Jayasuriya', 3, 'Route C');
@@ -83,7 +86,7 @@ describe('estate-advance-view', () => {
     expect([part.recovered, part.remaining, part.recovery]).toEqual([
       5000,
       15000,
-      'Partly deducted',
+      'Recovering',
     ]);
     expect(gv.ownerName).toBe('K. Silva');
   });

@@ -102,9 +102,17 @@ const outstandingColumn: Column<EstateDirectoryRow> = {
   // Same rule as OutstandingPanel (§6.3): amber only when non-zero, calm
   // success-toned "Settled" at zero, never danger-red — owing for
   // recently-issued fertilizer is normal, red here would cry wolf.
+  // Owed to the factory = unpaid fertilizer + remaining advances (Estate-Owner-Advances-Addendum
+  // §4) — both from the shared server selectors; the hover shows each part.
   render: (e) =>
     e.hasOutstanding ? (
-      <span className="font-medium text-warning-fg">{formatCurrency(e.outstandingRs)}</span>
+      <span
+        className="cursor-help font-medium text-warning-fg underline decoration-dotted underline-offset-2"
+        title={`Fertilizer ${formatCurrency(e.fertilizerOutstandingRs)} · Advances ${formatCurrency(e.advanceOutstandingRs)}`}
+        aria-label={`${formatCurrency(e.outstandingRs)}: fertilizer ${formatCurrency(e.fertilizerOutstandingRs)}, advances ${formatCurrency(e.advanceOutstandingRs)}`}
+      >
+        {formatCurrency(e.outstandingRs)}
+      </span>
     ) : (
       <span className="text-success-fg">Settled</span>
     ),

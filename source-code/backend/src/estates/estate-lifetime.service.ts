@@ -5,6 +5,11 @@ import { AuditLogEntity } from '../audit/audit-log.entity';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { gradeKg, toAppStatus, weightSummary, type PublicCollection } from '../collections/collection-map';
 import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
+import {
+  estateAdvanceOutstanding,
+  remainingOf,
+} from './estate-advance-balance';
+import { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
 import { fertilizerOutstanding } from '../fertilizer/fertilizer-balance';
 import { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
 import { formatBatchId, formatChargeId, formatRequestId } from '../fertilizer/fertilizer-map';
@@ -154,6 +159,9 @@ export class EstateLifetimeService {
     // Cash / bank fertilizer payments — part of the shared outstanding figure.
     @InjectRepository(FertilizerPaymentEntity)
     private readonly paymentRepo: Repository<FertilizerPaymentEntity>,
+    // Estate advance repayments — the advance half of Outstanding (estate-advance-balance.ts).
+    @InjectRepository(EstateAdvanceRecoveryEntity)
+    private readonly recoveryRepo: Repository<EstateAdvanceRecoveryEntity>,
   ) {}
 
   // ── §3 — the shared lifetime selector ───────────────────────────
@@ -194,6 +202,15 @@ export class EstateLifetimeService {
 
     const fertilizerRs = charges.reduce((s, c) => s + Number(c.totalCharge), 0);
     const advancesRs = advances.reduce((s, a) => s + Number(a.amount), 0);
+    // what's still owed on them — the shared estate-advance balance rule
+    const advanceRecoveries = await this.recoveryRepo.find();
+    const openAdvances = advances.filter(
+      (a) => remainingOf(a, advanceRecoveries) > 0,
+    );
+    const advanceOwed = openAdvances.reduce(
+      (s, a) => s + remainingOf(a, advanceRecoveries),
+      0,
+    );
 
     // The one fertilizer-balance rule (charges − settlement recoveries − cash/bank payments).
     const outstandingCharges = charges.filter((c) => !c.settlementId);
@@ -237,6 +254,8 @@ export class EstateLifetimeService {
       outstanding: {
         fertilizerUndeductedRs: Math.round(fertilizerUndeductedRs),
         undeductedDispatchCount: outstandingCharges.length,
+        advancesRs: Math.round(advanceOwed),
+        openAdvanceCount: openAdvances.length,
         lastSettlementRs: lastSettlementRs !== null ? Math.round(lastSettlementRs) : null,
         lastSettlementDate: lastSettlement?.processedOn
           ? lastSettlement.processedOn.toISOString()
@@ -465,7 +484,7 @@ export class EstateLifetimeService {
   // aggregation and shouldn't slow those down.
 
   async directory(): Promise<EstateDirectoryRow[]> {
-    const [estates, owners, confirmed, processed, charges, documents, payments] = await Promise.all([
+    const [estates, owners, confirmed, processed, charges, documents, payments, advances, recoveries] = await Promise.all([
       this.estateRepo.find(),
       this.ownerRepo.find(),
       this.collectionRepo.find({ where: { status: 'confirmed' } }),
@@ -473,7 +492,10 @@ export class EstateLifetimeService {
       this.chargeRepo.find(),
       this.documentRepo.find(),
       this.paymentRepo.find(),
+      this.advanceRepo.find(),
+      this.recoveryRepo.find(),
     ]);
+    const advanceOwed = estateAdvanceOutstanding(advances, recoveries);
 
     const now = new Date();
     const cutoff = new Date();
@@ -498,10 +520,11 @@ export class EstateLifetimeService {
         0,
       );
 
-      const outstandingRs = fertilizerOutstanding(
+      const fertilizerRs = fertilizerOutstanding(
         ownCharges,
         payments.filter((p) => p.estateId === estate.id),
       ).outstandingRs;
+      const advanceRs = advanceOwed.get(estate.id) ?? 0;
 
       const lastDelivery = [...ownDeliveries].sort((a, b) => b.collectionDate.localeCompare(a.collectionDate))[0];
 
@@ -531,8 +554,10 @@ export class EstateLifetimeService {
         lastDeliveryDate: lastDelivery?.collectionDate ?? null,
         lastPaymentRs,
         lastPaymentDate: lastSettlement?.processedOn ? lastSettlement.processedOn.toISOString() : null,
-        outstandingRs: Math.round(outstandingRs),
-        hasOutstanding: outstandingRs > 0,
+        outstandingRs: Math.round(fertilizerRs) + Math.round(advanceRs),
+        fertilizerOutstandingRs: Math.round(fertilizerRs),
+        advanceOutstandingRs: Math.round(advanceRs),
+        hasOutstanding: fertilizerRs > 0 || advanceRs > 0,
         lifetimeEarnedRs: Math.round(earnedRs),
         lifetimeDeliveredKg: round1(deliveredKg),
         superPct: deliveredKg > 0 ? round1((superKg / deliveredKg) * 100) : 0,

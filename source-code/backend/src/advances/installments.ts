@@ -91,6 +91,17 @@ export function planError(
   return null;
 }
 
+/** 'one deduction in July 2026' · 'Rs. 10,000 × 5 from December 2026' — audit / list wording. */
+export function planText(plan: {
+  installment: number;
+  months: number;
+  startPeriod: string;
+}): string {
+  return plan.months === 1
+    ? `one deduction in ${plan.startPeriod}`
+    : `Rs. ${plan.installment.toLocaleString('en-US')} × ${plan.months} from ${plan.startPeriod}`;
+}
+
 // ── balance ──────────────────────────────────────────────────────────────────────────────────
 
 /** Σ actually recovered (processed periods + early repayments). */

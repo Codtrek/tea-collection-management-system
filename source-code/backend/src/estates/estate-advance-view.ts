@@ -1,8 +1,15 @@
 import {
+  carriedForwardOf,
+  type RepaymentFacts,
+} from '../advances/installments';
+import {
+  type EstateAdvanceFacts,
   type EstateAdvanceRecoveryStatus,
+  planOf,
   recoveredOf,
   recoveryStatus,
   remainingOf,
+  scheduleFor,
 } from './estate-advance-balance';
 import type { PublicAdvance } from './estate-map';
 import type { EstateFacts } from './settlement-view';
@@ -22,6 +29,16 @@ export interface EstateAdvanceRow extends PublicAdvance {
   recovered: number;
   remaining: number;
   recovery: EstateAdvanceRecoveryStatus;
+  /** the repayment plan — one installment a settlement period */
+  plan: { installment: number; months: number; startPeriod: string };
+  /** the next settlement period that deducts from it (null once recovered) */
+  nextPeriod: string | null;
+  /** the period its balance is projected to reach Rs. 0 */
+  clearedPeriod: string | null;
+  /** Σ what short periods couldn't take, pushed later */
+  carriedForward: number;
+  /** "Outstanding: estate inactive" — a balance left on an estate that's no longer active */
+  estateInactive: boolean;
 }
 
 export interface EstateAdvanceQuery {
@@ -54,16 +71,8 @@ export interface EstateAdvanceListResult extends PaginatedResult<EstateAdvanceRo
   issuers: string[];
 }
 
-interface AdvanceSource {
-  id: string;
-  estateId: number;
-  amount: string | number;
-}
-interface RecoverySource {
-  advanceId: string;
-  amount: string | number;
-  recoveredAt: Date;
-}
+type RecoverySource = RepaymentFacts & { recoveredAt: Date };
+type AdvanceSource = EstateAdvanceFacts & { installmentMonths?: number | null };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -76,14 +85,29 @@ export function toAdvanceRow(
   facts: EstateFacts | undefined,
   recoveries: RecoverySource[],
 ): EstateAdvanceRow {
+  const own = recoveries.filter((r) => r.advanceId === source.id);
+  const remaining = remainingOf(source, own);
+  const plan = planOf(source);
+  const schedule = scheduleFor(source, own);
   return {
     ...pub,
     ownerName: facts?.ownerName ?? 'Unknown',
     routeId: facts?.routeId ?? null,
     route: facts?.route ?? '',
-    recovered: recoveredOf(source.id, recoveries),
-    remaining: remainingOf(source, recoveries),
-    recovery: recoveryStatus(source, recoveries),
+    recovered: recoveredOf(source, own),
+    remaining,
+    recovery: recoveryStatus(source, own),
+    plan: {
+      installment: plan.installment,
+      months:
+        source.installmentMonths ??
+        Math.max(1, Math.ceil(plan.amount / plan.installment)),
+      startPeriod: plan.startPeriod,
+    },
+    nextPeriod: remaining > 0 ? schedule.nextPeriod : null,
+    clearedPeriod: schedule.clearedPeriod,
+    carriedForward: carriedForwardOf(source, own),
+    estateInactive: remaining > 0 && facts?.active === false,
   };
 }
 
@@ -128,7 +152,11 @@ export function summarizeAdvances(
     issuedCount: issued.length,
     deducted: round2(
       recoveries
-        .filter((r) => inRange(localDate(r.recoveredAt), from, to))
+        .filter(
+          (r) =>
+            r.status === 'recovered' &&
+            inRange(localDate(r.recoveredAt), from, to),
+        )
         .reduce((s, r) => s + Number(r.amount), 0),
     ),
     pendingDeduction: round2(pending.reduce((s, r) => s + r.remaining, 0)),

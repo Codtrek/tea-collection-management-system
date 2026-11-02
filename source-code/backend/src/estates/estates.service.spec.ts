@@ -1,3 +1,7 @@
+import {
+  DEFAULT_ESTATE_ADVANCE_SETTINGS,
+  type EstateAdvanceSettingsService,
+} from './estate-advance-settings.service';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import type { CollectionRecordEntity } from '../collections/collection-record.entity';
@@ -131,6 +135,9 @@ function makeAdvance(
     dateIssued: '2026-07-05',
     issuedBy: 'S. Fernando',
     status: 'pending_deduction',
+    installmentAmount: '50000.00',
+    installmentMonths: 1,
+    startPeriod: 'July 2026',
     createdAt: new Date('2026-07-05T00:00:00.000Z'),
     ...overrides,
   };
@@ -177,6 +184,9 @@ describe('EstatesService', () => {
       recoveryRepo as unknown as Repository<EstateAdvanceRecoveryEntity>,
       {} as UsersService,
       { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
+      {
+        get: () => Promise.resolve(DEFAULT_ESTATE_ADVANCE_SETTINGS),
+      } as unknown as EstateAdvanceSettingsService,
     );
   });
 
@@ -276,6 +286,64 @@ describe('EstatesService', () => {
       expect(result.issuedBy).toBe(officer.name);
       expect(result.status).toBe('Pending deduction');
       expect(result.estateId).toBe('EST-0001');
+      const [saved] = await advanceRepo.find();
+      // default plan: one deduction
+      expect([saved.installmentAmount, saved.installmentMonths]).toEqual([
+        '25000',
+        1,
+      ]);
+    });
+
+    it('refuses an inactive estate', async () => {
+      estateRepo.seed(makeEstate({ status: 'inactive' }));
+      await expect(
+        service.issueAdvance(
+          { estateId: 'EST-0001', amount: 25000, reason: 'x' },
+          officer,
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('stores an installment plan and validates it against the max months', async () => {
+      estateRepo.seed(makeEstate());
+      await service.issueAdvance(
+        {
+          estateId: 'EST-0001',
+          amount: 50000,
+          reason: 'x',
+          installmentAmount: 10000,
+          startMonth: '2099-12',
+        },
+        officer,
+      );
+      const [saved] = await advanceRepo.find();
+      expect([
+        saved.installmentAmount,
+        saved.installmentMonths,
+        saved.startPeriod,
+      ]).toEqual(['10000', 5, 'December 2099']);
+      await expect(
+        service.issueAdvance(
+          {
+            estateId: 'EST-0001',
+            amount: 50000,
+            reason: 'x',
+            installmentAmount: 5000,
+          },
+          officer,
+        ),
+      ).rejects.toThrow('That plan runs 10 months — the most allowed is 6.');
+      await expect(
+        service.issueAdvance(
+          {
+            estateId: 'EST-0001',
+            amount: 50000,
+            reason: 'x',
+            installmentAmount: 60000,
+          },
+          officer,
+        ),
+      ).rejects.toThrow('The installment can’t be more than the advance.');
     });
   });
 
@@ -299,34 +367,27 @@ describe('EstatesService', () => {
       expect(stillPending?.status).toBe('pending');
     });
 
-    it('flips pending advances for processed estates to Deducted', async () => {
+    it('records what the settlement took; an advance is Deducted only at Rs. 0', async () => {
+      // stored advance deduction Rs 50,000 (makeSettlement)
       settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
       advanceRepo.seed(makeAdvance({ id: 'EADV-1', estateId: 1 }));
       advanceRepo.seed(
-        makeAdvance({ id: 'EADV-2', estateId: 2, status: 'deducted' }),
+        makeAdvance({
+          id: 'EADV-2',
+          estateId: 1,
+          amount: '30000.00',
+          installmentAmount: '10000.00',
+          installmentMonths: 3,
+          dateIssued: '2026-07-10',
+        }),
       );
-
-      await service.processSettlements(officer);
-
-      const advances = await advanceRepo.find();
-      expect(advances.find((a) => a.id === 'EADV-1')?.status).toBe('deducted');
-    });
-
-    it('records the remaining balance it marks deducted as a recovery by that settlement', async () => {
-      settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
-      advanceRepo.seed(makeAdvance({ id: 'EADV-1', estateId: 1 }));
       advanceRepo.seed(
-        makeAdvance({ id: 'EADV-3', estateId: 1, amount: '30000.00' }),
+        makeAdvance({
+          id: 'EADV-OTHER',
+          estateId: 2,
+          status: 'pending_deduction',
+        }),
       );
-      // part already recovered earlier → only the rest is recorded now
-      recoveryRepo.seed({
-        id: 1,
-        advanceId: 'EADV-3',
-        settlementId: 'SET-OLD',
-        amount: '10000.00',
-        recoveredAt: new Date('2026-06-01T00:00:00Z'),
-        createdAt: new Date('2026-06-01T00:00:00Z'),
-      });
       const before = (await settlementRepo.find()).map((s) => ({ ...s }));
 
       await service.processSettlements(officer);
@@ -334,14 +395,60 @@ describe('EstatesService', () => {
       const rows = (await recoveryRepo.find()).filter(
         (r) => r.settlementId === 'SET-A',
       );
-      expect(rows.map((r) => [r.advanceId, Number(r.amount)]).sort()).toEqual([
-        ['EADV-1', 50000],
-        ['EADV-3', 20000],
+      expect(
+        rows.map((r) => [
+          r.advanceId,
+          Number(r.plannedAmount),
+          Number(r.amount),
+          r.period,
+        ]),
+      ).toEqual([
+        ['EADV-1', 50000, 50000, 'July 2026'],
+        // the oldest took it all — EADV-2's installment is carried forward
+        ['EADV-2', 10000, 0, 'July 2026'],
       ]);
-      // nothing about the settlement's own amounts changed
+      const status = async (id: string) =>
+        (await advanceRepo.find()).find((a) => a.id === id)?.status;
+      expect(await status('EADV-1')).toBe('deducted');
+      expect(await status('EADV-2')).toBe('pending_deduction');
+      expect(await status('EADV-OTHER')).toBe('pending_deduction');
       const after = (await settlementRepo.find())[0];
       expect(after.advanceDeduction).toBe(before[0].advanceDeduction);
       expect(after.fertilizerDeduction).toBe(before[0].fertilizerDeduction);
+    });
+
+    it('a settlement that took less leaves the advance Recovering, the rest carried', async () => {
+      settlementRepo.seed(
+        makeSettlement({
+          id: 'SET-A',
+          estateId: 1,
+          advanceDeduction: '20000.00',
+        }),
+      );
+      advanceRepo.seed(makeAdvance({ id: 'EADV-1', estateId: 1 }));
+
+      await service.processSettlements(officer);
+
+      const [row] = await recoveryRepo.find();
+      expect([Number(row.plannedAmount), Number(row.amount)]).toEqual([
+        50000, 20000,
+      ]);
+      expect((await advanceRepo.find())[0].status).toBe('recovering');
+    });
+
+    it('no longer marks an advance deducted when the settlement took nothing', async () => {
+      settlementRepo.seed(
+        makeSettlement({ id: 'SET-A', estateId: 1, advanceDeduction: '0' }),
+      );
+      advanceRepo.seed(makeAdvance({ id: 'EADV-1', estateId: 1 }));
+
+      await service.processSettlements(officer);
+
+      expect((await advanceRepo.find())[0].status).toBe('pending_deduction');
+      const [row] = await recoveryRepo.find();
+      expect([Number(row.plannedAmount), Number(row.amount)]).toEqual([
+        50000, 0,
+      ]);
     });
 
     it('rejects Manager', async () => {

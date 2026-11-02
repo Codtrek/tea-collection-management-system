@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -11,8 +12,17 @@ import type { AppRole } from '../auth/role-map';
 import { UsersService } from '../users/users.service';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { SettlementAdjustmentEntity } from '../collections/settlement-adjustment.entity';
-import { labelToKey } from '../reports/reports-map';
-import { remainingOf } from './estate-advance-balance';
+import { keyToLabel, labelToKey } from '../reports/reports-map';
+import {
+  addMonths,
+  monthsForInstallment,
+  planError,
+  planText,
+} from '../advances/installments';
+import { localDate } from '../dispatch/dispatch-map';
+import { dbStatusFor } from './estate-advance-balance';
+import { EstateAdvanceSettingsService } from './estate-advance-settings.service';
+import { allocateStoredAdvanceDeduction } from './settlement-deductions';
 import { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
 import { EstateAdvanceEntity } from './estate-advance.entity';
 import { EstateDocumentEntity } from './estate-document.entity';
@@ -38,6 +48,8 @@ import { payableDeliveries } from './settlement-calc';
 export interface Actor {
   name: string;
   role: AppRole;
+  /** users.id — for the no-self-approval check on reschedules */
+  sub?: number;
 }
 
 @Injectable()
@@ -63,6 +75,7 @@ export class EstatesService {
     private readonly recoveryRepo: Repository<EstateAdvanceRecoveryEntity>,
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
+    private readonly advanceSettings: EstateAdvanceSettingsService,
   ) {}
 
   async findAll(): Promise<PublicEstate[]> {
@@ -192,13 +205,38 @@ export class EstatesService {
     return this.toPublicOne(saved);
   }
 
-  /** EST-06 — money moves immediately; deducted at the estate's next processed settlement. */
+  /**
+   * EST-06 — money moves immediately; deducted by settlements per the repayment plan
+   * (Estate-Owner-Advances-Addendum §4): one deduction (default) or one installment a period,
+   * from `startMonth` (default: next calendar month). Never to an inactive estate.
+   */
   async issueAdvance(
     dto: IssueAdvanceDto,
     actor: Actor,
   ): Promise<PublicAdvance> {
     this.assertCanWrite(actor);
     const estate = await this.findEntity(dto.estateId);
+    if (estate.status !== 'active') {
+      throw new ConflictException(
+        `${estate.name} is inactive — inactive estates can't receive advances.`,
+      );
+    }
+    const { maxInstallmentMonths } = await this.advanceSettings.get();
+    const installment = dto.installmentAmount ?? dto.amount;
+    const error = planError(dto.amount, installment, maxInstallmentMonths);
+    if (error) throw new BadRequestException(error);
+    const thisMonth = localDate(new Date()).slice(0, 7);
+    const startKey = dto.startMonth ?? addMonths(thisMonth, 1);
+    if (startKey < thisMonth) {
+      throw new BadRequestException(
+        'The repayment can’t start in a month that has already passed.',
+      );
+    }
+    const plan = {
+      installment,
+      months: monthsForInstallment(dto.amount, installment),
+      startPeriod: keyToLabel(startKey),
+    };
 
     const advance = this.advanceRepo.create({
       id: this.generateAdvanceId(),
@@ -209,6 +247,9 @@ export class EstatesService {
       dateIssued: new Date().toISOString().slice(0, 10),
       issuedBy: actor.name,
       status: 'pending_deduction',
+      installmentAmount: String(plan.installment),
+      installmentMonths: plan.months,
+      startPeriod: plan.startPeriod,
     });
 
     const saved = await this.advanceRepo.save(advance);
@@ -217,7 +258,7 @@ export class EstatesService {
       module: 'Estate Owner',
       record: saved.id,
       recordHref: `/estates/${formatEstateId(estate.id)}`,
-      details: `${estate.name} — ${dto.reason}`,
+      details: `${estate.name} — ${dto.reason} — ${planText(plan)}`,
     });
     return this.toPublicAdvance(saved);
   }
@@ -267,6 +308,11 @@ export class EstatesService {
         (!period || s.period === period),
     );
 
+    // oldest period first, so an estate's advance balances recover month by month
+    eligible.sort((a, b) =>
+      labelToKey(a.period).localeCompare(labelToKey(b.period)),
+    );
+
     if (eligible.length === 0) {
       throw new ConflictException(
         'No pending settlements are ready to process.',
@@ -285,6 +331,7 @@ export class EstatesService {
     });
     let skippedOpen = 0;
     let linked = 0;
+    let unallocatedRs = 0;
 
     for (const settlement of eligible) {
       // Signed corrections on deliveries paid in EARLIER settlements ride along here — the
@@ -323,29 +370,44 @@ export class EstatesService {
         linked += 1;
       }
 
-      for (const advance of allAdvances) {
-        if (
-          advance.estateId === settlement.estateId &&
-          advance.status === 'pending_deduction'
-        ) {
-          advance.status = 'deducted';
+      // Estate-Owner-Advances-Addendum §4: split the advance deduction this settlement actually
+      // took (its stored advance_deduction — there's no generator yet) across the estate's open
+      // advances: due installments first, oldest first; any excess pays down the oldest balances.
+      // One recovery row per advance (planned vs taken — the rest is carried forward). An
+      // advance is Deducted only once its balance reaches Rs. 0. Settlement amounts never change.
+      const open = allAdvances.filter(
+        (a) => a.estateId === settlement.estateId && a.status !== 'deducted',
+      );
+      const { lines, unallocated } = allocateStoredAdvanceDeduction(
+        Number(settlement.advanceDeduction),
+        open,
+        allRecoveries,
+        settlement.period,
+      );
+      unallocatedRs += unallocated;
+      for (const line of lines) {
+        allRecoveries.push(
+          await this.recoveryRepo.save(
+            this.recoveryRepo.create({
+              advanceId: line.advanceId,
+              settlementId: settlement.id,
+              kind: 'settlement',
+              period: settlement.period,
+              plannedAmount: String(line.planned),
+              amount: String(line.amount),
+              status: 'recovered',
+              reference: null,
+              paidOn: null,
+              recordedBy: actor.name,
+              recoveredAt: now,
+            }),
+          ),
+        );
+        const advance = open.find((a) => a.id === line.advanceId)!;
+        const status = dbStatusFor(advance, allRecoveries);
+        if (status !== advance.status) {
+          advance.status = status;
           await this.advanceRepo.save(advance);
-          // Estate-Owner-Advances-Addendum §3: record what this run already treats as recovered
-          // (the whole remaining balance), so the advance's schedule names its settlement. Which
-          // advances flip — and every settlement amount — is unchanged (the §4 fix awaits approval).
-          const left = remainingOf(advance, allRecoveries);
-          if (left > 0) {
-            allRecoveries.push(
-              await this.recoveryRepo.save(
-                this.recoveryRepo.create({
-                  advanceId: advance.id,
-                  settlementId: settlement.id,
-                  amount: String(left),
-                  recoveredAt: now,
-                }),
-              ),
-            );
-          }
         }
       }
     }
@@ -359,6 +421,9 @@ export class EstatesService {
         `${linked} deliver${linked === 1 ? 'y' : 'ies'} linked as paid` +
         (skippedOpen > 0
           ? `; ${skippedOpen} still inside the correction window and not included`
+          : '') +
+        (unallocatedRs > 0
+          ? `; Rs. ${Math.round(unallocatedRs).toLocaleString('en-US')} of advance deductions matched no open advance`
           : ''),
     });
     return processed.map((s) => this.toPublicSettlement(s));
@@ -385,7 +450,7 @@ export class EstatesService {
   }
 
   /** Manager has read-only access to Estates + Payments (Administrator/Officer can write). */
-  private assertCanWrite(actor: Actor): void {
+  assertCanWrite(actor: Actor): void {
     if (actor.role === 'Manager') {
       throw new ForbiddenException(
         'Managers have read-only access to estates and payments.',

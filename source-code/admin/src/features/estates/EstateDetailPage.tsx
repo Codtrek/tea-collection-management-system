@@ -151,7 +151,7 @@ export function EstateDetailPage() {
     {
       key: 'status',
       header: 'Status',
-      render: (a) => <StatusBadge tone={a.status === 'Deducted' ? 'success' : 'warning'}>{a.status}</StatusBadge>,
+      render: (a) => <StatusBadge tone={a.status === 'Deducted' ? 'success' : a.status === 'Recovering' ? 'assigned' : 'warning'}>{a.status}</StatusBadge>,
     },
   ]
 
@@ -270,6 +270,9 @@ export function EstateDetailPage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge tone={estate.status === 'Active' ? 'success' : 'danger'}>{estate.status}</StatusBadge>
+              {estate.status === 'Inactive' && (lifetime?.outstanding.advancesRs ?? 0) > 0 && (
+                <StatusBadge tone="danger">Outstanding advance: estate inactive</StatusBadge>
+              )}
               <StatusBadge tone="assigned">{estate.route}</StatusBadge>
               {estate.selfDelivery && (
                 <StatusBadge tone="approved" icon={<Truck />}>
@@ -290,7 +293,7 @@ export function EstateDetailPage() {
             label: 'Overview',
             content: (
               <div className="flex flex-col gap-4">
-                {lifetime && <LifetimeSummary metrics={lifetime} />}
+                {lifetime && <LifetimeSummary metrics={lifetime} inactive={estate.status === 'Inactive'} />}
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-5">
                     <h3 className="mb-3 text-[13px] font-semibold text-text-heading">Contact & location</h3>

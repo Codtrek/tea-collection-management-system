@@ -2586,11 +2586,25 @@ async function seed() {
     // Which settlement recovered which advance (Estate-Owner-Advances-Addendum §3) — the one
     // deducted seed advance was taken in full by Mount Rest's June 2026 settlement.
     await client.query(
-      `INSERT INTO estate_advance_recoveries (advance_id, settlement_id, amount, recovered_at)
-       SELECT a.id, s.id, a.amount, COALESCE(s.processed_on, NOW())
+      `INSERT INTO estate_advance_recoveries
+         (advance_id, settlement_id, kind, period, planned_amount, amount, recovered_at)
+       SELECT a.id, s.id, 'settlement', s.period, a.amount, a.amount, COALESCE(s.processed_on, NOW())
        FROM estate_advances a JOIN settlements s ON s.id = 'SET-2026-06-003'
        WHERE a.id = 'EADV-2026-0022' AND a.status = 'deducted'
        ON CONFLICT (advance_id, settlement_id) DO NOTHING`,
+    );
+    // Every seed advance is a one-deduction plan, starting at the settlement already set up for it
+    // (the estate's first settlement on or after the issue month) — Estate-Owner-Advances-Addendum §4.
+    await client.query(
+      `UPDATE estate_advances a
+          SET installment_amount = a.amount, installment_months = 1,
+              start_period = COALESCE(
+                (SELECT s.period FROM settlements s
+                  WHERE s.estate_id = a.estate_id
+                    AND to_date(s.period, 'FMMonth YYYY') >= date_trunc('month', a.date_issued)
+                  ORDER BY to_date(s.period, 'FMMonth YYYY') LIMIT 1),
+                trim(to_char(a.date_issued + INTERVAL '1 month', 'FMMonth YYYY')))
+        WHERE a.start_period IS NULL`,
     );
 
     // ── Employees + Payroll (EMP-01..14) ──

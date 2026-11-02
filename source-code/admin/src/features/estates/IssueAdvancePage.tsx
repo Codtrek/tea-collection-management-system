@@ -10,6 +10,9 @@ import { HighStakesConfirmFlow } from '@/components/patterns/HighStakesConfirmFl
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as estatesService from '@/services/estates'
+import { currentMonth } from '@/lib/month'
+import { defaultStartMonth, planInstallment, planLabel, planValueError, scheduleText, previewSchedule, type PlanValue } from '@/features/advances/advance-plan'
+import { RepaymentPlanFields } from '@/features/advances/RepaymentPlanFields'
 import { formatCurrency } from '@/lib/format'
 
 /*
@@ -35,6 +38,8 @@ export function IssueAdvancePage() {
   const [reason, setReason] = useState('')
   const [errors, setErrors] = useState<{ estate?: string; amount?: string; reason?: string }>({})
   const [confirming, setConfirming] = useState(false)
+  const firstMonth = defaultStartMonth(currentMonth())
+  const [plan, setPlan] = useState<PlanValue>({ mode: 'single', installment: '', months: '', startMonth: firstMonth })
 
   const activeEstates = (estates ?? []).filter((e) => e.status === 'Active').sort((a, b) => a.estateName.localeCompare(b.estateName))
   const estate = activeEstates.find((e) => e.id === estateId)
@@ -43,17 +48,41 @@ export function IssueAdvancePage() {
   const estateError = errors.estate ?? (inactive ? `${inactive.estateName} is ${inactive.status} — advances go to active estate owners only` : undefined)
   const parsedAmount = Number(amount)
 
+  // the picked estate's open advance balance, 3-period average net and the plan limits (§4)
+  const { data: context } = useQuery({
+    queryKey: ['estates', 'advance-context', estate?.id],
+    queryFn: () => estatesService.getAdvanceContext(estate!.id),
+    enabled: !!estate,
+  })
+  const maxMonths = context?.maxInstallmentMonths ?? 6
+  const installment = parsedAmount > 0 ? planInstallment(parsedAmount, plan) : 0
+  const planProblem = parsedAmount > 0 ? planValueError(parsedAmount, plan, maxMonths) : null
+  const warnAbove = context?.averageNetRs != null ? (context.averageNetRs * context.netWarnPct) / 100 : null
+  const installmentTooHigh = warnAbove !== null && installment > warnAbove
+  const planSummary =
+    parsedAmount > 0 && !planProblem
+      ? `${planLabel({ installment, months: Math.max(1, Math.ceil(parsedAmount / Math.max(1, installment))) })} — ${scheduleText(previewSchedule(parsedAmount, installment, plan.startMonth))}`
+      : ''
+
   const validate = () => {
     const next: typeof errors = {}
     if (!estate) next.estate = 'Select an estate owner'
     if (!amount || Number.isNaN(parsedAmount) || parsedAmount <= 0) next.amount = 'Enter a positive amount'
     if (!reason.trim()) next.reason = 'Reason is required'
+    if (planProblem) next.amount = next.amount ?? planProblem
     setErrors(next)
     return Object.keys(next).length === 0
   }
 
   const issueMutation = useMutation({
-    mutationFn: () => estatesService.issueAdvance({ estateId, amount: parsedAmount, reason }),
+    mutationFn: () =>
+      estatesService.issueAdvance({
+        estateId,
+        amount: parsedAmount,
+        reason,
+        installmentAmount: plan.mode === 'installments' ? installment : undefined,
+        startMonth: plan.startMonth,
+      }),
     onSuccess: (issued) => {
       // Audit trail entry per the module doc.
       toast(`Advance of ${formatCurrency(parsedAmount)} issued to ${estate?.estateName} by ${user?.name}`)
@@ -108,6 +137,44 @@ export function IssueAdvancePage() {
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g. Pre-season plucking labour costs"
           />
+          {estate && context && (
+            <div className="rounded-[var(--radius-md)] border border-border bg-surface-sunken/50 p-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-text-muted">Outstanding advances</span>
+                <span className="tabular font-medium text-text">{formatCurrency(context.outstandingAdvanceRs)}</span>
+              </div>
+              <div className="mt-1 flex justify-between gap-3">
+                <span className="text-text-muted">Average settlement net</span>
+                <span className="tabular text-text">
+                  {context.averageNetRs !== null ? formatCurrency(context.averageNetRs) : '—'}
+                  <span className="block text-right text-xs text-text-muted">
+                    {context.averagePeriods.length > 0 ? `last ${context.averagePeriods.length} processed` : 'no processed settlement yet'}
+                  </span>
+                </span>
+              </div>
+              {context.openAdvances.length > 0 && (
+                <p className="mt-2 text-xs text-warning-fg">
+                  {context.openAdvances.length === 1 ? 'An advance is' : `${context.openAdvances.length} advances are`} already open (
+                  {context.openAdvances.map((o) => o.id).join(', ')}) — this one is deducted on top.
+                </p>
+              )}
+            </div>
+          )}
+          <RepaymentPlanFields
+            amount={parsedAmount > 0 ? parsedAmount : 0}
+            value={plan}
+            onChange={setPlan}
+            maxMonths={maxMonths}
+            firstMonth={firstMonth}
+            singleLabel="One deduction from the next settlement"
+          />
+          {installmentTooHigh && (
+            <p className="rounded-[var(--radius-md)] border border-warning-fg/25 bg-warning-bg/60 p-3 text-sm text-text">
+              <strong className="text-warning-fg">High for this estate</strong> — {formatCurrency(installment)} a period is more than{' '}
+              {context?.netWarnPct}% of its average settlement net ({formatCurrency(context?.averageNetRs ?? 0)}). Whatever a settlement can't
+              cover is carried forward.
+            </p>
+          )}
           {estate && !estate.bank.account && (
             <p className="rounded-[var(--radius-md)] border border-warning-fg/25 bg-warning-bg/60 p-3 text-sm text-text">
               <strong className="text-warning-fg">No bank details on file</strong> — this advance would need to be paid
@@ -144,12 +211,16 @@ export function IssueAdvancePage() {
               <span className="text-text-muted">Reason</span>
               <span className="max-w-[60%] text-right text-text">{reason}</span>
             </div>
+            <div className="mt-1 flex justify-between gap-3 text-sm">
+              <span className="text-text-muted">Repayment</span>
+              <span className="max-w-[70%] text-right text-text">{planSummary}</span>
+            </div>
             <div className="mt-2 flex justify-between border-t border-border pt-2 text-sm">
               <span className="font-medium text-text">Amount to issue now</span>
               <span className="tabular font-semibold text-text-heading">{formatCurrency(parsedAmount || 0)}</span>
             </div>
             <p className="mt-2 text-xs text-text-muted">
-              Money moves immediately and is deducted at this estate's next settlement. This cannot be undone.
+              Money moves immediately and is deducted by this estate's settlements as planned. This cannot be undone.
             </p>
           </div>
         }

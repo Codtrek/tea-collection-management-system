@@ -1,3 +1,4 @@
+import { planText } from '../advances/installments';
 import {
   BadRequestException,
   ConflictException,
@@ -1102,12 +1103,5 @@ export class EmployeesService {
 }
 
 /** 'Rs. 5,000 × 4 from December 2026' (one deduction: 'one deduction in December 2026') */
-export function planText(plan: {
-  installment: number;
-  months: number;
-  startPeriod: string;
-}): string {
-  return plan.months === 1
-    ? `one deduction in ${plan.startPeriod}`
-    : `Rs. ${plan.installment.toLocaleString('en-US')} × ${plan.months} from ${plan.startPeriod}`;
-}
+// The plan's wording now lives with the shared installment model (estate advances use it too).
+export { planText };
