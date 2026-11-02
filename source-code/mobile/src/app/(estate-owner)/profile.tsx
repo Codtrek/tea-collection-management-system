@@ -1,12 +1,42 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-
-import { Screen, AppText, SearchBar, GeneralHeader, Avatar, AppCard, Stat} from "@/components/ui";
+import { Pressable, ScrollView, StyleSheet, View, Platform } from "react-native";
+import * as SecureStore from "expo-secure-store";
+import type { PublicUser } from "../services/api/auth.api";
+import {Screen, AppText, SearchBar, GeneralHeader, Avatar, AppCard, Stat} from "@/components/ui";
 import { ProfileFeatureCard } from "@/components/estate-owner";
 import { colors, spacing } from "@/theme";
 
 export default function Profile() {
+    const [user, setUser] = useState<PublicUser | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let active = true;
+
+        async function loadUser() {
+            try {
+                const storedUser = 
+                    Platform.OS == "web"
+                        ? localStorage.getItem("user")
+                        : await SecureStore.getItemAsync("user");
+
+                if (active && storedUser) {
+                    setUser(JSON.parse(storedUser) as PublicUser);
+                }
+            } catch (error) {
+                console.error("Error loading user:", error);
+            } finally {
+                if (active) setLoading(false);
+            }
+        }
+
+        void loadUser();
+
+        return () => {
+            active = false;
+        };
+    }, []);
     return(
         <>            
             <Screen
@@ -26,7 +56,14 @@ export default function Profile() {
                         size={50}
                     />
                     <View>
-                        <AppText>Welcome, Kalana!</AppText>
+                        <AppText>
+                            {loading
+                                ? "Loading profile..."
+                                : user
+                                    ? `Welcome, ${user.name}`
+                                    : "Please log in to view your profile."
+                                }
+                        </AppText>
                     </View>
                 </View>
                 <View style={styles.stats}>
