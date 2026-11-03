@@ -1,3 +1,4 @@
+import { OwnerJwtStrategy } from './owner-jwt.strategy';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -46,6 +47,7 @@ import { JwtStrategy } from './jwt.strategy';
   providers: [
     AuthService,
     JwtStrategy,
+    OwnerJwtStrategy,
     AgentJwtStrategy,
     AgentDirectoryService,
   ],

@@ -1,3 +1,5 @@
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { UpdateOwnerProfileDto } from '../auth/dto/update-owner-profile.dto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -30,6 +32,37 @@ export class UsersService {
     private readonly estateManagersRepository: Repository<EstateManager>,
   ) {}
 
+  async getOwnerDetails(userId: number) {
+    const user = await this.findById(userId);
+    const owner = await this.estateOwnersRepository.findOne({ where: { userId } });
+    if (!user || user.role !== 'estate_owner' || user.status !== 'active' || !owner) {
+      throw new UnauthorizedException('An active estate owner account is required.');
+    }
+    return { id: String(user.id), name: owner.name, phone: user.phone, email: owner.email ?? '', role: 'Estate Owner' as const };
+  }
+
+  async updateOwnerDetails(userId: number, dto: UpdateOwnerProfileDto) {
+    try {
+      await this.usersRepository.manager.transaction(async (manager) => {
+        const user = await manager.findOne(User, { where: { id: userId }, lock: { mode: 'pessimistic_write' } });
+        const owner = await manager.findOne(EstateOwnerEntity, { where: { userId }, lock: { mode: 'pessimistic_write' } });
+        if (!user || user.role !== 'estate_owner' || user.status !== 'active' || !owner) {
+          throw new UnauthorizedException('An active estate owner account is required.');
+        }
+        if (dto.name !== undefined) { user.name = dto.name.trim(); owner.name = dto.name.trim(); }
+        if (dto.phone !== undefined) { user.phone = dto.phone; owner.contact = dto.phone; }
+        if (dto.email !== undefined) owner.email = dto.email.trim() || null;
+        await manager.save(user);
+        await manager.save(owner);
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw new ConflictException('An account already exists for this mobile number.');
+      }
+      throw error;
+    }
+    return this.getOwnerDetails(userId);
+  }
   findByPhone(phone: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { phone } });
   }
@@ -57,7 +90,7 @@ export class UsersService {
   /**
    * Provisions a login row for a non-portal user registered through the
    * portal (e.g. an estate owner via EST-02). No password is issued through
-   * this flow — mobile login/reset is deferred to PLAN.md Phase 3, so a
+   * this flow â€” mobile login/reset is deferred to PLAN.md Phase 3, so a
    * random hash is stored to satisfy the schema in the meantime. Reuses the
    * existing row if this phone is already registered.
    */
@@ -120,8 +153,7 @@ export class UsersService {
     const estate = await this.estatesRepository.findOne({
       where: { ownerId: estateOwner.id },
     });
-    if (!estate) return null;
-    return { name: estateOwner.name, estate: estate.name };
+    return { name: estateOwner.name, estate: estate?.name };
   }
   async getEstateManagerProfile(userId: number): Promise<UserProfile | null> {
     const estateManager = await this.estateManagersRepository
