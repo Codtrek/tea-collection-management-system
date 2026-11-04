@@ -71,13 +71,13 @@ jobs:
       # Direct (non-pooled) URL: PgBouncer can break migrations
       - name: Run migrations on the PR branch
         env:
-          DATABASE_URL_DIRECT: ${{ steps.neon.outputs.db_url }}
+          DATABASE_URL_DIRECT: ${{ steps.refresh.outputs.db_url }}
         run: npm run migration:run
 
       # Fails if entities changed but no migration was committed
       - name: Check for missing migrations
         env:
-          DATABASE_URL_DIRECT: ${{ steps.neon.outputs.db_url }}
+          DATABASE_URL_DIRECT: ${{ steps.refresh.outputs.db_url }}
         # --check exits 1 on drift; --dryrun prints the SQL instead of writing a file
         run: |
           if npm run migration:generate -- src/migrations/CiDriftCheck --check --dryrun; then
