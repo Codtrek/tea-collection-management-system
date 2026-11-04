@@ -1,528 +1,257 @@
-import {
-  Alert,
-  Linking,
-  Pressable,
-  StyleSheet,
-  View,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
+import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { isToday } from "date-fns";
 
-import { EstateAvatarWithDetails } from "@/components/estate";
-import WeeklyPluckedWeightChart from "@/components/estate-owner/WeeklyPluckedWeightChart";
+import { EstateIcon, EstatePage, estateGreen, estateStyles as ui } from "@/components/estate-owner/EstatePage";
 import { RequestListItem } from "@/components/estate-owner";
-import { AppButton, AppText, Avatar, Screen } from "@/components/ui";
+import { AppButton, AppInput, AppText, Avatar } from "@/components/ui";
+import { getAttendanceSavedAt, useSavedEstateWorkers } from "@/data/estateWorkers";
 import { useEstateStore } from "@/store/estateStore";
-import { useSavedEstateWorkers } from "@/data/estateWorkers";
-import { colors, spacing } from "@/theme";
+
+const formatTime = (time: number) => new Date(time).toLocaleTimeString("en-LK", { hour: "numeric", minute: "2-digit" });
 
 export default function EstateDetails() {
-  const estateProfiles = useEstateStore((state) => state.estates);
-  const {
-    estateId,
-    collectionFactory,
-    collectionWeightKg,
-    collectionRequestedAt,
-  } = useLocalSearchParams<{
+  const { estateId, collectionFactory, collectionWeightKg, collectionRequestedAt } = useLocalSearchParams<{
     estateId: string;
     collectionFactory?: string;
     collectionWeightKg?: string;
     collectionRequestedAt?: string;
   }>();
-  const estate = estateProfiles.find((profile) => profile.id === estateId);
-  const savedWorkers = useSavedEstateWorkers(estate?.id);
-  const collectionWeight = Number(collectionWeightKg);
-  const requestedAt = collectionRequestedAt
-    ? new Date(collectionRequestedAt)
-    : null;
-  const pendingCollection =
-    estate &&
-    collectionFactory &&
-    Number.isFinite(collectionWeight) &&
-    collectionWeight > 0 &&
-    requestedAt &&
-    !Number.isNaN(requestedAt.getTime())
-      ? {
-          id: `request-${requestedAt.getTime()}`,
-          estateName: estate.name,
-          factory: collectionFactory,
-          estimatedWeightKg: collectionWeight,
-          requestedAt: requestedAt.toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          }),
-          status: "pending" as const,
-        }
-      : null;
+  const estate = useEstateStore((state) => state.estates.find((profile) => profile.id === estateId));
+  const records = useEstateStore((state) => state.pluckingByEstate[estateId]);
+  const updateEstate = useEstateStore((state) => state.updateEstate);
+  const workers = useSavedEstateWorkers(estate?.id);
+  const [form, setForm] = useState<"edit" | "factory" | null>(null);
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState("");
 
   if (!estate) {
-    return (
-      <Screen style={styles.screen}>
-        <View style={styles.notFound}>
-          <Ionicons name="leaf-outline" size={36} color={colors.brandDark} />
-          <AppText variant="subHeading" style={styles.notFoundTitle}>
-            Estate not found
-          </AppText>
-          <AppText variant="bodySmall" style={styles.notFoundDescription}>
-            This estate may have been removed from your account.
-          </AppText>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.replace("/(estate-owner)/estates")}
-            style={styles.backButton}
-          >
-            <AppText variant="label" style={styles.backButtonText}>
-              Back to estates
-            </AppText>
-          </Pressable>
-        </View>
-      </Screen>
-    );
+    return <EstatePage title="Estate details"><AppText>Estate not found.</AppText></EstatePage>;
   }
 
-  const workersActionLabel = savedWorkers
-    ? `${savedWorkers.filter((worker) => worker.present).length}/${savedWorkers.length} present`
-    : "0/0 present";
+  const presentCount = workers?.filter((worker) => worker.present).length ?? 0;
+  const attendanceTime = getAttendanceSavedAt(estate.id);
+  const latestRecord = records?.[0];
+  const todayRecords = records?.filter((record) => isToday(record.recordedAt)) ?? [];
+  const awaiting = records?.reduce((total, record) => total + record.weightKg, 0) ?? 0;
+  const requestedAt = collectionRequestedAt ? new Date(collectionRequestedAt) : undefined;
+  const requestWeight = Number(collectionWeightKg);
+  const pending = collectionFactory && requestedAt && Number.isFinite(requestedAt.getTime()) && Number.isFinite(requestWeight) && requestWeight > 0
+    ? { id: requestedAt.toISOString(), estateName: estate.name, factory: collectionFactory, estimatedWeightKg: requestWeight, requestedAt: requestedAt.toLocaleDateString("en-GB"), status: "pending" as const }
+    : undefined;
+  const activities = todayRecords.map((record) => ({
+    title: "Plucking recorded",
+    detail: `${record.weightKg.toLocaleString()} kg · ${record.workerName}`,
+    time: record.recordedAt,
+    icon: "leaf-outline" as const,
+  }));
+  const todayActivities = [
+    ...activities,
+    ...(attendanceTime && isToday(attendanceTime) ? [{
+      title: "Worker attendance updated",
+      detail: `${presentCount} workers marked present`,
+      time: attendanceTime,
+      icon: "people-outline" as const,
+    }] : []),
+  ].sort((a, b) => b.time - a.time);
 
-  const callManager = async () => {
-    try {
-      await Linking.openURL(`tel:${estate.managerPhone}`);
-    } catch {
-      Alert.alert("Unable to call", "Calling is not available on this device.");
+  function openForm(next: "edit" | "factory") {
+    if (!estate) return;
+    setName(next === "edit" ? estate.name : "");
+    setLocation(next === "edit" ? estate.location : "");
+    setAmount(next === "edit" ? String(estate.areaAcres) : "");
+    setError("");
+    setForm(next);
+  }
+
+  function saveForm() {
+    if (!estate || !form) return;
+    const trimmedName = name.trim();
+    const address = location.trim();
+    if (!trimmedName || !address) {
+      setError("Enter a name and address.");
+      return;
     }
-  };
-
-  const openCollectionRequest = () => {
-    router.push({
-      pathname: "/(shared)/collectionRequest",
-      params: { estateId: estate.id },
-    });
-  };
+    if (form === "factory") {
+      if (estate.factories.some((factory) => factory.name.toLowerCase() === trimmedName.toLowerCase())) {
+        setError("This factory is already assigned.");
+        return;
+      }
+      updateEstate(estate.id, { factories: [...estate.factories, { name: trimmedName, address }] });
+    } else {
+      const value = Number(amount.replace(",", "."));
+      if (!Number.isFinite(value) || value <= 0) {
+        setError("Enter an area greater than zero.");
+        return;
+      }
+      updateEstate(estate.id, { name: trimmedName, location: address, areaAcres: value });
+    }
+    setForm(null);
+  }
 
   return (
-    <>
-    <Screen
-      pageTitle="Estate"
-      scroll>
-
-      <EstateAvatarWithDetails
-        name={estate.name}
-        address={estate.location}
-        area={`${estate.areaAcres} acres`}
-        image={estate.imageSrc}
-        size={52}
-      />
-
-      <View style={styles.quickActions}>
-        <AppButton title="Fertilizers" width="half"  variant="secondary"/>
-        <AppButton title="+Collection" width="half" variant="primary" onPress={openCollectionRequest}/>
-        
+    <EstatePage title="Estate details" onEdit={() => openForm("edit")}>
+      <View style={styles.identity}>
+        <Image
+          source={estate.imageSrc || require("@/assets/images/estate1.jpg")}
+          placeholder={require("@/assets/images/estate1.jpg")}
+          contentFit="cover"
+          placeholderContentFit="cover"
+          style={styles.hero}
+        />
+        <AppText variant="heading" style={ui.bold}>{estate.name}</AppText>
+        <View style={ui.row}>
+          <EstateIcon name="location-outline" size={16} />
+          <AppText variant="bodySmall" style={[ui.muted, ui.grow]}>{estate.location}</AppText>
+        </View>
+        <View style={ui.row}>
+          <EstateIcon name="scan-outline" size={16} />
+          <AppText variant="bodySmall">{estate.areaAcres} acres</AppText>
+          <View style={styles.divider} />
+          <EstateIcon name="leaf-outline" size={17} />
+          <AppText variant="bodySmall">{estate.grade === "Not graded" ? estate.grade : `${estate.grade} grade`}</AppText>
+        </View>
       </View>
 
-      {pendingCollection ? (
-        <>
-          <SectionHeading title="Ongoing collection" />
-          <RequestListItem
-            request={pendingCollection}
-            title={pendingCollection.factory}
-            showFactory={false}
-            highlight
-          />
-        </>
-      ) : null}
+      <View style={styles.identity}>
+        <AppText variant="bodySmall" style={ui.muted}>Assigned factories</AppText>
+        <View style={styles.factories}>
+          {estate.factories.map((factory) => (
+            <AppText key={factory.name} variant="caption" style={styles.chip}>{factory.name}</AppText>
+          ))}
+          <Pressable accessibilityRole="button" accessibilityLabel="Assign factory" hitSlop={7} style={styles.addFactory} onPress={() => openForm("factory")}>
+            <EstateIcon name="add" size={19} />
+          </Pressable>
+        </View>
+      </View>
 
-      <SectionHeading title="Factories" actionLabel={`${estate.factories.length} linked`} />
-      <View style={styles.factoryList}>
-        {estate.factories.map((factory) => (
-          <View key={factory.name} style={styles.factoryRow}>
-            <View style={styles.factoryIcon}>
-              <Ionicons name="business-outline" size={18} color={colors.brandDark} />
-            </View>
-            <View style={styles.factoryDetails}>
-              <AppText variant="bodySmall" style={styles.factoryName}>
-                {factory.name}
-              </AppText>
-              <AppText variant="caption" style={styles.factoryAddress}>
-                {factory.address}
-              </AppText>
-            </View>
+      <View style={ui.section}>
+        <AppText variant="subHeading" style={ui.bold}>Estate information</AppText>
+        <View style={[ui.card, ui.row]}>
+          <Avatar name={estate.managerName} size={42} />
+          <View style={ui.grow}>
+            <AppText variant="caption" style={ui.muted}>Estate manager</AppText>
+            <AppText variant="bodySmall" style={ui.bold}>{estate.managerName}</AppText>
           </View>
-        ))}
-      </View>
-
-      <View style={styles.sectionHeading}>
-        <View>
-          <AppText variant="sectionHeading" style={styles.sectionTitle}>
-            Plucked tea
-          </AppText>
-          <AppText variant="caption" style={styles.sectionSubtitle}>
-            Daily collected weight
-          </AppText>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Call ${estate.managerName}`} style={styles.call}
+            onPress={() => Linking.openURL(`tel:${estate.managerPhone}`).catch(() => Alert.alert("Unable to call", "Calling is unavailable on this device."))}>
+            <EstateIcon name="call-outline" size={18} />
+          </Pressable>
         </View>
-        <View style={styles.periodBadge}>
-          <Ionicons name="calendar-outline" size={14} color={colors.brandDark} />
-          <AppText variant="caption" style={styles.periodText}>
-            Last 7 days
-          </AppText>
-        </View>
-      </View>
-      <View style={styles.chartCard}>
-        <WeeklyPluckedWeightChart weightsKg={estate.weeklyPluckedWeightsKg} />
-      </View>
-
-      <SectionHeading title="Estate manager" />
-      <View style={styles.managerCard}>
-        <Avatar name={estate.managerName} size={48} />
-        <View style={styles.managerInfo}>
-          <AppText variant="bodySmall" style={styles.managerName}>
-            {estate.managerName}
-          </AppText>
-          <AppText variant="caption" style={styles.managerPhone}>
-            {estate.managerPhone}
-          </AppText>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Call ${estate.managerName}`}
-          onPress={callManager}
-          style={({ pressed }) => [
-            styles.callButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Ionicons name="call" size={17} color={colors.white} />
+        <Pressable accessibilityRole="button" style={[ui.card, ui.row]} onPress={() => router.push({
+          pathname: "/(estate-owner)/workers/[estateId]", params: { estateId: estate.id },
+        })}>
+          <EstateIcon name="people-outline" size={26} />
+          <View style={ui.grow}>
+            <AppText variant="bodySmall" style={ui.bold}>Estate workers</AppText>
+            <AppText variant="caption" style={ui.muted}>{workers?.length ?? 0} workers · {attendanceTime && isToday(attendanceTime) ? presentCount : 0} active today</AppText>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color="#46566b" />
         </Pressable>
       </View>
 
-      <SectionHeading
-        title="Workers"
-        actionLabel={workersActionLabel}
-      />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="View estate workers"
-        onPress={() =>
-          router.push({
-            pathname: "/(estate-owner)/workers/[estateId]",
-            params: { estateId: estate.id },
-          })
-        }
-        style={({ pressed }) => [styles.workersCard, pressed && styles.pressed]}
-      >
-        <View style={styles.workersIcon}>
-          <Ionicons name="people-outline" size={20} color={colors.brandDark} />
-        </View>
-        <View style={styles.workersInfo}>
-          <AppText variant="bodySmall" style={styles.workersCount}>
-            {savedWorkers
-              ? `${savedWorkers.filter((worker) => worker.present).length} of ${savedWorkers.length} workers present`
-              : "0 workers added"}
+      <View style={ui.section}>
+        <AppText variant="subHeading" style={ui.bold}>Tea plucking</AppText>
+        <Pressable accessibilityRole="button" accessibilityLabel={`View plucking records, ${awaiting.toLocaleString()} kilograms awaiting collection`}
+          style={({ pressed }) => [ui.row, styles.awaiting, pressed && styles.pressed]} onPress={() => router.push({
+            pathname: "/(estate-owner)/estate/[estateId]/plucking-records", params: { estateId: estate.id },
+          })}>
+          <View style={ui.grow}>
+            <AppText variant="bodySmall" style={ui.muted}>Awaiting collection</AppText>
+            <AppText variant="heading" style={ui.bold}>{awaiting.toLocaleString()} kg</AppText>
+            <AppText variant="caption" style={ui.muted}>Plucked tea leaves not yet collected</AppText>
+            <AppText variant="caption" style={styles.recordsLink}>View plucking records</AppText>
+          </View>
+          <EstateIcon name="leaf-outline" size={36} />
+          <EstateIcon name="chevron-forward" size={17} />
+        </Pressable>
+        <Pressable accessibilityRole="button" style={ui.action} onPress={() => router.push({
+          pathname: "/(estate-owner)/estate/[estateId]/add-plucking-record", params: { estateId: estate.id },
+        })}>
+          <Ionicons name="add" size={20} color="#fff" />
+          <AppText variant="bodySmall" style={ui.white}>Add plucking record</AppText>
+        </Pressable>
+        <Pressable accessibilityRole="button" style={[ui.action, ui.outline]} onPress={() => router.push({
+          pathname: "/(shared)/collectionRequest", params: { estateId: estate.id },
+        })}>
+          <EstateIcon name="car-outline" size={19} />
+          <AppText variant="bodySmall">Request collection</AppText>
+        </Pressable>
+        <View style={ui.row}>
+          <EstateIcon name="time-outline" size={15} />
+          <AppText variant="caption" style={ui.muted}>
+            {latestRecord ? `Last recorded ${isToday(latestRecord.recordedAt) ? "today" : new Date(latestRecord.recordedAt).toLocaleDateString("en-GB")} at ${formatTime(latestRecord.recordedAt)}` : "No plucking records added yet"}
           </AppText>
-          <AppText variant="caption" style={styles.workersHint}>
-            Manage workers and attendance
-          </AppText>
         </View>
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={colors.text.tertiary}
-        />
+      </View>
+
+      {pending && <RequestListItem request={pending} title={pending.factory} showFactory={false} highlight />}
+
+      <Pressable accessibilityRole="button" style={[ui.card, ui.row]} onPress={() => router.push({
+        pathname: "/(estate-owner)/estate/[estateId]/performance", params: { estateId: estate.id },
+      })}>
+        <EstateIcon name="stats-chart-outline" size={25} />
+        <View style={ui.grow}>
+          <AppText variant="bodySmall" style={ui.bold}>Estate performance</AppText>
+          <AppText variant="caption" style={ui.muted}>Plucking, revenue and worker insights</AppText>
+        </View>
+        <Ionicons name="chevron-forward" size={17} color="#46566b" />
       </Pressable>
 
-      <SectionHeading title="Recent activities" />
-      <View style={[styles.activityCard, styles.lastCard]}>
-        {estate.recentActivities.map((activity, index) => (
-          <View
-            key={activity.id}
-            style={[
-              styles.activityRow,
-              index < estate.recentActivities.length - 1 && styles.activityDivider,
-            ]}
-          >
-            <View style={styles.activityIcon}>
-              <Ionicons name="leaf-outline" size={15} color={colors.brandDark} />
+      <View style={ui.section}>
+        <AppText variant="subHeading" style={ui.bold}>Today’s activities</AppText>
+        {todayActivities.length === 0 && <AppText variant="bodySmall" style={ui.muted}>No activities recorded today.</AppText>}
+        {todayActivities.map((activity, index) => (
+          <View style={[ui.row, styles.activity]} key={`${activity.time}-${index}`}>
+            <View style={styles.activityIcon}><EstateIcon name={activity.icon} size={19} /></View>
+            <View style={ui.grow}>
+              <AppText variant="bodySmall" style={ui.bold}>{activity.title}</AppText>
+              <AppText variant="caption" style={ui.muted}>{activity.detail}</AppText>
             </View>
-            <View style={styles.activityInfo}>
-              <AppText variant="bodySmall" style={styles.activityDescription}>
-                {activity.description}
-              </AppText>
-              <AppText variant="caption" style={styles.activityFactory}>
-                {activity.factory}
-              </AppText>
-            </View>
-            <AppText variant="caption" style={styles.activityTime}>
-              {activity.timeAgo}
-            </AppText>
+            <AppText variant="caption" style={ui.muted}>{formatTime(activity.time)}</AppText>
           </View>
         ))}
       </View>
 
-    </Screen>
-    </>
-  );
-}
-
-function SectionHeading({
-  title,
-  actionLabel,
-}: {
-  title: string;
-  actionLabel?: string;
-}) {
-  return (
-    <View style={styles.sectionHeading}>
-      <AppText variant="sectionHeading" style={styles.sectionTitle}>
-        {title}
-      </AppText>
-      {actionLabel ? (
-        <AppText variant="caption" style={styles.sectionAction}>
-          {actionLabel}
-        </AppText>
-      ) : null}
-    </View>
+      <Modal visible={form !== null} transparent animationType="fade" onRequestClose={() => setForm(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modal}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.modalContent}>
+            <View style={[ui.card, styles.form]}>
+              <AppText variant="subHeading" style={ui.bold}>{form === "edit" ? "Edit estate" : "Assign factory"}</AppText>
+              <AppInput label={form === "edit" ? "Estate name" : "Factory name"} value={name} onChangeText={setName} />
+              <AppInput label="Address" value={location} onChangeText={setLocation} />
+              {form === "edit" && <AppInput label="Area (acres)" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />}
+              {!!error && <AppText accessibilityRole="alert" variant="bodySmall" style={styles.error}>{error}</AppText>}
+              <AppButton title="Save" onPress={saveForm} />
+              <AppButton title="Cancel" onPress={() => setForm(null)} variant="secondary" />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+    </EstatePage>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    paddingTop: spacing.sm,
-  },
-  topBar: {
-    minHeight: 28,
-    justifyContent: "center",
-    marginBottom: spacing.md,
-  },
-  pageTitle: {
-    color: colors.text.primary,
-    fontWeight: "500",
-  },
-  quickActions: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginLeft: 62,
-    marginBottom: spacing.md,
-  },
-  quickAction: {
-    minHeight: 40,
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    borderRadius: 14,
-    backgroundColor: colors.backgroundGray,
-  },
-  quickActionText: {
-    color: colors.text.primary,
-    fontWeight: "500",
-  },
-  pressed: {
-    opacity: 0.78,
-  },
-  sectionHeading: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    color: colors.text.primary,
-  },
-  sectionSubtitle: {
-    marginTop: 2,
-    color: colors.text.secondary,
-  },
-  sectionAction: {
-    color: colors.brandDark,
-    fontWeight: "600",
-  },
-  factoryList: {
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 18,
-    backgroundColor: colors.white,
-  },
-  factoryRow: {
-    minHeight: 68,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-  },
-  factoryIcon: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    backgroundColor: colors.brandSurface,
-  },
-  factoryDetails: {
-    flex: 1,
-    gap: 3,
-  },
-  factoryName: {
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  factoryAddress: {
-    color: colors.text.secondary,
-  },
-  periodBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: colors.brandBorder,
-    borderRadius: 99,
-    backgroundColor: colors.brandSurface,
-  },
-  periodText: {
-    color: colors.brandDark,
-    fontWeight: "600",
-  },
-  chartCard: {
-    overflow: "hidden",
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 20,
-    backgroundColor: colors.white,
-  },
-  managerCard: {
-    minHeight: 76,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 18,
-    backgroundColor: colors.white,
-  },
-  managerInfo: {
-    flex: 1,
-    gap: spacing.xs,
-    marginLeft: spacing.sm,
-  },
-  managerName: {
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  managerPhone: {
-    color: colors.text.secondary,
-  },
-  callButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 15,
-    backgroundColor: colors.success,
-  },
-  workersCard: {
-    minHeight: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 18,
-    backgroundColor: colors.white,
-  },
-  workersIcon: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 14,
-    backgroundColor: colors.brandSurface,
-  },
-  workersInfo: {
-    flex: 1,
-    gap: 3,
-    marginLeft: spacing.sm,
-  },
-  workersCount: {
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  workersHint: {
-    color: colors.text.secondary,
-  },
-  activityCard: {
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 18,
-    backgroundColor: colors.white,
-  },
-  lastCard: {
-    marginBottom: spacing.xl,
-  },
-  activityRow: {
-    minHeight: 68,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  activityDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.light,
-  },
-  activityIcon: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    backgroundColor: colors.brandSurface,
-  },
-  activityInfo: {
-    flex: 1,
-    gap: 3,
-  },
-  activityDescription: {
-    color: colors.text.primary,
-  },
-  activityFactory: {
-    color: colors.text.secondary,
-  },
-  activityTime: {
-    color: colors.text.tertiary,
-  },
-  notFound: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.lg,
-  },
-  notFoundTitle: {
-    marginTop: spacing.md,
-    color: colors.text.primary,
-  },
-  notFoundDescription: {
-    marginTop: spacing.xs,
-    color: colors.text.secondary,
-    textAlign: "center",
-  },
-  backButton: {
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: 16,
-    backgroundColor: colors.brandSurface,
-  },
-  backButtonText: {
-    color: colors.brandDark,
-  },
+  identity: { gap: 5 },
+  hero: { width: "100%", height: 128, borderRadius: 8, backgroundColor: "#e5f6e2" },
+  divider: { width: 1, height: 16, backgroundColor: "#e0e6e9", marginHorizontal: 6 },
+  factories: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
+  chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: "#eefbea", borderWidth: 1, borderColor: "#bbebbb", color: "#10241c" },
+  addFactory: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: estateGreen, alignItems: "center", justifyContent: "center" },
+  call: { backgroundColor: "#eefbea", width: 44, height: 44, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  awaiting: { backgroundColor: "#e8fae4", borderRadius: 9, padding: 13 },
+  pressed: { opacity: 0.75 },
+  recordsLink: { color: estateGreen, fontWeight: "700", marginTop: 6 },
+  activity: { paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#e0e6e9" },
+  activityIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#e8fae4", alignItems: "center", justifyContent: "center" },
+  modal: { flex: 1, backgroundColor: "#0007" },
+  modalContent: { flexGrow: 1, justifyContent: "center", padding: 20 },
+  form: { gap: 12, padding: 18, width: "100%", maxWidth: 420, alignSelf: "center" },
+  error: { color: "#ad2020" },
 });
