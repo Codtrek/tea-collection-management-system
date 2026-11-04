@@ -1,0 +1,2 @@
+source-code/deploy/preview/*.sh text eol=lf
+deploy/preview/*.sh text eol=lf

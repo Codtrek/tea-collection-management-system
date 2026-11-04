@@ -1,6 +1,16 @@
-import type { EstateAdvance, EstateOwner, Settlement } from './types'
+import type { EstateOwner } from './types'
 
-/* Example estates — figures drawn from the module docs' example data. */
+/*
+  Example estates — figures drawn from the module docs' example data.
+  Kept (not deleted) after the Estates + Payments backend slice landed
+  (2026-07-26): still consumed by EstateAnalyticsPage (EST-09, deliberately
+  left on mock data this slice — self-contained charts, no backend
+  dependency), and by CollectionExceptionEntryPage / Fertilizer's
+  LogRequestPage to resolve an estate/route/agent, since those modules
+  aren't wired to the real Estates API yet. Advance/settlement fixtures and
+  their `grossRevenue`/`netPayable` helpers moved to `calc.ts` + the real
+  backend — see `services/estates.ts`.
+*/
 
 export const ESTATES: EstateOwner[] = [
   {
@@ -92,155 +102,3 @@ export const ESTATES: EstateOwner[] = [
     lastUpdatedOn: '2026-04-12',
   },
 ]
-
-export const ESTATE_ADVANCES: EstateAdvance[] = [
-  {
-    id: 'EADV-2026-0031',
-    estateId: 'EST-0001',
-    estateName: 'Green Valley Estate',
-    amount: 50000,
-    reason: 'Pre-season plucking labour costs',
-    dateIssued: '2026-07-05',
-    issuedBy: 'S. Fernando',
-    status: 'Pending deduction',
-  },
-  {
-    id: 'EADV-2026-0028',
-    estateId: 'EST-0002',
-    estateName: 'Hilltop Estate',
-    amount: 30000,
-    reason: 'Fertilizer application labour',
-    dateIssued: '2026-06-21',
-    issuedBy: 'S. Fernando',
-    status: 'Pending deduction',
-  },
-  {
-    id: 'EADV-2026-0022',
-    estateId: 'EST-0003',
-    estateName: 'Mount Rest Estate',
-    amount: 40000,
-    reason: 'Transport vehicle repair',
-    dateIssued: '2026-05-30',
-    issuedBy: 'A. Bandara',
-    status: 'Deducted',
-  },
-]
-
-/*
-  July 2026 settlement run. Rates from Factory Setup (ADM-01): Super Rs. 185/kg,
-  Normal Rs. 95/kg effective 01/07/2026. Fertilizer deductions mirror the
-  Fertilizer module's linked dispatches (Urea ≈ Rs. 190/kg at cost).
-*/
-export const SETTLEMENTS: Settlement[] = [
-  {
-    id: 'SET-2026-07-001',
-    estateId: 'EST-0001',
-    estateName: 'Green Valley Estate',
-    period: 'July 2026',
-    superKg: 408,
-    normalKg: 175,
-    superRate: 185,
-    normalRate: 95,
-    transportCost: 8400,
-    fertilizerDeduction: 22800, // 120 kg Urea dispatched 20/06 (FB-2291)
-    advanceDeduction: 50000,
-    status: 'Pending',
-    selfDelivery: false,
-  },
-  {
-    id: 'SET-2026-07-002',
-    estateId: 'EST-0002',
-    estateName: 'Hilltop Estate',
-    period: 'July 2026',
-    superKg: 120,
-    normalKg: 277,
-    superRate: 185,
-    normalRate: 95,
-    transportCost: 6100,
-    fertilizerDeduction: 11400, // 60 kg Urea dispatched 05/07 (FB-2291)
-    advanceDeduction: 30000,
-    status: 'Pending',
-    selfDelivery: false,
-  },
-  {
-    id: 'SET-2026-07-003',
-    estateId: 'EST-0003',
-    estateName: 'Mount Rest Estate',
-    period: 'July 2026',
-    superKg: 188,
-    normalKg: 164,
-    superRate: 185,
-    normalRate: 95,
-    transportCost: 0, // self-delivery exemption
-    fertilizerDeduction: 15200, // 80 kg NPK dispatched 28/06 (FB-2287)
-    advanceDeduction: 0,
-    status: 'Pending',
-    selfDelivery: true,
-  },
-  {
-    id: 'SET-2026-07-004',
-    estateId: 'EST-0004',
-    estateName: 'Silver Peak Estate',
-    period: 'July 2026',
-    superKg: 96,
-    normalKg: 0,
-    superRate: 185,
-    normalRate: 95,
-    transportCost: 3800,
-    fertilizerDeduction: 3800, // 20 kg Potash dispatched 30/05 (FB-2274)
-    advanceDeduction: 0,
-    status: 'Pending',
-    selfDelivery: false,
-    missingBank: true,
-  },
-  {
-    id: 'SET-2026-06-001',
-    estateId: 'EST-0001',
-    estateName: 'Green Valley Estate',
-    period: 'June 2026',
-    superKg: 380,
-    normalKg: 214,
-    superRate: 180,
-    normalRate: 92,
-    transportCost: 7900,
-    fertilizerDeduction: 0,
-    advanceDeduction: 0,
-    status: 'Processed',
-    selfDelivery: false,
-    processedBy: 'A. Bandara',
-    processedOn: '2026-07-01',
-  },
-  {
-    id: 'SET-2026-06-003',
-    estateId: 'EST-0003',
-    estateName: 'Mount Rest Estate',
-    period: 'June 2026',
-    superKg: 240,
-    normalKg: 198,
-    superRate: 180,
-    normalRate: 92,
-    transportCost: 0,
-    fertilizerDeduction: 7600,
-    advanceDeduction: 40000,
-    status: 'Processed',
-    selfDelivery: true,
-    processedBy: 'A. Bandara',
-    processedOn: '2026-07-01',
-  },
-]
-
-export function grossRevenue(s: Settlement): number {
-  return s.superKg * s.superRate + s.normalKg * s.normalRate
-}
-
-export function netPayable(s: Settlement): number {
-  return grossRevenue(s) - s.transportCost - s.fertilizerDeduction - s.advanceDeduction
-}
-
-export function advancesForEstate(estateId: string): EstateAdvance[] {
-  return ESTATE_ADVANCES.filter((a) => a.estateId === estateId)
-}
-
-export function settlementsForEstate(estateId: string): Settlement[] {
-  return SETTLEMENTS.filter((s) => s.estateId === estateId)
-}

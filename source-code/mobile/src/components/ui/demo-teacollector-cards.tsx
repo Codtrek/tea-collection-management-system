@@ -152,7 +152,11 @@ interface FertRequestCardProps {
   onViewDetails?: (request: any) => void;
   onAcceptFertilizer?: (request: any) => void;
   onLoadFertilizer?: (request: any) => void;
-  onDeliverFertilizer?: (request: any) => void;
+  onNavigateToFertilizerEstate?: (request: any) => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (request: any) => void;
+  onStartSelection?: (request: any) => void;
 }
 
 export const FertRequestCard = ({
@@ -160,9 +164,14 @@ export const FertRequestCard = ({
   onViewDetails,
   onAcceptFertilizer,
   onLoadFertilizer,
-  onDeliverFertilizer,
+  onNavigateToFertilizerEstate,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onStartSelection,
 }: FertRequestCardProps) => {
   const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
+  const canCancel = ["pending", "confirmed", "loaded"].includes(request.status);
 
   const statusMap: any = {
     pending: {
@@ -179,8 +188,8 @@ export const FertRequestCard = ({
 
     loaded: {
       label: "Loaded",
-      action: "Deliver",
-      handler: onDeliverFertilizer,
+      action: "Navigate to Estate",
+      handler: onNavigateToFertilizerEstate,
     },
 
     delivered: {
@@ -206,7 +215,7 @@ export const FertRequestCard = ({
 
   return (
     <>
-    <View style={styles.card}>
+    <View style={[styles.card, selected && styles.selectedCard]}>
       {/* =========================
           HEADER
       ========================= */}
@@ -216,7 +225,22 @@ export const FertRequestCard = ({
         activeOpacity={0.85}
         accessibilityRole="button"
         accessibilityLabel={`View ${request.estateName || "tea estate"} fertilizer request details`}
-        onPress={() => onViewDetails?.(request)}
+        disabled={selectionMode && !canCancel}
+        onLongPress={() => {
+          if (!canCancel) return;
+          if (selectionMode) {
+            onToggleSelect?.(request);
+          } else {
+            onStartSelection?.(request);
+          }
+        }}
+        onPress={() => {
+          if (selectionMode) {
+            onToggleSelect?.(request);
+            return;
+          }
+          onViewDetails?.(request);
+        }}
       >
         <View style={styles.mainInfo}>
           <Text style={styles.title}>
@@ -240,7 +264,17 @@ export const FertRequestCard = ({
 
             {request.status === "delivered" &&
               `Delivered at ${request.deliveredAt}`}
+
+            {request.status === "cancelled" &&
+              `Cancelled at ${request.cancelledAt}`}
           </Text>
+
+          {["pending", "confirmed", "loaded"].includes(request.status) &&
+            request.estimatedDistanceKm != null && (
+              <Text style={styles.estimatedDistance}>
+                Estimated distance: ~{request.estimatedDistanceKm} km
+              </Text>
+            )}
 
           {(request.status === "declined" || request.status === "cancelled") &&
             request.reason && (
@@ -248,48 +282,55 @@ export const FertRequestCard = ({
             )}
         </View>
 
-        <Pill status={request.status} />
+        <View style={styles.statusSelection}>
+          <Pill status={request.status} />
+          {selectionMode && canCancel && (
+            <Ionicons
+              name={selected ? "checkmark-circle" : "ellipse-outline"}
+              size={24}
+              color={selected ? colors.primary : colors.text.tertiary}
+            />
+          )}
+        </View>
       </TouchableOpacity>
 
       {/* =========================
           BUTTONS
       ========================= */}
 
-      <View style={styles.buttonRow}>
-        {/* View Details */}
-
-        <View style={styles.buttonWrapper}>
-          <Btn
-            variant="secondary"
-            small
-            block
-            onPress={() => onViewDetails?.(request)}
-          >
-            View Details
-          </Btn>
-        </View>
-
-        {/* Status Action */}
-
-        {currentStatus?.action && (
+      {!selectionMode && (
+        <View style={styles.buttonRow}>
           <View style={styles.buttonWrapper}>
             <Btn
-              variant="primary"
+              variant="secondary"
               small
               block
-              onPress={() => {
-                if (request.status === "pending") {
-                  setShowAcceptConfirmation(true);
-                  return;
-                }
-                currentStatus.handler?.(request);
-              }}
+              onPress={() => onViewDetails?.(request)}
             >
-              {currentStatus.action}
+              View Details
             </Btn>
           </View>
-        )}
-      </View>
+
+          {currentStatus?.action && (
+            <View style={styles.buttonWrapper}>
+              <Btn
+                variant="primary"
+                small
+                block
+                onPress={() => {
+                  if (request.status === "pending") {
+                    setShowAcceptConfirmation(true);
+                    return;
+                  }
+                  currentStatus.handler?.(request);
+                }}
+              >
+                {currentStatus.action}
+              </Btn>
+            </View>
+          )}
+        </View>
+      )}
     </View>
     <ConfirmationWarning
       visible={showAcceptConfirmation}
@@ -714,6 +755,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
+  statusSelection: {
+    alignItems: "center",
+    gap: 8,
+  },
+
   estateNameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -759,6 +805,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     color: colors.text.muted,
+  },
+
+  estimatedDistance: {
+    fontFamily: fonts.default,
+    fontSize: 12,
+    marginTop: 4,
+    color: colors.primary,
   },
 
   reasonText: {

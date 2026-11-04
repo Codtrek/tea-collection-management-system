@@ -12,7 +12,34 @@ branch `hasindu/mobile/test01` is **abandoned as a failed branch** — nothing i
 all backend/database/mobile work is built fresh on this branch. Earlier versions of this file
 described reconciling with it; that is no longer the plan. Updated 2026-07-22 to record the
 Authentication vertical slice (committed on `feature/auth-slice`) and the Fertilizer
-stock-position rework + dev-CORS fix (in progress on `feature/fertilizer-stock-position`).
+stock-position rework + dev-CORS fix (committed on `feature/fertilizer-stock-position`). Updated
+2026-07-26 to record the Tea Leaf Collection vertical slice (`feature/collections-slice`) — the
+first full DB→backend→portal slice built after auth, per `PLAN.md` Phase 2.1. Updated again
+2026-07-26 to record the Estates + Payments vertical slice (`feature/estates-payments-backend`,
+`PLAN.md` Phase 2.2) and resolve the ~Rs. 3 bank-charge open item. Updated again 2026-07-26 to
+record the Employees + Payroll vertical slice (`feature/employees-payroll-backend`, `PLAN.md`
+Phase 2.3) — the first slice with a genuinely new table (`employees`, independent of the
+auth-side `factory_employees`) and the first to implement live payroll computation rather than
+a snapshot/seeded value. Updated 2026-07-27 to record the Fertilizer vertical slice
+(`feature/fertilizer-backend`, `PLAN.md` Phase 2.4) — resolved the last open business question
+(ad-hoc vs request-linked dispatch: both allowed) and the fourth module to prove the recipe,
+this time extending a pre-existing table in place rather than building fresh or splitting a
+new one. Updated again 2026-07-27 to record the Reports vertical slice
+(`feature/reports-backend`, `PLAN.md` Phase 2.5) — the fifth module, and the first that's mostly
+pure aggregation (no new tables for RPT-01/02) with one greenfield write path (RPT-04's
+`expense_entries`). Updated 2026-07-28 to record the Administration vertical slice
+(`feature/administration-backend`, `PLAN.md` Phase 2.6) — the **sixth and final web-portal
+module**: the permission matrix is now server-driven (`role_permissions`), grade rates are a
+real effective-dated table (`grade_rates`), system settings persist (`system_settings`), and a
+cross-cutting `AuditService` writes a real `audit_logs` row on every mutation across all six
+modules. With this, **zero web-portal modules remain on mock fixtures** — only Phase 3 (Mobile)
+is left. Updated 2026-08-05 to record the Estate Owner Lifetime History slice
+(`feature/estate-lifetime-history`) — amends EST-03 (a new Lifetime Summary strip on Overview) and
+adds EST-10 (the unified timeline, with the Tenure Ribbon as its signature visual element). Not a
+new Phase 2 module — it deepens the already-shipped Estates module — but it's the first slice
+built directly from a screen-design addendum doc rather than from `PLAN.md`'s own module list, and
+it redefined the pre-existing (but never-modeled) `fertilizer_charges` table to finally give
+Fertilizer a money figure.
 
 ## What this system does
 
@@ -123,6 +150,21 @@ Sequence:
 5. If collected weight vs. factory weight differs beyond a configured threshold → system
    **auto-generates a complaint** (do not just store both numbers silently)
 
+**Grading is factory-side only (decided 2026-10-09).** Tea collection agents and estate owners
+record only the collected (estate) weight — never a grade. Grades are assigned at the factory
+during receiving/grading, as **grade lines**: one delivery can carry several lines
+(`delivery_grade_lines`: Super and/or Normal, at most one line per grade per delivery), and the
+delivery's graded total is the **sum of its lines** — never a separately stored total. Rules that
+follow from this:
+- The mobile app has **no grade input anywhere** (collector or owner side).
+- Grade-line create/edit is restricted to factory roles; agents and owners can never write one.
+- The estate weight stays its own field (`tea_collection_records.weight_kg`) — it's what the
+  mismatch check compares the graded total against, so it is never overwritten by grading.
+- Before any grade line exists, the delivery displays as **Ungraded** (showing the estate weight).
+- Grade is a reference/enum value on the line, not a per-grade weight column, so a grade catalogue
+  can replace the Super/Normal enum later by migration. Pricing a line uses the ADM-01 rate
+  version effective on the collection date.
+
 ## Offline behavior
 
 Two distinct problems, don't conflate them:
@@ -169,10 +211,21 @@ Net Payable   = Gross Revenue − Transport Cost − Fertilizer Deductions − A
 
 Employee payroll follows a parallel but separate calculation: shift-based pay (Day/Day OT/
 Night/Night OT, different rates), with employee-requested salary advances deducted at month end,
-also exportable as a bank payment file.
+also exportable as a bank payment file. **Implemented 2026-07-26** (Employees + Payroll vertical
+slice) — each employee carries four hourly rates; a payroll "generate" step aggregates that
+period's `employee_attendance` rows into hour buckets and multiplies by the employee's rates
+*at generation time* (snapshotted onto the row, so a later rate change never alters a past run);
+"process" then finalizes Pending rows the same way settlements do (missing-bank exclusion,
+advance-deduction flip). This is more live computation than Estates' settlements, which stayed
+snapshot-only because their inputs (`grade_rates`, fertilizer) don't exist yet — here the inputs
+(rates, attendance) were built in the same slice.
 
-The ~Rs. 3 per-transaction bank charge is a **per-transaction transfer fee**, deducted from each
-payee's net payable (resolved design decision — don't model it as a flat file-processing fee).
+The ~Rs. 3 per-transaction bank charge is **not deducted from any payee** (resolved 2026-07-26,
+Estates + Payments slice): estate owners and employees are never charged a per-transaction fee.
+Instead the **factory** is billed a separate periodic platform fee (6-monthly or annually) —
+that's SaaS billing, unrelated to the tea settlement/payroll math above, and out of scope for the
+payment calculation itself. Earlier drafts of this file described this charge as a per-transaction
+deduction from net payable; that direction was superseded by this decision.
 
 ---
 
@@ -220,14 +273,15 @@ HighStakesConfirmFlow uses: issue-advance and settlement processing with expanda
 gross/transport/fertilizer/advance breakdown), Tea Leaf Collection (COL-01..04, new
 `PhotoEvidenceGallery` pattern; COL-02 is a provisional "Pending Agent Confirmation" exception
 entry, NOT a weight override — preserves the agent-entered-weight constraint §7.1; Confirmed
-records are locked with a Flag-for-Correction audit path), Reports & Analytics (RPT-01..04,
+records are locked — since 2026-10-16 after a short OPEN window, with a Manager-approved correction path instead of Flag-for-Correction), Reports & Analytics (RPT-01..04,
 shared `ReportViewer` + `ReportActionsBar`; RPT-04 Daily Expense Entry fills the §8.1.6 gap),
 Administration (ADM-01..04 behind `AdminGuard`: Factory Setup with VERSIONED grade-rate history,
 Users & Roles with the editable permission matrix that the data-driven `permissions.ts` model
 was built for, System Settings, read-only Audit Logs). Design decisions honored in the build:
-the ~Rs. 3 bank charge is displayed as an unresolved note in EST-08 (never deducted); grade
-rates are versioned by effective date so past settlements never recalculate; reports aggregate
-Confirmed collection records only. Permissions stay data-driven (`src/context/permissions.ts`).
+the ~Rs. 3 bank charge is never deducted from estate owners or employees (resolved 2026-07-26 —
+see Payment calculation above); grade rates are versioned by effective date so past settlements
+never recalculate; reports aggregate Confirmed collection records only. Permissions stay
+data-driven (`src/context/permissions.ts`).
 Most data is still mock (`features/*/data.ts`), shaped to match a future REST contract — wiring the
 remaining modules to the real backend is the remaining web-portal work. `ComingSoon` stub was
 removed. Build + lint clean. See `source-code/admin/AGENTS.md` for conventions.
@@ -239,16 +293,302 @@ plus `src/services/auth.ts`. `AuthContext` performs real JWT login and hydrates 
 `GET /auth/me` on load. Login is **phone + password** (not email), with per-field validation and a
 password-reveal (eye) toggle in `LoginPage`.
 
-**Fertilizer Inventory reworked (2026-07-22, `feature/fertilizer-stock-position`, in progress).**
+**Fertilizer Inventory reworked (2026-07-22, `feature/fertilizer-stock-position`, committed).**
 Per the fertilizer addendum, the module now distinguishes **On hand ≠ Available**
 (`Available = On hand − Committed − Expired`) to prevent over-commitment. The
 `onHand − committed` math lives in exactly one place — the single-source-of-truth
 `features/fertilizer/position.ts`. Added the request workflow: FERT-05 request queue, FERT-06
 request detail (approval with FEFO allocation + override), FERT-07 log-phoned-in request; plus
 FERT-02 (stock movement now request-linked unless ad-hoc + reason) and FERT-04 (alerts show
-demand coverage) amendments, with routing and a "Fertilizer Requests" nav item. Still mock data.
+demand coverage) amendments, with routing and a "Fertilizer Requests" nav item. Still mock data —
+not yet backend-wired.
 
-**Backend (`source-code/backend/`) — real auth slice built (2026-07-21), rest still to come.**
+**Tea Leaf Collection wired to the real backend (2026-07-26, `feature/collections-slice`) — the
+first complete DB→backend→portal vertical slice built after auth, per `PLAN.md` Phase 2.1.** All
+four screens (COL-01 list, COL-02 exception entry, COL-03 detail, COL-04 edit) now read/write
+through TanStack Query + `src/services/collections.ts` instead of `features/collections/data.ts`.
+Server-side enforces exactly what the UI already implied: Confirmed records are locked (edit →
+409; grading changes go through the OPEN window or a correction request, see the 2026-10-16 section); grade can only be set once status is Collected; Manager
+role is read-only (403 on any write); exception entries always land as **Pending Agent
+Confirmation** with no authoritative weight (§7.1). `features/collections/data.ts` is
+**intentionally kept** — `features/estates/EstateDetailPage.tsx`'s `collectionsForEstate` still
+depends on it until the Estates module (2.2) is wired.
+
+**Estate Owner wired to the real backend (2026-07-26, `feature/estates-payments-backend`) —
+`PLAN.md` Phase 2.2, second module after Collections.** All nine screens (EST-01 list, EST-02
+registration, EST-03 detail, EST-04 edit, EST-05 advance list, EST-06 issue advance, EST-07
+settlement list, EST-08 process settlement) read/write through `src/services/estates.ts` instead
+of `features/estates/data.ts`. Route assignment is server-side (least-loaded of the seeded routes
+— no geo data exists yet to route by estate location) and stays read-only after registration, per
+the architecture decision. Server-side enforces what the UI already implied: register/deactivate
+are Administrator-only (403 otherwise); Manager is read-only on every write; settlement
+processing excludes missing-bank estates rather than blocking the run (UC-054) and flips the
+processed estates' pending advances to Deducted; re-processing when nothing is eligible → 409.
+**The ~Rs. 3 bank charge is resolved**: no per-transaction deduction anywhere in the settlement
+math — see Payment calculation above. Settlements are **process-only this slice**: rows are
+denormalized with snapshot rate/deduction values (seeded, mirroring the old fixture) rather than
+auto-generated from live data, since that needs `grade_rates` (ADM-01, Phase 2.6) and Fertilizer
+dispatch linkage (Phase 2.4), neither built yet. EST-09 Analytics stays on mock data (self-
+contained charts, no backend dependency) *as of this slice — wired to a real endpoint by the
+Estate Owner Lifetime History slice, 2026-08-05, see below*. `features/estates/data.ts` is
+**intentionally kept** (trimmed to just the `ESTATES` array) — `EstateAnalyticsPage`,
+`CollectionExceptionEntryPage`, and Fertilizer's `LogRequestPage` still resolve estate/route/agent
+from it until those flows wire to the real API; `grossRevenue`/`netPayable` moved to the new
+`features/estates/calc.ts`.
+
+**Employees + Payroll wired to the real backend (2026-07-26, `feature/employees-payroll-backend`)
+— `PLAN.md` Phase 2.3, third module, "largest surface, fully greenfield."** All thirteen
+non-mock screens (EMP-01 list, EMP-02 registration, EMP-03 detail, EMP-04 edit, EMP-05/06/07/08
+attendance overview + entry, EMP-09/10 advance list/request/decision, EMP-11/12/13 payroll
+list/process/payslip) read/write through `src/services/employees.ts` instead of
+`features/employees/data.ts`. Two things this slice does differently from Estates: **roster
+writes are Administrator-only end to end** (`employees` permission key is Officer=`view`, not
+`edit` — a real difference from Estates where Officer could edit), and **payroll is live-computed,
+not seeded snapshot** — a "Generate from Attendance" action aggregates that period's
+`employee_attendance` rows × the employee's rates into Pending payroll rows (rates snapshotted at
+generation time), then "Process Payroll" finalizes them (missing-bank exclusion, approved-advance
+deduction flip), same UC-054-style exception handling as settlements. The registration/edit forms
+gained a "Pay rates (Rs./hour)" section (Day/Day-OT/Night/Night-OT) not in the original design doc
+mockup — necessary for the live computation to have real inputs. `AttendanceOverviewPage`'s grid
+now reads real `employee_attendance` rows instead of a pseudo-random fill function; unmarked days
+render as a neutral dot rather than defaulting to Present. `PerformancePage` (EMP-14) stays mock
+(self-contained charts, no backend dependency — the same call EST-09 Analytics made in this slice,
+before it was wired for real by the Estate Owner Lifetime History slice, 2026-08-05).
+`features/employees/data.ts` is **intentionally kept** (trimmed to just the `EMPLOYEES` array) —
+`PerformancePage`'s employee picker still reads it; `netPay` moved to the new
+`features/employees/calc.ts`.
+
+**Fertilizer wired to the real backend (2026-07-27, `feature/fertilizer-backend`) — `PLAN.md`
+Phase 2.4, fourth module.** All eight screens (FERT-01 stock position + expandable batch rows,
+FERT-02 movement entry, FERT-03 batch detail, FERT-04 alerts, FERT-05 request queue, FERT-06
+request detail/decision, FERT-07 log-phoned-in request) read/write through
+`src/services/fertilizer.ts` instead of `features/fertilizer/data.ts`/`position.ts` — both fixture
+files are **deleted this slice** (unlike Estates/Employees, which kept a trimmed fixture for a
+still-mock sibling page; Fertilizer had no such holdout). Stock arithmetic (on-hand/committed/
+available/coverage) is computed **server-side only**, at `GET /fertilizer/positions` — the client
+never recomputes it; `features/fertilizer/lib.ts` keeps only pure *presentation* helpers (expiry
+status, FEFO allocation as a display suggestion, request-availability lookups) that read whatever
+was last fetched. The resolved business question shows up directly in the data model: an Outgoing
+stock movement's `linkedRequest` stays optional — ad-hoc dispatch (no request behind it) and
+request-linked dispatch both draw down the same batch ledger, and a linked dispatch advances the
+request's `dispatchedQtyKg` and flips its status (Approved → Partially Dispatched → Dispatched).
+Decide (approve/reject/cancel a request) is **Administrator-only** — Officer's `edit` level covers
+logging requests and recording movements, but not the approval decision itself (a three-way split
+that doesn't exist in any other module's permission column).
+
+**Reports wired to the real backend (2026-07-27, `feature/reports-backend`) — `PLAN.md` Phase
+2.5, fifth module.** All four screens (RPT-01 Collection, RPT-02 Revenue, RPT-03 Expense, RPT-04
+Log Daily Expense) read/write through `src/services/reports.ts` instead of the deleted
+`features/reports/data.ts` fixture (`types.ts` kept, per the recipe, plus a small
+`REPORT_PERIODS` constant — the five seeded months, Mar–Jul 2026 — since there's no "list
+available periods" endpoint). Unlike every prior slice, RPT-01/02 needed **no new tables** —
+`ReportsService` aggregates read-only off `tea_collection_records`/`settlements`/`payroll_runs`
+(the same second-repository-binding pattern Fertilizer used for `EstateEntity`), so Reports is
+the first module that's pure aggregation over other modules' data rather than owning a workflow.
+RPT-01 filters to **Confirmed collection records only** (§ reports doc); RPT-02 counts only
+**processed** settlements as realized revenue — a period with nothing processed yet (e.g. July,
+whose settlements seed as `Pending`) correctly shows zero, not an error. RPT-03's expense split
+unions three sources: Payroll (`payroll_runs.gross`) and Fertilizer/Transport
+(`settlements.fertilizer_deduction`/`transport_cost`) are **derived** at query time, never
+duplicated as rows; only the manual Utilities/Maintenance/Miscellaneous/Other entries RPT-04
+logs live in the new `expense_entries` table. Each report endpoint accepts an optional
+`?period=YYYY-MM` and **defaults to the latest month with data** when omitted, so the page loads
+something real on first render rather than an empty/error state. Fixed a pre-existing permission
+gap while wiring RPT-04: `reports` was `'view'` for both Officer and Manager in
+`permissions.ts`, which would have shown Manager a "Log Daily Expense" button the backend then
+403s — bumped Officer to `'edit'` (matching every other module's Officer-edits/Manager-views
+split), so the button now hides for Manager via the existing data-driven `can()` check rather
+than a hardcoded role branch.
+
+**Administration wired to the real backend (2026-07-28, `feature/administration-backend`) —
+`PLAN.md` Phase 2.6, the sixth and final web-portal module.** All four screens (ADM-01 Factory
+Setup, ADM-02 Users & Roles, ADM-03 System Settings, ADM-04 Audit Logs) read/write through
+`src/services/admin.ts`; there was no `features/admin/data.ts` fixture to delete (its mock arrays
+lived inline in the page files), and the Public* shapes were lifted into a new
+`features/admin/types.ts` per the recipe. Two things became server-driven that previously weren't:
+- **Permissions are now truly data-driven end to end.** The `role_permissions` table (one row per
+  role×module, seeded from the portal's `DEFAULT_PERMISSIONS`) is the runtime source of truth.
+  `AuthService.buildPublicUser()` attaches the user's own role map onto `PublicUser.permissions`
+  (returned on both login and `/auth/me`); `AuthContext.level()` reads
+  `user.permissions?.[module] ?? DEFAULT_PERMISSIONS[...]` — the client constant is now only a
+  fallback. `can()`/`level()` signatures are byte-identical, so **no page or guard changed**.
+  ADM-02's matrix editor writes back via `PUT /admin/permissions`; the **Administrator row is
+  immutable server-side** (a real downgrade attempt 403s — the factory always keeps one
+  unrestricted account). Changes take effect at a user's next login (the map is baked into the
+  login response, not re-fetched per request).
+- **Audit capture is real and cross-cutting.** A shared `AuditService.record(actor, {...})` (in
+  the new `AuditModule`, imported by every write module) inserts one `audit_logs` row after each
+  successful mutation across Collections, Estates, Employees, Fertilizer, Reports, and Admin. It
+  is **best-effort** — wrapped in try/catch so an audit-insert failure can never roll back or
+  break the business mutation. `GET /audit` (Administrator-only, matching `AdminGuard`) feeds
+  ADM-04. This closed the temporary "no audit_logs table yet" note in `CollectionsService.flag`.
+
+ADM-01 grade rates are a real effective-dated `grade_rates` table (newest `effective_date` is
+"current"); because settlements already snapshot their rate at settlement time, adding a new
+version never retro-recalculates past settlements. ADM-02's System Users tab lists factory users
+by joining `users`+`factory_employees`; **suspend is real** — it flips `users.status` and a
+suspended account is then rejected at login (401), and `users.last_login_at` is stamped on each
+successful login. Password reset stays a stub (records an audit entry; no email infra until Phase
+3). ADM-03 persists to a key/value `system_settings` table. Left static (no backing table this
+slice, noted in code): ADM-01's General Info / Transport / Beneficiary Items tabs, and the
+audit-log CSV/PDF export button.
+
+**Estate Owner Lifetime History (2026-08-05, `feature/estate-lifetime-history`) — amends EST-03,
+adds EST-10.** Turns EST-03 from four disconnected tabs (Deliveries/Payments/Advances/Documents,
+each with its own date column and no shared total) into a lifetime relationship view. Built
+against the addendum doc `estate-owner-lifetime-history-addendum.md`; three real gaps the spec
+assumed away had to be resolved before it could be built:
+- **Fertilizer had no money on it anywhere** — no rate on a batch, and the pre-existing
+  `fertilizer_charges` table (unused: no entity, no rows) was keyed 1:1 on
+  `fertilizer_request_id`, which can't hold an ad-hoc dispatch or the repeated partial dispatches
+  one approved request legitimately produces. **Redefined** `fertilizer_charges` to one row per
+  *dispatch event* (`stock_movement_id` UNIQUE, nullable `estate_id`/`fertilizer_request_id`,
+  `settlement_id` set once recovered) and gave `RecordMovementDto` an optional `ratePerKg` (+
+  `estateId` for ad-hoc dispatches — `destination` stays free text, never fuzzy-matched against an
+  estate name for billing). `recordOutgoing` now writes a charge alongside the dispatch when a
+  rate is given; a linked request's estate always wins over an explicitly-passed one.
+- **Dispatches had no structured estate link** — `stock_movements.destination` was free text.
+  Added `stock_movements.estate_id`, set from the linked request's estate or the caller's explicit
+  `estateId`.
+- **Every estate's `created_at` was ~seed time**, so "Member since" would read ~0 months for
+  everyone. Added `estates.registered_on` (a genuine tenure anchor, distinct from the row-insert
+  timestamp) and backfilled it staggered 2019–2023 across the 5 seeded estates, plus sparse
+  Sep-dated confirmed deliveries/processed settlements/priced dispatches per year so the feature
+  demos with real multi-year depth (Green Valley Estate, registered 2019-03-01, is the flagship
+  long-tenured example — matches the addendum's own worked example almost exactly).
+- Two orphaned, unused tables (`monthly_payments`, `payment_deduction_items` — predating the
+  Estates slice, 0 rows, no entity, superseded by `settlements`) were dropped outright rather than
+  worked around, since `payment_deduction_items`' only reason to exist was pinning down
+  `fertilizer_charges`' old shape.
+
+New backend surface — all on `EstateLifetimeService` (`estates/estate-lifetime.service.ts`),
+JWT-guarded, no caching (computed per request; the addendum's own §11 open item 31 recommends a
+cache, deliberately deferred — the endpoint boundary means one can be added later without touching
+a caller, and at dev scale a cache is premature): `GET /estates/:id/lifetime` (the §3 shared
+selector — deliveries count Confirmed only, earnings count processed settlements' gross only, same
+rules RPT-01/02 use; outstanding = Σ charges − Σ recovered; disputes roll up collection records'
+`mismatch` field, `resolved` is honestly 0 since no resolution tracking exists anywhere in this
+schema); `GET /estates/:id/timeline` (the merged Delivery/Fertilizer/Settlement/Advance/Account
+feed — Account entries read the Administration slice's `audit_logs`, filtered to rows whose
+`record` matches this estate's formatted id; always closes with a synthetic `Registered` entry from
+`registered_on`, since route reassignment doesn't exist in this system — route is system-assigned
+at registration and never edited, addendum §11 item 34); `GET /estates/:id/analytics` (EST-09's
+real numbers, replacing the old hardcoded `REVENUE_TREND`/`GRADE_SPLIT`/`FACTORY_AVG_*` frontend
+constants — factory averages computed over a trailing 6-month window); and paginated
+`GET /estates/:id/{deliveries,payments,advances}` (page size 25, default last-90-days window,
+`?from=`/`?to=` overrides it — "View all" on the frontend passes an early `from`).
+
+Frontend: `LifetimeSummary`/`OutstandingPanel` (the strip on Overview — the Outstanding figure is
+tinted primary/warning-amber when owed, success-green "Fully settled" at zero, **never
+danger-red**, since owing for recently-issued fertilizer is normal); `EstateTimelineTab` +
+`TenureRibbon` (EST-10 — the signature element, a single `--gradient-hero` vertical rail, dark
+`#0D2E19` at the bottom/oldest flowing to bright Harboost `#53CF81` at the top/newest, second
+application of the Provenance Trail thesis after COL-03's photo trail — leaf nodes for deliveries,
+rings for settlements, dots for fertilizer/advance/account, a hollow marker for Registered); a new
+**Analytics** tab on EST-03 renders the same `EstateAnalyticsBody` the standalone EST-09 route
+uses, just pre-scoped, no duplicate component. Motion: entries fade+rise capped at the first 6 —
+enforced structurally by the array index itself (`i < 6`), so "load more" pages, which always start
+at index 25+, can never retrigger it; a filter change remounts the feed (React's own
+reset-state-via-`key` idiom) so a fresh first-6 animation there is a legitimate new "first load",
+not a replay. The ribbon draws once per mount only (`useRef` guard read/written inside a
+`useEffect`, never during render — this codebase's ESLint config flags any render-phase `.current`
+read as an error). Lifetime figures never count up (`useCountUp` is for live/today figures, not
+settled history).
+
+**Estate Owner Directory (2026-08-05, `feature/estate-owner-directory`) — amends EST-01.** Grew out
+of a plain question: "where do I browse all the estate owners?" The roster page already existed
+(`EstateListPage.tsx`) but was invisible (no sidebar entry — the one nav item pointing at `/estates`
+was labelled "Estate Owner Payments" and filed under Finance) and moneyless (only column was YTD
+kg; no last payment, no outstanding, no lifetime figure, and `DataTable` had no sorting at all, so
+"in order" meant insertion order). Rather than add a second, parallel "directory" page — which
+would drift from the roster page over time — **EST-01 was turned into a role-aware directory**:
+same table, same backend shape, three views (Management/Payments/Oversight) that swap default
+columns, sort, filters, primary action, row actions and empty-state copy.
+
+Which view renders is driven by `level('estateOwners')` (`'approve'|'edit'|'view'|'none'` →
+management/payments/oversight), **never `user.role`** — this repo's hardest non-negotiable
+(`AGENTS.md`: "gate UI with `useAuth().can(module, level)`, never hardcode `if (role === ...)`").
+That matters beyond style: if an Administrator regrades Officer down to `view` in ADM-02, that user
+correctly drops to the read-only Oversight view on their very next login — a role-keyed version
+would keep showing them payment actions they can no longer take. Two things the original per-role
+design asked for don't exist in this system and weren't faked in: a per-row "Issue Settlement"
+(EST-08 processes every Pending settlement in one bulk run — `estates.service.ts` says outright
+"there's no per-settlement targeting" — so the Payments view's row action is **View payments**,
+deep-linking to EST-03's Payments tab via a new `?tab=` query param `EstateDetailPage` now reads
+into `DetailPageWithTabs`' `defaultTab`); and per-role column-visibility design docs that aren't in
+this repo (`tea-estate-owner-screen-prompt.md` etc. don't exist here) — the amended contract lives
+in this file instead.
+
+New backend: `GET /estates/directory` (`EstateLifetimeService.directory()`) — deliberately a
+separate endpoint from `GET /estates`, which four other screens (`IssueAdvancePage`,
+`EstateAnalyticsPage`, `LogRequestPage`, dropdowns) use for lightweight id+name lookups that
+shouldn't pay for roster-wide aggregation. One grouped pass over estates/owners/confirmed
+collections/processed settlements/charges/documents (same shape as the existing
+`factoryAverages()` helper), applying the *same* §3 rules `lifetime()` uses per-estate — Confirmed
+deliveries only, processed-settlements-only earnings, outstanding = Σ unrecovered charges — so a
+directory row always agrees with what EST-03 shows for that estate; nothing is summed twice with
+different rules. Returns `EstateDirectoryRow[]` (`estate-lifetime-map.ts`), including a 6-month
+`qualityTrend` for the Oversight view's sparkline and a `documentCount` (cheap addition to the same
+query, not a new endpoint).
+
+`DataTable` (18 existing consumers) gained two **additive, opt-in** capabilities so no other screen
+changed: per-column `sortable`/`sortValue` (click-cycles asc → desc → none, `aria-sort`) and
+`hideable` + `columnPrefsKey` (a "Columns" popover, persisted to `localStorage` the same way the
+existing density toggle is) plus `initialHidden` for a view's pre-localStorage default. New
+`components/charts/Sparkline.tsx` (a bare recharts `LineChart`, no axes/tooltip) is the first
+consumer of `hideable`. `formatTenure()` (was a private helper duplicated nowhere — now promoted to
+`lib/format.ts`) is shared by `LifetimeSummary` and the directory's Registered/Tenure columns.
+
+Nav (`components/layout/nav.ts`): added **Estate Owners** → `/estates` under **People** (the actual
+browse entry point this whole slice was about); repointed Finance's existing **Estate Owner
+Payments** to `/estates/settlements` (the real payment-processing screen) instead of the roster, so
+the two entries no longer point at the same route under different names.
+
+**EST-03 gained a Fertilizer tab (2026-08-05, same branch) — fixing the Timeline's Fertilizer
+"View" link, which went through two wrong destinations before this.** It started as a hardcoded
+`/fertilizer` constant (the factory-wide inventory list). The first fix pointed it at the
+request/batch detail pages instead — better, but still factory-side, and every one of an estate's
+ad-hoc historical dispatches typically draws from the *same* batch (a `LOT-HIST-0001` placeholder
+for pre-2026 records), so every one of that estate's View links landed on the identical page. The
+actual gap: EST-03 had no list of the owner's *own* fertilizer records anywhere — Overview already
+headlines "Fertilizer taken" and "Outstanding to factory" from this exact data, but there was
+nowhere to see the line items behind those figures. Added `EstateLifetimeService.fertilizerFor()` +
+`GET /estates/:id/fertilizer` (mirrors `advancesFor()`; page size 25, default last-90-days window)
+and a new **Fertilizer** tab (Date · Item · Quantity · Rate/kg · Total · Status · Request · Lot) —
+`Status` is Deducted (+ its settlement id) in success-fg or Outstanding in warning-fg, same
+never-danger-red rule as `OutstandingPanel`; `Request`/`Lot` are still clickable through to the
+factory-side pages, just no longer the *destination*. The timeline entry's `recordHref` is now
+`/estates/:id?tab=fertilizer&record=FC-…` (a new `formatChargeId` id, since the charge — not the
+batch or request — is the row actually being listed). A deep-linked charge can be years old, and
+the tab defaults to last-90-days like every other paginated tab, so `EstateDetailPage` derives that
+tab's `showAll` from whether `?record=` is present, forcing all-time so a historical row is actually
+on screen. `DataTable` gained one more additive prop for this, `highlightRowKey`, tinting the
+deep-linked row the same way the existing bulk-select tint does. Known, accepted limit: past 25
+charges for one estate the highlighted row could be off the first page — not worth solving at
+today's data volume (largest estate has 6).
+
+**EST-03's tabs had to become URL-driven (2026-08-05, same day) — the View link set the right URL
+but the page didn't move.** The first cut of the above seeded state at mount
+(`useState(() => !!highlightRecord)` for `showAll`, and `DetailPageWithTabs`'s own
+`useState(defaultTab ?? tabs[0]?.id)` for the active tab) — but a `useState` initializer only runs
+on first mount, and clicking View while already on `/estates/:id` is a **same-route** navigation:
+React Router updates the query string, `EstateDetailPage` stays mounted, neither initializer
+re-runs, and the tab silently never switches. Fixed by making the URL the actual source of truth
+instead of a one-time seed: `DetailPageWithTabs` gained an opt-in **controlled mode**
+(`activeTab`/`onTabChange` props, standard controlled/uncontrolled split — its other two consumers,
+EMP-03 and the fertilizer batch page, pass neither and are untouched); `EstateDetailPage` now
+*derives* `activeTab`, `highlightRecord`, and `fertilizerShowAll` from `searchParams` every render
+instead of capturing them once. Tab clicks write `?tab=` back via `setSearchParams(..., {replace:
+true})` and drop `record` (a highlight belongs to the arrival, not a tab clicked into afterward);
+`replace` keeps ordinary tab-browsing out of the history stack while the Timeline's `navigate()`
+push still gives Back a real "return to Timeline". The `useEffect`-based "sync a prop into state"
+fix that comes to mind first isn't available here — this repo's ESLint bans `setState` inside
+`useEffect` (`react-hooks/set-state-in-effect`) — which is exactly why derived-from-render, not
+effect-synced, is the pattern to reach for the *next* time a same-route deep-link needs to move
+something that used to be `useState`-seeded.
+
+**Backend (`source-code/backend/`) — auth, collections, estates, employees, fertilizer, reports,
+and administration slices built; all six web-portal modules now backend-wired.**
 The default NestJS scaffold (`app.controller.ts`, `app.service.ts`, their spec, and the e2e test)
 was **deleted**; `package.json` now depends on TypeORM, pg, @nestjs/jwt, passport-jwt, bcrypt, and
 class-validator. Built:
@@ -258,22 +598,192 @@ class-validator. Built:
   `factory_officer→Officer`, `factory_manager→Manager`; non-factory roles are rejected).
 - **Users** (`src/users/`): User / Factory / FactoryEmployee entities + service; users are keyed
   by **phone**, not email; the profile join reaches `factory_employees → factories`.
-- **Seed** (`src/seed.ts`, `npm run seed`): three factory users, DEV creds
-  `0771234567` / `Password123!` (admin / officer / manager on `…67/68/69`).
+- **Collections** (`src/collections/`): `GET/PUT /collections(/:id)`, `POST /collections`
+  (exception entry), `POST /collections/:id/flag`, all JWT-guarded. Business rules (lock, grade
+  gate, Manager-read-only, provisional-record creation) live in `collections.service.ts` with unit
+  tests in `collections.service.spec.ts`. DB↔portal status/grade mapping in `collection-map.ts`
+  (mirrors `auth/role-map.ts`'s pattern) — the DB stores snake_case, the API returns the portal's
+  exact `CollectionRecord` shape (Title Case statuses, `photos`/`timeline` as JSONB passed through
+  near-verbatim).
+- **Estates** (`src/estates/`): `GET/POST/PUT /estates(/:id)`, `PATCH /estates/:id/deactivate`,
+  `GET/POST /estates/advances`, `GET /estates/settlements`, `POST /estates/settlements/process`,
+  all JWT-guarded. Business rules (Administrator-only register/deactivate, Manager-read-only,
+  missing-bank exclusion, advance-flip-to-Deducted, least-loaded route auto-assignment) live in
+  `estates.service.ts` with unit tests in `estates.service.spec.ts`. DB↔portal mapping in
+  `estate-map.ts` (same pattern as `collection-map.ts`), including `formatEstateId`/
+  `parseEstateId` for the `EST-0001`-style business id (formatted from the `estates.id` serial,
+  not stored). New estate owners get a `users` row provisioned via `UsersService.createUser`
+  (phone-keyed, random password — no distribution flow yet, deferred to mobile login, Phase 3).
+- **Employees** (`src/employees/`): `GET/POST/PUT /employees(/:id)`, `PATCH
+  /employees/:id/deactivate`, `GET/POST /employees/attendance`, `GET/POST /employees/advances`,
+  `PATCH /employees/advances/:id/decide`, `GET /employees/payroll`, `POST
+  /employees/payroll/generate`, `POST /employees/payroll/process`, all JWT-guarded. Business rules
+  live in `employees.service.ts` with unit tests in `employees.service.spec.ts`:
+  Administrator-only roster writes (a stricter gate than Estates — Officer is view-only on the
+  roster there too); attendance-mark/advance-decide/payroll-generate/process all reject Manager;
+  advance decisions accept both Officer and Administrator; `generatePayroll` aggregates
+  `employee_attendance` hours × the employee's *current* rates, snapshotting both onto the
+  `payroll_runs` row (a later rate change never alters a past run); `processPayroll` excludes
+  missing-bank rows and flips contributing Approved advances to `deducted`. DB↔portal mapping in
+  `employee-map.ts` — unlike `estate-map.ts`/`collection-map.ts`, every enum here uses the *same*
+  string on both sides (the DB CHECK constraints were written to match the portal's types
+  directly), so it's just id-formatting (`formatEmployeeId`/`parseEmployeeId`, `EMP-0001`-style)
+  plus the `PublicEmployee`/`PublicAdvance`/`PublicAttendance`/`PublicPayrollRow` shapes — no
+  DB→App conversion tables needed. `employees` is a **new, separate table** from the pre-existing
+  `factory_employees` (the auth/permission subtype table for the 3 factory login roles) —
+  intentionally unrelated; `hasLogin` on an `employees` row is a stored flag only, since Employee
+  self-service login is out of scope for this admin-portal slice (this module never provisions a
+  `users` row, unlike Estates' owner-registration flow).
+- **Fertilizer** (`src/fertilizer/`): `GET/POST /fertilizer/batches`, `GET /fertilizer/batches/:id`,
+  `PATCH /fertilizer/batches/:id/discard`, `GET /fertilizer/positions`, `GET/POST
+  /fertilizer/requests`, `GET /fertilizer/requests/:id`, `PATCH /fertilizer/requests/:id/decide`,
+  `GET/POST /fertilizer/movements`, all JWT-guarded. Business rules live in
+  `fertilizer.service.ts` with unit tests in `fertilizer.service.spec.ts`: the position/coverage
+  arithmetic (on-hand/committed/available, Healthy/Tight/Short) is computed here and only here;
+  decide is Administrator-only while logging/recording is Officer+ (Manager read-only, same
+  three-tier split as the other modules but with an extra approve-vs-edit distinction unique to
+  this one); an Outgoing movement's `linkedRequest` is optional (ad-hoc allowed) but when present
+  must reference a request with `Approved`/`Partially Dispatched` status and enough remainder, and
+  advances `dispatched_qty_kg` + flips status (→ `Partially Dispatched` or `Dispatched`). DB↔portal
+  mapping in `fertilizer-map.ts` — same shared-enum, id-formatting-only pattern as
+  `employee-map.ts` (`formatBatchId`/`formatMovementId` → `FB-0001`/`MV-0001`;
+  `formatRequestId` → `FR-2026-0001`, embedding the request's creation year cosmetically). Reads
+  a second `EstateEntity` repository (registered in `fertilizer.module.ts` alongside its own
+  entities) purely to resolve estate name + owner id — Estates doesn't model `estate_employees`
+  managers at the app layer, so `fertilizer_requests.requested_by` is nullable and always null
+  from this module (see Database status below).
+- **Reports** (`src/reports/`): `GET /reports/collection`, `GET /reports/revenue`, `GET
+  /reports/expenses`, `POST /reports/expenses`, all JWT-guarded, each GET accepting an optional
+  `?period=YYYY-MM` (defaults to the latest month with data). Business rules live in
+  `reports.service.ts` with unit tests in `reports.service.spec.ts`: collection totals filter to
+  **Confirmed** records only; revenue counts only **processed** settlements (`super_kg×super_rate
+  + normal_kg×normal_rate`) as realized income; expenses union three sources — Payroll
+  (`payroll_runs.gross`) and Fertilizer/Transport (`settlements.fertilizer_deduction`/
+  `transport_cost`) computed on the fly, plus manual entries from the new `expense_entries` table
+  — and `createExpense` is Officer+ (Manager read-only, same tier as every other module).
+  `ReportsModule` registers no entities of its own for aggregation — it binds read-only onto
+  `CollectionRecordEntity`/`SettlementEntity`/`PayrollRunEntity` (same second-repository pattern
+  Fertilizer used for `EstateEntity`) alongside owning `ExpenseEntryEntity`. `reports-map.ts`
+  holds the period-key helpers (`'YYYY-MM'` ↔ `'Month YYYY'` label conversion, since
+  `settlements`/`payroll_runs` store the latter) and the `Public*` report shapes; no DB↔portal
+  enum mapping is needed since Reports doesn't own a status lifecycle.
+- **Audit** (`src/audit/`): cross-cutting `AuditModule` exporting `AuditService`; imported by
+  every write module. `record(actor, {action, module, record?, recordHref?, details?})` is
+  **best-effort** (try/catch swallows failures — an audit write never breaks the mutation) and
+  formats a running `AUD-NNNNN` id. `GET /audit` (module/user/search filters) is
+  **Administrator-only** (checked off `req.user.role`, matching the portal's `AdminGuard`). Unit
+  tests in `audit.service.spec.ts` cover the shape, the id sequence, the swallow-on-failure
+  contract, and filtering.
+- **Administration** (`src/admin/`): `GET/POST /admin/grade-rates`, `GET/PUT /admin/permissions`,
+  `GET/PUT /admin/settings`, `GET /admin/users`, `POST /admin/users/:id/{suspend,reset-password}`,
+  all JWT-guarded and **Administrator-only** (`assertIsAdmin`; `administration: 'approve'`). Owns
+  `grade_rates`/`role_permissions`/`system_settings` and binds read/write onto `User` +
+  read-only `FactoryEmployee` for the Users tab. `admin-map.ts` holds the shared permission
+  vocabulary (`ModuleKey`/`PermissionLevel`/`PortalRole`, mirrored from the portal) and the
+  matrix (de)serialisation helpers. `updatePermissions` enforces the immutable-Administrator
+  invariant server-side; `createGradeRate` never mutates past rows (newest effective date is
+  current); `suspendUser` blocks self-suspend. Unit tests in `admin.service.spec.ts`.
+  `AuthService` also binds `RolePermissionEntity` read-only to attach the caller's role map onto
+  the login/`/auth/me` response (`PublicUser.permissions`), and rejects a `suspended` login.
+- **Seed** (`src/seed.ts`, `npm run seed`, idempotent): three factory users, DEV creds
+  `0771234567` / `Password123!` (admin / officer / manager on `…67/68/69`), plus reference
+  routes/collection agents, 5 estates (1 inactive, 1 missing-bank) with owners/documents, 3 estate
+  advances, 12 settlements (July pending + processed history back to March), 16 collection
+  records (July fixture-detail rows plus lightweight Mar–Jun confirmed history for RPT-01's trend
+  chart), 6 employees (1 suspended, 1 missing-bank) with pay rates, ~52 July-2026 attendance
+  records (covering all four shift-hour buckets), 3 salary advances, a payroll run for July 2026
+  computed inline in the script (same aggregation formula `generatePayroll` uses, since the seed
+  script has no NestJS DI context to call the real service from) plus 4 static historical payroll
+  rows (Mar–Jun) for RPT-03's trend, and 8 fertilizer batches (one intentionally past-expiry,
+  reproducing the addendum's TSP-available-−200 showcase), 11 fertilizer requests (5 Approved, 4
+  Submitted, 1 Dispatched, 1 Rejected — natural-keyed by `(estate, item, quantity)` for idempotent
+  re-seeding, since `fertilizer_requests` has no business-key column), 6 stock movements, and 5
+  expense entries (3 July + 2 earlier months, mirroring the old fixture's manual rows) — spanning
+  every status each module needs. For Administration: the 33-cell `role_permissions` matrix
+  (seeded from the portal's `DEFAULT_PERMISSIONS`, kept in sync via the script's
+  `PERMISSION_MATRIX`), 3 `grade_rates` versions (Jan/Apr/Jul 2026), a `system_settings` baseline,
+  and 5 `audit_logs` baseline rows so ADM-04 isn't empty on first load (real capture appends from
+  there).
 - **Config**: `app.module.ts` wires ConfigModule + TypeORM (`synchronize: false`,
   `autoLoadEntities`); `main.ts` has a global ValidationPipe and dev-tolerant CORS (see below).
 
-The routes / pickup-requests / collection-records / payments modules are still to be written — see
-`PLAN.md` Phase 1 onward.
+The pickup-requests / reports / administration modules are still to be written — see `PLAN.md`
+Phase 2.5 onward. (Route/Estate/Employee/Fertilizer now have minimal real backing; the full
+Route/Pickup request state machine is still mobile-driven, Phase 3.)
 
-**Database (`source-code/database/init.sql`) — auth unblocked, broader reconciliation still
-pending.** The `users.role` **and** `factory_employees.role` CHECK constraints were extended
-(2026-07-21) to include `factory_officer` and `factory_manager`, so the web portal's two non-admin
-roles now authenticate (this was `PLAN.md` Phase 0). The schema still has the old
-`tea_selling_requests`/`tea_collection_assignments`/`estate_route_mapping` model, not the
-`routes`/`route_stops`/`pickup_requests` state machines described above — that reconciliation is
-still to come. The local dev DB runs the auth slice in an isolated `tea_authslice` schema; the
-older, more-advanced `tea` schema left over from the abandoned test01 branch is untouched.
+**Database (`source-code/database/init.sql`) — auth unblocked, collections reconciled to the
+photo-evidence design, estates extended to the full EST-01..09 contract, employees/payroll tables
+added from scratch, fertilizer stock tables added and the pre-existing request table extended in
+place, broader Route/Pickup reconciliation still pending.** The `users.role`
+**and** `factory_employees.role` CHECK constraints were extended (2026-07-21) to include
+`factory_officer` and `factory_manager`, so the web portal's two non-admin roles now authenticate
+(this was `PLAN.md` Phase 0). On 2026-07-26 the old OTP-based collection lineage —
+`tea_selling_requests` → `tea_collection_assignments` → `tea_collection_records` (with
+`collection_otp`/`otp_verified`) → `tea_receiving_records` — was **dropped and superseded** by a
+single reconciled `tea_collection_records` table matching the finalized **photo evidence only,
+never OTP** design (§ Weight verification) and the web portal's status chain 1:1: business-key id
+(e.g. `GV-2026-0714`), nullable FKs to `estates`/`routes`/`collection_agents` plus denormalized
+display columns, `photos`/`timeline` as JSONB. `complaints.collection_record_id` and
+`fertilizer_dispatches.collection_record_id` were retyped to match. This collapsed table
+intentionally covers only what the web portal needs; the full Route/Pickup request state machine
+(estate-initiated requests, auto-assignment) is mobile-driven and still deferred to `PLAN.md`
+Phase 3 — `estate_route_mapping` and the broader `routes`/`route_stops`/`pickup_requests` model
+from the domain section above are not yet built. On 2026-07-26 (same day, Estates + Payments
+slice) `tea_estate_owners` gained `nic`/`contact`/`email`, and `estates` gained the full EST-01..09
+contract (`address`, `route_id`/`route_name`, `self_delivery`, `status`, `ytd_deliveries_kg`,
+`bank_name`/`bank_branch`/`bank_account`, audit columns) — `route_id` forward-references `routes`
+(defined later in `init.sql`), so its FK constraint is added via a separate `ALTER TABLE` right
+after `routes` is created rather than inline. Three new tables: `estate_documents` (metadata only,
+same deferred-storage pattern as Collections' photos), `estate_advances`, and `settlements`
+(denormalized with snapshot rate/deduction values — no join to `grade_rates` or
+`fertilizer_dispatches`, neither exists yet). The pre-existing `monthly_payments` /
+`payment_deduction_items` skeleton predates this slice and doesn't match the portal's per-estate
+settlement contract — left in place, unused, rather than dropped (see the Payments section
+comment in `init.sql`). On 2026-07-26 (same day, Employees + Payroll slice) four tables were added
+from scratch, since none of `employee_attendance`/`payroll_runs`/`salary_advances` existed even as
+stubs (unlike Estates, which extended an already-decent base): `employees` (the HR roster,
+independent of `factory_employees`), `employee_attendance` (one row per employee per day, `UNIQUE
+(employee_id, date)`), `salary_advances` (adds a `deducted` boolean alongside the
+Pending/Approved/Rejected approval-workflow `status`, so payroll can track which Approved advances
+a processed run has already applied), and `payroll_runs` (`UNIQUE (employee_id, period)`, with
+`day_rate`/`day_ot_rate`/`night_rate`/`night_ot_rate` and matching hour columns snapshotted at
+generation time — same effective-dated-rate principle as `grade_rates`). On 2026-07-27 (Fertilizer
+slice) the pre-existing `fertilizer_requests` table — created for a dual owner/factory approval
+flow the portal never built — was **extended in place** rather than replaced: added `item`,
+`origin`, a portal-matching `status` lifecycle (`Submitted → Approved → Partially Dispatched →
+Dispatched → Deducted`, `Rejected`/`Cancelled` terminal), `approved_qty_kg`/`dispatched_qty_kg`,
+and `decided_by`/`decided_on`; the legacy `owner_status`/`factory_status` columns stay, defaulted,
+for a possible future mobile dual-approval flow. `requested_by` (FK to `estate_employees`, a
+manager) was changed **NOT NULL → nullable**, same "nullable because this slice doesn't populate
+it" reasoning as `estates`' bank fields — the Estates module never modeled `estate_employees` at
+the app layer, and the portal's FERT-07 log-phoned-in-request flow records against an estate, not
+a specific manager. Two new tables: `fertilizer_batches` (FEFO-tracked via `expiry_date`, folds
+beneficiary items like Rice into the same `category` column rather than a parallel table) and
+`stock_movements` (`linked_request_id` nullable by design — ad-hoc dispatch resolved 2026-07-27).
+On 2026-07-27 (same day, Reports slice) exactly **one** new table was added — `expense_entries`,
+for RPT-04's manual daily-expense entries — the smallest schema footprint of any slice so far,
+since RPT-01/02 read existing `tea_collection_records`/`settlements` columns as-is with no
+schema change at all. On 2026-07-28 the Administration slice added **four** tables —
+`grade_rates` (effective-dated), `role_permissions` (PK `(role, module)`), `system_settings`
+(key/`jsonb` value), and `audit_logs` (append-only) — plus two columns on `users` (`status`
+`active`/`suspended`, `last_login_at`). Because the dev DB runs `synchronize: false`, the same
+changes were applied as a scoped non-destructive migration (`ALTER … ADD COLUMN IF NOT EXISTS`,
+`CREATE TABLE IF NOT EXISTS`) against the running instance in addition to landing in `init.sql`.
+On 2026-08-05 the Estate Owner Lifetime History slice added `estates.registered_on` (the tenure
+anchor) and `stock_movements.estate_id` (the structured billing link `destination`'s free text
+never provided), **redefined** `fertilizer_charges` from a 1:1-on-request table to one row per
+dispatch event, and **dropped** the long-orphaned `monthly_payments`/`payment_deduction_items`
+tables outright (0 rows, no entity, superseded by `settlements` since the Estates slice — the
+latter's only reason to exist was pinning down `fertilizer_charges`' old shape).
+The local dev DB runs everything in an isolated `tea_authslice` schema; the older, more-advanced
+`tea` schema left over from the abandoned test01 branch is untouched.
+
+**Native local DB setup (2026-10-12, hp laptop).** PostgreSQL 17 is installed natively (no Docker): DB
+`tea_db`, user `tea_user`, plain `public` schema (not `tea_authslice`), DBeaver as the GUI. The backend does
+**not** create tables (`synchronize: false` in `app.module.ts`) — they come from `source-code/database/
+init.sql` then `database/migrations/*.sql` in date order, applied by hand with `psql -f` (native installs
+skip Docker's `initdb.d`). Then `source-code/backend/.env` needs `DATABASE_URL` (a `!` in the password must
+be `%21`) and `JWT_SECRET` (`REDIS_URL` is optional), and `npm run seed` fills it. The `.env` is gitignored.
 
 Infra is already in place and needs no work: `source-code/docker-compose.yml` defines postgres 16,
 redis, api, admin, and nginx.
@@ -283,7 +793,95 @@ tokens (`src/theme/`: colors, spacing, typography — note `colors.primary` is t
 `#53cf81` the web portal's hybrid palette is built from) and a minimal `_layout.tsx` +
 `index.tsx`. No role-based login, route/pickup/weight/payment flows exist here yet.
 
-## Remaining work (as of 2026-07-22)
+## Agent Dispatch, absence cover & multi-grade deliveries (2026-10-09)
+
+Branch `feature/agent-dispatch` (from `feature/estate-owner-directory`; `origin/dev` NOT merged yet).
+Spec: `docs/specs/Collection-Agent-Dispatch-Addendum.md`. Backend + web done; **mobile deferred** (only the
+agent API exists, exercised by unit tests and curl — merge `origin/dev` for the teammate's collector app first).
+
+- **Requests go to a ROUTE, not an agent.** `RouteResolverService.getAgentForRoute(routeId, date)`
+  (`backend/src/dispatch/`): ACTIVE cover > ACTIVE permanent > null. Every routing path uses it; uncollected
+  records show the route's *current* agent at read time (`agent_id` is stamped only when collected), so covers
+  hand over and back with no rewrites. Table: `route_assignments` (`PERMANENT`|`COVER`; statuses PENDING/ACTIVE/
+  DECLINED/EXPIRED/CANCELLED; `stop_scope` is the unused hook for splitting a route later).
+- **Cover flow:** officer marks absent → system ranks candidates (neighbour routes first, then fewest remaining
+  stops; soft 30-day-best-day ceiling is a warning only; one cover per agent per day) → request → agent
+  accepts/declines or it expires (`system_settings.dispatch.coverRequestTimeoutMin`, default 15). Reassign
+  "today only" is an instruction (instantly ACTIVE); "from now on" ends the permanent (valid_to = yesterday).
+  Both blocked once the route has collected today. Shared load maths live ONLY in `RouteLoadService`.
+- **Agent auth is a separate token audience:** `POST /auth/agent/login` → role `CollectionAgent`; the portal
+  `JwtStrategy` rejects it and `AgentJwtStrategy` ('jwt-agent') rejects portal tokens. Agent API: `/dispatch/me/*`.
+- **Live location (overrides the old "no live tracking" rule — the GPS "Deferred" bullet above is stale; user
+  owns that edit):** shift-only pings, batch upload keeps device `recorded_at`; a fix is accepted only if recorded
+  inside a shift. Latest position in Redis (`agent:pos:{id}`, 12h TTL; in-process fallback when Redis is down),
+  history in `agent_location_pings`, **30-day retention** (nightly job). UI shows *age* (green <5 min, amber
+  5–30, grey "Last seen HH:MM"), never "live". Foreground-only this round.
+- **Grade lines:** `delivery_grade_lines` (UNIQUE delivery+grade); the old `tea_collection_records.grade` column
+  is gone. `weight_kg` = **estate weight** (mismatch input). Total = Σ lines via `weightSummary()` in
+  `collection-map.ts` (one place). `PUT /collections/:id/grade-lines` is factory-only; it confirms the record and
+  raises a `complaints` row when the graded total strays >5% (`MISMATCH_THRESHOLD`). Settlement math:
+  `estates/settlement-calc.ts` (`computeGross` per line × that grade's effective-dated rate) — not yet wired into
+  a settlement generator (settlements are still seeded snapshots).
+- **COL-02 is estate-first:** client sends only `estateId`; server derives route + today's agent (cover-aware).
+  `GET /dispatch/estates/:id/route-agent` feeds the form.
+- **Web:** `/collections/dispatch` (`features/dispatch/`), Leaflet map lazy-loaded; `dispatch` is a data-driven
+  permission module (view / edit = absent+cover+today-only / approve = permanent). `ReceivingOfficer` row exists
+  in `role_permissions` with level `none` (the "agent hasn't arrived" flag is deferred).
+- **Agents are employees (2026-10-10).** `Tea Collecting Agent` is an HR job title (`employees/employee-roles.ts`, served by
+  `GET /employees/roles`; the portal has no hardcoded copy). An agent = **Active** employee with that title linked via
+  `collection_agents.hr_employee_id`; `AgentDirectoryService` is driven by employees, so deactivating/re-roling removes
+  them from the board and kills their mobile login. Registering one provisions the login in a single transaction
+  (`AgentProvisioningService`; one-time temp password returned once, `users.must_change_password`, 409 on a taken
+  contact number). Dispatch board: new agents show "Not started"/"Unassigned"; "View history" →
+  `/employees/:id?tab=collections` (`GET /employees/:id/collections`, 90-day default, paginated, "Covering Route X").
+  Migration `2026-10-10-agent-employees.sql`. Portal now has vitest (`npm test`).
+- **Gotchas:** seed re-runs burn serial values, so seeded agent ids are 1, 2, 45–47 (don't hardcode). `expo-server-sdk`
+  is ESM-only, loaded lazily in `DispatchNotifier`. Redis isn't installed locally — the fallback is what runs.
+  Migration: `source-code/database/migrations/2026-10-09-agent-dispatch.sql` (idempotent; mirrored in `init.sql`).
+
+## Grading corrections & estate owner notification (2026-10-16, `feature/grading-corrections`)
+
+Spec: `docs/specs/Collection-Grading-Corrections-Addendum.md`. Branched from `feature/agent-dispatch`; `origin/dev` NOT merged.
+Migration `database/migrations/2026-10-16-grading-corrections.sql` (idempotent, mirrored in `init.sql`).
+
+- **States are derived, never stored:** OPEN (graded, `now < locked_at`) → LOCKED → SETTLED (`settlement_id`). `status` stays
+  `confirmed`. **`locked_at` is a snapshot** (`graded_at` + the window *at grading time*), so changing the setting never
+  re-opens/re-locks old deliveries; a confirmed row with null `locked_at` is legacy = LOCKED. One helper decides it:
+  `gradingState` / `isPayable` in `collections/collection-map.ts`.
+- **No silent edits:** every change is a row in append-only `delivery_grade_revisions` (initial / open_edit / correction;
+  who, when, why, approver). `delivery_grade_lines` is still the current projection. OPEN edits need a reason; after that
+  a correction request (`grade_correction_requests`, one pending per delivery) → Manager approves → new revision.
+  `POST /collections/:id/flag` is gone. Logic: `collections/grading.service.ts`.
+- **Permissions (2 new data-driven keys):** `grading` (Officer edit; Manager/Administrator view) and `gradingApproval`
+  (Manager approve). Approval is its own key because `approve` implies `edit`. The Administrator is still pinned to
+  `approve` everywhere except these two (`ADMIN_EDITABLE_MODULES` in `admin/admin-map.ts`; ADM-02 enables those cells).
+  So an Administrator can no longer grade by default. Gate with `useAuth().can('grading'|'gradingApproval', …)`.
+- **Settlement:** `tea_collection_records.settlement_id` is set when a settlement is *processed* (same estate + month,
+  via `labelToKey(period)`), and **only for payable (non-OPEN) deliveries** (`payableDeliveries` in `estates/settlement-calc.ts`).
+  A correction on a SETTLED delivery → pending `settlement_adjustments` row (Δkg × the PAYING settlement's rates, signed),
+  carried into the next processed settlement via `settlements.adjustment_amount`; the paid settlement is never rewritten.
+  Net = gross − deductions **+ adjustment**: `settlementNet` (backend) / `netPayable` (portal). Settled approvals use
+  `HighStakesConfirmFlow`. **Known gap:** no settlement generator and `period` is free text, so a delivery that was OPEN
+  at run time is never auto-picked-up by a later run for the same month.
+- **Owner notification:** outbox table `grading_notifications` (queued in the same transaction as the grading; held until
+  `locked_at` or Finalize; a minute cron `GradingNotificationTasks` → `GradingNotificationService.sweep`; compare-and-swap claim;
+  UNIQUE `dedupe_key` + `notifications.dedupe_key` ⇒ no duplicates; stale `sending` claims released after 5 min). A correction
+  made after the original was sent queues a labelled "Correction" notice (old → new); the original is never edited. Statuses
+  Queued/Sent/Correction sent/Failed/Cancelled + officer Resend. **Owners still have no login, push token or preferences**, so
+  "Sent" = stored for their account (+ push if a token exists); `system_settings.notifications/defaultChannel` are still unread.
+- **Settings:** `system_settings.collection` = `{correctionWindowMin: 30, mismatchTolerancePct: 5, usualRangeLow: 0.5, usualRangeHigh: 2}`
+  via `CollectionSettingsService` (no admin UI to edit it yet — SQL/seed only). The mismatch complaint now uses that tolerance
+  (was the hard-coded 5%) and follows the current grading (refreshed by edits; `resolved` when a fix brings it within tolerance).
+- **Portal:** `GradeDeliveryModal` = enter → Review step (estate weight, lines, total, difference; blocks zero/negative/non-numeric;
+  warns on tolerance and "unusual for this estate" from `GET /collections/:id/grading-context`). Detail page: state badge,
+  Edit grading / Finalize / Request correction, pending-request banner with Approve/Reject, "Revised N times" history with
+  diffs, owner-notification status + Resend. `features/collections/GradingPanels.tsx`.
+- **Gotchas:** `@nestjs/schedule` is ESM-only and Jest can't load it, so crons live in `*.tasks.ts` files with no spec (test `sweep()`
+  instead). Tests: `collections/testing/` (`FakeRepo` with `update()` + a fake `manager.transaction`, `grading-harness.ts` with
+  `freezeClock`/`setClock` that fake only `Date`). A running `nest start --watch` hot-reloads backend changes — don't start a second
+  one (port 3000).
+
+## Remaining work (as of 2026-08-05)
 
 **See `PLAN.md` at the repo root for the phased execution roadmap** (schema → auth slice →
 module-by-module vertical slices → mobile), with per-phase done-criteria and checkboxes.
@@ -292,22 +890,125 @@ module-by-module vertical slices → mobile), with per-phase done-criteria and c
 abandoned** — take nothing from it. All backend, database, and mobile work is built fresh on
 this branch. Do not propose merging or cherry-picking from it.
 
-Two facts that shaped the sequencing — **both now resolved by the auth slice**:
+Two facts that shaped the sequencing — **both resolved by the auth slice, and the seam is now
+proven end-to-end by the Collections, Estates, Employees, and Fertilizer slices**:
 
-1. **The portal now has a data-fetching seam.** It was previously fixture-only (no `services/`
-   layer, zero `useQuery` calls). The auth slice built that seam — `src/lib/api.ts` +
-   `src/services/` — so wiring the remaining modules is now *using* it, not building it. TanStack
-   Query is still installed and `QueryClientProvider` wired in `src/main.tsx` for that follow-on
-   work; the rest of the pages still import static fixtures until each is migrated.
-2. **The schema no longer blocks auth.** The `users.role` (and `factory_employees.role`) CHECK
-   constraints were extended to include `factory_officer` and `factory_manager`, so all three
-   factory roles authenticate. The broader routes/pickup schema reconciliation is still pending.
+1. **The portal has a data-fetching seam, and all six modules besides auth now prove it holds.**
+   It was previously fixture-only (no `services/` layer, zero `useQuery` calls). The auth slice
+   built the seam (`src/lib/api.ts` + `src/services/`); Collections (2026-07-26) was the first
+   module to actually use it, Estates (2026-07-26, same day) the second — including a money-moving
+   write path (advances, settlement processing) — Employees (2026-07-26, same day) the third,
+   adding live server-side computation (payroll generation) on top of that pattern for the first
+   time — and Fertilizer (2026-07-27) the fourth, the first to extend a pre-existing table in
+   place instead of building fresh. Reports (2026-07-27, same day) is the fifth — the first that's
+   mostly pure aggregation over other modules' tables. Administration (2026-07-28) is the sixth and
+   last, making permissions and audit server-driven. **No web-portal module remains on mock
+   fixtures** — only Phase 3 (Mobile) is left; see "Modules, in dependency order" in `PLAN.md`.
+   (A few individual pages still keep static config UI where there's no backing table, e.g.
+   ADM-01's General Info / Transport / Beneficiary Items tabs — noted in code.)
+2. **The schema no longer blocks auth**, and the Collections table is now reconciled to the
+   photo-evidence design too. The `users.role` (and `factory_employees.role`) CHECK constraints
+   were extended to include `factory_officer` and `factory_manager`, so all three factory roles
+   authenticate. `tea_collection_records` was rebuilt 2026-07-26 to drop the old OTP-based lineage
+   and match the portal's contract 1:1 (see Database status above). The broader Route/Pickup
+   state-machine schema (mobile-driven) is still pending.
 
 Dev-environment note: `main.ts` CORS tolerates Vite's port drift — in dev it accepts any
 `localhost`/`127.0.0.1` port (Vite bumps 5173 → 5174 → … whenever a port is taken), while
 production stays pinned to `CORS_ORIGIN`. Safe because the JWT rides the `Authorization` header,
 not cookies.
 
-Open business items still unresolved and surfaced in the UI: bank-charge owner, ad-hoc vs
-request-linked fertilizer dispatch, beneficiary-items scope. Deferred a11y polish from the
-2026-07-18 review: modal focus trap, DataTable keyboard rows, tab ARIA wiring, Toggle hit area.
+Open business items still unresolved: beneficiary-items scope (Rice already flows through the same
+`category` column as fertilizer proper, but no policy exists yet for e.g. a different approval
+threshold or reporting split). (The ~Rs. 3 bank-charge owner was resolved 2026-07-26, and ad-hoc
+vs request-linked fertilizer dispatch was resolved 2026-07-27 — both allowed — see Payment
+calculation above and the Fertilizer slice note below.) Deferred a11y polish from the 2026-07-18
+review: modal focus trap, DataTable keyboard rows, tab ARIA wiring, Toggle hit area.
+
+Deferred from the Collections slice (2026-07-26), noted as seams rather than gaps: auto-generating
+a `complaint` on weight mismatch (currently display-only on the record); Cloudinary photo upload
+(the mobile capture path — `photos` is JSONB metadata for now). *(The `audit_logs` seam for Flag
+for Correction is now **resolved** — the Administration slice, 2026-07-28, added the real table
+and `CollectionsService.flag` writes a row via `AuditService`; the timeline entry is kept too.)*
+
+Deferred from the Estates slice (2026-07-26), noted as seams rather than gaps: settlement
+**generation** (currently seeded/process-only — auto-generating a run from live collections needs
+`grade_rates` and fertilizer-dispatch linkage; *both* now exist as of the Administration and
+Estate Owner Lifetime History slices, but the auto-generation logic itself still isn't built);
+document **upload** (`estate_documents` is metadata only, same deferred-storage pattern as
+Collections' photos — no Cloudinary yet); estate-owner **login credentials** (a `users` row is
+provisioned with a random password on registration, but there's no distribution/reset flow —
+lands with the mobile app, Phase 3); and the `ESTATES` fixture in `features/estates/data.ts` is
+still the estate/route/agent source for Collections' exception-entry flow and Fertilizer's
+request-logging flow, both out of scope for this slice. *(EST-09 Analytics is no longer on mock
+data — wired to a real endpoint by the Estate Owner Lifetime History slice, 2026-08-05.)*
+
+Deferred from the Employees + Payroll slice (2026-07-26), noted as seams rather than gaps:
+**employee self-service login** — `Employee.hasLogin` is stored as a flag only; no `users` row is
+provisioned and no self-service portal/role exists yet (Claude.md's User roles section scopes this
+out of the admin portal; lands whenever mobile/self-service is built, Phase 3 or later); document
+**upload** — `Employee` has no `documents` field at all (unlike `EstateOwner`), so
+`employee_documents` wasn't built and the registration wizard's Documents step stays decorative;
+**"other" payroll deductions** — `deductions.other` is always `0`, there's no source feeding it yet
+(no equivalent of Estates' fertilizer-deduction linkage for employees); **bank payment file
+export** — the "Bank File" button on `PayrollListPage` is still a toast stub, same deferred-export
+pattern as Collections/Estates; and EMP-14 Performance stays on mock data (the same call EST-09
+made until the Estate Owner Lifetime History slice, 2026-08-05, wired it for real — EMP-14 hasn't
+had that pass yet).
+
+Deferred from the Fertilizer slice (2026-07-27), noted as seams rather than gaps: **settlement
+linkage** — "feeds the estate settlement deduction breakdown" means a `Deducted` request should
+flow into `fertilizer_charges` → `settlements.fertilizer_deduction`, but settlement generation
+itself is still seeded/process-only (deferred from the Estates slice, needs `grade_rates` from
+ADM-01 too) — this slice only produces the `Deducted` status, the charge-row/settlement wiring
+lands whenever settlement auto-generation does; **new-batch category** — `StockMovementEntryPage`'s
+quick "+ New batch" path (Incoming, no existing batch selected) has no category selector and
+always creates a `Fertilizer` batch — registering a new `Beneficiary` (e.g. Rice) batch needs
+`POST /fertilizer/batches` directly, not this form; **request logging date** — `LogRequestPage`'s
+"Requested date" field is validated client-side but not sent; the backend always stamps a logged
+request with "now" (there's no backdating field yet); and **dual owner/factory approval** — the
+DB's `owner_status`/`factory_status` columns on `fertilizer_requests` stay unused by this slice
+(portal approval runs off the single `status` lifecycle instead), reserved for a possible future
+mobile owner-approval step.
+
+Deferred from the Reports slice (2026-07-27), noted as seams rather than gaps: **live grade-rate
+revenue** — RPT-02 reads settlements' *snapshot* rates, same as Estates. *(The `grade_rates` table
+itself now exists as of the Administration slice, 2026-07-28, but a RPT-02 variant that recomputes
+off it is still deferred — and by design settlements keep their snapshot rate so past revenue
+never moves.)* **available-periods
+endpoint** — the portal's period filter is a hardcoded `REPORT_PERIODS` list (the five seeded
+months) rather than a "what periods have data" call, since each report already defaults sensibly
+to its own latest month when no period is given; **export/print/schedule/share** — `ReportActionsBar`'s
+buttons stay demo toasts, same deferred-export pattern as Collections/Estates/Employees' bank-file
+buttons; **receipt upload** — RPT-04's receipt dropzone stays decorative, same deferred-storage
+pattern as Collections' photos / Estates' documents; and **quarter-range periods** — the old
+fixture's "Q2 2026" period option was dropped rather than wired, since aggregating a quarter needs
+a range parameter the backend doesn't accept yet (single `YYYY-MM` only).
+
+Deferred from the Administration slice (2026-07-28), noted as seams rather than gaps: **password
+reset delivery** — `POST /admin/users/:id/reset-password` records an audit entry but sends no email
+(no email/SMS infra until Phase 3; the UI frames it as "a reset link is emailed"); **user
+reactivation** — suspend is one-way in the UI (a suspended account is un-suspended only by a direct
+DB update this slice); **ADM-01 non-rate config** — the Factory Setup General Info / Transport
+Rates / Beneficiary Item tabs have no backing table yet and stay demo saves (only grade rates
+persist); **audit-log export** — ADM-04's "Export CSV / PDF" button is still a demo toast; **audit
+`user_id`** — `AuditService` stamps the human-facing `user_name`/`role` always but leaves
+`user_id` null for the existing modules' `Actor` (which carries no `sub`); only the Admin module
+passes it; and **per-user permission overrides** — permissions are per-*role*, not per-user (the
+matrix edits a role's row; there's no per-account exception), matching the original three-role
+model.
+
+Deferred from the Estate Owner Lifetime History slice (2026-08-05), noted as seams rather than
+gaps: **no caching on `/estates/:id/lifetime`** — computed fresh per request (the addendum's §11
+item 31 recommends a cache; deliberately deferred, since at dev scale it's premature and the
+endpoint boundary means one can be added later without touching a caller); **dispute resolution
+tracking** — `disputes.resolved` is honestly always 0, since nothing anywhere in this schema
+tracks whether a `mismatch`-flagged collection record was ever resolved (the unused `complaints`
+table was never modeled, same as the other orphaned tables); **route history is always exactly one
+entry** — route reassignment doesn't exist in this system at all (routes are system-assigned at
+registration, never edited), so there's nothing for EST-10's Account entries to show beyond the
+estate-level audit rows (register/update/deactivate); **full-history export** — `ReportActionsBar`
+on the Timeline tab stays a demo toast, same deferred-export pattern as every other module;
+**factory-average window is a fixed trailing 6 months**, not user-configurable; and **ADM-01's
+General Info / Transport / Beneficiary Items tabs still have no backing table** (unchanged from
+the Administration slice — this slice didn't touch that gap).

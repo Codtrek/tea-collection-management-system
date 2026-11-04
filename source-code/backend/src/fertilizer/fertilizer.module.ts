@@ -1,0 +1,31 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuditModule } from '../audit/audit.module';
+import { EstateEntity } from '../estates/estate.entity';
+import { UsersModule } from '../users/users.module';
+import { FertilizerBatchEntity } from './fertilizer-batch.entity';
+import { FertilizerChargeEntity } from './fertilizer-charge.entity';
+import { FertilizerRequestEntity } from './fertilizer-request.entity';
+import { FertilizerController } from './fertilizer.controller';
+import { FertilizerService } from './fertilizer.service';
+import { StockMovementEntity } from './stock-movement.entity';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([
+      FertilizerBatchEntity,
+      StockMovementEntity,
+      FertilizerRequestEntity,
+      FertilizerChargeEntity,
+      // Read-only lookup for estate name + owner id when logging/deciding a
+      // request — same entity Estates registers, just a second repository
+      // binding onto the same table.
+      EstateEntity,
+    ]),
+    UsersModule,
+    AuditModule,
+  ],
+  controllers: [FertilizerController],
+  providers: [FertilizerService],
+})
+export class FertilizerModule {}

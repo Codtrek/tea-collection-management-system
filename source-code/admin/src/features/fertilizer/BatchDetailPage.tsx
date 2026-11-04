@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, Trash2 } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, Loader2, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DetailPageWithTabs } from '@/components/patterns/DetailPageWithTabs'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
@@ -11,7 +12,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { BATCHES, batchStatus, daysToExpiry, movementsFor } from './data'
+import * as fertilizerService from '@/services/fertilizer'
+import { batchStatus, daysToExpiry } from './lib'
 import { BATCH_TONE } from './status'
 import type { StockMovement } from './types'
 import { formatDate, formatWeight } from '@/lib/format'
@@ -22,22 +24,56 @@ export function BatchDetailPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { can } = useAuth()
+  const queryClient = useQueryClient()
   const canEdit = can('fertilizer', 'edit')
   const [discarding, setDiscarding] = useState(false)
 
-  const batch = BATCHES.find((b) => b.id === batchId)
-  if (!batch) {
+  const {
+    data: batch,
+    isPending: batchPending,
+    isError: batchError,
+    refetch: refetchBatch,
+  } = useQuery({
+    queryKey: ['fertilizer', 'batches', batchId],
+    queryFn: () => fertilizerService.getBatch(batchId!),
+    enabled: !!batchId,
+  })
+  const { data: movementsList } = useQuery({
+    queryKey: ['fertilizer', 'movements'],
+    queryFn: fertilizerService.listMovements,
+  })
+
+  const discardMutation = useMutation({
+    mutationFn: (id: string) => fertilizerService.discardBatch(id),
+    onSuccess: (updated) => {
+      toast(`${updated.id} marked as discarded`, 'warning')
+      setDiscarding(false)
+      void queryClient.invalidateQueries({ queryKey: ['fertilizer'] })
+      navigate('/fertilizer')
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not discard this batch', 'danger'),
+  })
+
+  if (batchPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (batchError || !batch) {
     return (
       <ErrorState
         title="Batch not found"
         description={`No fertilizer batch with ID “${batchId}”.`}
-        onRetry={() => navigate('/fertilizer')}
+        onRetry={() => void refetchBatch()}
       />
     )
   }
 
   const status = batchStatus(batch)
-  const movements = movementsFor(batch.id)
+  const movements = (movementsList ?? []).filter((m) => m.batchId === batch.id)
   const dispatches = movements.filter((m) => m.type === 'Outgoing' && m.destination)
 
   const movementColumns: Column<StockMovement>[] = [
@@ -165,11 +201,8 @@ export function BatchDetailPage() {
       <LightConfirmModal
         open={discarding}
         onClose={() => setDiscarding(false)}
-        onConfirm={() => {
-          toast(`${batch.id} marked as discarded`, 'warning')
-          setDiscarding(false)
-          navigate('/fertilizer')
-        }}
+        onConfirm={() => discardMutation.mutate(batch.id)}
+        loading={discardMutation.isPending}
         tone="danger"
         title="Discard this batch"
         confirmLabel="Mark as Discarded"

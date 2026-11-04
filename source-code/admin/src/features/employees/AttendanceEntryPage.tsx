@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
-import { EMPLOYEES } from './data'
+import * as employeesService from '@/services/employees'
 import type { AttendanceStatus } from './types'
 import { initials } from '@/lib/format'
 import { cn } from '@/lib/cn'
@@ -22,16 +25,39 @@ const optionClass: Record<AttendanceStatus, string> = {
 export function AttendanceEntryPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [date, setDate] = useState('2026-07-17')
-  const [marks, setMarks] = useState<Record<string, AttendanceStatus>>(
-    Object.fromEntries(EMPLOYEES.map((e) => [e.id, 'Present' as AttendanceStatus])),
-  )
+  const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({})
 
-  const markAll = (s: AttendanceStatus) => setMarks(Object.fromEntries(EMPLOYEES.map((e) => [e.id, s])))
+  const { data: employees, isPending, isError, refetch } = useQuery({ queryKey: ['employees'], queryFn: employeesService.list })
+  const activeEmployees = (employees ?? []).filter((e) => e.status === 'Active')
 
-  const save = () => {
-    toast(`Attendance saved for ${date}`)
-    navigate('/employees/attendance')
+  const markAll = (s: AttendanceStatus) => setMarks(Object.fromEntries(activeEmployees.map((e) => [e.id, s])))
+
+  const markMutation = useMutation({
+    mutationFn: () =>
+      employeesService.markAttendance({
+        date,
+        records: activeEmployees.map((e) => ({ employeeId: e.id, status: marks[e.id] ?? 'Present' })),
+      }),
+    onSuccess: () => {
+      toast(`Attendance saved for ${date}`)
+      void queryClient.invalidateQueries({ queryKey: ['employees', 'attendance'] })
+      navigate('/employees/attendance')
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not save attendance', 'danger'),
+  })
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return <ErrorState title="Couldn't load employees" description="Something went wrong fetching the employee roster." onRetry={() => void refetch()} />
   }
 
   return (
@@ -39,7 +65,7 @@ export function AttendanceEntryPage() {
       <PageHeader
         title="Daily Attendance Entry"
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Attendance', to: '/employees/attendance' }, { label: 'Entry' }]}
-        actions={<Button onClick={save}>Save</Button>}
+        actions={<Button onClick={() => markMutation.mutate()} loading={markMutation.isPending}>Save</Button>}
       />
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
@@ -51,7 +77,7 @@ export function AttendanceEntryPage() {
 
       <Card className="p-0">
         <ul className="divide-y divide-border">
-          {EMPLOYEES.map((e) => (
+          {activeEmployees.map((e) => (
             <li key={e.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <span className="flex items-center gap-2.5">
                 <span className="flex size-8 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-primary">
@@ -64,7 +90,7 @@ export function AttendanceEntryPage() {
               </span>
               <div className="flex gap-1.5">
                 {OPTIONS.map((o) => {
-                  const active = marks[e.id] === o
+                  const active = (marks[e.id] ?? 'Present') === o
                   return (
                     <button
                       key={o}

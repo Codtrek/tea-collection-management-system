@@ -21,6 +21,7 @@ import { PayslipPage } from './features/employees/PayslipPage'
 import { PerformancePage } from './features/employees/PerformancePage'
 import { CollectionListPage } from './features/collections/CollectionListPage'
 import { CollectionExceptionEntryPage } from './features/collections/CollectionExceptionEntryPage'
+import { DispatchBoardPage } from './features/dispatch/DispatchBoardPage'
 import { CollectionDetailPage } from './features/collections/CollectionDetailPage'
 import { CollectionEditPage } from './features/collections/CollectionEditPage'
 import { FertilizerStockListPage } from './features/fertilizer/FertilizerStockListPage'
@@ -62,6 +63,8 @@ export const router = createBrowserRouter([
       // Operations — Tea Leaf Collection (COL-01..04)
       { path: 'collections', element: <CollectionListPage /> },
       { path: 'collections/new', element: <CollectionExceptionEntryPage /> },
+      // Agent Dispatch (COL-05) — static path, before collections/:id
+      { path: 'collections/dispatch', element: <DispatchBoardPage /> },
       { path: 'collections/:id', element: <CollectionDetailPage /> },
       { path: 'collections/:id/edit', element: <CollectionEditPage /> },
 

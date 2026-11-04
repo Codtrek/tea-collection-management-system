@@ -55,10 +55,133 @@ export interface Settlement {
   transportCost: number
   fertilizerDeduction: number
   advanceDeduction: number
+  /** signed carry-over from approved grading corrections on already-settled deliveries (0 when none) */
+  adjustment: number
   status: SettlementStatus
   selfDelivery: boolean
   /** excluded from a run and flagged, same exception pattern as payroll (UC-054) */
   missingBank?: boolean
   processedBy?: string
   processedOn?: string
+}
+
+/*
+  Estate Owner Lifetime History (EST-03 amended + EST-10) — mirrors the
+  backend's `estate-lifetime-map.ts` byte-for-byte. Every figure here is
+  computed server-side (addendum §3); no component sums a table for a total.
+*/
+
+export interface EstateLifetimeMetrics {
+  memberSince: string // 'YYYY-MM-DD'
+  tenureMonths: number
+  lifetime: {
+    deliveredKg: number
+    earnedRs: number
+    fertilizerRs: number
+    fertilizerOrders: number
+    gradeSuperPct: number
+    gradeNormalPct: number
+    advancesRs: number
+  }
+  outstanding: {
+    fertilizerUndeductedRs: number
+    undeductedDispatchCount: number
+    lastSettlementRs: number | null
+    lastSettlementDate: string | null
+  }
+  comparison: {
+    deliveredVsAvgPct: number | null
+    qualityVsAvgPct: number | null
+  }
+  disputes: {
+    total: number
+    resolved: number
+    open: number
+  }
+  routeHistory: Array<{ route: string; from: string; to: string | null }>
+}
+
+export type TimelineEntryType = 'Delivery' | 'Fertilizer' | 'Settlement' | 'Advance' | 'Account' | 'Registered'
+
+export interface TimelineEntry {
+  id: string
+  type: TimelineEntryType
+  date: string // ISO
+  description: string
+  value?: number
+  recordHref?: string
+}
+
+export interface TimelinePage {
+  entries: TimelineEntry[]
+  page: number
+  limit: number
+  total: number
+  hasMore: boolean
+}
+
+export interface EstateAnalytics {
+  estateId: string
+  estateName: string
+  revenueTrend: Array<{ month: string; revenue: number }>
+  gradeSplit: { superPct: number }
+  avgMonthlyKg: number
+  factoryAvgMonthlyKg: number
+  factoryAvgSuperPct: number
+  deliveredVsAvgPct: number | null
+}
+
+export interface PaginatedResult<T> {
+  rows: T[]
+  page: number
+  limit: number
+  total: number
+  hasMore: boolean
+}
+
+/*
+  EST-01 amended — the roster-wide directory row. Mirrors the backend's
+  `EstateDirectoryRow` byte-for-byte; the same §3 rules apply (Confirmed
+  deliveries, processed-only earnings, outstanding = charges − recovered),
+  so these figures always agree with what EST-03's Lifetime Summary shows.
+*/
+export interface EstateDirectoryRow {
+  id: string
+  estateName: string
+  ownerName: string
+  route: string
+  status: EstateStatus
+  registeredOn: string
+  tenureMonths: number
+  ytdDeliveriesKg: number
+  lastDeliveryDate: string | null
+  lastPaymentRs: number | null
+  lastPaymentDate: string | null
+  outstandingRs: number
+  hasOutstanding: boolean
+  lifetimeEarnedRs: number
+  lifetimeDeliveredKg: number
+  superPct: number
+  qualityTrend: Array<{ month: string; superPct: number }>
+  documentCount: number
+}
+
+/*
+  EST-03 amended — a Fertilizer tab row, one per dispatch charged to this
+  estate. Mirrors the backend's `EstateFertilizerRecord` byte-for-byte. The
+  Timeline's Fertilizer entries' `recordHref` deep-links to this tab.
+*/
+export interface EstateFertilizerRecord {
+  id: string // 'FC-0001'
+  date: string // ISO
+  item: string
+  quantityKg: number
+  ratePerKg: number
+  totalCharge: number
+  /** null = outstanding, not yet recovered at a settlement. */
+  settlementId: string | null
+  /** formatted 'FR-2026-0001'; null for an ad-hoc dispatch. */
+  requestId: string | null
+  batchId: string | null // formatted 'FB-0001'
+  lotNumber: string | null
 }

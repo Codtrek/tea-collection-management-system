@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
+import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
-import { EMPLOYEES } from './data'
+import * as employeesService from '@/services/employees'
 import { formatCurrency } from '@/lib/format'
 
 /*
@@ -18,15 +21,27 @@ import { formatCurrency } from '@/lib/format'
 export function AdvanceRequestPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
+
+  const { data: employees, isPending, isError, refetch } = useQuery({ queryKey: ['employees'], queryFn: employeesService.list })
 
   const [employeeId, setEmployeeId] = useState('')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [errors, setErrors] = useState<{ employee?: string; amount?: string; reason?: string }>({})
-  const [submitting, setSubmitting] = useState(false)
 
-  const employee = EMPLOYEES.find((e) => e.id === employeeId)
+  const employee = (employees ?? []).find((e) => e.id === employeeId)
   const parsedAmount = Number(amount)
+
+  const requestMutation = useMutation({
+    mutationFn: () => employeesService.requestAdvance({ employeeId, amount: parsedAmount, reason }),
+    onSuccess: () => {
+      toast(`Advance request of ${formatCurrency(parsedAmount)} for ${employee?.name} submitted for approval`)
+      void queryClient.invalidateQueries({ queryKey: ['employees', 'advances'] })
+      navigate('/employees/advances')
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not submit this advance request', 'danger'),
+  })
 
   const validate = () => {
     const next: typeof errors = {}
@@ -39,11 +54,19 @@ export function AdvanceRequestPage() {
 
   const submit = () => {
     if (!validate()) return
-    setSubmitting(true)
-    setTimeout(() => {
-      toast(`Advance request of ${formatCurrency(parsedAmount)} for ${employee?.name} submitted for approval`)
-      navigate('/employees/advances')
-    }, 600)
+    requestMutation.mutate()
+  }
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return <ErrorState title="Couldn't load employees" description="Something went wrong fetching the employee roster." onRetry={() => void refetch()} />
   }
 
   return (
@@ -65,7 +88,7 @@ export function AdvanceRequestPage() {
             value={employeeId}
             error={errors.employee}
             onChange={(e) => setEmployeeId(e.target.value)}
-            options={EMPLOYEES.filter((e) => e.status === 'Active').map((e) => ({
+            options={(employees ?? []).filter((e) => e.status === 'Active').map((e) => ({
               value: e.id,
               label: `${e.name} — ${e.role}`,
             }))}
@@ -92,11 +115,11 @@ export function AdvanceRequestPage() {
           </p>
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button variant="secondary" onClick={() => navigate('/employees/advances')}>
+            <Button variant="secondary" onClick={() => navigate('/employees/advances')} disabled={requestMutation.isPending}>
               Cancel
             </Button>
-            <Button size="lg" onClick={submit} disabled={submitting}>
-              {submitting ? 'Submitting…' : 'Submit Request'}
+            <Button size="lg" onClick={submit} loading={requestMutation.isPending}>
+              Submit Request
             </Button>
           </div>
         </div>

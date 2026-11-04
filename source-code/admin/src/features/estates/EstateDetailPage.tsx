@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { Pencil, HandCoins, Banknote, CircleSlash, FileText, Eye, EyeOff, Truck } from 'lucide-react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Pencil, HandCoins, Banknote, CircleSlash, FileText, Eye, EyeOff, Loader2, Truck } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DetailPageWithTabs } from '@/components/patterns/DetailPageWithTabs'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
@@ -11,48 +12,116 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { ESTATES, advancesForEstate, settlementsForEstate, grossRevenue, netPayable } from './data'
-import { collectionsForEstate } from '@/features/collections/data'
+import * as estatesService from '@/services/estates'
+import { grossRevenue, netPayable } from './calc'
+import { EstateAnalyticsBody } from './EstateAnalyticsPage'
+import { EstateTimelineTab } from './EstateTimelineTab'
+import { LifetimeSummary } from './LifetimeSummary'
 import { COLLECTION_TONE } from '@/features/collections/status'
-import type { EstateAdvance, Settlement } from './types'
+import type { EstateAdvance, EstateFertilizerRecord, Settlement } from './types'
 import type { CollectionRecord } from '@/features/collections/types'
+import { GradeChips } from '@/features/collections/GradeChips'
 import { formatCurrency, formatDate, formatWeight, initials, maskAccount } from '@/lib/format'
 
-/* EST-03 — DetailPageWithTabs: Overview | Deliveries | Payments | Advances | Documents. */
+/* EST-03 — DetailPageWithTabs: Overview | Timeline | Analytics | Deliveries | Payments | Fertilizer | Advances | Documents. */
 export function EstateDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  // EST-01/EST-03 amended — the directory's "View payments" and the
+  // Timeline's Fertilizer entries deep-link here via `?tab=…` (+ `?record=`
+  // for the latter). Derived from the URL every render, not seeded once at
+  // mount: clicking View while already on this page is a same-route
+  // navigation (only the query string changes), and a `useState` initializer
+  // never re-runs for that — the tab would silently fail to switch.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('tab') ?? 'overview'
+  const highlightRecord = searchParams.get('record') ?? undefined
   const { toast } = useToast()
   const { can } = useAuth()
+  const queryClient = useQueryClient()
   const canEdit = can('estateOwners', 'edit')
   const canManage = can('estateOwners', 'approve')
 
   const [deactivating, setDeactivating] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
+  // §7 — each paginated tab defaults to the last 90 days; "View all" widens
+  // the range rather than switching to client-side slicing of a full fetch.
+  const [deliveriesShowAll, setDeliveriesShowAll] = useState(false)
+  const [paymentsShowAll, setPaymentsShowAll] = useState(false)
+  const [advancesShowAll, setAdvancesShowAll] = useState(false)
+  // §7's own manual "View all" choice, separate from the derived override
+  // below — a deep-linked record can be years old (the tab's 90-day default
+  // would hide it), so `?record=` forces all-time regardless of this.
+  const [fertilizerShowAllChosen, setFertilizerShowAllChosen] = useState(false)
+  const fertilizerShowAll = fertilizerShowAllChosen || !!highlightRecord
 
-  const estate = ESTATES.find((e) => e.id === id)
-  if (!estate) {
-    return <ErrorState title="Estate not found" description={`No estate owner with ID “${id}”.`} onRetry={() => navigate('/estates')} />
+  const {
+    data: estate,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['estate', id],
+    queryFn: () => estatesService.getById(id!),
+    enabled: !!id,
+  })
+
+  const { data: lifetime } = useQuery({
+    queryKey: ['estates', id, 'lifetime'],
+    queryFn: () => estatesService.getLifetimeMetrics(id!),
+    enabled: !!id,
+  })
+
+  const deliveriesQuery = useQuery({
+    queryKey: ['estates', id, 'deliveries', deliveriesShowAll],
+    queryFn: () => estatesService.getDeliveries(id!, deliveriesShowAll ? { from: '2000-01-01', limit: 25 } : { limit: 25 }),
+    enabled: !!id,
+  })
+  const paymentsQuery = useQuery({
+    queryKey: ['estates', id, 'payments', paymentsShowAll],
+    queryFn: () => estatesService.getPayments(id!, paymentsShowAll ? { from: '2000-01-01', limit: 25 } : { limit: 25 }),
+    enabled: !!id,
+  })
+  const advancesQuery = useQuery({
+    queryKey: ['estates', id, 'advances', advancesShowAll],
+    queryFn: () => estatesService.getAdvancesFor(id!, advancesShowAll ? { from: '2000-01-01', limit: 25 } : { limit: 25 }),
+    enabled: !!id,
+  })
+  const fertilizerQuery = useQuery({
+    queryKey: ['estates', id, 'fertilizer', fertilizerShowAll],
+    queryFn: () => estatesService.getFertilizerFor(id!, fertilizerShowAll ? { from: '2000-01-01', limit: 25 } : { limit: 25 }),
+    enabled: !!id,
+  })
+
+  const deactivateMutation = useMutation({
+    mutationFn: (estateId: string) => estatesService.deactivate(estateId),
+    onSuccess: (updated) => {
+      toast(`${updated.estateName} deactivated`, 'warning')
+      setDeactivating(false)
+      void queryClient.invalidateQueries({ queryKey: ['estate', id] })
+      void queryClient.invalidateQueries({ queryKey: ['estates'] })
+      navigate('/estates')
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not deactivate this estate', 'danger'),
+  })
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
   }
 
-  const deliveries = collectionsForEstate(estate.id)
-  const advances = advancesForEstate(estate.id)
-  const settlements = settlementsForEstate(estate.id)
+  if (isError || !estate) {
+    return <ErrorState title="Estate not found" description={`No estate owner with ID “${id}”.`} onRetry={() => void refetch()} />
+  }
 
   const deliveryColumns: Column<CollectionRecord>[] = [
     { key: 'id', header: 'Delivery', render: (c) => <span className="id text-xs">{c.id}</span> },
     { key: 'date', header: 'Date', render: (c) => formatDate(c.date) },
     { key: 'weightKg', header: 'Weight', align: 'right', render: (c) => formatWeight(c.weightKg) },
-    {
-      key: 'grade',
-      header: 'Grade',
-      render: (c) =>
-        c.grade === 'Pending' ? (
-          <span className="text-xs text-text-muted">Pending</span>
-        ) : (
-          <StatusBadge tone={c.grade === 'Super' ? 'gradeSuper' : 'gradeNormal'}>{c.grade}</StatusBadge>
-        ),
-    },
+    { key: 'grade', header: 'Grade', render: (c) => <GradeChips record={c} /> },
     { key: 'status', header: 'Status', render: (c) => <StatusBadge tone={COLLECTION_TONE[c.status]}>{c.status}</StatusBadge> },
   ]
 
@@ -85,6 +154,65 @@ export function EstateDetailPage() {
     },
   ]
 
+  const fertilizerColumns: Column<EstateFertilizerRecord>[] = [
+    { key: 'id', header: 'Charge', render: (f) => <span className="id text-xs">{f.id}</span> },
+    { key: 'date', header: 'Date', render: (f) => formatDate(f.date) },
+    { key: 'item', header: 'Item' },
+    { key: 'quantityKg', header: 'Quantity', align: 'right', render: (f) => formatWeight(f.quantityKg) },
+    { key: 'ratePerKg', header: 'Rate/kg', align: 'right', render: (f) => `${formatCurrency(f.ratePerKg)}/kg` },
+    { key: 'totalCharge', header: 'Total', align: 'right', render: (f) => formatCurrency(f.totalCharge) },
+    {
+      key: 'status',
+      // Same rule OutstandingPanel uses (§6.3): amber for owed, never
+      // danger-red — owing for recently-issued fertilizer is normal.
+      header: 'Status',
+      render: (f) =>
+        f.settlementId ? (
+          <span className="text-xs font-medium text-success-fg">Deducted · {f.settlementId}</span>
+        ) : (
+          <span className="text-xs font-medium text-warning-fg">Outstanding</span>
+        ),
+    },
+    {
+      key: 'requestId',
+      header: 'Request',
+      render: (f) =>
+        f.requestId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/fertilizer/requests/${f.requestId}`)
+            }}
+            className="id text-xs text-primary underline-offset-2 hover:underline"
+          >
+            {f.requestId}
+          </button>
+        ) : (
+          <span className="text-xs text-text-muted">—</span>
+        ),
+    },
+    {
+      key: 'batchId',
+      header: 'Lot',
+      render: (f) =>
+        f.batchId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/fertilizer/${f.batchId}`)
+            }}
+            className="id text-xs text-primary underline-offset-2 hover:underline"
+          >
+            {f.lotNumber ?? f.batchId}
+          </button>
+        ) : (
+          <span className="text-xs text-text-muted">—</span>
+        ),
+    },
+  ]
+
   return (
     <div>
       <PageHeader
@@ -112,6 +240,22 @@ export function EstateDetailPage() {
       />
 
       <DetailPageWithTabs
+        activeTab={activeTab}
+        onTabChange={(tabId) => {
+          // `replace: true` — ordinary tab-clicking shouldn't grow the
+          // history stack — but the Timeline's View link uses `navigate()`
+          // (a push), so Back from it still returns to Timeline correctly.
+          // `record` belongs to the arrival, not to a tab clicked into later.
+          setSearchParams(
+            (prev) => {
+              const updated = new URLSearchParams(prev)
+              updated.set('tab', tabId)
+              updated.delete('record')
+              return updated
+            },
+            { replace: true },
+          )
+        }}
         header={
           <div className="flex flex-wrap items-center gap-4">
             <span className="flex size-14 items-center justify-center rounded-full bg-brand-soft text-lg font-semibold text-primary">
@@ -144,95 +288,133 @@ export function EstateDetailPage() {
             id: 'overview',
             label: 'Overview',
             content: (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-5">
-                  <h3 className="mb-3 text-[13px] font-semibold text-text-heading">Contact & location</h3>
-                  <dl className="flex flex-col gap-2.5">
-                    <InfoRow label="Owner" value={estate.ownerName} />
-                    <InfoRow label="NIC" value={estate.nic} mono />
-                    <InfoRow label="Contact" value={estate.contact} />
-                    <InfoRow label="Email" value={estate.email ?? '—'} />
-                    <InfoRow label="Address" value={estate.address} />
-                    <InfoRow label="Route" value={`${estate.route} (auto-assigned)`} />
-                  </dl>
-                </div>
-                <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-5">
-                  <h3 className="mb-3 text-[13px] font-semibold text-text-heading">Deliveries & bank</h3>
-                  <dl className="flex flex-col gap-2.5">
-                    <InfoRow label="YTD deliveries" value={formatWeight(estate.ytdDeliveriesKg)} />
-                    <InfoRow label="Transport" value={estate.selfDelivery ? 'Self-delivered — cost exempt' : 'Factory collection'} />
-                    <InfoRow label="Bank" value={estate.bank.bank || 'Missing — excluded from settlements'} />
-                    <InfoRow label="Branch" value={estate.bank.branch || '—'} />
-                    <div className="flex justify-between gap-4 text-sm">
-                      <dt className="text-text-muted">Account</dt>
-                      <dd className="flex items-center gap-1.5 text-right text-text">
-                        {estate.bank.account ? (
-                          <>
-                            <span className="id">{showAccount ? estate.bank.account : maskAccount(estate.bank.account)}</span>
-                            <button
-                              onClick={() => setShowAccount((s) => !s)}
-                              aria-label={showAccount ? 'Hide account number' : 'Reveal account number'}
-                              className="text-text-muted hover:text-text"
-                            >
-                              {showAccount ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                            </button>
-                          </>
-                        ) : (
-                          '—'
-                        )}
-                      </dd>
-                    </div>
-                  </dl>
-                  {estate.lastUpdatedBy && (
-                    <p className="mt-4 border-t border-border pt-3 text-xs text-text-muted">
-                      Last updated by {estate.lastUpdatedBy} on {estate.lastUpdatedOn && formatDate(estate.lastUpdatedOn)}
-                    </p>
-                  )}
+              <div className="flex flex-col gap-4">
+                {lifetime && <LifetimeSummary metrics={lifetime} />}
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-5">
+                    <h3 className="mb-3 text-[13px] font-semibold text-text-heading">Contact & location</h3>
+                    <dl className="flex flex-col gap-2.5">
+                      <InfoRow label="Owner" value={estate.ownerName} />
+                      <InfoRow label="NIC" value={estate.nic} mono />
+                      <InfoRow label="Contact" value={estate.contact} />
+                      <InfoRow label="Email" value={estate.email ?? '—'} />
+                      <InfoRow label="Address" value={estate.address} />
+                      <InfoRow label="Route" value={`${estate.route} (auto-assigned)`} />
+                    </dl>
+                  </div>
+                  <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-5">
+                    <h3 className="mb-3 text-[13px] font-semibold text-text-heading">Deliveries & bank</h3>
+                    <dl className="flex flex-col gap-2.5">
+                      <InfoRow label="YTD deliveries" value={formatWeight(estate.ytdDeliveriesKg)} />
+                      <InfoRow label="Transport" value={estate.selfDelivery ? 'Self-delivered — cost exempt' : 'Factory collection'} />
+                      <InfoRow label="Bank" value={estate.bank.bank || 'Missing — excluded from settlements'} />
+                      <InfoRow label="Branch" value={estate.bank.branch || '—'} />
+                      <div className="flex justify-between gap-4 text-sm">
+                        <dt className="text-text-muted">Account</dt>
+                        <dd className="flex items-center gap-1.5 text-right text-text">
+                          {estate.bank.account ? (
+                            <>
+                              <span className="id">{showAccount ? estate.bank.account : maskAccount(estate.bank.account)}</span>
+                              <button
+                                onClick={() => setShowAccount((s) => !s)}
+                                aria-label={showAccount ? 'Hide account number' : 'Reveal account number'}
+                                className="text-text-muted hover:text-text"
+                              >
+                                {showAccount ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                              </button>
+                            </>
+                          ) : (
+                            '—'
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                    {estate.lastUpdatedBy && (
+                      <p className="mt-4 border-t border-border pt-3 text-xs text-text-muted">
+                        Last updated by {estate.lastUpdatedBy} on {estate.lastUpdatedOn && formatDate(estate.lastUpdatedOn)}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             ),
           },
           {
+            id: 'timeline',
+            label: 'Timeline',
+            content: <EstateTimelineTab estateId={estate.id} />,
+          },
+          {
+            id: 'analytics',
+            label: 'Analytics',
+            content: <EstateAnalyticsBody estateId={estate.id} />,
+          },
+          {
             id: 'deliveries',
             label: 'Deliveries History',
             content: (
-              <DataTable
-                columns={deliveryColumns}
-                rows={deliveries}
-                rowKey={(c) => c.id}
-                onRowClick={(c) => navigate(`/collections/${c.id}`)}
-                emptyState={<EmptyState title="No deliveries yet" description="Collection records from the field flow appear here." />}
-              />
+              <PaginatedTabBody
+                query={deliveriesQuery}
+                showAll={deliveriesShowAll}
+                onShowAll={() => setDeliveriesShowAll(true)}
+              >
+                <DataTable
+                  columns={deliveryColumns}
+                  rows={deliveriesQuery.data?.rows ?? []}
+                  rowKey={(c) => c.id}
+                  onRowClick={(c) => navigate(`/collections/${c.id}`)}
+                  emptyState={<EmptyState title="No deliveries yet" description="Collection records from the field flow appear here." />}
+                />
+              </PaginatedTabBody>
             ),
           },
           {
             id: 'payments',
             label: 'Payment History',
             content: (
-              <DataTable
-                columns={paymentColumns}
-                rows={settlements}
-                rowKey={(s) => s.id}
-                emptyState={<EmptyState title="No settlements yet" description="Processed payment settlements appear here." />}
-              />
+              <PaginatedTabBody query={paymentsQuery} showAll={paymentsShowAll} onShowAll={() => setPaymentsShowAll(true)}>
+                <DataTable
+                  columns={paymentColumns}
+                  rows={paymentsQuery.data?.rows ?? []}
+                  rowKey={(s) => s.id}
+                  emptyState={<EmptyState title="No settlements yet" description="Processed payment settlements appear here." />}
+                />
+              </PaginatedTabBody>
+            ),
+          },
+          {
+            id: 'fertilizer',
+            label: 'Fertilizer',
+            content: (
+              <PaginatedTabBody query={fertilizerQuery} showAll={fertilizerShowAll} onShowAll={() => setFertilizerShowAllChosen(true)}>
+                <DataTable
+                  columns={fertilizerColumns}
+                  rows={fertilizerQuery.data?.rows ?? []}
+                  rowKey={(f) => f.id}
+                  highlightRowKey={highlightRecord}
+                  emptyState={<EmptyState title="No fertilizer dispatched" description="Priced dispatches charged to this estate appear here." />}
+                />
+              </PaginatedTabBody>
             ),
           },
           {
             id: 'advances',
             label: 'Advances',
             content: (
-              <DataTable
-                columns={advanceColumns}
-                rows={advances}
-                rowKey={(a) => a.id}
-                emptyState={
-                  <EmptyState
-                    title="No advances issued"
-                    description="Advance payments issued to this estate appear here and deduct at the next settlement."
-                    action={canEdit ? <Button size="sm" onClick={() => navigate(`/estates/advances/new?estate=${estate.id}`)}>Issue Advance</Button> : undefined}
-                  />
-                }
-              />
+              <PaginatedTabBody query={advancesQuery} showAll={advancesShowAll} onShowAll={() => setAdvancesShowAll(true)}>
+                <DataTable
+                  columns={advanceColumns}
+                  rows={advancesQuery.data?.rows ?? []}
+                  rowKey={(a) => a.id}
+                  emptyState={
+                    <EmptyState
+                      title="No advances issued"
+                      description="Advance payments issued to this estate appear here and deduct at the next settlement."
+                      action={canEdit ? <Button size="sm" onClick={() => navigate(`/estates/advances/new?estate=${estate.id}`)}>Issue Advance</Button> : undefined}
+                    />
+                  }
+                />
+              </PaginatedTabBody>
             ),
           },
           {
@@ -269,11 +451,8 @@ export function EstateDetailPage() {
       <LightConfirmModal
         open={deactivating}
         onClose={() => setDeactivating(false)}
-        onConfirm={() => {
-          toast(`${estate.estateName} deactivated`, 'warning')
-          setDeactivating(false)
-          navigate('/estates')
-        }}
+        onConfirm={() => deactivateMutation.mutate(estate.id)}
+        loading={deactivateMutation.isPending}
         tone="danger"
         title="Deactivate estate owner"
         confirmLabel="Deactivate"
@@ -284,6 +463,48 @@ export function EstateDetailPage() {
           </>
         }
       />
+    </div>
+  )
+}
+
+/**
+ * §7 — wraps a paginated tab's table with loading/error states and the
+ * "Showing last 90 days · View all" control. `query` is a TanStack Query
+ * result carrying a `PaginatedResult<T>`; this component doesn't care about
+ * the row type, only the pagination envelope.
+ */
+function PaginatedTabBody({
+  query,
+  showAll,
+  onShowAll,
+  children,
+}: {
+  query: { isPending: boolean; isError: boolean; data?: { total: number }; refetch: () => void }
+  showAll: boolean
+  onShowAll: () => void
+  children: React.ReactNode
+}) {
+  if (query.isPending) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+  if (query.isError) {
+    return <ErrorState title="Couldn't load this tab" onRetry={() => query.refetch()} />
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {!showAll && (
+        <p className="text-xs text-text-muted">
+          Showing last 90 days ({query.data?.total ?? 0}) ·{' '}
+          <button type="button" onClick={onShowAll} className="font-medium text-primary underline-offset-2 hover:underline">
+            View all
+          </button>
+        </p>
+      )}
+      {children}
     </div>
   )
 }

@@ -27,6 +27,16 @@
   --color-primary-active: #106138;
   --color-primary-disabled: #b7d8c4;
 
+  /* Hero gradient (brand doc §3) — roots-to-growth, dark to bright Harboost
+     green. First application: the login/report-cover hero. Second
+     application: EST-10's Tenure Ribbon (visual-foundations §10, Provenance
+     Trail thesis) — see TenureRibbon.tsx. 0deg points bottom-to-top, so the
+     dark "roots" stop anchors at the bottom and bright "growth" at the top —
+     matching the ribbon's oldest-at-bottom/newest-at-top feed. Not a
+     --color-* token since it's a multi-stop gradient, not a solid color;
+     consumed via var() directly. */
+  --gradient-hero: linear-gradient(0deg, #0d2e19 0%, #1d6839 55%, #53cf81 100%);
+
   /* ---- Neutrals (Harboost + warm-tinted borders) ------------------------- */
   --color-background: #f8fbf9;
   --color-surface: #ffffff;
@@ -186,6 +196,24 @@ body {
 }
 .animate-fade-up {
   animation: fade-up var(--duration-slow) var(--ease-entrance) both;
+}
+
+/* EST-10's Tenure Ribbon (§6.4/§6.5) — draws once on first mount, bottom to
+   top (roots to current growth), never on filter/pagination change. The
+   global prefers-reduced-motion block above already forces animation-duration
+   to ~0, so a reduced-motion user sees it rendered fully drawn with no
+   separate branch needed here. */
+@keyframes ribbon-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.animate-ribbon-grow {
+  transform-origin: bottom;
+  animation: ribbon-grow 320ms var(--ease-entrance) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

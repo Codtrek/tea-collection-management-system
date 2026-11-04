@@ -1,6 +1,14 @@
 export type EmployeeStatus = 'Active' | 'Suspended' | 'Inactive'
 export type EmploymentType = 'Permanent' | 'Contract' | 'Casual'
 
+/** Shift-based hours or rates: Day / Day-OT / Night / Night-OT. */
+export interface ShiftBreakdown {
+  day: number
+  dayOt: number
+  night: number
+  nightOt: number
+}
+
 export interface Employee {
   id: string
   name: string
@@ -17,6 +25,36 @@ export interface Employee {
   hasLogin: boolean
   lastUpdatedBy?: string
   lastUpdatedOn?: string
+  /** Additive — shift-based pay rates (Rs./hour), the input to payroll generation. */
+  rates?: ShiftBreakdown
+  /**
+   * Only on the create/update response that provisioned a Tea Collecting Agent's mobile login:
+   * the one-time temporary password. Show it once; it is never returned again.
+   */
+  initialPassword?: string
+}
+
+/** From GET /employees/roles — the single source for the role dropdown. */
+export interface EmployeeRoles {
+  roles: string[]
+  /** the job title that makes someone a collection agent (shown on the dispatch board) */
+  agentRole: string
+}
+
+/** One row of a Tea Collecting Agent's collection history (mirrors the backend's PublicAgentHistoryRow). */
+export interface AgentHistoryRow {
+  id: string
+  date: string
+  route: string
+  /** set when the agent was COVERING this route that day */
+  coveringRoute: string | null
+  estateName: string
+  estateWeightKg: number
+  /** graded total once graded, else the estate weight */
+  weightKg: number
+  graded: boolean
+  gradeLines: Array<{ grade: 'Super' | 'Normal'; weightKg: number }>
+  status: string
 }
 
 export type AdvanceStatus = 'Pending' | 'Approved' | 'Rejected'
@@ -33,6 +71,7 @@ export interface Advance {
 }
 
 export type PayrollStatus = 'Pending' | 'Processed'
+
 export interface PayrollRow {
   id: string
   employeeId: string
@@ -43,6 +82,22 @@ export interface PayrollRow {
   status: PayrollStatus
   /** flagged when the employee has no bank details — excluded from a run */
   missingBank?: boolean
+  /** Hours aggregated from attendance, behind the stored `gross` snapshot. */
+  shiftHours?: ShiftBreakdown
+  /** The employee's rates at the time this row was generated. */
+  rates?: ShiftBreakdown
 }
 
 export type AttendanceStatus = 'Present' | 'Absent' | 'Leave' | 'Half-day'
+
+export interface AttendanceRecord {
+  employeeId: string
+  employeeName: string
+  date: string
+  status: AttendanceStatus
+  dayHours: number
+  dayOtHours: number
+  nightHours: number
+  nightOtHours: number
+  markedBy?: string
+}

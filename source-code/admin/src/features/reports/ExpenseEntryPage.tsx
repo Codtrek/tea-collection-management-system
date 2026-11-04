@@ -1,8 +1,8 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Upload } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { useToast } from '@/components/ui/Toast'
+import * as reportsService from '@/services/reports'
 
 /*
   RPT-04 — daily operational expenses (utilities, maintenance, misc) that no
@@ -31,7 +32,7 @@ type ExpenseForm = z.infer<typeof expenseSchema>
 export function ExpenseEntryPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const [saving, setSaving] = useState(false)
+  const queryClient = useQueryClient()
 
   const {
     register,
@@ -43,13 +44,18 @@ export function ExpenseEntryPage() {
     defaultValues: { date: new Date().toISOString().slice(0, 10) },
   })
 
-  const onSubmit = (data: ExpenseForm) => {
-    setSaving(true)
-    setTimeout(() => {
+  const logMutation = useMutation({
+    mutationFn: (data: ExpenseForm) => reportsService.createExpense(data),
+    onSuccess: () => {
       toast('Expense logged')
-      void data
+      void queryClient.invalidateQueries({ queryKey: ['reports', 'expenses'] })
       navigate('/reports/expenses')
-    }, 600)
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not log this expense', 'danger'),
+  })
+
+  const onSubmit = (data: ExpenseForm) => {
+    logMutation.mutate(data)
   }
 
   return (
@@ -87,10 +93,10 @@ export function ExpenseEntryPage() {
           </label>
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button type="button" variant="secondary" onClick={() => navigate('/reports/expenses')} disabled={saving}>
+            <Button type="button" variant="secondary" onClick={() => navigate('/reports/expenses')} disabled={logMutation.isPending}>
               Cancel
             </Button>
-            <Button type="submit" loading={saving}>
+            <Button type="submit" loading={logMutation.isPending}>
               Save Expense
             </Button>
           </div>

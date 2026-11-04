@@ -1,10 +1,12 @@
 import { Fragment, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ArrowLeftRight, ShoppingCart } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronRight, ArrowLeftRight, ShoppingCart, Loader2 } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { CoverageBar } from '@/components/data/CoverageBar'
 import { RowAction } from '@/components/data/DataTable'
-import { BATCHES, batchStatus } from './data'
+import * as fertilizerService from '@/services/fertilizer'
+import { batchStatus } from './lib'
 import { BATCH_TONE, COVERAGE_TONE } from './status'
 import type { ItemPosition } from './types'
 import { formatDate, formatWeight } from '@/lib/format'
@@ -18,6 +20,10 @@ import { cn } from '@/lib/cn'
 export function StockPositionTable({ positions, canLog }: { positions: ItemPosition[]; canLog: boolean }) {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const { data: allBatches, isPending: batchesPending } = useQuery({
+    queryKey: ['fertilizer', 'batches'],
+    queryFn: fertilizerService.listBatches,
+  })
 
   const toggle = (item: string) =>
     setExpanded((prev) => {
@@ -50,7 +56,7 @@ export function StockPositionTable({ positions, canLog }: { positions: ItemPosit
           <tbody>
             {positions.map((p) => {
               const open = expanded.has(p.item)
-              const batches = BATCHES.filter((b) => b.item === p.item)
+              const batches = (allBatches ?? []).filter((b) => b.item === p.item)
               return (
                 <Fragment key={p.item}>
                   <tr
@@ -108,6 +114,11 @@ export function StockPositionTable({ positions, canLog }: { positions: ItemPosit
                     <tr className="bg-surface-sunken/40">
                       <td />
                       <td colSpan={9} className="px-4 pb-4 pt-1">
+                        {batchesPending ? (
+                          <div className="flex items-center justify-center py-6">
+                            <Loader2 className="size-4 animate-spin text-text-muted" aria-hidden />
+                          </div>
+                        ) : (
                         <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
                           <table className="w-full border-collapse text-sm">
                             <thead className="bg-surface-sunken">
@@ -140,6 +151,7 @@ export function StockPositionTable({ positions, canLog }: { positions: ItemPosit
                             </tbody>
                           </table>
                         </div>
+                        )}
                       </td>
                     </tr>
                   )}
