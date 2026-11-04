@@ -9,6 +9,7 @@ export type ModuleKey =
   | 'fertilizer'
   | 'estateOwners'
   | 'estateAdvances'
+  | 'holidayCalendar'
   | 'payroll'
   | 'advances'
   | 'employees'

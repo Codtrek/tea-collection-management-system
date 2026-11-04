@@ -24,6 +24,8 @@ export interface Employee {
   bank: { bank: string; branch: string; account: string }
   /** how the employee is paid — cash-paid employees need no bank details */
   paymentMethod: EmployeePaymentMethod
+  /** office staff (Shop & Office Act) vs factory workers (Wages Board) */
+  category?: 'factory' | 'office'
   hasLogin: boolean
   lastUpdatedBy?: string
   lastUpdatedOn?: string
@@ -265,7 +267,7 @@ export interface PayrollMonthResult {
   periods: string[]
 }
 
-export type AttendanceStatus = 'Present' | 'Absent' | 'Leave' | 'Half-day'
+export type AttendanceStatus = 'Present' | 'Absent' | 'Leave' | 'Half-day' | 'Short leave'
 
 export interface AttendanceRecord {
   employeeId: string
@@ -277,4 +279,114 @@ export interface AttendanceRecord {
   nightHours: number
   nightOtHours: number
   markedBy?: string
+}
+
+/* ── Attendance-Leave-Addendum Phase 1 — the month grid, the day view, the holiday calendar ── */
+
+export type AttendanceCode = 'P' | 'A' | 'L' | 'H' | 'S' | 'W'
+export type DayType = 'working' | 'half' | 'weekly' | 'rest' | 'poya' | 'public' | 'closure'
+
+export interface AttendanceCell {
+  date: string
+  code: AttendanceCode | null
+  status: AttendanceStatus | null
+  tooltip: string
+  dayType: DayType
+  dayLabel: string | null
+  future: boolean
+  lockedReason: string | null
+}
+
+export interface AttendanceTotals {
+  present: number
+  absent: number
+  leave: number
+  half: number
+  short: number
+  holidayWorked: number
+  workingDays: number
+  pct: number | null
+  unmarked: number
+}
+
+export interface AttendanceMonthRow {
+  employeeId: string
+  name: string
+  role: string
+  category: 'factory' | 'office'
+  routes: { id: number; name: string }[]
+  cells: AttendanceCell[]
+  totals: AttendanceTotals
+}
+
+export interface AttendanceMonth {
+  month: string
+  today: string
+  days: { date: string; dayType: DayType; label: string | null; today: boolean; future: boolean }[]
+  rows: AttendanceMonthRow[]
+  roles: string[]
+  routes: { id: number; name: string }[]
+}
+
+export interface AttendanceDayRow {
+  employeeId: string
+  name: string
+  role: string
+  routes: { id: number; name: string }[]
+  status: AttendanceStatus | null
+  code: AttendanceCode | null
+  half: 'AM' | 'PM' | null
+  shortOut: string | null
+  shortBack: string | null
+  holidayWorked: boolean
+  markedBy: string | null
+  markedAt: string | null
+  source: 'portal' | 'dispatch' | 'app' | 'leave' | 'holiday' | null
+  dayType: DayType
+  dayLabel: string | null
+  workAllowed: boolean
+  lockedReason: string | null
+}
+
+export interface AttendanceDay {
+  date: string
+  today: string
+  editWindowDays: number
+  needsReason: boolean
+  rows: AttendanceDayRow[]
+  summary: { present: number; absent: number; onLeave: number; notMarked: number }
+}
+
+export type HolidayKind = 'poya' | 'public' | 'closure'
+
+export interface Holiday {
+  id: number
+  date: string
+  name: string
+  type: HolidayKind
+  paid: boolean
+  workAllowed: boolean
+  appliesTo: 'all' | 'factory' | 'office'
+  collectionStops: boolean
+  declareGroup: string | null
+  reason: string | null
+  createdBy: string | null
+  cancelled: boolean
+  cancelReason: string | null
+}
+
+export interface HolidayYear {
+  year: number
+  holidays: Holiday[]
+  types: { type: 'poya' | 'public' | 'weekly' | 'closure'; label: string; paid: boolean; workAllowed: boolean }[]
+  weeklyRules: { id: number; category: 'factory' | 'office'; weekdays: number[]; halfDayWeekday: number | null; effectiveFrom: string; createdBy: string | null }[]
+  restDays: { id: number; employeeId: string; employeeName: string; weekday: number | null; effectiveFrom: string }[]
+  nextYearMissing: boolean
+  nextYear: number
+}
+
+export interface DeclarePreview {
+  dates: string[]
+  attendance: { employeeId: string; name: string; date: string; status: string }[]
+  routeDays: { routeId: number; routeName: string; date: string }[]
 }

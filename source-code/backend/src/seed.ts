@@ -2102,6 +2102,7 @@ const PERMISSION_MATRIX: Record<
     dashboard: 'approve', collection: 'approve', fertilizer: 'approve',
     estateOwners: 'approve', payroll: 'approve', advances: 'approve',
     estateAdvances: 'approve',
+    holidayCalendar: 'view',
     employees: 'approve', attendance: 'approve', performance: 'approve',
     reports: 'approve', administration: 'approve', dispatch: 'approve',
     grading: 'view', gradingApproval: 'view',
@@ -2111,6 +2112,7 @@ const PERMISSION_MATRIX: Record<
     dashboard: 'view', collection: 'edit', fertilizer: 'edit',
     estateOwners: 'edit', payroll: 'edit', advances: 'approve',
     estateAdvances: 'edit',
+    holidayCalendar: 'view',
     employees: 'view', attendance: 'edit', performance: 'view',
     reports: 'edit', administration: 'none', dispatch: 'edit',
     grading: 'edit', gradingApproval: 'view',
@@ -2120,7 +2122,8 @@ const PERMISSION_MATRIX: Record<
     dashboard: 'view', collection: 'view', fertilizer: 'view',
     estateOwners: 'view', payroll: 'view', advances: 'view',
     estateAdvances: 'view',
-    employees: 'view', attendance: 'view', performance: 'approve',
+    holidayCalendar: 'edit',
+    employees: 'view', attendance: 'approve', performance: 'approve',
     reports: 'view', administration: 'none', dispatch: 'approve',
     grading: 'view', gradingApproval: 'approve',
     fertilizerApproval: 'view', fertilizerManagerApproval: 'approve',
@@ -2653,6 +2656,11 @@ async function seed() {
       );
     }
     console.log(`Seeded ${EMPLOYEE_SEEDS.length} employees`);
+    // Office staff (Shop & Office Act) vs factory workers (Wages Board) — Attendance-Leave-Addendum
+    await client.query(
+      `UPDATE employees SET category = CASE WHEN role IN ('Factory Officer', 'Factory Manager')
+         THEN 'office' ELSE 'factory' END`,
+    );
 
     for (const a of ATTENDANCE_SEEDS) {
       await client.query(

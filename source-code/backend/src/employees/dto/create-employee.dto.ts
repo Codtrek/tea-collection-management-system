@@ -58,6 +58,11 @@ export class CreateEmployeeDto {
   @IsIn(['bank', 'cash'])
   paymentMethod?: EmployeePaymentMethod;
 
+  /** office staff (Shop & Office Act) vs factory workers (Wages Board); default factory */
+  @IsOptional()
+  @IsIn(['factory', 'office'])
+  category?: 'factory' | 'office';
+
   @ValidateIf((o: CreateEmployeeDto) => o.paymentMethod !== 'cash')
   @IsString()
   @MinLength(1)

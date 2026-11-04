@@ -11,6 +11,7 @@ import { EmployeeRegistrationPage } from './features/employees/EmployeeRegistrat
 import { EmployeeDetailPage } from './features/employees/EmployeeDetailPage'
 import { EmployeeEditPage } from './features/employees/EmployeeEditPage'
 import { AttendanceOverviewPage } from './features/employees/AttendanceOverviewPage'
+import { HolidayCalendarPage } from './features/employees/HolidayCalendarPage'
 import { AttendanceEntryPage } from './features/employees/AttendanceEntryPage'
 import { AdvanceListPage } from './features/employees/AdvanceListPage'
 import { AdvanceDetailPage } from './features/employees/AdvanceDetailPage'
@@ -100,6 +101,7 @@ export const router = createBrowserRouter([
       { path: 'employees/new', element: <EmployeeRegistrationPage /> },
       { path: 'employees/attendance', element: <AttendanceOverviewPage /> },
       { path: 'employees/attendance/entry', element: <AttendanceEntryPage /> },
+      { path: 'holidays', element: <HolidayCalendarPage /> },
       { path: 'employees/advances', element: <AdvanceListPage /> },
       { path: 'employees/advances/new', element: <AdvanceRequestPage /> },
       { path: 'employees/advances/:id', element: <AdvanceDetailPage /> },

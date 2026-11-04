@@ -13,7 +13,7 @@ import { Toggle } from '@/components/ui/Toggle'
 import { MultiStepWizard } from '@/components/patterns/MultiStepWizard'
 import { useToast } from '@/components/ui/Toast'
 import * as employeesService from '@/services/employees'
-import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS, PAYMENT_METHOD_OPTIONS } from './schema'
+import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS, PAYMENT_METHOD_OPTIONS, CATEGORY_OPTIONS } from './schema'
 import { InitialPasswordModal } from './InitialPasswordModal'
 import { useEmployeeRoles } from './useEmployeeRoles'
 import type { Employee } from './types'
@@ -24,7 +24,7 @@ const STEPS = [
   {
     id: 'employment',
     label: 'Employment Details',
-    fields: ['role', 'department', 'hireDate', 'employmentType', 'dayRate', 'dayOtRate', 'nightRate', 'nightOtRate'],
+    fields: ['role', 'department', 'hireDate', 'employmentType', 'category', 'dayRate', 'dayOtRate', 'nightRate', 'nightOtRate'],
   },
   { id: 'bank', label: 'Bank Details', fields: ['paymentMethod', 'bank', 'branch', 'account'] },
   { id: 'documents', label: 'Documents', fields: [] },
@@ -50,6 +50,7 @@ export function EmployeeRegistrationPage() {
     mode: 'onBlur',
     defaultValues: {
       employmentType: 'Permanent',
+      category: 'factory',
       paymentMethod: 'bank',
       bank: '',
       branch: '',
@@ -121,6 +122,7 @@ export function EmployeeRegistrationPage() {
                   <Select label="Department" placeholder="Select department" error={errors.department?.message} options={DEPARTMENTS.map((d) => ({ value: d, label: d }))} {...register('department')} />
                   <Input label="Hire date" type="date" error={errors.hireDate?.message} {...register('hireDate')} />
                   <Select label="Employment type" options={['Permanent', 'Contract', 'Casual'].map((t) => ({ value: t, label: t }))} {...register('employmentType')} />
+                  <Select label="Category" options={CATEGORY_OPTIONS} {...register('category')} />
                 </div>
 
                 {isAgent && (

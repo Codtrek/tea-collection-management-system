@@ -1,4 +1,9 @@
 import {
+  type AttendanceDay,
+  type AttendanceMonth,
+  AttendanceService,
+} from './attendance.service';
+import {
   Body,
   Controller,
   Get,
@@ -100,6 +105,7 @@ export class EmployeesController {
     private readonly payrollView: PayrollViewService,
     private readonly advancePlans: AdvancePlanService,
     private readonly payrollSettings: PayrollSettingsService,
+    private readonly attendance: AttendanceService,
   ) {}
 
   // Static segments (attendance/advances/payroll) are registered before the
@@ -113,15 +119,40 @@ export class EmployeesController {
     return this.employeesService.listAttendance(employeeId, month);
   }
 
+  /**
+   * Attendance-Leave-Addendum Phase 1 — the month grid (`month=YYYY-MM`; filters run here) and the
+   * one-date view used by the Day tab and the daily entry page.
+   */
+  @Get('attendance/month')
+  attendanceMonth(
+    @Query('month') month: string,
+    @Query('search') search?: string,
+    @Query('role') role?: string,
+    @Query('routeId') routeId?: string,
+    @Query('unmarked') unmarked?: string,
+    @Query('employeeId') employeeId?: string,
+  ): Promise<AttendanceMonth> {
+    return this.attendance.month(month, {
+      search,
+      role: role || undefined,
+      routeId: routeId ? Number(routeId) : undefined,
+      unmarked: unmarked === 'true' || unmarked === '1',
+      employeeId: employeeId || undefined,
+    });
+  }
+
+  @Get('attendance/day')
+  attendanceDay(@Query('date') date: string): Promise<AttendanceDay> {
+    return this.attendance.day(date, null);
+  }
+
+  /** Roll-call for one date — no future dates, the edit window, payroll lock, holiday rules. */
   @Post('attendance')
   async markAttendance(
     @Body() dto: MarkAttendanceDto,
     @Req() req: AuthedRequest,
   ): Promise<void> {
-    return this.employeesService.markAttendance(
-      dto,
-      await this.resolveActor(req),
-    );
+    return this.attendance.mark(dto, await this.resolveActor(req));
   }
 
   /**

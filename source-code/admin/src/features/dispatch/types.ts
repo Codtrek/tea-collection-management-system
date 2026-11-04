@@ -25,6 +25,8 @@ export interface BoardAgent {
   coveringRouteName: string | null
   status: BoardStatus
   absent: boolean
+  /** absent because attendance has him on approved leave */
+  onLeave?: boolean
   stopsDone: number
   stopsTotal: number
   /** estate-weighed kg collected so far today */

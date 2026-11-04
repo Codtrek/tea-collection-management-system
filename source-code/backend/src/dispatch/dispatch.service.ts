@@ -1,4 +1,8 @@
 import {
+  AgentAttendanceLink,
+  ATTENDANCE_LEAVE,
+} from './agent-attendance-link.service';
+import {
   ConflictException,
   Injectable,
   NotFoundException,
@@ -89,6 +93,7 @@ export class DispatchService {
     private readonly settings: DispatchSettingsService,
     private readonly audit: AuditService,
     private readonly schedule: RouteScheduleService,
+    private readonly attendanceLink: AgentAttendanceLink,
   ) {}
 
   /* ── Board ─────────────────────────────────────────────────────── */
@@ -204,6 +209,7 @@ export class DispatchService {
           stopsTotal: total,
         }),
         absent: day?.status === 'ABSENT',
+        onLeave: day?.status === 'ABSENT' && day.reason === ATTENDANCE_LEAVE,
         stopsDone: done,
         stopsTotal: total,
         kgCollected: kg,
@@ -395,6 +401,14 @@ export class DispatchService {
       reason: reason ?? null,
       markedBy: actor.name,
     });
+    // One record, two views: the board's absence is the agent's attendance for the day.
+    await this.attendanceLink.recordFromDispatch(
+      agentId,
+      date,
+      'ABSENT',
+      reason ?? null,
+      actor.name,
+    );
     // An absent agent can't be covering someone else — hand that route back.
     await this.cancelCoversHeldBy(
       agentId,
@@ -424,6 +438,13 @@ export class DispatchService {
       reason: null,
       markedBy: actor.name,
     });
+    await this.attendanceLink.recordFromDispatch(
+      agentId,
+      date,
+      'AVAILABLE',
+      null,
+      actor.name,
+    );
     await this.endCoversForReturningAgent(agentId, date, now);
     await this.audit.record(actor, {
       action: 'Marked agent available again',
@@ -431,6 +452,37 @@ export class DispatchService {
       record: agent.name,
     });
     return { agentId, date, status: 'AVAILABLE' };
+  }
+
+  /**
+   * Attendance → the board (Attendance-Leave-Addendum): an agent marked Absent / on leave in
+   * attendance shows ABSENT for that date and, from today on, hands back any cover he holds; a
+   * later Present lifts it again. No-op for an employee who isn't an agent.
+   */
+  async syncFromAttendance(
+    employeeId: number,
+    date: string,
+    status: Parameters<AgentAttendanceLink['mirrorToDispatch']>[2],
+    markedBy: string,
+    now: Date = new Date(),
+  ): Promise<void> {
+    const changed = await this.attendanceLink.mirrorToDispatch(
+      employeeId,
+      date,
+      status,
+      markedBy,
+    );
+    if (!changed || date < localDate(now)) return;
+    if (changed.absent) {
+      await this.cancelCoversHeldBy(
+        changed.agentId,
+        date,
+        status === 'Leave'
+          ? 'Cover agent is on leave'
+          : 'Cover agent marked absent',
+        now,
+      );
+    }
   }
 
   /** Covers on the returning agent's own route end early (no later than today). */

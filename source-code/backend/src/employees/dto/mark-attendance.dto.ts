@@ -2,12 +2,11 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
-  IsDateString,
   IsIn,
-  IsNumber,
   IsOptional,
   IsString,
-  Min,
+  Matches,
+  MaxLength,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -18,37 +17,36 @@ export class AttendanceRecordDto {
   @MinLength(1)
   employeeId: string;
 
-  @IsIn(['Present', 'Absent', 'Leave', 'Half-day'])
-  status: 'Present' | 'Absent' | 'Leave' | 'Half-day';
+  @IsIn(['Present', 'Absent', 'Leave', 'Half-day', 'Short leave'])
+  status: 'Present' | 'Absent' | 'Leave' | 'Half-day' | 'Short leave';
 
-  // Hours are optional — omitted values are inferred server-side from
-  // `status` (Present → 8 day hours, Half-day → 4, Absent/Leave → 0), so
-  // the simple "Mark All Present" bulk path needs no manual entry.
+  /** Half-day: which half was worked */
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  dayHours?: number;
+  @IsIn(['AM', 'PM'])
+  half?: 'AM' | 'PM';
 
+  /** Short leave: 'HH:MM' out and back */
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  dayOtHours?: number;
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+  shortOut?: string;
 
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  nightHours?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  nightOtHours?: number;
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+  shortBack?: string;
+  // Hours are set server-side from the status (attendance-rules.ts): Present / Worked on
+  // holiday / Short leave 8, Half-day 4, Absent / Leave 0 — payroll pays hours × rates.
 }
 
-/** EMP-05/08 — bulk roll-call for one date across many employees. */
+/** EMP-05/08 — bulk roll-call for one date across many employees (rules: attendance-rules.ts). */
 export class MarkAttendanceDto {
-  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   date: string;
+
+  /** required for a day older than the edit window (Factory Manager) */
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  reason?: string;
 
   @IsArray()
   @ArrayMinSize(1)

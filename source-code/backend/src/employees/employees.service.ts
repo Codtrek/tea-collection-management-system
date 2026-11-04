@@ -13,10 +13,6 @@ import type { AppRole } from '../auth/role-map';
 import { AgentProvisioningService } from '../dispatch/agent-provisioning.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { GeneratePayrollDto } from './dto/generate-payroll.dto';
-import {
-  MarkAttendanceDto,
-  AttendanceRecordDto,
-} from './dto/mark-attendance.dto';
 import { ProcessPayrollDto } from './dto/process-payroll.dto';
 import { RequestAdvanceDto } from './dto/request-advance.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -129,6 +125,7 @@ export class EmployeesService {
       bankBranch: dto.branch || null,
       bankAccount: dto.account || null,
       paymentMethod: dto.paymentMethod ?? 'bank',
+      category: dto.category ?? 'factory',
       dayRate: String(dto.dayRate ?? 0),
       dayOtRate: String(dto.dayOtRate ?? 0),
       nightRate: String(dto.nightRate ?? 0),
@@ -192,6 +189,7 @@ export class EmployeesService {
     employee.bankBranch = dto.branch || null;
     employee.bankAccount = dto.account || null;
     employee.paymentMethod = dto.paymentMethod ?? employee.paymentMethod;
+    employee.category = dto.category ?? employee.category;
     if (dto.dayRate !== undefined) employee.dayRate = String(dto.dayRate);
     if (dto.dayOtRate !== undefined) employee.dayOtRate = String(dto.dayOtRate);
     if (dto.nightRate !== undefined) employee.nightRate = String(dto.nightRate);
@@ -278,54 +276,6 @@ export class EmployeesService {
     );
   }
 
-  /** EMP-05/08 — bulk roll-call; upserts one row per (employee, date). Officer+ (portal: `attendance: 'edit'`). */
-  async markAttendance(dto: MarkAttendanceDto, actor: Actor): Promise<void> {
-    this.assertCanWrite(actor);
-    const existing = await this.attendanceRepo.find();
-    // Validate every id up front so a bad id 404s cleanly instead of surfacing
-    // as an FK-violation 500 partway through the batch.
-    for (const record of dto.records) {
-      await this.findEntity(record.employeeId);
-    }
-
-    for (const record of dto.records) {
-      const employeeId = parseEmployeeId(record.employeeId);
-      const hours = this.resolveHours(record);
-      const found = existing.find(
-        (a) => a.employeeId === employeeId && a.date === dto.date,
-      );
-
-      if (found) {
-        found.status = record.status;
-        found.dayHours = String(hours.dayHours);
-        found.dayOtHours = String(hours.dayOtHours);
-        found.nightHours = String(hours.nightHours);
-        found.nightOtHours = String(hours.nightOtHours);
-        found.markedBy = actor.name;
-        await this.attendanceRepo.save(found);
-      } else {
-        const created = this.attendanceRepo.create({
-          employeeId,
-          date: dto.date,
-          status: record.status,
-          dayHours: String(hours.dayHours),
-          dayOtHours: String(hours.dayOtHours),
-          nightHours: String(hours.nightHours),
-          nightOtHours: String(hours.nightOtHours),
-          markedBy: actor.name,
-        });
-        await this.attendanceRepo.save(created);
-        existing.push(created);
-      }
-    }
-
-    await this.audit.record(actor, {
-      action: `Marked attendance for ${dto.records.length} employee(s)`,
-      module: 'Employee',
-      record: dto.date,
-      recordHref: '/employees/attendance',
-    });
-  }
 
   async listAdvances(): Promise<PublicAdvance[]> {
     const advances = await this.advanceRepo.find({
@@ -853,38 +803,6 @@ export class EmployeesService {
   }
 
   /** Fills omitted hour fields from `status` (Present→8 day, Half-day→4, else 0); explicit values always win. */
-  private resolveHours(record: AttendanceRecordDto): {
-    dayHours: number;
-    dayOtHours: number;
-    nightHours: number;
-    nightOtHours: number;
-  } {
-    const anyProvided =
-      record.dayHours !== undefined ||
-      record.dayOtHours !== undefined ||
-      record.nightHours !== undefined ||
-      record.nightOtHours !== undefined;
-
-    if (anyProvided) {
-      return {
-        dayHours: record.dayHours ?? 0,
-        dayOtHours: record.dayOtHours ?? 0,
-        nightHours: record.nightHours ?? 0,
-        nightOtHours: record.nightOtHours ?? 0,
-      };
-    }
-
-    const defaultDayHours: Partial<Record<DbAttendanceStatus, number>> = {
-      Present: 8,
-      'Half-day': 4,
-    };
-    return {
-      dayHours: defaultDayHours[record.status] ?? 0,
-      dayOtHours: 0,
-      nightHours: 0,
-      nightOtHours: 0,
-    };
-  }
 
   /** Whether an attendance date (YYYY-MM-DD) falls within a period label like 'July 2026'. */
   private inPeriod(date: string, period: string): boolean {
@@ -913,6 +831,7 @@ export class EmployeesService {
         account: entity.bankAccount ?? '',
       },
       paymentMethod: entity.paymentMethod ?? 'bank',
+      category: entity.category ?? 'factory',
       hasLogin: entity.hasLogin,
       lastUpdatedBy: entity.lastUpdatedBy ?? undefined,
       lastUpdatedOn: entity.lastUpdatedOn

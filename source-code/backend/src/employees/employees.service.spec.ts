@@ -83,6 +83,7 @@ function makeEmployee(overrides: Partial<EmployeeEntity> = {}): EmployeeEntity {
     bankAccount: '1002458800',
     paymentMethod: 'bank',
     deactivatedOn: null,
+    category: 'factory',
     dayRate: '500.00',
     dayOtRate: '750.00',
     nightRate: '600.00',
@@ -108,6 +109,14 @@ function makeAttendance(
     nightHours: '0.00',
     nightOtHours: '0.00',
     markedBy: 'S. Fernando',
+    half: null,
+    shortOut: null,
+    shortBack: null,
+    holidayWorked: false,
+    leaveRequestId: null,
+    markedAt: null,
+    editReason: null,
+    source: 'portal',
     createdAt: new Date('2026-07-01T00:00:00.000Z'),
     ...overrides,
   };
@@ -399,77 +408,6 @@ describe('EmployeesService', () => {
       await expect(
         service.create({ ...validEmployeeDto, dob: '2020-01-01' }, admin),
       ).rejects.toThrow(ConflictException);
-    });
-  });
-
-  describe('markAttendance — Manager read-only, default hours', () => {
-    it('rejects Manager', async () => {
-      employeeRepo.seed(makeEmployee());
-      const dto: MarkAttendanceDto = {
-        date: '2026-07-01',
-        records: [{ employeeId: 'EMP-0001', status: 'Present' }],
-      };
-      await expect(service.markAttendance(dto, manager)).rejects.toThrow(
-        ForbiddenException,
-      );
-    });
-
-    it('rejects an unknown employee id', async () => {
-      const dto: MarkAttendanceDto = {
-        date: '2026-07-01',
-        records: [{ employeeId: 'EMP-9999', status: 'Present' }],
-      };
-      await expect(service.markAttendance(dto, officer)).rejects.toThrow();
-    });
-
-    it('infers 8 day hours for Present with no explicit hours', async () => {
-      employeeRepo.seed(makeEmployee());
-      const dto: MarkAttendanceDto = {
-        date: '2026-07-01',
-        records: [{ employeeId: 'EMP-0001', status: 'Present' }],
-      };
-      await service.markAttendance(dto, officer);
-      const rows = await attendanceRepo.find();
-      expect(rows[0].dayHours).toBe('8');
-      expect(rows[0].status).toBe('Present');
-    });
-
-    it('infers 0 hours for Absent', async () => {
-      employeeRepo.seed(makeEmployee());
-      const dto: MarkAttendanceDto = {
-        date: '2026-07-01',
-        records: [{ employeeId: 'EMP-0001', status: 'Absent' }],
-      };
-      await service.markAttendance(dto, officer);
-      const rows = await attendanceRepo.find();
-      expect(rows[0].dayHours).toBe('0');
-    });
-
-    it('honors explicit hours over the status default', async () => {
-      employeeRepo.seed(makeEmployee());
-      const dto: MarkAttendanceDto = {
-        date: '2026-07-01',
-        records: [{ employeeId: 'EMP-0001', status: 'Present', nightHours: 6 }],
-      };
-      await service.markAttendance(dto, officer);
-      const rows = await attendanceRepo.find();
-      expect(rows[0].dayHours).toBe('0');
-      expect(rows[0].nightHours).toBe('6');
-    });
-
-    it('upserts the same (employee, date) instead of duplicating', async () => {
-      employeeRepo.seed(makeEmployee());
-      attendanceRepo.seed(
-        makeAttendance({ id: 1, status: 'Absent', dayHours: '0.00' }),
-      );
-      const dto: MarkAttendanceDto = {
-        date: '2026-07-01',
-        records: [{ employeeId: 'EMP-0001', status: 'Present' }],
-      };
-      await service.markAttendance(dto, officer);
-      const rows = await attendanceRepo.find();
-      expect(rows).toHaveLength(1);
-      expect(rows[0].status).toBe('Present');
     });
   });
 

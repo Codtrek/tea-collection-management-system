@@ -16,6 +16,7 @@ export type ModuleKey =
   | 'fertilizer'
   | 'estateOwners'
   | 'estateAdvances'
+  | 'holidayCalendar'
   | 'payroll'
   | 'advances'
   | 'employees'
@@ -37,6 +38,7 @@ export const MODULE_KEYS: ModuleKey[] = [
   'fertilizer',
   'estateOwners',
   'estateAdvances',
+  'holidayCalendar',
   'payroll',
   'advances',
   'employees',
@@ -63,6 +65,8 @@ export const ADMIN_EDITABLE_MODULES: ModuleKey[] = [
   // above the limit, the Administrator audits (Fertilizer-Delivery-Addendum §4).
   'fertilizerApproval',
   'fertilizerManagerApproval',
+  // Holidays are the Factory Manager's call; the Administrator only views (Attendance-Leave-Addendum).
+  'holidayCalendar',
 ];
 
 export type PermissionMatrix = Record<

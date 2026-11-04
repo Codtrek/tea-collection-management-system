@@ -78,6 +78,7 @@ import { StockMovementEntity } from './stock-movement.entity';
     AgentFertilizerHistoryService,
   ],
   // the Employee detail page's "Fertilizer deliveries" tab
-  exports: [AgentFertilizerHistoryService],
+  // FertilizerDeliveryService: a declared holiday moves deliveries off cancelled collection days
+  exports: [AgentFertilizerHistoryService, FertilizerDeliveryService],
 })
 export class FertilizerModule {}

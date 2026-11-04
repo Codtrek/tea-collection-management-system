@@ -1071,6 +1071,18 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - the picker lists them disabled (`Combobox` `getDisabledReason`);
   - a balance left on one is flagged, never written off.
 
+### Attendance & holidays (`docs/specs/Attendance-Leave-Addendum.md`, Phase 1; branch `feat/attendance-leave`)
+
+- **Attendance:** `employees/attendance-rules.ts` (pure) + `AttendanceService`. These hold every attendance rule:
+  - no future dates;
+  - the edit window (`system_settings.attendance.editWindowDays`): an Officer edits within it; `attendance: approve` with a reason edits older days;
+  - the per-employee payroll lock;
+  - holidays can't be Absent; working one is "Worked on holiday";
+  - half-day AM/PM and short-leave times.
+- **Portal pages:** the month grid and day view read `GET /employees/attendance/month` and `/day`. The entry page never defaults to Present.
+- **The ONE working-day rule:** `holidays/working-days.ts` (`dayInfo`). The holiday calendar (`holidays/`) is the Manager's, through the data-driven `holidayCalendar` permission, enforced server-side.
+- **Attendance ↔ dispatch:** one record. `dispatch/agent-attendance-link.service.ts` + `DispatchService.syncFromAttendance`: attendance is the record, `agent_day_status` the board's view. Don't write one without the other.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

@@ -71,6 +71,10 @@ export class EmployeeEntity {
   @Column({ name: 'deactivated_on', type: 'date', nullable: true })
   deactivatedOn: string | null;
 
+  /** office staff (Shop & Office Act) vs factory workers (Wages Board) — Attendance-Leave-Addendum */
+  @Column({ type: 'varchar', default: 'factory' })
+  category: 'factory' | 'office';
+
   @Column({ name: 'day_rate', type: 'decimal', precision: 8, scale: 2 })
   dayRate: string;
 

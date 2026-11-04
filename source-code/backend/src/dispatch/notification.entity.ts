@@ -15,7 +15,8 @@ export type NotificationType =
   | 'delivery_graded'
   | 'grade_correction'
   | 'fertilizer_approval'
-  | 'fertilizer_update';
+  | 'fertilizer_update'
+  | 'holiday_declared';
 
 /** In-app notification row (the `notifications` table). Dispatch is its first writer. */
 @Entity('notifications')

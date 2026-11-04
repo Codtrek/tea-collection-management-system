@@ -26,6 +26,7 @@ const MODULE_LABELS: Record<ModuleKey, string> = {
   fertilizer: 'Fertilizer',
   estateOwners: 'Estate Owners',
   estateAdvances: 'Estate Owner Advances',
+  holidayCalendar: 'Holiday Calendar',
   payroll: 'Payroll',
   advances: 'Advances',
   employees: 'Employees',

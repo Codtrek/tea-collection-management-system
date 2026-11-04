@@ -1,3 +1,5 @@
+import { EmployeeAttendanceEntity } from '../employees/employee-attendance.entity';
+import { AgentAttendanceLink } from './agent-attendance-link.service';
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -46,6 +48,8 @@ import { RouteScheduleService } from './route-schedule.service';
   imports: [
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([
+      // the attendance record the board's absence writes through (AgentAttendanceLink)
+      EmployeeAttendanceEntity,
       RouteAssignmentEntity,
       RouteNeighbourEntity,
       RouteScheduleWeekdayEntity,
@@ -71,6 +75,7 @@ import { RouteScheduleService } from './route-schedule.service';
   ],
   controllers: [DispatchController, DispatchAgentController],
   providers: [
+    AgentAttendanceLink,
     RouteResolverService,
     RouteScheduleService,
     RouteLoadService,
@@ -88,6 +93,9 @@ import { RouteScheduleService } from './route-schedule.service';
     DispatchTasks,
   ],
   exports: [
+    // attendance ↔ dispatch: one record, two views (Attendance-Leave-Addendum)
+    DispatchService,
+    AgentAttendanceLink,
     RouteResolverService,
     RouteScheduleService,
     AgentDirectoryService,

@@ -60,6 +60,36 @@ export class EmployeeAttendanceEntity {
   @Column({ name: 'marked_by', type: 'varchar', nullable: true })
   markedBy: string | null;
 
+  // ── Attendance-Leave-Addendum Phase 1 ──
+  /** Half-day: which half was worked */
+  @Column({ type: 'varchar', nullable: true })
+  half: 'AM' | 'PM' | null;
+
+  /** Short leave: 'HH:MM' out and back */
+  @Column({ name: 'short_out', type: 'time', nullable: true })
+  shortOut: string | null;
+
+  @Column({ name: 'short_back', type: 'time', nullable: true })
+  shortBack: string | null;
+
+  /** worked on a non-working day — flagged for payroll */
+  @Column({ name: 'holiday_worked', type: 'boolean', default: false })
+  holidayWorked: boolean;
+
+  /** the approved leave request that filled (and locks) this day — Phase 2 */
+  @Column({ name: 'leave_request_id', type: 'int', nullable: true })
+  leaveRequestId: number | null;
+
+  @Column({ name: 'marked_at', type: 'timestamptz', nullable: true })
+  markedAt: Date | null;
+
+  /** why an older day was edited (Manager) */
+  @Column({ name: 'edit_reason', type: 'text', nullable: true })
+  editReason: string | null;
+
+  @Column({ type: 'varchar', default: 'portal' })
+  source: 'portal' | 'dispatch' | 'app' | 'leave' | 'holiday';
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

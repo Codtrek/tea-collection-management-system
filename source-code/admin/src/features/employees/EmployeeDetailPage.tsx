@@ -1,3 +1,4 @@
+import { EmployeeAttendanceTab } from './EmployeeAttendanceTab'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -19,11 +20,10 @@ import { AgentFertilizerTab } from './AgentFertilizerTab'
 import { netPay } from './calc'
 import { COLLECTIONS_TAB, FERTILIZER_TAB, resolveEmployeeTab } from './links'
 import { useEmployeeRoles } from './useEmployeeRoles'
-import type { AttendanceRecord, PayrollRow } from './types'
+import type { PayrollRow } from './types'
 import { formatCurrency, formatDate, initials, maskAccount } from '@/lib/format'
 
 const statusTone: Record<string, BadgeTone> = { Active: 'success', Suspended: 'warning', Inactive: 'danger' }
-const attendanceTone: Record<string, BadgeTone> = { Present: 'success', Absent: 'danger', Leave: 'warning', 'Half-day': 'submitted' }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -63,7 +63,6 @@ export function EmployeeDetailPage() {
   })
   // Attendance/payroll have no "for this employee" endpoint yet — fetch the
   // (dev-scale) full lists and filter client-side, same as Estates' pattern.
-  const { data: allAttendance } = useQuery({ queryKey: ['employees', 'attendance'], queryFn: () => employeesService.listAttendance() })
   const { data: allPayroll } = useQuery({ queryKey: ['employees', 'payroll'], queryFn: () => employeesService.listPayroll() })
   // the same balance the Salary Advances page and payroll use (backend advance-balance.ts)
   const { data: advances } = useQuery({
@@ -96,17 +95,8 @@ export function EmployeeDetailPage() {
     return <ErrorState title="Employee not found" description={`No employee with ID “${id}”.`} onRetry={() => void refetch()} />
   }
 
-  const attendance = (allAttendance ?? []).filter((a) => a.employeeId === employee.id)
   const payroll = (allPayroll ?? []).filter((p) => p.employeeId === employee.id)
 
-  const attendanceColumns: Column<AttendanceRecord>[] = [
-    { key: 'date', header: 'Date', render: (a) => formatDate(a.date) },
-    { key: 'status', header: 'Status', render: (a) => <StatusBadge tone={attendanceTone[a.status]}>{a.status}</StatusBadge> },
-    { key: 'dayHours', header: 'Day', align: 'right', render: (a) => a.dayHours },
-    { key: 'dayOtHours', header: 'Day OT', align: 'right', render: (a) => a.dayOtHours },
-    { key: 'nightHours', header: 'Night', align: 'right', render: (a) => a.nightHours },
-    { key: 'nightOtHours', header: 'Night OT', align: 'right', render: (a) => a.nightOtHours },
-  ]
 
   const payrollColumns: Column<PayrollRow>[] = [
     { key: 'period', header: 'Period' },
@@ -236,15 +226,8 @@ export function EmployeeDetailPage() {
     },
     {
       id: 'attendance',
-      label: 'Attendance History',
-      content: (
-        <DataTable
-          columns={attendanceColumns}
-          rows={attendance}
-          rowKey={(a) => a.date}
-          emptyState={<EmptyState title="No attendance yet" description="Attendance records appear here once marked." />}
-        />
-      ),
+      label: 'Attendance & Leave',
+      content: <EmployeeAttendanceTab employeeId={employee.id} />,
     },
     {
       id: 'salary',

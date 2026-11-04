@@ -596,6 +596,8 @@ CREATE TABLE employees (
         CHECK (payment_method IN ('bank', 'cash')),
     -- Installments (2026-11-02): when the employee left — their final payroll month
     deactivated_on   DATE,
+    -- Attendance-Leave-Addendum: office staff (Shop & Office Act) vs factory workers (Wages Board)
+    category         VARCHAR(10) NOT NULL DEFAULT 'factory' CHECK (category IN ('factory', 'office')),
     day_rate         DECIMAL(8,2) NOT NULL DEFAULT 0,
     day_ot_rate      DECIMAL(8,2) NOT NULL DEFAULT 0,
     night_rate       DECIMAL(8,2) NOT NULL DEFAULT 0,
@@ -620,12 +622,22 @@ CREATE TABLE employee_attendance (
     employee_id    INTEGER NOT NULL REFERENCES employees(id),
     date           DATE NOT NULL,
     status         VARCHAR(20) NOT NULL
-        CHECK (status IN ('Present', 'Absent', 'Leave', 'Half-day')),
+        CHECK (status IN ('Present', 'Absent', 'Leave', 'Half-day', 'Short leave')),
     day_hours      DECIMAL(5,2) NOT NULL DEFAULT 0,
     day_ot_hours   DECIMAL(5,2) NOT NULL DEFAULT 0,
     night_hours    DECIMAL(5,2) NOT NULL DEFAULT 0,
     night_ot_hours DECIMAL(5,2) NOT NULL DEFAULT 0,
     marked_by      VARCHAR(100),
+    -- Attendance-Leave-Addendum Phase 1
+    half             VARCHAR(2) CHECK (half IS NULL OR half IN ('AM', 'PM')),
+    short_out        TIME,
+    short_back       TIME,
+    holiday_worked   BOOLEAN NOT NULL DEFAULT FALSE,   -- worked on a non-working day (payroll flag)
+    leave_request_id INTEGER,
+    marked_at        TIMESTAMPTZ,
+    edit_reason      TEXT,                              -- an older-day edit (Manager)
+    source           VARCHAR(10) NOT NULL DEFAULT 'portal'
+        CHECK (source IN ('portal', 'dispatch', 'app', 'leave', 'holiday')),
     created_at     TIMESTAMP DEFAULT NOW(),
     UNIQUE (employee_id, date)
 );
@@ -1165,9 +1177,85 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
                     'collection_complete', 'no_agents',
                     'cover_request', 'cover_response', 'missed_checkin',
                     'route_reassigned', 'exception_request',
-                    'delivery_graded', 'grade_correction', 'fertilizer_update'));
+                    'delivery_graded', 'grade_correction', 'fertilizer_update',
+                    'holiday_declared'));
+
+-- ─── Holiday calendar (Attendance-Leave-Addendum Phase 1) ──────────────────
+-- Paid / work-allowed defaults per holiday type (the Manager edits these).
+CREATE TABLE IF NOT EXISTS holiday_types (
+    type         VARCHAR(10) PRIMARY KEY CHECK (type IN ('poya', 'public', 'weekly', 'closure')),
+    label        VARCHAR(40) NOT NULL,
+    paid         BOOLEAN NOT NULL,
+    work_allowed BOOLEAN NOT NULL,
+    updated_by   VARCHAR(100),
+    updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+INSERT INTO holiday_types (type, label, paid, work_allowed) VALUES
+    ('poya',    'Poya day',            TRUE,  TRUE),
+    ('public',  'Public holiday',      TRUE,  TRUE),
+    ('weekly',  'Weekly holiday',      FALSE, TRUE),
+    ('closure', 'Factory closure',     FALSE, FALSE)
+ON CONFLICT (type) DO NOTHING;
+
+-- Dated holidays: Poya / public (entered per year) and declared closures.
+CREATE TABLE IF NOT EXISTS holidays (
+    id               SERIAL PRIMARY KEY,
+    date             DATE NOT NULL,
+    name             VARCHAR(100) NOT NULL,
+    type             VARCHAR(10) NOT NULL CHECK (type IN ('poya', 'public', 'closure')),
+    paid             BOOLEAN,            -- null = the type's default
+    work_allowed     BOOLEAN,            -- null = the type's default
+    applies_to       VARCHAR(10) NOT NULL DEFAULT 'all' CHECK (applies_to IN ('all', 'factory', 'office')),
+    collection_stops BOOLEAN NOT NULL DEFAULT FALSE,
+    declare_group    UUID,               -- one "Declare holiday" over a range
+    reason           TEXT,
+    created_by       VARCHAR(100),
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    cancelled_at     TIMESTAMPTZ,
+    cancelled_by     VARCHAR(100),
+    cancel_reason    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_holidays_date ON holidays(date);
+
+-- Weekly holiday per category; a change adds a row with a later effective_from (past weeks keep theirs).
+CREATE TABLE IF NOT EXISTS weekly_holiday_rules (
+    id               SERIAL PRIMARY KEY,
+    category         VARCHAR(10) NOT NULL CHECK (category IN ('factory', 'office')),
+    weekdays         INTEGER[] NOT NULL,   -- 0 = Sunday … 6 = Saturday
+    half_day_weekday INTEGER CHECK (half_day_weekday BETWEEN 0 AND 6),
+    effective_from   DATE NOT NULL,
+    created_by       VARCHAR(100),
+    created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+INSERT INTO weekly_holiday_rules (category, weekdays, half_day_weekday, effective_from, created_by)
+SELECT c, ARRAY[0], NULL, DATE '2000-01-01', 'migration 2026-11-05'
+FROM (VALUES ('factory'), ('office')) v(c)
+WHERE NOT EXISTS (SELECT 1 FROM weekly_holiday_rules w WHERE w.category = v.c);
+
+-- A per-employee rest day (7-day factories) — overrides the category's weekly holiday.
+CREATE TABLE IF NOT EXISTS employee_rest_days (
+    id             SERIAL PRIMARY KEY,
+    employee_id    INTEGER NOT NULL REFERENCES employees(id),
+    weekday        INTEGER CHECK (weekday BETWEEN 0 AND 6),   -- null = back to the category rule
+    effective_from DATE NOT NULL,
+    created_by     VARCHAR(100),
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_employee_rest_days_employee ON employee_rest_days(employee_id);
+
 
 -- ─── Settings + permissions ─────────────────────────────────────────────────
+INSERT INTO system_settings (key, value, updated_by)
+VALUES ('attendance', '{"editWindowDays": 3}'::jsonb, 'migration')
+ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO role_permissions (role, module, level) VALUES
+    ('Administrator',    'holidayCalendar', 'view'),
+    ('Officer',          'holidayCalendar', 'view'),
+    ('Manager',          'holidayCalendar', 'edit'),
+    ('ReceivingOfficer', 'holidayCalendar', 'none')
+ON CONFLICT (role, module) DO NOTHING;
+
 INSERT INTO system_settings (key, value, updated_by)
 VALUES ('fertilizer', '{"managerApprovalAboveKg": 500, "maxDeliveryAttempts": 3}'::jsonb, 'migration')
 ON CONFLICT (key) DO NOTHING;
