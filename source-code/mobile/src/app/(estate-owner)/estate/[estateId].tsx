@@ -12,11 +12,12 @@ import { EstateAvatarWithDetails } from "@/components/estate";
 import WeeklyPluckedWeightChart from "@/components/estate-owner/WeeklyPluckedWeightChart";
 import { RequestListItem } from "@/components/estate-owner";
 import { AppButton, AppText, Avatar, Screen } from "@/components/ui";
-import { estateProfiles } from "@/data/estateOwnerEstates";
+import { useEstateStore } from "@/store/estateStore";
 import { useSavedEstateWorkers } from "@/data/estateWorkers";
 import { colors, spacing } from "@/theme";
 
 export default function EstateDetails() {
+  const estateProfiles = useEstateStore((state) => state.estates);
   const {
     estateId,
     collectionFactory,
