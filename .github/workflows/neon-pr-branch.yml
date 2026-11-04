@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 env:
-  NEON_BRANCH: ${{ github.event.pull_request.head.ref }}
+  NEON_BRANCH: pr-${{ github.event.number }}
 
 jobs:
   create-and-migrate:
