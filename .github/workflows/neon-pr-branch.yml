@@ -97,7 +97,7 @@ jobs:
       # is shown. Teammates decrypt it with the shared passphrase.
       - name: Publish encrypted connection string
         env:
-          DB_URL: ${{ steps.neon.outputs.db_url }}
+          DB_URL: ${{ steps.refresh.outputs.db_url }}
           PASS: ${{ secrets.TEAM_PASSPHRASE }}
         run: |
           ENC=$(printf '%s' "$DB_URL" | openssl enc -aes-256-cbc -pbkdf2 -salt -a -A -pass env:PASS)
