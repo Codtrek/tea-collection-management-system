@@ -1,0 +1,1108 @@
+TEA COLLECTION REQUEST WORKFLOW ANALYSIS
+Repository inspection date: 2026-11-01
+
+Scope and evidence note
+-----------------------
+This report describes repository source, entities, and migration definitions. It does not
+connect to a running database, so it cannot confirm which migrations have already been applied
+to a particular environment. The request tables are defined in a TypeORM migration, but are
+not in the SQL snapshots and are not used by application code. A table described as
+"migration-defined" exists in a database only if that migration has run successfully.
+
+The only project file created for this task is this report.
+
+
+1. Project Architecture Overview
+--------------------------------
+The backend is NestJS with TypeORM and PostgreSQL. The backend data source is configured in
+source-code\backend\src\data-source.ts. It reads DATABASE_URL_DIRECT or DATABASE_URL, uses
+src/**/*.entity.ts and src/migrations/*.ts, and sets synchronize=false. The Nest application
+also uses synchronize=false in source-code\backend\src\app.module.ts. Schema changes therefore
+come from migrations, not automatic entity synchronization.
+
+There are two migration/snapshot locations:
+
+- source-code\database\init.sql and source-code\database\migrations\*.sql are the hand-maintained
+  SQL schema and targeted SQL migrations.
+- source-code\backend\src\migrations\*.ts and source-code\backend\src\migrations\baseline.sql
+  are the TypeORM migration chain used by the package's migration:run script.
+
+The request tables are defined only by
+source-code\backend\src\migrations\1793030191149-CreateTeaCollectionRequestTables.ts. They
+are absent from source-code\database\init.sql and
+source-code\backend\src\migrations\baseline.sql. They have no TypeORM entity, module, service,
+controller, or API integration in the mobile client. The TypeORM CLI can run migrations
+explicitly through the backend package script, but the normal Nest app configuration does not
+set migrationsRun=true.
+
+The implemented dispatch workflow is route-centred, not pickup-request-centred:
+
+- A route belongs to a factory.
+- A route is staffed using route_assignments. An active cover takes precedence over an active
+  permanent assignment for the selected date.
+- Tea collection records are kept in tea_collection_records. For records not yet collected,
+  the factory collection service resolves the current route agent at read time. Once collected,
+  the schema is intended to hold the stamped collector in agent_id, but no current collector
+  collection operation was found that writes that value.
+- The collector mobile API currently returns today's route stops (collection records), not
+  tea_collection_requests.
+
+Evidence: source-code\backend\src\dispatch\route-resolver.service.ts,
+source-code\backend\src\dispatch\agent-self.service.ts,
+source-code\backend\src\collections\collections.service.ts, and
+source-code\database\init.sql.
+
+
+2. Existing Database Tables
+---------------------------
+The inventory below distinguishes the current SQL schema, request-only migration definitions,
+and tables that exist without an end-to-end request workflow. Types are PostgreSQL types as
+declared in the schema/migration; SERIAL means integer backed by a sequence.
+
+A. Identity, estate, factory, and plucking tables
+
+users — Present in both SQL snapshots, with a schema discrepancy noted in section 11.
+  Purpose: login identity and role.
+  Important columns: id SERIAL PK; phone VARCHAR(15) UNIQUE NOT NULL; password_hash TEXT NOT
+  NULL; role VARCHAR(30) with a CHECK covering estate_owner, estate_manager, plucking_employee,
+  collection_agent, receiving_officer, factory_admin, factory_officer, factory_manager;
+  status VARCHAR(20) active/suspended; last_login_at TIMESTAMP nullable;
+  must_change_password BOOLEAN NOT NULL DEFAULT FALSE; created_at TIMESTAMP.
+  The current TypeORM User entity additionally maps name VARCHAR(32) NOT NULL and nullable,
+  unique nic VARCHAR(12), which are not declared in database/init.sql.
+  Evidence: source-code\database\init.sql; source-code\backend\src\users\user.entity.ts;
+  source-code\backend\src\migrations\baseline.sql.
+
+tea_estate_owners — Present.
+  Purpose: estate-owner profile linked to a login.
+  Important columns: id SERIAL PK; user_id INTEGER NOT NULL UNIQUE FK users(id); name
+  VARCHAR(100) NOT NULL; nic VARCHAR(20); contact VARCHAR(15); email VARCHAR(100).
+  Relationship: one owner profile per user; one owner can own multiple estates.
+
+estates — Present and used by the backend.
+  Purpose: estate profile and its configured route.
+  Important columns: id SERIAL PK; owner_id INTEGER NOT NULL FK tea_estate_owners(id); name
+  VARCHAR(100) NOT NULL; location TEXT NOT NULL; address TEXT; route_id INTEGER nullable FK
+  routes(id); route_name VARCHAR(100); self_delivery BOOLEAN; status active/inactive;
+  registered_on DATE; lat/lng DECIMAL(9,6); bank fields; created_at TIMESTAMP.
+  Relationship: many estates can refer to one owner and one route. route_id is the route
+  source used by the current collection and dispatch code.
+
+estate_employees — Present in SQL; login/profile subtype for estate workers.
+  Important columns: id SERIAL PK; user_id INTEGER NOT NULL UNIQUE FK users(id); estate_id
+  INTEGER NOT NULL FK estates(id); name; date_of_birth DATE; nic UNIQUE; role manager or
+  plucking_employee; is_active BOOLEAN.
+
+tea_estate_managers — Present in SQL.
+  Important columns: id SERIAL PK; employee_id INTEGER NOT NULL UNIQUE FK estate_employees(id);
+  estate_id INTEGER NOT NULL FK estates(id); assigned_at TIMESTAMP.
+  Its two estate references are not constrained to refer to the same estate as the employee.
+
+plucking_employees — Present in SQL.
+  Important columns: id SERIAL PK; employee_id INTEGER NOT NULL UNIQUE FK estate_employees(id);
+  lifetime/monthly plucked weight DECIMAL; rating DECIMAL(3,2) with 0..5 CHECK.
+
+daily_plucking_records — Present in SQL, but no current backend entity/service use was found.
+  Purpose: individual worker/day plucking entries.
+  Important columns: id SERIAL PK; employee_id INTEGER NOT NULL FK plucking_employees(id);
+  manager_id INTEGER NOT NULL FK tea_estate_managers(id); date DATE NOT NULL; weight_kg
+  DECIMAL(8,2) NOT NULL; notes TEXT. Indexes exist on employee_id and date. There is no
+  request_id, and no unique employee/date constraint.
+
+plucking_completion_reports — Present in SQL, but no current request API use was found.
+  Purpose: manager-submitted total for plucking completion.
+  Important columns: id SERIAL PK; manager_id INTEGER NOT NULL FK tea_estate_managers(id);
+  estate_id INTEGER NOT NULL FK estates(id); report_date DATE; total_weight DECIMAL(10,2);
+  status submitted/reviewed; submitted_at TIMESTAMP. No request_id or unique estate/date key.
+
+factories — Present.
+  Important columns: id SERIAL PK; name VARCHAR(100) NOT NULL; location TEXT.
+
+factory_employees — Present.
+  Important columns: id SERIAL PK; user_id INTEGER NOT NULL UNIQUE FK users(id); factory_id
+  INTEGER NOT NULL FK factories(id); name; date_of_birth DATE; nic UNIQUE; role CHECK includes
+  collection_agent, receiving_officer, factory_admin, factory_officer, factory_manager;
+  is_active BOOLEAN.
+  Relationship: one factory employee profile per user; factory_id is the factory boundary.
+
+collection_agents — Present and used.
+  Important columns: id SERIAL PK; employee_id INTEGER NOT NULL UNIQUE FK factory_employees(id);
+  factory_id INTEGER NOT NULL FK factories(id); is_available BOOLEAN; hr_employee_id INTEGER
+  UNIQUE nullable FK employees(id), added by the agent-employees schema change.
+  The current dispatch directory requires the linked HR employee to be Active, to have the
+  "Tea Collecting Agent" job title, and to have a user_id.
+  Evidence: source-code\database\init.sql, source-code\database\migrations\2026-10-10-agent-
+  employees.sql, source-code\backend\src\dispatch\collection-agent.entity.ts, and
+  source-code\backend\src\dispatch\agent-directory.service.ts.
+
+receiving_officers — Present in SQL, but no receiving workflow entity/API was found.
+  Important columns: id SERIAL PK; employee_id INTEGER NOT NULL UNIQUE FK factory_employees(id);
+  factory_id INTEGER NOT NULL FK factories(id).
+
+B. Route staffing and collector availability
+
+routes — Present and used.
+  Important columns: id SERIAL PK; factory_id INTEGER NOT NULL FK factories(id); name
+  VARCHAR(100). One factory has many routes.
+
+estate_route_mapping — Present in SQL, but not used by the current route resolver or estate
+  entity. Important columns: id SERIAL PK; route_id INTEGER NOT NULL FK routes(id); estate_id
+  INTEGER NOT NULL FK estates(id); factory_id INTEGER NOT NULL FK factories(id). No composite
+  uniqueness is declared. It duplicates information held by estates.route_id and routes.factory_id.
+
+route_assignments — Present in SQL and used for route staffing / cover history; it is NOT a
+  collection-request assignment table.
+  Important columns: id SERIAL PK; route_id INTEGER NOT NULL FK routes(id); agent_id INTEGER
+  NOT NULL FK collection_agents(id); type PERMANENT/COVER; status PENDING/ACTIVE/DECLINED/
+  EXPIRED/CANCELLED; valid_from DATE; valid_to DATE nullable; created_by; accepted_at,
+  responded_at, expires_at timestamps; reason TEXT; covers_assignment_id self-FK; stop_scope
+  JSONB; created_at.
+  Constraints: valid_to must be on/after valid_from; a partial unique index allows only one
+  open-ended active PERMANENT row per route. There is no FK/constraint enforcing that the
+  agent's factory matches the route's factory.
+
+route_neighbours — Present in SQL/entity; route-to-neighbour route pairs, composite PK
+  (route_id, neighbour_route_id), both FKs routes(id), with a no-self-neighbour CHECK. Used as
+  a proximity signal for route-cover candidate ranking.
+
+agent_day_status — Present in SQL/entity.
+  Important columns: agent_id INTEGER FK collection_agents(id); day DATE; status AVAILABLE/ABSENT;
+  source self/officer; reason, marked_by; shift_started_at and shift_ended_at TIMESTAMPTZ.
+  Composite PK (agent_id, day). This is the daily availability/shift record.
+
+agent_location_pings — Present in SQL/entity.
+  Important columns: id BIGSERIAL PK; agent_id FK collection_agents(id); recorded_at and
+  received_at TIMESTAMPTZ; lat/lng DECIMAL(9,6) with geographic CHECKs; accuracy_m DECIMAL;
+  source ping/checkin. Indexed by agent/time; used for dispatch map freshness, not request
+  assignment.
+
+device_push_tokens — Present in SQL/entity.
+  Important columns: token VARCHAR(200) PK; user_id INTEGER NOT NULL FK users(id); platform;
+  updated_at. It is keyed by user, not by collection request.
+
+C. Request, collection, and receiving tables
+
+tea_collection_requests — Defined only in the TypeORM request migration; not in init.sql or
+  baseline.sql, and not mapped to an entity.
+  Important columns: id SERIAL PK; estate_id INTEGER NOT NULL FK estates(id) ON DELETE RESTRICT;
+  requested_by_user_id INTEGER nullable FK users(id) ON DELETE SET NULL; created_by_user_id
+  INTEGER NOT NULL FK users(id) ON DELETE RESTRICT; source VARCHAR(40) CHECK allows only
+  estate_submitted and factory_created_on_behalf; requested_weight_kg NUMERIC(10,2) NOT NULL
+  and > 0; requested_collection_date DATE NOT NULL; notes TEXT; status VARCHAR(20) DEFAULT
+  pending with CHECK pending/assigned/accepted/cancelled/collected/delivered; created_at and
+  updated_at TIMESTAMPTZ; cancelled_at TIMESTAMPTZ.
+  Indexes: (estate_id,status), (status,requested_collection_date), and created_by_user_id.
+  Gaps: no factory_id or route_id, no collector-created source, no expiry field, no request-to-
+  collection-record FK, and no unique active request per estate/date.
+  Evidence: source-code\backend\src\migrations\1793030191149-CreateTeaCollectionRequestTables.ts.
+
+tea_collection_request_assignments — Defined only in that same TypeORM migration; not mapped
+  to an entity or used by an API.
+  Important columns: id SERIAL PK; request_id INTEGER NOT NULL FK tea_collection_requests(id)
+  ON DELETE CASCADE; agent_id INTEGER NOT NULL FK collection_agents(id) ON DELETE RESTRICT;
+  assigned_by_user_id INTEGER nullable FK users(id) ON DELETE SET NULL; status VARCHAR(20)
+  DEFAULT offered with CHECK offered/accepted/declined/cancelled/completed; offered_at,
+  responded_at, created_at TIMESTAMPTZ; response_reason TEXT.
+  Indexes: (request_id,status), (agent_id,status), and a partial unique index on request_id
+  where status is offered or accepted. The partial unique index supports at most one open
+  offer/accepted assignment per request, but does not automate or validate request status
+  changes.
+  Gaps: no expires_at, no explicit superseded/reassigned/expired assignment state, and no
+  factory/route consistency constraint.
+
+tea_collection_records — Present in init.sql and baseline.sql and fully mapped to an entity.
+  This is the collection/delivery record, not the request and not assignment history.
+  Important columns: id VARCHAR(20) PK (business ID); estate_id INTEGER nullable FK estates(id);
+  estate_ref VARCHAR(20); estate_name VARCHAR(100) NOT NULL; route_id INTEGER nullable FK
+  routes(id); route_name VARCHAR(100) NOT NULL; weight_kg DECIMAL(10,2) NOT NULL; status
+  CHECK submitted/approved/agent_assigned/collected/confirmed/pending_agent_confirmation;
+  collection_date DATE NOT NULL; agent_id INTEGER nullable FK collection_agents(id);
+  agent_name; photos JSONB; timeline JSONB; provisional JSONB; mismatch JSONB; update stamps;
+  graded_at, locked_at, finalized_at TIMESTAMPTZ; settlement_id VARCHAR(20) nullable FK
+  settlements(id); created_at TIMESTAMP.
+  Indexes exist on estate_id, status, settlement_id. There is no request_id, received weight,
+  collection timestamp, receiving officer ID, or factory ID. agent_id is nullable; the code
+  resolves the route agent at read time for pre-collection display, but no current mobile
+  collection action stamps the collector on the record.
+
+delivery_grade_lines — Present in SQL and mapped. Important columns: id SERIAL PK; delivery_id
+  VARCHAR(20) NOT NULL FK tea_collection_records(id) ON DELETE CASCADE; grade super/normal;
+  weight_kg DECIMAL(10,2) > 0; graded_by VARCHAR(100); graded_at TIMESTAMP; UNIQUE
+  (delivery_id,grade). This stores factory-side grade weights; it is not a receiving record and
+  does not record received_weight or a receiving_officer FK.
+
+tea_receiving_records — Not present in current init.sql, baseline.sql, or backend entities.
+  The SQL comment says the former OTP-era tea_receiving_records lineage was superseded when the
+  collection schema was flattened. There is no current receiving table to inventory.
+
+D. Cross-cutting event records
+
+notifications — Present in SQL/entity. id SERIAL PK; user_id INTEGER NOT NULL FK users(id);
+  type/title/body/is_read/reference_id/reference_type/created_at. reference_id is generic and
+  has no FK to request or assignment. It can notify agent users, but no request-specific
+  notification flow currently uses it.
+
+audit_logs — Present in SQL/entity. id VARCHAR(20) PK; created_at TIMESTAMP; nullable user_id FK
+  users(id); user_name, role, action, module; record and record_href are text identifiers, not
+  relational FKs; details TEXT. Dispatch mutations write audit entries, but no request service
+  exists to log request events.
+
+
+3. Entity Relationships
+-----------------------
+Relationships that the actual schema supports:
+
+- Estate owner -> estates: one owner profile may own many estates; estates.owner_id is the FK.
+- Estate -> route: estates.route_id is nullable and references routes.id. The current
+  EstateEntity and dispatch code use this direct FK.
+- Route -> factory: routes.factory_id references factories.id.
+- Route -> route staffing history: route_assignments.route_id references routes.id, and
+  route_assignments.agent_id references collection_agents.id. A route can have many assignment
+  history rows and an agent can have many assignment rows over time. The resolver chooses an
+  active cover first, then an active permanent assignment for a given date.
+- Agent -> identity: collection_agents.employee_id references factory_employees.id, and the
+  newer hr_employee_id references employees.id. The employee row's user_id resolves to users.
+  The HR link is unique, as are the employee links, but factory consistency across all these
+  duplicated factory_id values is not enforced by a composite FK.
+- Request -> estate / actor users: supported by the request migration. One estate can have many
+  requests. created_by_user_id is required; requested_by_user_id is optional.
+- Request -> assignment history: supported by the request migration. One request can have many
+  assignment rows over time. The partial unique index allows at most one row at a time with
+  status offered or accepted.
+- Assignment -> collector: supported by the request migration through agent_id.
+- Collection record -> estate / route / collector / settlement: supported by nullable FKs in
+  tea_collection_records. One record can have many grade lines.
+- Daily plucking row -> plucker and manager; completion report -> manager and estate.
+
+Relationships not represented or not safely enforced:
+
+- A request has no factory_id or route_id. Factory can only be inferred indirectly from
+  estate.route_id -> routes.factory_id, and that route may be changed after a request exists.
+- There is no FK from tea_collection_records to tea_collection_requests; the request migration
+  cannot guarantee that one request yields at most one collection record.
+- There is no receiving record/table, so a record cannot be related to a receiving officer,
+  factory, or received weight.
+- estate_route_mapping has independent estate, route, and factory FKs, but no unique constraints
+  or cross-table consistency check. It is not used by the current backend. estates.route_id is
+  the active mapping used by code.
+- The route staffing assignment is distinct from a request assignment. Changing the route's
+  active collector changes who is responsible for all uncollected route stops on that date; it
+  does not record which individual collector was offered a particular pickup request.
+- The request-assignment table's FK prevents references to nonexistent requests or agents, but
+  not assignment of an agent from a different factory than the estate/request.
+
+
+4. ER Diagram
+-------------
+The diagram shows declared FK relationships. Dashed conceptual gaps are described below it;
+they are not actual relationships.
+
+```mermaid
+erDiagram
+    USERS ||--o| TEA_ESTATE_OWNERS : profile
+    USERS ||--o| ESTATE_EMPLOYEES : login
+    ESTATES ||--o{ ESTATE_EMPLOYEES : employs
+    ESTATE_EMPLOYEES ||--o| TEA_ESTATE_MANAGERS : manager_profile
+    ESTATE_EMPLOYEES ||--o| PLUCKING_EMPLOYEES : plucker_profile
+    PLUCKING_EMPLOYEES ||--o{ DAILY_PLUCKING_RECORDS : plucks
+    TEA_ESTATE_MANAGERS ||--o{ DAILY_PLUCKING_RECORDS : supervises
+    TEA_ESTATE_MANAGERS ||--o{ PLUCKING_COMPLETION_REPORTS : submits
+    ESTATES ||--o{ PLUCKING_COMPLETION_REPORTS : reported_for
+    TEA_ESTATE_OWNERS ||--o{ ESTATES : owns
+    FACTORIES ||--o{ FACTORY_EMPLOYEES : employs
+    USERS ||--o| FACTORY_EMPLOYEES : login
+    FACTORY_EMPLOYEES ||--o| COLLECTION_AGENTS : dispatch_identity
+    EMPLOYEES ||--o| COLLECTION_AGENTS : hr_identity
+    FACTORIES ||--o{ ROUTES : operates
+    ROUTES ||--o{ ESTATES : configured_route
+    ROUTES ||--o{ ESTATE_ROUTE_MAPPING : mapping_rows
+    ESTATES ||--o{ ESTATE_ROUTE_MAPPING : mapping_rows
+    FACTORIES ||--o{ ESTATE_ROUTE_MAPPING : mapping_rows
+    ROUTES ||--o{ ROUTE_ASSIGNMENTS : staffing_history
+    COLLECTION_AGENTS ||--o{ ROUTE_ASSIGNMENTS : staffing_history
+    ROUTE_ASSIGNMENTS o|--o{ ROUTE_ASSIGNMENTS : covers_assignment
+    COLLECTION_AGENTS ||--o{ AGENT_DAY_STATUS : daily_status
+    COLLECTION_AGENTS ||--o{ AGENT_LOCATION_PINGS : location_history
+    ESTATES ||--o{ TEA_COLLECTION_REQUESTS : requested_for
+    USERS ||--o{ TEA_COLLECTION_REQUESTS : created_by
+    USERS o|--o{ TEA_COLLECTION_REQUESTS : requested_by
+    TEA_COLLECTION_REQUESTS ||--o{ TEA_COLLECTION_REQUEST_ASSIGNMENTS : assignment_history
+    COLLECTION_AGENTS ||--o{ TEA_COLLECTION_REQUEST_ASSIGNMENTS : offered_to
+    USERS o|--o{ TEA_COLLECTION_REQUEST_ASSIGNMENTS : assigned_by
+    ESTATES o|--o{ TEA_COLLECTION_RECORDS : collection
+    ROUTES o|--o{ TEA_COLLECTION_RECORDS : route
+    COLLECTION_AGENTS o|--o{ TEA_COLLECTION_RECORDS : collected_by
+    TEA_COLLECTION_RECORDS ||--o{ DELIVERY_GRADE_LINES : grade_lines
+    SETTLEMENTS o|--o{ TEA_COLLECTION_RECORDS : settled_by
+    USERS ||--o{ NOTIFICATIONS : recipient
+    USERS o|--o{ AUDIT_LOGS : actor
+```
+
+The ER diagram intentionally has no edge from TEA_COLLECTION_REQUESTS to
+TEA_COLLECTION_RECORDS and no receiving-record entity. Those are missing FKs/tables, not
+omissions in the diagram. The request entities appear only if the TypeORM request migration has
+been applied. EMPLOYEES is the HR table that collection_agents.hr_employee_id references.
+
+
+5. Complete Collection Request Workflow
+---------------------------------------
+This section separates current behavior from the desired request workflow.
+
+Current request creation:
+
+- No application service inserts into tea_collection_requests or
+  tea_collection_request_assignments.
+- The migration schema has columns for estate, requesting/creating users, source, requested
+  weight, requested date, notes, status, and assignment history, but no endpoint or entity
+  consumes them.
+- The factory portal's POST /collections is not a request-creation endpoint. It creates a
+  provisional tea_collection_records row in pending_agent_confirmation status, after validating
+  an active estate with a route. It stores reportedWeight in weight_kg but marks it provisional
+  in the status and provisional JSON; the factory user is recorded in its timeline/audit.
+- The collector mobile screen's manual request action adds a new object to React component
+  state. It does not insert either request table.
+
+Desired request creation, proposed:
+
+1. Authenticate the owner/manager, or the factory/collector user creating it on the estate's
+   behalf. Store the actor in created_by_user_id and the estate requester in requested_by_user_id
+   when applicable. Extend source to explicitly distinguish collector-created requests if that
+   remains a supported channel.
+2. Verify that the estate exists and is active, the submitting user is authorized for it (or is
+   authorized factory staff / the assigned collector), and the estate has a route/factory.
+3. Capture the route and factory association at request time, or otherwise make route changes
+   impossible while the request is active. The current request table has neither route_id nor
+   factory_id.
+4. Insert one tea_collection_requests row in a transaction. Store requested weight, date, notes,
+   actor provenance, and an initial status.
+5. Resolve a suitable agent for the request's route/date, respecting factory, availability,
+   absence, shift, and daily workload constraints. Insert an offered
+   tea_collection_request_assignments row and move the request to assigned in the same
+   transaction. If no suitable agent exists, leave it pending and surface that state.
+
+Current assignment behavior:
+
+- route_assignments is for route staffing, including permanent route ownership and temporary
+  absence covers. It is not linked to any collection request.
+- RouteResolverService.getAgentForRoute(routeId,date) returns an active cover first, then an
+  active permanent route assignment. Request creation does not call it today, because request
+  creation is not implemented.
+- CandidateRankingService ranks cover candidates for route staffing, not request-level pickup
+  assignments. It is not automatically invoked after a pickup request is declined.
+
+Current collector retrieval:
+
+- POST /auth/agent/login issues a separate agent token. Agent identity is obtained by taking
+  JWT sub as users.id, then AgentDirectoryService.byUserId resolves collection_agents.id through
+  the HR employee link.
+- GET /dispatch/me/stops resolves which routes the agent handles today and returns collection
+  records on those routes for today's date. It does not query tea_collection_requests or
+  tea_collection_request_assignments.
+- GET /dispatch/me/cover-requests returns pending route-cover offers, not tea pickup requests.
+- The mobile collector UI does not call either endpoint.
+
+Desired collector screen, proposed:
+
+- Query assignments for the authenticated collection_agents.id, not an agent ID supplied by
+  the phone. Join the open assignment to its request, estate, route, and factory data.
+- Display offered/awaiting response, accepted/in progress, collected/awaiting receiving, and
+  delivered history as distinct request states.
+- After accept/decline, send the action to the backend and refresh from server state. The client
+  should not treat an in-memory status edit as authoritative.
+
+
+6. Database Operations at Each Workflow Stage
+---------------------------------------------
+The following describes both the current implementation and the proposed end-to-end operations.
+The current column/status values are distinguished from the proposed changes.
+
+A. Estate submits a request
+
+Current:
+  Trigger: none in the backend.
+  Tables read/inserted/updated by request workflow: none.
+  The migration defines a possible insert into tea_collection_requests, but no code performs it.
+  The separate factory exception-entry flow reads estates and route assignments, then inserts
+  tea_collection_records and writes audit_logs / notifications as applicable.
+
+Proposed request transaction:
+  1. Read users, estate ownership/manager relation, estates, routes, and factories to validate
+     identity, estate status, route, and factory.
+  2. INSERT tea_collection_requests with estate_id, requested_by_user_id, created_by_user_id,
+     source, requested_weight_kg, requested_collection_date, notes, and pending status.
+  3. If an eligible collector is found, INSERT tea_collection_request_assignments with
+     request_id, agent_id, assigned_by_user_id (NULL or system actor), status=offered, offered_at,
+     and an expiry time. Update request status pending -> assigned.
+  4. Use notification/outbox data after commit; do not make assignment correctness depend only on
+     a push notification.
+  FKs: request.estate_id -> estates.id; request user ids -> users.id; assignment.request_id ->
+  request.id; assignment.agent_id -> collection_agents.id.
+  The current migration supports these FKs except route/factory association and assignment expiry.
+
+B. System assigns/reassigns a collector
+
+Current route staffing:
+  Read routes, route_assignments, agent_day_status, collection_agents/employee/user, and route
+  load/history. Insert a route_assignments row for a cover or reassignment; later update its
+  status to accepted/declined/expired/cancelled as appropriate. The route resolver reads
+  ACTIVE rows; it does not read request-assignment rows.
+
+Proposed per-request assignment:
+  Read request route/date, route staffing, candidate availability, agent factory, absence/shift
+  status, and workload. Insert a new request-assignment row; never overwrite a declined row.
+  On decline/timeout, mark that offer declined/expired with responded_at/reason, then insert a
+  new offered row for the next eligible agent. Keep request status assigned while another offer
+  is active; return it to pending if there is no active offer. The current partial unique index
+  prevents two offered/accepted assignment rows for one request at once, but service transactions
+  and row locks are still needed to prevent races and to keep the request status consistent.
+
+C. Collector reads and accepts/declines
+
+Current:
+  GET /dispatch/me/stops reads route_assignments and tea_collection_records. There is no
+  collection-request accept/decline action.
+  Existing POST /dispatch/me/cover-requests/:id/accept|decline updates a route_assignments row
+  only. A decline stores status=DECLINED and responded_at; this is a route-cover response, not a
+  tea_collection_request_assignments response.
+
+Proposed:
+  Read the JWT sub, resolve the agent on the server, then query the current offered/accepted
+  assignment for that agent and join the request/estate. On accept, lock the request and offer,
+  verify the offer is open and unexpired, update assignment status=accepted/responded_at, and
+  update request status assigned -> accepted in one transaction. On decline, update that offer
+  to declined, record a required response_reason/responded_at, and keep the row permanently as
+  history; offer the next eligible agent by inserting a fresh row.
+
+D. Collector records the pickup
+
+Current:
+  No collector API writes actual collection information. The portal's POST /collections creates
+  a provisional record. Its PUT /collections/:id can update weight/date for a non-confirmed
+  record, but it uses the portal JWT and does not provide a collector-specific write path.
+
+Proposed:
+  Validate that the JWT's agent owns the currently accepted request assignment. In one
+  transaction insert one tea_collection_records row linked by a new request_id FK, including
+  estate weight, date/time, collector ID, photo metadata, owner confirmation, and collection
+  note. Update request status accepted -> collected and assignment status accepted -> completed.
+  Keep the requested weight/date on the original request; do not overwrite requested values with
+  actual collection values.
+  Add a UNIQUE request_id constraint to collection records if the business rule is one request,
+  one collection event. Permit NULL request_id for supported manual/offline collections that do
+  not originate from an app request.
+
+E. Factory receives tea
+
+Current:
+  There is no tea_receiving_records table or receive endpoint. The factory grading API writes
+  delivery_grade_lines and changes a collection record through the grading/confirmation logic.
+  Graded line weights are not a separate received-weight measurement.
+
+Proposed:
+  Read the collection record and its request, then insert a receiving record with unique
+  collection_record_id, factory_id, received_weight_kg, received_at, and receiving-officer
+  identity. Record notes/discrepancy. Update the collection record to the appropriate factory
+  status and request status collected -> delivered in one transaction. Generate/maintain
+  grade lines separately from the received-weight measurement.
+
+
+7. Request Status Lifecycle
+---------------------------
+There are multiple state machines in the repository. They must not be conflated.
+
+Request migration's request status CHECK:
+
+- pending: submitted but not yet assigned to a live collector offer.
+- assigned: an offer exists and is awaiting a collector response.
+- accepted: collector accepted the current offer.
+- cancelled: request cancelled by an authorized actor.
+- collected: tea was collected at the estate.
+- delivered: factory receipt completed.
+
+The migration has no expired request status and no declined request status. Decline belongs in
+assignment history. It does not define allowed transitions in backend code.
+
+Request-assignment migration status:
+
+- offered: current offer awaiting response.
+- accepted: current collector accepted.
+- declined: that collector declined; retain the row.
+- cancelled: offer was withdrawn/cancelled.
+- completed: assignment finished.
+
+The partial unique index covers only offered and accepted. It does not enforce transitions
+between request.status and assignment.status.
+
+Route-assignment status (separate route workforce state):
+
+- PENDING: cover offer awaiting the agent.
+- ACTIVE: route assignment is effective.
+- DECLINED, EXPIRED, CANCELLED: route-cover/reassignment history states.
+
+Collection-record status (separate delivery/portal state):
+
+- submitted -> approved -> agent_assigned -> collected -> confirmed, plus
+  pending_agent_confirmation for provisional exception entries.
+- These values are checked in tea_collection_records and mapped in
+  source-code\backend\src\collections\collection-map.ts. They do not include request-specific
+  declined/cancelled/delivered states.
+
+Collector app demo values:
+
+- pending, accepted, loaded, delivered, cancelled.
+- These are in-memory UI values; they are not the DB request or collection status enums.
+
+Recommended request transitions, reusing the existing request enum where possible:
+
+  pending -> assigned -> accepted -> collected -> delivered
+      |         |            |
+      |         |            +-- cancellation only if policy permits before collection
+      |         +-- offer declined/expired -> next offer; request remains assigned
+      |             while another offer exists, otherwise returns to pending
+      +-- cancelled
+
+Keep DECLINED on tea_collection_request_assignments, not the parent request, because one
+collector's decline should not mean the estate's request is permanently declined. Add
+assignment-level expires_at and an expired assignment status. If the business needs a terminal
+request timeout, add an explicit request-level expired status and transition it only when no
+eligible reassignment is possible or the request's overall deadline passes. Use delivered as the
+terminal request status after factory receipt; "completed" is already available on the
+assignment and need not be added as another request status unless product semantics require it.
+
+
+8. Collector Reassignment Mechanism
+------------------------------------
+What exists:
+
+- route_assignments preserves route-staffing history. A replacement permanent assignment ends
+  the prior row's valid_to rather than deleting it. A temporary route cover is a separate row.
+- A cover offer records agent, route, reason, response time, and response state. Declines and
+  expirations remain as rows.
+- CandidateRankingService considers agent availability, absence, ended shifts, existing
+  covers, route neighbours, remaining route stops, and estimated load. It ranks candidates for
+  covering a route. Dispatch staff must create the cover offer; the service does not
+  automatically reassign a pickup request.
+- AgentSelfService.respondToCover updates the cover row. A new cover offer can then be created
+  for another candidate by the factory dispatch workflow.
+
+What is required for per-request reassignment:
+
+1. Leave a declined/expired request-assignment row untouched except for status, response time,
+   and reason. Never replace its agent_id with the next collector.
+2. Select another eligible agent for the request's route/date and same factory. Current candidate
+   ranking does not filter candidates by route.factory_id; it iterates active directory agents
+   and uses route proximity/load. Add explicit same-factory validation before using it for
+   collection requests.
+3. INSERT a new offered request-assignment row. The open-assignment partial unique index
+   provides a database backstop against two simultaneous offers for a request.
+4. Update request.status and create the next offer atomically. Use a transaction/row lock or
+   equivalent concurrency control; the index alone does not prevent request/assignment status
+   drift.
+5. Record a required reason on decline and on factory/system reassignment. The current request
+   assignment schema has response_reason, but no backend DTO/validation currently requires it.
+6. Notify the newly offered collector and the estate as product rules require. Push is a
+   delivery mechanism, not the authoritative state; the collector's next GET must return the
+   current assignment from PostgreSQL.
+
+Do not use route_assignments to model individual request reassignment. Route reassignment changes
+the current responsible collector for all matching route stops; a declined single request should
+not silently change route staffing.
+
+
+9. Tea Collection and Factory Receiving
+---------------------------------------
+Current collection record:
+
+- tea_collection_records.weight_kg is the estate/collection weight and collection_date is DATE,
+  not a precise collection timestamp.
+- agent_id is nullable. CollectionService resolves an agent from the route for pre-collection
+  reads, and the record is expected to store the actual agent after collection.
+- photos and timeline are JSONB. provisional stores an exception's reporter/reason.
+- There is no dedicated collection note or owner_confirmed column in this current entity/schema.
+- The factory exception flow writes reportedWeight into weight_kg and marks the row
+  pending_agent_confirmation with provisional metadata; the value is not a confirmed actual
+  weight until verified.
+- The current mobile UI's actualWeight, photoUri, collectionNote, and acceptedAt are local
+  component state only. It submits no collection request or weight to the API.
+
+Recommended distinction:
+
+- Request = what the estate asked to be collected (requested date, estimated weight, source,
+  notes, requester).
+- Assignment = each offer/response attempt to a collector, with history retained.
+- Collection record = what the collector actually picked up (actual estate weight, collector,
+  time, evidence, confirmation).
+- Receiving record = what the factory received and who weighed/received it.
+
+The collection record should be a separate record linked to the request, because the request's
+estimated weight/date must remain auditable and the actual weight/time/evidence are later facts.
+Keep existing manual phone-arranged collection support by allowing a collection record with no
+request_id, or by creating a request-on-behalf first where the business requires every phone
+pickup to share the request workflow.
+
+Factory receiving:
+
+- receiving_officers exists as an employee subtype and factory_employees includes the
+  receiving_officer role, but no tea_receiving_records table/API stores the receiving event.
+- delivery_grade_lines is for grading, with one row per grade per delivery, and cannot replace a
+  receiving row: it has no received_weight, received_at, factory_id, or receiving officer FK.
+- Collection status confirmed currently reflects the factory-side grading/confirmation logic.
+  Request status delivered should mean the separate receipt step has been successfully recorded.
+  That mapping needs to be explicit in backend logic.
+
+
+10. Tea Collector Mobile Application Integration
+------------------------------------------------
+Authentication currently available:
+
+- Backend POST /auth/agent/login validates phone/password, verifies the user is a collection
+  agent, resolves the agent through AgentDirectoryService, stamps last_login_at, and issues a
+  CollectionAgent token.
+- Agent JWT sub is users.id. AgentSelfService.me resolves it to collection_agents.id and checks
+  that the linked HR employee remains Active with the Tea Collecting Agent role, and that the
+  account is not suspended and has changed its temporary password.
+- AgentJwtGuard/AgentJwtStrategy protect /dispatch/me/*. The portal JwtStrategy explicitly
+  rejects agent tokens.
+- The current mobile auth API calls /auth/mobile/login, not /auth/agent/login. The login screen
+  routes estate owner/manager users only; all other roles receive "does not have a mobile
+  dashboard yet." The collector demo screen is not connected to agent login.
+
+Existing mobile/backend data flow:
+
+- GET /dispatch/me/stops: agent token -> agent ID resolution -> active routes resolved for
+  today's local date -> tea_collection_records on those route IDs and collection_date=today.
+  Response includes stop ID, route ID/name, whether covered, estate name, estate weight, and
+  collection status. It does not return a collection-request row or assignment history.
+- GET /dispatch/me/cover-requests and accept/decline cover-request actions deal only with
+  route staffing.
+- There are no collector pickup-request endpoints, no request-specific accept/decline endpoint,
+  and no collector endpoint to submit collected weight/evidence.
+- The mobile api client sets JSON headers but does not attach an Authorization token. Its only
+  current apiRequest callers are the estate-owner auth login/register functions.
+
+Mobile UI state:
+
+- source-code\mobile\src\app\teacollector\teacollectorMobile.tsx defines INITIAL_STOPS as
+  fixture data and initializes useState from it.
+- acceptPickup, confirmDecline, collection weighing, factory submission, and
+  createManualCollectionRequest update local React state. The last function appends a request
+  with Date.now() as ID; it does not call the backend.
+- demo-teacollector-collect.tsx displays pending, accepted, loaded, delivered, cancelled groups.
+  demo-teacollector-home.tsx displays hardcoded counts and factory text.
+- No request list is fetched on screen load, no server status is refreshed after actions, and
+  the demo statuses do not map to the backend request/record enums.
+
+Recommended backend-to-mobile flow:
+
+1. Add a collector-specific login path in the mobile auth service/screen that calls
+   /auth/agent/login and handles mustChangePassword before accessing dispatch screens.
+2. Store the agent token using the existing secure storage approach on native platforms; add a
+   token-aware API client that sends Authorization: Bearer <token> and surfaces 401/403/network
+   failures.
+3. Add a guarded GET API that resolves the current agent from JWT sub and returns their current
+   offered/accepted tea request assignments with request, estate, route, and factory display
+   data. Never accept a client-supplied agent ID as the identity selector.
+4. Add guarded accept/decline actions that verify the assignment belongs to that agent and is
+   still current. Require a decline reason; reject stale/replayed actions with an explicit
+   conflict response.
+5. Replace INITIAL_STOPS with API query state, and render loading, error, empty, offline/stale,
+   offered, accepted, collected, and delivered states.
+6. Refresh the server list after accept/decline and after collection submission. A local optimistic
+   status may improve responsiveness but must roll back/show an error if the server rejects it.
+
+
+11. Identified Problems and Missing Functionality
+-------------------------------------------------
+1. Request migration is not part of the SQL snapshots.
+   Why: tea_collection_requests and tea_collection_request_assignments appear only in the
+   backend TypeORM migration, not init.sql or the captured baseline.sql.
+   Schema protection: no snapshot protects a fresh SQL setup from omitting them.
+   Recommendation: make the canonical schema and migration chain agree; verify the migration
+   was applied in each environment before enabling any request code.
+
+2. Request tables are not mapped or used.
+   Why: no entity/service/controller/DTO was found referencing either table; no application
+   operation inserts or updates them.
+   Schema protection: the DB migration can create tables, but it does not create workflow
+   behavior.
+   Recommendation: add typed entities, validation DTOs, service transactions, and authorization
+   only after reconciling the request lifecycle.
+
+3. No factory is stored on the request, and source omits collector-created requests.
+   Why: request migration stores estate but not factory/route; source CHECK allows only
+   estate_submitted and factory_created_on_behalf.
+   Schema protection: only estate/user FKs exist, not estate-route-factory consistency.
+   Recommendation: store or snapshot the request's route/factory, verify it matches estate and
+   route, and add an explicit collector-created-on-behalf source if that channel is required.
+
+4. Duplicate active estate requests are possible.
+   Why: request indexes are ordinary indexes, not unique; two submissions can target the same
+   estate and date.
+   Schema protection: none prevents duplicates.
+   Recommendation: enforce the business rule with a partial unique index on
+   (estate_id, requested_collection_date) for active request statuses, and still return a
+   friendly conflict from the service. Perform creation transactionally.
+
+5. Request and assignment statuses can disagree.
+   Why: no service or DB trigger synchronizes request.status with assignment.status. The unique
+   index only limits simultaneous offered/accepted assignment rows.
+   Schema protection: CHECKs validate vocabulary, not transitions or cross-table consistency.
+   Recommendation: own transitions in one service transaction with row locking and tests; treat
+   the active assignment as the source for current collector.
+
+6. Declines and timeouts cannot automatically lead to reliable reassignment yet.
+   Why: assignment status supports declined but has no expires_at/expired state; there is no
+   request workflow service or reassignment worker.
+   Schema protection: response_reason and responded_at allow recording a decline if code writes
+   them; they are currently unused for collection requests.
+   Recommendation: add assignment expiry, an explicit expired state, timeout processing, and
+   candidate selection; retain each attempt as a separate row.
+
+7. Cross-factory assignment can occur.
+   Why: route_assignments stores route and agent FKs independently. CandidateRankingService
+   iterates eligible agents without filtering by the target route's factory.
+   Schema protection: no same-factory composite FK/check exists on route or request assignments.
+   Recommendation: enforce factory equality in the service and preferably in a schema key/
+   constraint design where practical. Validate agent/route factory on both automatic and
+   manual assignment paths.
+
+8. Current route cover and per-request assignment are easy to conflate.
+   Why: both can be described as "assigning a collector", but route_assignments changes
+   responsibility for a route while request assignments represent a single request's offers.
+   Schema protection: the tables are distinct, but there is no request link on route assignments.
+   Recommendation: keep these lifecycles independent; a single request decline must not replace
+   route staffing.
+
+9. Collection records can be duplicated for a request and cannot be traced back to one.
+   Why: tea_collection_records has no request_id; there is no one-request/one-record constraint.
+   Schema protection: only its business ID is a PK; that does not prevent two IDs for one
+   underlying request.
+   Recommendation: add nullable request_id FK with UNIQUE constraint if a request produces one
+   collection event; maintain NULL for permitted manual collections.
+
+10. Actual collection time, owner confirmation, and collector API writes are missing.
+    Why: collection_date is DATE; no collected_at, owner_confirmed, or collector-specific
+    collection endpoint exists. The app's values remain local.
+    Schema protection: current constraints do not enforce a single collector collection action.
+    Recommendation: persist a precise timestamp and confirmation/evidence metadata, authorize
+    against the current accepted assignment, and make the operation idempotent.
+
+11. Factory receiving is not modeled as a separate event.
+    Why: tea_receiving_records is absent; the receiving_officers profile table does not record
+    events; grade lines are weights by grade, not scale receipt measurements.
+    Schema protection: no unique collection-record receipt constraint.
+    Recommendation: add a receiving entity/table with unique collection_record_id, received
+    weight/time, factory, officer FK, and notes. Update request status to delivered only after a
+    successful receipt insert.
+
+12. Route mapping has duplicate sources and weak integrity.
+    Why: estate_route_mapping duplicates estates.route_id and no current backend use was found.
+    It has no unique estate/route pair or constraint that its factory matches routes.factory_id.
+    Schema protection: individual FKs only.
+    Recommendation: choose one route source of truth (currently estates.route_id); either retire
+    the unused mapping deliberately or define its constraints and use it consistently.
+
+13. Daily plucking data does not become a collection request.
+    Why: daily_plucking_records and plucking_completion_reports are disconnected from request
+    tables and have no request_id; they are not used by current collection services.
+    Schema protection: no estate/day uniqueness or request link.
+    Recommendation: treat these as optional evidence for estimated weight, not as the request
+    itself, unless a deliberate one-report-to-request relation is added.
+
+14. Collector app request UI is demo-only and is not authenticated as an agent.
+    Why: it uses local INITIAL_STOPS; the shared mobile login calls /auth/mobile/login and does
+    not route CollectionAgent to the dashboard. The API client does not attach stored tokens.
+    Schema protection: not applicable; this is missing application integration.
+    Recommendation: finish the collector login/token/API path before claiming real requests are
+    displayed.
+
+15. Schema snapshots disagree with the TypeORM user entity.
+    Why: database/init.sql users omits name and nic, while User entity and
+    backend/src/migrations/baseline.sql require name and include nic. A fresh schema made only
+    from init.sql can therefore fail entity-backed queries or writes.
+    Recommendation: reconcile init.sql with the entity/baseline, including types, nullability,
+    and constraint names, before using it as a fresh-install source.
+
+16. Multiple simultaneous cover offers can race.
+    Why: route cover duplicate checks are performed in service code; the DB partial unique index
+    only limits one open permanent per route, not one pending/active cover per route/date.
+    Recommendation: consider a partial unique index for a route's active/pending cover window
+    and a corresponding protection against one agent holding/being offered multiple covers per
+    day. Preserve cancelled/declined history outside the unique predicate.
+
+
+12. Recommended Database Architecture
+-------------------------------------
+Keep the business objects distinct:
+
+1. tea_collection_requests is the estate's request and provenance record. It should retain the
+   original requested weight/date/notes and requester/creator. Add route_id and factory_id (or
+   immutable route/factory snapshots) so later route changes cannot silently change the request's
+   destination. Add a source for collector-created-on-behalf if supported.
+2. tea_collection_request_assignments is append-only offer/response history. Add expires_at and
+   expired state; keep response_reason and responded_at. A partial unique index should permit
+   only one current offered/accepted assignment per request. Current assignment can be derived
+   from that open row; avoid maintaining a second mutable "current agent" value unless there is
+   a clear transactional invariant.
+3. route_assignments remains for route staffing (permanent and temporary cover). It is not the
+   request assignment ledger.
+4. tea_collection_records remains the actual estate pickup/delivery record. Add nullable
+   request_id FK, unique where non-null if a request can produce only one collection record.
+   Preserve NULL for the supported phone-arranged/manual collection path. Add precise
+   collected_at, collection note, and the required owner confirmation/evidence fields; keep
+   weight_kg as actual estate weight.
+5. Add a receiving record table/entity for the factory-side scale measurement, officer, factory,
+   timestamp, notes, and received weight. A unique collection_record_id enforces one receipt per
+   delivery unless split receipts become a documented requirement.
+6. Keep grading in delivery_grade_lines; it is independent from receiving and does not overwrite
+   the estate's collection weight.
+7. Use FK/unique/check constraints for identity and cardinality, and service transactions for
+   transitions. Database constraints should protect race conditions; service validation should
+   provide clear errors.
+8. Keep audit_logs for actor/action history and notifications for delivery, but neither substitutes
+   for request/assignment rows. Audit rows are not relationally linked to request IDs today.
+
+Proposed ER additions (not currently implemented):
+
+  tea_collection_requests.route_id -> routes.id
+  tea_collection_requests.factory_id -> factories.id
+  tea_collection_records.request_id -> tea_collection_requests.id (nullable, UNIQUE when set)
+  tea_receiving_records.collection_record_id -> tea_collection_records.id (UNIQUE)
+  tea_receiving_records.factory_id -> factories.id
+  tea_receiving_records.receiving_officer_id -> receiving_officers.id or the chosen user/profile
+  tea_receiving_records.received_by_user_id -> users.id, if actor identity is normalized there
+
+Use composite or service-level validation to ensure:
+
+- estate.route_id equals request.route_id when request is created;
+- request.factory_id equals routes.factory_id;
+- receiving factory equals the request/delivery's designated factory;
+- assigned agent.factory_id equals request.factory_id;
+- only one active request exists per estate/requested date if that remains the business rule.
+
+
+13. Recommended Implementation Sequence
+---------------------------------------
+Priority 1 — establish one authoritative schema.
+  Reconcile database/init.sql, backend/src/migrations/baseline.sql, and the request-table
+  TypeORM migration. Run and verify migrations explicitly in each environment. Resolve the
+  users.name/nic mismatch before fresh installs.
+
+Priority 2 — map and test the request persistence model.
+  Add entities for the two request tables, explicit status types, indexes, and relations. Decide
+  source vocabulary, route/factory persistence, expiration fields, and the active-request rule.
+  Do not rely on TypeORM synchronize.
+
+Priority 3 — implement request creation and assignment in one backend vertical slice.
+  Add DTO validation and authorization for estate owner/manager, authorized factory staff, and
+  collectors creating on behalf. Enforce estate/factory boundaries. Create request plus initial
+  offer transactionally. Make duplicate creation return a conflict.
+
+Priority 4 — implement collector authentication and real request retrieval.
+  Use the dedicated /auth/agent/login and AgentJwtGuard. Resolve the agent from JWT sub only.
+  Add request-list and accept/decline operations. Ensure the mobile token client attaches the
+  correct bearer token and that pending temporary-password change blocks request access.
+
+Priority 5 — implement reassignment, timeout, notifications, and audit.
+  On decline/expiry, preserve assignment history and offer the next same-factory eligible
+  agent. Reuse route/availability/load logic only after adding factory filtering and clarifying
+  how a request differs from a route cover. Add tests for concurrent offers and stale responses.
+
+Priority 6 — implement collection capture and link it to the request.
+  Persist actual weight/time/collector/evidence and update request/assignment in one transaction.
+  Test repeated submission, offline retry/idempotency, and unauthorized agent IDs.
+
+Priority 7 — implement receiving.
+  Add a receiving record and factory-officer operation; persist received weight/time/actor and
+  move request to delivered only after that record succeeds. Test duplicate receipt and
+  collection-versus-received weight discrepancy.
+
+Priority 8 — replace collector fixtures and verify the actual mobile workflow.
+  Replace INITIAL_STOPS and local status handlers with API data and mutations. Verify that
+  offered requests appear only to the assigned collector, accepted requests remain visible,
+  declined requests move off the active list, and refresh after every transition returns the
+  server's authoritative state.
+
+
+14. Final Summary
+-----------------
+What is already implemented:
+
+- PostgreSQL schema and TypeORM entities for estates, routes, route staffing, agent profiles,
+  daily availability, collection records, and grade lines.
+- A date-aware route resolver: active cover takes precedence over active permanent route
+  staffing.
+- A distinct agent login/token audience and authenticated agent endpoints for shift, absence,
+  pings, cover requests, route stops, and push tokens.
+- A collector "stops" backend query that lists today's tea_collection_records for the agent's
+  resolved routes.
+- A migration that defines tea_collection_requests and
+  tea_collection_request_assignments, with FKs, status CHECKs, indexes, and one-open-assignment
+  partial uniqueness.
+
+What is only partially implemented:
+
+- The request migration schema is not in the SQL snapshots and is not mapped or used by
+  application code.
+- Route/cover assignment history works for route staffing, but it is not request assignment
+  history and does not automatically reassign a declined pickup request.
+- The mobile collector screen visually models requests but stores them in local demo state.
+- The estate exception flow creates a provisional collection record, not a tea collection
+  request.
+
+What is missing:
+
+- Real request creation, list, accept/decline, timeout, and reassignment handlers.
+- A mobile collector login/API/token path that fetches real requests.
+- A request-to-collection-record FK and reliable one-request/one-collection protection.
+- A distinct factory receiving record with received weight, timestamp, officer, and factory.
+- Schema consistency across init.sql and the TypeORM entity/baseline definitions.
+
+The next highest-value step is not to wire the current demo screen directly to
+tea_collection_records. First reconcile and map the request migration, implement its validated
+backend lifecycle and JWT-scoped collector retrieval, then replace the demo list with that API.
+Only after that should actual collection capture and factory receiving be linked into the same
+request lifecycle.
+
+
+15. tea_collection_request_assignments Column and Relationship Analysis
+----------------------------------------------------------------------
+Repository reference search
+
+The only source-code definition/reference to the exact table name is in
+source-code\backend\src\migrations\1793030191149-CreateTeaCollectionRequestTables.ts:
+
+- The up() migration creates tea_collection_request_assignments and its indexes.
+- The down() migration drops its partial unique index and then drops the table.
+- No TypeORM entity is defined for this table. The backend data source includes
+  src/**/*.entity.ts files, but no matching entity exists to map this table.
+- No controller, service, DTO, repository query, or mobile API code references the table.
+- The table is absent from source-code\database\init.sql and
+  source-code\backend\src\migrations\baseline.sql. It is defined only by the TypeORM migration.
+- source-code\backend\src\data-source.ts configures migrations under src/migrations/*.ts and
+  synchronize=false. Consequently, this migration creates the table only when migrations are
+  explicitly run successfully; startup does not synchronize it from an entity.
+
+Column inventory
+
+1. id
+   - PostgreSQL type: SERIAL (integer backed by an implicit sequence).
+   - Primary key: Yes; declared PRIMARY KEY, therefore NOT NULL.
+   - Foreign key: No.
+   - Nullable: No.
+   - Default: Implicit SERIAL sequence default (next sequence value).
+   - Relationship: Identifier for one assignment-history row.
+
+2. request_id
+   - PostgreSQL type: INTEGER.
+   - Primary key: No.
+   - Foreign key: Yes; constraint fk_request_assignments_request references
+     tea_collection_requests(id), with ON DELETE CASCADE.
+   - Nullable: No.
+   - Default: None.
+   - Relationship: Each assignment belongs to exactly one collection request. A request may have
+     multiple assignment rows over time. Deleting a request cascades to its assignment rows.
+
+3. agent_id
+   - PostgreSQL type: INTEGER.
+   - Primary key: No.
+   - Foreign key: Yes; constraint fk_request_assignments_agent references
+     collection_agents(id), with ON DELETE RESTRICT.
+   - Nullable: No.
+   - Default: None.
+   - Relationship: Each assignment identifies exactly one collection-agent identity. One agent
+     may be referenced by multiple assignment rows. Deleting an agent referenced by an
+     assignment is restricted.
+
+4. assigned_by_user_id
+   - PostgreSQL type: INTEGER.
+   - Primary key: No.
+   - Foreign key: Yes; constraint fk_request_assignments_assigned_by references users(id), with
+     ON DELETE SET NULL.
+   - Nullable: Yes.
+   - Default: None (NULL when omitted).
+   - Relationship: Optionally identifies the user who created/issued this assignment. A user can
+     issue many assignment rows; deleting that user preserves the assignment and nulls this
+     reference. A NULL value can represent a system-created assignment, but the schema does not
+     explicitly distinguish system assignment from unknown/unrecorded assigner.
+
+5. status
+   - PostgreSQL type: VARCHAR(20).
+   - Primary key: No.
+   - Foreign key: No.
+   - Nullable: No.
+   - Default: 'offered'.
+   - Check constraint: chk_request_assignments_status permits only offered, accepted, declined,
+     cancelled, or completed.
+   - Relationship: Stores the state of this assignment attempt, not the parent request's
+     lifecycle. The migration does not enforce transitions or synchronize this status with
+     tea_collection_requests.status.
+
+6. offered_at
+   - PostgreSQL type: TIMESTAMPTZ.
+   - Primary key: No.
+   - Foreign key: No.
+   - Nullable: No.
+   - Default: NOW().
+   - Relationship: Timestamp for when the assignment offer was created. It is not a relationship
+     column.
+
+7. responded_at
+   - PostgreSQL type: TIMESTAMPTZ.
+   - Primary key: No.
+   - Foreign key: No.
+   - Nullable: Yes.
+   - Default: None (NULL until a response is recorded).
+   - Relationship: Timestamp for the collector's response or another handling event; the
+     database does not require it for accepted/declined statuses.
+
+8. response_reason
+   - PostgreSQL type: TEXT.
+   - Primary key: No.
+   - Foreign key: No.
+   - Nullable: Yes.
+   - Default: None (NULL when omitted).
+   - Relationship: Free-text reason associated with a response. The database does not require a
+     reason for declined status or define its meaning for other statuses.
+
+9. created_at
+   - PostgreSQL type: TIMESTAMPTZ.
+   - Primary key: No.
+   - Foreign key: No.
+   - Nullable: No.
+   - Default: NOW().
+   - Relationship: Assignment-row creation timestamp; not a relationship column.
+
+Indexes and constraints applying across columns
+
+- idx_request_assignments_request_status is a non-unique index on (request_id, status).
+- idx_request_assignments_agent_status is a non-unique index on (agent_id, status).
+- uq_request_one_open_assignment is a partial UNIQUE index on request_id where status is
+  offered or accepted. It permits at most one offered-or-accepted assignment row for a given
+  request at a time; it does not limit the number of declined/cancelled/completed history rows.
+  Since both offered and accepted are included in the same predicate, one request cannot have
+  both an offered row and a separate accepted row simultaneously.
+- There is no uniqueness constraint on (request_id, agent_id), no assignment expiry column,
+  and no FK to routes, factories, collection records, or audit rows.
+
+Entity, migration, and SQL-schema consistency
+
+- Entity definition: none exists in source-code\backend\src. The migration is raw SQL inside a
+  TypeORM MigrationInterface; it does not define a TypeORM Entity class.
+- TypeORM migration: defines all nine columns, their nullability/defaults, three FKs, a status
+  CHECK, two ordinary indexes, and one partial unique index.
+- Canonical SQL schema source-code\database\init.sql: no definition of
+  tea_collection_request_assignments.
+- TypeORM baseline snapshot source-code\backend\src\migrations\baseline.sql: no definition of
+  tea_collection_request_assignments.
+- Other SQL migrations under source-code\database\migrations: no definition of this table.
+- Runtime/application references: no entity-backed repository, service, endpoint, or mobile
+  implementation uses it. Its existence in a deployed database depends on whether the
+  TypeORM migration has been applied.
+
+Therefore the implementation and migration files are inconsistent: the migration defines a
+database table, while no entity maps it and neither maintained SQL schema snapshot includes it.
+This is not a column-level difference between two entity definitions; there is no entity
+definition to compare. For a fresh install made from either SQL snapshot alone, this table and
+its indexes/constraints will be absent. For a database that has run the TypeORM migration, the
+table may exist but remains unmapped and unused by the application.
