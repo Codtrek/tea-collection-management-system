@@ -371,13 +371,42 @@ export interface Holiday {
   declareGroup: string | null
   reason: string | null
   createdBy: string | null
+  createdAt: string | null
+  /** manual · google (imported) · file (uploaded .ics / CSV) */
+  source: 'manual' | 'google' | 'file'
+  importedAt: string | null
   cancelled: boolean
   cancelReason: string | null
+  /** may the viewer change / cancel it — decided by the server (holiday permission matrix) */
+  canChange: boolean
 }
+
+/** A Manager's proposal / request waiting for the Administrator, or an emergency closure to review. */
+export interface HolidayRequest {
+  id: number
+  kind: 'weekly_rule' | 'closure' | 'emergency'
+  status: 'pending' | 'approved' | 'rejected' | 'kept' | 'reverted'
+  name: string
+  dateFrom: string
+  dateTo: string
+  appliesTo: 'all' | 'factory' | 'office' | null
+  summary: string
+  reason: string | null
+  requestedBy: string
+  requestedAt: string
+  decidedBy: string | null
+  decidedAt: string | null
+  decisionReason: string | null
+}
+
+/** applied = in force · pending = waiting for the Administrator · review = in force, reviewed after */
+export type HolidayChangeResult = { status: 'applied' } | { status: 'pending' | 'review'; requestId: number }
 
 export interface HolidayYear {
   year: number
   holidays: Holiday[]
+  counts: { poya: number; public: number; closure: number }
+  pending: HolidayRequest[]
   types: { type: 'poya' | 'public' | 'weekly' | 'closure'; label: string; paid: boolean; workAllowed: boolean }[]
   weeklyRules: { id: number; category: 'factory' | 'office'; weekdays: number[]; halfDayWeekday: number | null; effectiveFrom: string; createdBy: string | null }[]
   restDays: { id: number; employeeId: string; employeeName: string; weekday: number | null; effectiveFrom: string }[]

@@ -30,7 +30,10 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     fertilizer: 'approve',
     estateOwners: 'approve',
     estateAdvances: 'approve',
-    holidayCalendar: 'view',
+    // Holidays (Attendance-Leave-Addendum §4): the Administrator approves holiday changes and owns
+    // Poya / public holidays, type settings and the Google import (`holidayStatutory`).
+    holidayCalendar: 'approve',
+    holidayStatutory: 'approve',
     payroll: 'approve',
     advances: 'approve',
     employees: 'approve',
@@ -56,6 +59,7 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     estateOwners: 'edit',
     estateAdvances: 'edit',
     holidayCalendar: 'view',
+    holidayStatutory: 'view',
     payroll: 'edit',
     advances: 'approve',
     employees: 'view',
@@ -79,7 +83,9 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     fertilizer: 'view',
     estateOwners: 'view',
     estateAdvances: 'view',
+    // edit = category holidays, rest days, emergency closures; weekly holiday + factory-wide closure as requests
     holidayCalendar: 'edit',
+    holidayStatutory: 'view',
     payroll: 'view',
     advances: 'view',
     employees: 'view',

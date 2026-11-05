@@ -1178,10 +1178,10 @@ ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
                     'cover_request', 'cover_response', 'missed_checkin',
                     'route_reassigned', 'exception_request',
                     'delivery_graded', 'grade_correction', 'fertilizer_update',
-                    'holiday_declared'));
+                    'holiday_declared', 'holiday_request', 'holiday_cancelled'));
 
 -- ─── Holiday calendar (Attendance-Leave-Addendum Phase 1) ──────────────────
--- Paid / work-allowed defaults per holiday type (the Manager edits these).
+-- Paid / work-allowed defaults per holiday type (the Administrator edits these).
 CREATE TABLE IF NOT EXISTS holiday_types (
     type         VARCHAR(10) PRIMARY KEY CHECK (type IN ('poya', 'public', 'weekly', 'closure')),
     label        VARCHAR(40) NOT NULL,
@@ -1213,9 +1213,34 @@ CREATE TABLE IF NOT EXISTS holidays (
     created_at       TIMESTAMPTZ DEFAULT NOW(),
     cancelled_at     TIMESTAMPTZ,
     cancelled_by     VARCHAR(100),
-    cancel_reason    TEXT
+    cancel_reason    TEXT,
+    created_by_user_id INTEGER REFERENCES users(id),   -- a Manager edits only their own
+    source           VARCHAR(10) NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'google', 'file')),
+    external_uid     VARCHAR(200),       -- the iCal UID of an imported holiday (re-sync)
+    imported_at      TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_holidays_date ON holidays(date);
+CREATE INDEX IF NOT EXISTS idx_holidays_external_uid ON holidays(external_uid);
+
+-- Manager proposals / requests for the Administrator, and emergency closures awaiting review.
+CREATE TABLE IF NOT EXISTS holiday_requests (
+    id                   SERIAL PRIMARY KEY,
+    kind                 VARCHAR(12) NOT NULL CHECK (kind IN ('weekly_rule', 'closure', 'emergency')),
+    status               VARCHAR(10) NOT NULL DEFAULT 'pending'
+                             CHECK (status IN ('pending', 'approved', 'rejected', 'kept', 'reverted')),
+    payload              JSONB NOT NULL,          -- the DTO as requested
+    date_from            DATE NOT NULL,           -- for the calendar's "Awaiting approval" chips
+    date_to              DATE NOT NULL,
+    requested_by         VARCHAR(100) NOT NULL,
+    requested_by_user_id INTEGER REFERENCES users(id),
+    requested_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    decided_by           VARCHAR(100),
+    decided_at           TIMESTAMPTZ,
+    decision_reason      TEXT,
+    declare_group        UUID,                    -- the holidays it created (emergency / approved closure)
+    snapshot             JSONB                    -- attendance as it was before (emergency revert)
+);
+CREATE INDEX IF NOT EXISTS idx_holiday_requests_status ON holiday_requests(status);
 
 -- Weekly holiday per category; a change adds a row with a later effective_from (past weeks keep theirs).
 CREATE TABLE IF NOT EXISTS weekly_holiday_rules (
@@ -1250,10 +1275,14 @@ VALUES ('attendance', '{"editWindowDays": 3}'::jsonb, 'migration')
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO role_permissions (role, module, level) VALUES
-    ('Administrator',    'holidayCalendar', 'view'),
-    ('Officer',          'holidayCalendar', 'view'),
-    ('Manager',          'holidayCalendar', 'edit'),
-    ('ReceivingOfficer', 'holidayCalendar', 'none')
+    ('Administrator',    'holidayCalendar',  'approve'),
+    ('Officer',          'holidayCalendar',  'view'),
+    ('Manager',          'holidayCalendar',  'edit'),
+    ('ReceivingOfficer', 'holidayCalendar',  'none'),
+    ('Administrator',    'holidayStatutory', 'approve'),
+    ('Officer',          'holidayStatutory', 'view'),
+    ('Manager',          'holidayStatutory', 'view'),
+    ('ReceivingOfficer', 'holidayStatutory', 'none')
 ON CONFLICT (role, module) DO NOTHING;
 
 INSERT INTO system_settings (key, value, updated_by)

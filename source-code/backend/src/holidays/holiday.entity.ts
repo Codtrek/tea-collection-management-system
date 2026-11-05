@@ -6,6 +6,8 @@ import {
 } from 'typeorm';
 import type { EmployeeCategory, HolidayKind } from './working-days';
 
+export type HolidaySource = 'manual' | 'google' | 'file';
+
 /** A dated holiday — Poya / public (entered per year) or a declared closure (Attendance-Leave-Addendum). */
 @Entity('holidays')
 export class HolidayEntity {
@@ -54,4 +56,18 @@ export class HolidayEntity {
 
   @Column({ name: 'cancel_reason', type: 'text', nullable: true })
   cancelReason: string | null;
+
+  /** a Manager may change only the holidays they created */
+  @Column({ name: 'created_by_user_id', type: 'int', nullable: true })
+  createdByUserId: number | null;
+
+  @Column({ type: 'varchar', default: 'manual' })
+  source: HolidaySource;
+
+  /** the iCal UID of an imported holiday — what a re-sync matches on */
+  @Column({ name: 'external_uid', type: 'varchar', nullable: true })
+  externalUid: string | null;
+
+  @Column({ name: 'imported_at', type: 'timestamptz', nullable: true })
+  importedAt: Date | null;
 }

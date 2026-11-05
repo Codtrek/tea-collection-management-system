@@ -1,7 +1,12 @@
 import { apiFetch } from '@/lib/api'
-import type { DeclarePreview, Holiday, HolidayYear } from '@/features/employees/types'
+import type { DeclarePreview, Holiday, HolidayChangeResult, HolidayRequest, HolidayYear } from '@/features/employees/types'
 
-/* The holiday calendar (Attendance-Leave-Addendum §Holidays). Changes need `holidayCalendar: edit` (server-enforced). */
+/*
+  The holiday calendar (Attendance-Leave-Addendum §4). The server decides every change with the
+  holiday permission matrix (`holidayCalendar` + `holidayStatutory`): a Manager's weekly holiday or
+  factory-wide closure comes back `pending` (waiting for the Administrator), an emergency closure
+  `review` (in force now, reviewed after).
+*/
 
 export function getYear(year: number): Promise<HolidayYear> {
   return apiFetch<HolidayYear>(`/holidays?year=${year}`)
@@ -41,8 +46,8 @@ export function setWeeklyRule(input: {
   weekdays: number[]
   halfDayWeekday: number | null
   effectiveFrom: string
-}): Promise<void> {
-  return apiFetch<void>('/holidays/weekly', { method: 'POST', body: JSON.stringify(input) })
+}): Promise<HolidayChangeResult> {
+  return apiFetch<HolidayChangeResult>('/holidays/weekly', { method: 'POST', body: JSON.stringify(input) })
 }
 
 export function setRestDay(employeeId: string, input: { weekday: number | null; effectiveFrom: string }): Promise<void> {
@@ -58,14 +63,26 @@ export interface DeclareInput {
   appliesTo: 'all' | 'factory' | 'office'
   collectionStops: boolean
   attendance?: 'keep' | 'clear'
+  /** same-day closure for all employees — in force now, the Administrator reviews it after */
+  emergency?: boolean
 }
 
 export function previewDeclare(input: DeclareInput): Promise<DeclarePreview> {
   return apiFetch<DeclarePreview>('/holidays/declare/preview', { method: 'POST', body: JSON.stringify(input) })
 }
 
-export function declareHoliday(input: DeclareInput): Promise<{ group: string }> {
-  return apiFetch<{ group: string }>('/holidays/declare', { method: 'POST', body: JSON.stringify(input) })
+export function declareHoliday(input: DeclareInput): Promise<HolidayChangeResult & { group?: string }> {
+  return apiFetch('/holidays/declare', { method: 'POST', body: JSON.stringify(input) })
+}
+
+/** Requests and emergency reviews, pending first — the Administrator's "Pending approvals". */
+export function listRequests(): Promise<HolidayRequest[]> {
+  return apiFetch<HolidayRequest[]>('/holidays/requests')
+}
+
+/** approve (keep, for an emergency closure) or reject (revert) — a reason is always required. */
+export function decideRequest(id: number, decision: 'approve' | 'reject', reason: string): Promise<HolidayRequest> {
+  return apiFetch<HolidayRequest>(`/holidays/requests/${id}/${decision}`, { method: 'POST', body: JSON.stringify({ reason }) })
 }
 
 export function cancelDeclared(group: string, reason?: string): Promise<void> {

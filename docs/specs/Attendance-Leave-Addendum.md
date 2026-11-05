@@ -1,7 +1,7 @@
 # Attendance & Leave: Addendum (EMP-05 / EMP-08, holidays, leave)
 
 **Decided:** 2026-11-02
-**Status:** Phase 1 built (branch `feat/attendance-leave`, not committed). Phases 2 and 3 are planned, awaiting OK.
+**Status:** Phase 1 built and committed on `feat/attendance-leave`. Holiday permissions + approvals (§4.1–4.2) built 2026-11-05. Phases 2 and 3 are planned, awaiting OK.
 **Amends:** EMP-05 Attendance overview, EMP-08 Daily Attendance Entry, the EMP-03 Attendance tab and Agent Dispatch absence. Adds the holiday calendar.
 
 ## 1. The three bugs, and why they happened
@@ -75,11 +75,52 @@
 All rules are pure functions in `backend/src/employees/attendance-rules.ts`, applied by `AttendanceService`.
 
 ## 4. Holiday calendar (`/holidays`, under PEOPLE)
-- **Permission `holidayCalendar`:** Manager **edit**, Administrator **view**, Officer **view**.
-  - It is enforced on the **server** (`HolidayService` and the controller check `role_permissions`), not only in the UI.
-  - It's in `ADMIN_EDITABLE_MODULES`, so the Administrator row can be "view".
-  - Every change goes in the audit log (module "Holidays": who, when, what, reason).
-- **Types** (`holiday_types`), each with paid yes/no and work allowed yes/no, set by the Manager:
+
+### 4.1 Permissions (replaces the earlier "Manager only" rule; decided 2026-11-05)
+Two data-driven keys in `role_permissions`:
+
+| Key | Administrator | Manager | Officer |
+|---|---|---|---|
+| `holidayCalendar` | approve | edit | view |
+| `holidayStatutory` (new) | approve | view | view |
+
+`holidayCalendar` left `ADMIN_EDITABLE_MODULES`, so the Administrator row is pinned again. `holidayStatutory` is separate so a factory can later let a Manager enter Poya days without giving them approvals.
+
+| Function | Administrator | Manager | Officer |
+|---|---|---|---|
+| View calendar | Yes | Yes | Yes |
+| Public & Poya holidays (add, edit, delete, import) | Yes | No | No |
+| Holiday type settings (Paid / Work allowed) | Yes | No | No |
+| Weekly holiday per category | Yes | Propose → Admin approves | No |
+| Category holiday (Factory workers or Office staff only) | Yes | Yes | No |
+| Per-employee rest days | Yes | Yes | No |
+| Factory-wide closure (all employees) | Yes | Request → Admin approves | No |
+| Same-day emergency closure | Yes | Yes, in force now; Admin reviews (keep or revert) | No |
+| Edit / delete a holiday | Yes | Only their own, only future dates, only if no processed payroll is affected | No |
+| Approve holiday changes | Yes | No | No |
+
+- **One rule:** `backend/src/holidays/holiday-permissions.ts` `decide(action, levels, ctx)` returns direct / request / review / deny. `HolidayService` asks it before every write, so the server is the judge.
+  - Each holiday in the API carries `canChange`, so the portal shows only the buttons the viewer may use.
+  - "Their own" means `holidays.created_by_user_id`. For an approved request, that is the requester.
+  - "Processed payroll" means a Processed `payroll_runs` row for an employee the holiday applies to, in that month.
+  - A Manager never changes a factory-wide closure (only the Administrator).
+- **Officers** see a "View only" label. **Holiday type** checkboxes are read-only text for anyone without `holidayStatutory: edit`.
+- Every change goes in the audit log (module "Holidays": who, when, what, reason).
+
+### 4.2 Requests and approvals (`holiday_requests`)
+- **A request has no effect until approved.** A Manager's weekly-holiday proposal or factory-wide closure is stored only in `holiday_requests` (kind, payload, dates, requester). Nothing reaches `holidays` / `weekly_holiday_rules`, so `facts()` (attendance, leave, payroll, routes) is unchanged.
+  - The calendar shows it as a dashed "Awaiting approval" chip (`year().pending`).
+- **The Administrator** gets an in-app notification (`holiday_request`) and the "Pending approvals" panel (`GET /holidays/requests`, `POST /holidays/requests/:id/approve|reject`).
+  - Approving or rejecting **always needs a reason**. The requester is notified, and it is audited.
+  - **Approving** replays the request through the same write path. A weekly rule whose effective-from date has passed applies from the approval day (the audit log says so). Closure dates that have all passed can only be rejected.
+- **An emergency closure** is today only and for all employees. It takes effect immediately: routes are cancelled, deliveries move, agents are told, and attendance is kept or cleared.
+  - It is stored with a **snapshot** of the attendance it touched.
+  - **Keep:** closes the review.
+  - **Revert:** cancels the holiday, gives back the route days still ahead, re-inserts or un-flags the attendance from the snapshot, re-runs the delivery reconcile and tells the agents collection is back on (`holiday_cancelled`).
+- **Migration:** `database/migrations/2026-11-06-holiday-approvals.sql` (mirrored in `init.sql` and `seed.ts`).
+
+### 4.3 Calendar data
+- **Types** (`holiday_types`), each with paid yes/no and work allowed yes/no, set by the Administrator:
 
   | Type | Default |
   |---|---|
@@ -89,7 +130,7 @@ All rules are pure functions in `backend/src/employees/attendance-rules.ts`, app
   | Factory closure | unpaid, no work |
 
 - **Poya and public holidays** (`holidays`): entered per year (date, name, type).
-  - "Copy last year's names" fills in the names; the Manager sets the new dates.
+  - "Copy last year's names" fills in the names; the Administrator sets the new dates.
   - In **December** the page warns if next year's holidays aren't entered.
   - Nothing is scraped from external sites.
 - **Weekly holiday** per category (`weekly_holiday_rules`): one or more weekdays plus an optional half day.
@@ -100,7 +141,7 @@ All rules are pure functions in `backend/src/employees/attendance-rules.ts`, app
 - **The ONE working-day rule:** `backend/src/holidays/working-days.ts` `dayInfo` / `workingDaysIn`.
   - Order: a dated holiday that applies to the employee's category → their rest day → the category's weekly rule in force that week.
   - Attendance uses it now; leave and payroll will.
-- **Declare holiday** (sudden closure, Manager):
+- **Declare holiday** (a closure or category holiday; see §4.1 for who):
   - **The form:** date or range (max 31 days), name, reason, paid yes/no, applies to (all / factory / office), and whether **tea collection stops**.
   - **A preview comes first,** listing attendance already marked on those dates and the route days that would be cancelled.
     - If attendance is marked, the Manager chooses **keep as "Worked on holiday"** or **clear**. Absent is always cleared.
@@ -109,7 +150,7 @@ All rules are pure functions in `backend/src/employees/attendance-rules.ts`, app
     - fertilizer deliveries move to each route's next collection day (`FertilizerDeliveryService.reconcile`);
     - the route's agent gets an in-app notice (`holiday_declared`).
   - **If collection continues** (e.g. the office is closed): routes stay as they are.
-  - **Cancelling:** before the date it reverses the declaration and restores the route days still ahead. After the date it needs a reason.
+  - **Cancelling:** before the date it reverses the declaration and restores the route days still ahead. After the date it needs a reason (Administrator only; a Manager changes only future holidays).
   - **Phase 2:** approved leave on those dates will be refunded, with a notice to the Officer.
 
 ## 5. Agent Dispatch: one record, two views

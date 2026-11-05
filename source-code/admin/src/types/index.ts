@@ -10,6 +10,7 @@ export type ModuleKey =
   | 'estateOwners'
   | 'estateAdvances'
   | 'holidayCalendar'
+  | 'holidayStatutory'
   | 'payroll'
   | 'advances'
   | 'employees'

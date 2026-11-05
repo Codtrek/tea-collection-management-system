@@ -21,6 +21,7 @@ import { UsersService } from '../users/users.service';
 import {
   CancelHolidayDto,
   DeclareHolidayDto,
+  DecideRequestDto,
   HolidayDto,
   HolidayTypeDto,
   RestDayDto,
@@ -31,8 +32,9 @@ import { type HolidayActor, HolidayService } from './holiday.service';
 type AuthedRequest = Request & { user: JwtPayload };
 
 /**
- * The holiday calendar (Attendance-Leave-Addendum §Holidays). Reading needs `holidayCalendar:
- * view`; every change needs `edit` (the Factory Manager) — checked in HolidayService too.
+ * The holiday calendar (Attendance-Leave-Addendum §4). Reading needs `holidayCalendar: view`;
+ * every change is decided in HolidayService by the permission matrix (holiday-permissions.ts):
+ * `holidayCalendar` edit / approve and `holidayStatutory` for Poya / public holidays.
  */
 @Controller('holidays')
 @UseGuards(JwtAuthGuard)
@@ -47,7 +49,42 @@ export class HolidaysController {
   async year(@Query('year') year: string, @Req() req: AuthedRequest) {
     await this.view(req);
     const y = Number(year) || new Date().getFullYear();
-    return this.holidays.year(y);
+    return this.holidays.year(y, await this.actor(req));
+  }
+
+  /** Requests and emergency reviews (pending first) — the Administrator's "Pending approvals". */
+  @Get('requests')
+  async requests(@Req() req: AuthedRequest) {
+    await this.view(req);
+    return this.holidays.listRequests();
+  }
+
+  @Post('requests/:id/approve')
+  async approve(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: DecideRequestDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.holidays.decideRequest(
+      id,
+      'approve',
+      dto.reason,
+      await this.actor(req),
+    );
+  }
+
+  @Post('requests/:id/reject')
+  async reject(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: DecideRequestDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.holidays.decideRequest(
+      id,
+      'reject',
+      dto.reason,
+      await this.actor(req),
+    );
   }
 
   /** Last year's Poya / public names, dates blank — the template for a new year. */
@@ -91,7 +128,7 @@ export class HolidaysController {
 
   @Post('weekly')
   async weekly(@Body() dto: WeeklyRuleDto, @Req() req: AuthedRequest) {
-    await this.holidays.setWeeklyRule(dto, await this.actor(req));
+    return this.holidays.setWeeklyRule(dto, await this.actor(req));
   }
 
   @Post('rest-days/:employeeId')

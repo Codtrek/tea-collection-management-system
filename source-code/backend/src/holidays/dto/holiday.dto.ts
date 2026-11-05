@@ -80,7 +80,7 @@ export class RestDayDto {
   effectiveFrom: string;
 }
 
-/** "Declare holiday" — a sudden closure over one date or a range. */
+/** "Declare holiday" — a closure or category holiday over one date or a range. */
 export class DeclareHolidayDto {
   @Matches(DAY)
   from: string;
@@ -112,6 +112,19 @@ export class DeclareHolidayDto {
   @IsOptional()
   @IsIn(['keep', 'clear'])
   attendance?: 'keep' | 'clear';
+
+  /** same-day closure for all employees — in force now, the Administrator reviews it after */
+  @IsOptional()
+  @IsBoolean()
+  emergency?: boolean;
+}
+
+/** The Administrator's approve / reject (keep / revert for an emergency) — always with a reason. */
+export class DecideRequestDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  reason: string;
 }
 
 export class CancelHolidayDto {

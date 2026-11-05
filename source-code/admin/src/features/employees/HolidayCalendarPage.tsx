@@ -26,16 +26,18 @@ const TYPE_LABEL: Record<Holiday['type'], string> = { poya: 'Poya', public: 'Pub
 type DeclareForm = holidaysService.DeclareInput
 
 /*
-  Holiday Calendar (Attendance-Leave-Addendum §Holidays). Poya / public holidays are entered per
-  year (copy last year's names, then set the dates — nothing is scraped); paid / work-allowed per
-  type; the weekly holiday per category from an effective date; per-employee rest days; and
-  "Declare holiday" for sudden closures (preview first). Only `holidayCalendar: edit` (the Factory
-  Manager) can change anything — the server enforces it too. Everyone with `view` can read it.
+  Holiday Calendar (Attendance-Leave-Addendum §4). Poya / public holidays and the type settings
+  are `holidayStatutory: edit` (the Administrator); the weekly holiday per category, rest days and
+  "Declare holiday" are `holidayCalendar: edit` (the Manager) — a Manager's weekly holiday and
+  factory-wide closure go to the Administrator (`approve`) first. The server decides every change;
+  each holiday carries `canChange`. Everyone with `view` can read it.
 */
 export function HolidayCalendarPage() {
   const { toast } = useToast()
   const { can } = useAuth()
   const canEdit = can('holidayCalendar', 'edit')
+  const canStatutory = can('holidayStatutory', 'edit')
+  const isApprover = can('holidayCalendar', 'approve')
   const queryClient = useQueryClient()
   const today = factoryToday()
   const [year, setYear] = useState(Number(today.slice(0, 4)))
@@ -112,7 +114,8 @@ export function HolidayCalendarPage() {
         halfDayWeekday: weekly.half === '' ? null : Number(weekly.half),
         effectiveFrom: weekly.effectiveFrom,
       }),
-    onSuccess: () => done('Weekly holiday saved — it applies from the date you chose'),
+    onSuccess: (r) =>
+      done(r.status === 'pending' ? 'Weekly holiday proposed — the Administrator approves it' : 'Weekly holiday saved — it applies from the date you chose'),
     onError: failed,
   })
   const [rest, setRest] = useState({ employeeId: '', weekday: '', effectiveFrom: today })
@@ -140,8 +143,14 @@ export function HolidayCalendarPage() {
   })
   const declareMutation = useMutation({
     mutationFn: (f: DeclareForm) => holidaysService.declareHoliday(f),
-    onSuccess: () => {
-      done('Holiday declared')
+    onSuccess: (r) => {
+      done(
+        r.status === 'pending'
+          ? 'Closure requested — it takes effect when the Administrator approves it'
+          : r.status === 'review'
+            ? 'Emergency closure in force — the Administrator reviews it'
+            : 'Holiday declared',
+      )
       setDeclare(null)
       setPreview(null)
     },
@@ -149,6 +158,18 @@ export function HolidayCalendarPage() {
   })
   const openDeclare = () =>
     setDeclare({ from: today, to: today, name: '', reason: '', paid: false, appliesTo: 'all', collectionStops: true })
+
+  // the Administrator's decisions (approve / reject; keep / revert an emergency closure)
+  const [deciding, setDeciding] = useState<{ id: number; decision: 'approve' | 'reject'; label: string } | null>(null)
+  const [decisionReason, setDecisionReason] = useState('')
+  const decideMutation = useMutation({
+    mutationFn: (d: { id: number; decision: 'approve' | 'reject' }) => holidaysService.decideRequest(d.id, d.decision, decisionReason.trim()),
+    onSuccess: () => {
+      done('Decision saved')
+      setDeciding(null)
+    },
+    onError: failed,
+  })
 
   if (isPending) {
     return (
@@ -174,7 +195,9 @@ export function HolidayCalendarPage() {
             <Button onClick={openDeclare}>
               <CalendarPlus className="size-4" /> Declare holiday
             </Button>
-          ) : undefined
+          ) : (
+            <StatusBadge tone="neutral">View only</StatusBadge>
+          )
         }
       />
 
@@ -182,7 +205,7 @@ export function HolidayCalendarPage() {
         <p className="mb-4 flex items-center gap-2 rounded-[var(--radius-md)] border border-warning-fg/25 bg-warning-bg/60 p-3 text-sm text-text">
           <TriangleAlert className="size-4 text-warning-fg" aria-hidden />
           {data.nextYear}'s Poya and public holidays haven't been entered yet.
-          {canEdit && (
+          {canStatutory && (
             <button type="button" className="text-primary hover:underline" onClick={() => setYear(data.nextYear)}>
               Enter them now
             </button>
@@ -202,7 +225,7 @@ export function HolidayCalendarPage() {
                 <ChevronRight className="size-4" />
               </Button>
             </div>
-            {canEdit && (
+            {canStatutory && (
               <Button variant="secondary" size="sm" onClick={() => void loadTemplate()}>
                 <Copy className="size-4" /> Copy {year - 1} names
               </Button>
@@ -244,7 +267,7 @@ export function HolidayCalendarPage() {
                       {h.collectionStops && <span className="block">collection stopped</span>}
                     </td>
                     <td className="px-5 py-2 text-right">
-                      {canEdit && !h.cancelled && (
+                      {h.canChange && (
                         <div className="flex justify-end gap-1">
                           {h.type !== 'closure' && (
                             <Button
@@ -276,7 +299,7 @@ export function HolidayCalendarPage() {
               </tbody>
             </table>
           </div>
-          {canEdit && (
+          {canStatutory && (
             <div className="flex flex-wrap items-end gap-2 border-t border-border px-5 py-3">
               <div className="w-40">
                 <Input label="Date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
@@ -314,26 +337,74 @@ export function HolidayCalendarPage() {
         </Card>
 
         <div className="flex flex-col gap-4">
+          {data.pending.length > 0 && (
+            <Card>
+              <CardTitle className="mb-2">{isApprover ? 'Pending approvals' : 'Awaiting approval'}</CardTitle>
+              <ul className="flex flex-col gap-3 text-sm">
+                {data.pending.map((r) => (
+                  <li key={r.id} className="rounded-[var(--radius-md)] border border-dashed border-border-strong p-3">
+                    <p className="font-medium text-text">
+                      {r.kind === 'emergency' ? 'Emergency closure (in force) — ' : ''}
+                      {r.name}
+                    </p>
+                    <p className="text-xs text-text-muted">{r.summary}</p>
+                    {r.reason && <p className="text-xs text-text-muted">Reason: {r.reason}</p>}
+                    <p className="text-xs text-text-muted">Requested by {r.requestedBy}</p>
+                    {isApprover && (
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setDeciding({ id: r.id, decision: 'approve', label: r.kind === 'emergency' ? 'Keep' : 'Approve' })
+                            setDecisionReason('')
+                          }}
+                        >
+                          {r.kind === 'emergency' ? 'Keep' : 'Approve'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            setDeciding({ id: r.id, decision: 'reject', label: r.kind === 'emergency' ? 'Revert' : 'Reject' })
+                            setDecisionReason('')
+                          }}
+                        >
+                          {r.kind === 'emergency' ? 'Revert' : 'Reject'}
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
           <Card>
             <CardTitle className="mb-3">Holiday types</CardTitle>
             <ul className="flex flex-col gap-3 text-sm">
               {data.types.map((t) => (
                 <li key={t.type} className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium text-text">{t.label}</span>
+                  {!canStatutory ? (
+                    <span className="text-text-muted">
+                      {t.paid ? 'Paid' : 'Unpaid'} · {t.workAllowed ? 'work allowed' : 'no work'}
+                    </span>
+                  ) : (
                   <span className="flex gap-3">
                     <Checkbox
                       label="Paid"
                       checked={t.paid}
-                      disabled={!canEdit || typeMutation.isPending}
+                      disabled={typeMutation.isPending}
                       onChange={(e) => typeMutation.mutate({ type: t.type, paid: e.target.checked, workAllowed: t.workAllowed })}
                     />
                     <Checkbox
                       label="Work allowed"
                       checked={t.workAllowed}
-                      disabled={!canEdit || typeMutation.isPending}
+                      disabled={typeMutation.isPending}
                       onChange={(e) => typeMutation.mutate({ type: t.type, paid: t.paid, workAllowed: e.target.checked })}
                     />
                   </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -394,9 +465,11 @@ export function HolidayCalendarPage() {
                   <Input label="Effective from" type="date" min={today} value={weekly.effectiveFrom} onChange={(e) => setWeekly({ ...weekly, effectiveFrom: e.target.value })} />
                 </div>
                 <Button size="sm" onClick={() => weeklyMutation.mutate()} loading={weeklyMutation.isPending}>
-                  Save weekly holiday
+                  {isApprover ? 'Save weekly holiday' : 'Propose weekly holiday'}
                 </Button>
-                <p className="text-xs text-text-muted">Past weeks keep the holiday they had.</p>
+                <p className="text-xs text-text-muted">
+                  Past weeks keep the holiday they had.{!isApprover && ' The Administrator approves it before it applies.'}
+                </p>
               </div>
             )}
           </Card>
@@ -527,7 +600,7 @@ export function HolidayCalendarPage() {
           (!!preview && preview.attendance.length > 0 && !declare.attendance)
         }
         title={preview ? 'Confirm the holiday' : 'Declare holiday'}
-        confirmLabel={preview ? 'Declare holiday' : 'Check what it affects'}
+        confirmLabel={preview ? (declare?.appliesTo === 'all' && !isApprover && !declare.emergency ? 'Send for approval' : 'Declare holiday') : 'Check what it affects'}
         message={
           preview ? (
             <>
@@ -568,6 +641,16 @@ export function HolidayCalendarPage() {
                 onChange={(e) => setDeclare({ ...declare, collectionStops: e.target.checked })}
               />
             </div>
+            {declare.appliesTo === 'all' && !isApprover && (
+              <div className="sm:col-span-2">
+                <Checkbox
+                  label="Emergency — today only, takes effect now (the Administrator reviews it after)"
+                  checked={!!declare.emergency}
+                  onChange={(e) => setDeclare({ ...declare, emergency: e.target.checked, ...(e.target.checked ? { from: today, to: today } : {}) })}
+                />
+                {!declare.emergency && <p className="mt-1 text-xs text-text-muted">A closure for all employees goes to the Administrator for approval first.</p>}
+              </div>
+            )}
           </div>
         )}
         {declare && preview && (
@@ -607,6 +690,26 @@ export function HolidayCalendarPage() {
             {preview.attendance.length === 0 && preview.routeDays.length === 0 && <p className="text-text-muted">Nothing already marked or scheduled is affected.</p>}
           </div>
         )}
+      </LightConfirmModal>
+
+      <LightConfirmModal
+        open={!!deciding}
+        onClose={() => setDeciding(null)}
+        onConfirm={() => deciding && decideMutation.mutate(deciding)}
+        loading={decideMutation.isPending}
+        confirmDisabled={!decisionReason.trim()}
+        tone={deciding?.decision === 'reject' ? 'danger' : undefined}
+        title={`${deciding?.label ?? ''} this request`}
+        confirmLabel={deciding?.label ?? 'Save'}
+        message={
+          deciding?.label === 'Revert' ? (
+            <>The closure is cancelled, its route days come back and attendance is put back as it was.</>
+          ) : (
+            <>The requester is told, and the decision is audited.</>
+          )
+        }
+      >
+        <Input label="Reason (required)" value={decisionReason} onChange={(e) => setDecisionReason(e.target.value)} maxLength={300} />
       </LightConfirmModal>
     </div>
   )

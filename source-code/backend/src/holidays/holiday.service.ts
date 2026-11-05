@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -12,13 +13,17 @@ import type { AppRole } from '../auth/role-map';
 import { DispatchAccessService } from '../dispatch/dispatch-access.service';
 import { localDate } from '../dispatch/dispatch-map';
 import { DispatchNotifier } from '../dispatch/dispatch-notifier.service';
+import type { NotifyInput } from '../dispatch/dispatch-notifier.service';
 import { RouteResolverService } from '../dispatch/route-resolver.service';
 import { RouteScheduleOverrideEntity } from '../dispatch/route-schedule.entity';
 import { RouteScheduleService } from '../dispatch/route-schedule.service';
 import { EmployeeAttendanceEntity } from '../employees/employee-attendance.entity';
 import { EmployeeEntity } from '../employees/employee.entity';
+import { PayrollRunEntity } from '../employees/payroll-run.entity';
 import { RouteEntity } from '../estates/route.entity';
 import { FertilizerDeliveryService } from '../fertilizer/fertilizer-delivery.service';
+import { keyToLabel } from '../reports/reports-map';
+import { User } from '../users/user.entity';
 import type {
   DeclareHolidayDto,
   HolidayDto,
@@ -27,6 +32,18 @@ import type {
   WeeklyRuleDto,
 } from './dto/holiday.dto';
 import { EmployeeRestDayEntity } from './employee-rest-day.entity';
+import {
+  allowed,
+  type ChangeContext,
+  decide,
+  type HolidayAction,
+  type HolidayLevels,
+  type Outcome,
+} from './holiday-permissions';
+import {
+  type AttendanceSnapshot,
+  HolidayRequestEntity,
+} from './holiday-request.entity';
 import { HolidayTypeEntity } from './holiday-type.entity';
 import { HolidayEntity } from './holiday.entity';
 import { WeeklyHolidayRuleEntity } from './weekly-holiday-rule.entity';
@@ -55,8 +72,31 @@ export interface PublicHoliday {
   declareGroup: string | null;
   reason: string | null;
   createdBy: string | null;
+  createdAt: string | null;
+  source: HolidayEntity['source'];
+  importedAt: string | null;
   cancelled: boolean;
   cancelReason: string | null;
+  /** may the person asking change / cancel it (server-decided; the portal only shows the button) */
+  canChange: boolean;
+}
+
+export interface PublicHolidayRequest {
+  id: number;
+  kind: HolidayRequestEntity['kind'];
+  status: HolidayRequestEntity['status'];
+  name: string;
+  dateFrom: string;
+  dateTo: string;
+  appliesTo: 'all' | 'factory' | 'office' | null;
+  /** one line for the panel, e.g. "Factory workers: Sunday, Saturday from 2026-12-01" */
+  summary: string;
+  reason: string | null;
+  requestedBy: string;
+  requestedAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionReason: string | null;
 }
 
 export interface DeclarePreview {
@@ -72,15 +112,24 @@ export interface DeclarePreview {
   routeDays: { routeId: number; routeName: string; date: string }[];
 }
 
+/** applied = in force now · pending = waiting for the Administrator · review = in force, Administrator reviews after */
+export type ChangeResult =
+  | { status: 'applied' }
+  | { status: 'pending'; requestId: number }
+  | { status: 'review'; requestId: number };
+
 const CANCEL_TAG = 'Holiday:';
 const fmtEmp = (id: number) => `EMP-${String(id).padStart(4, '0')}`;
+const CATEGORY_LABEL = { factory: 'Factory workers', office: 'Office staff' };
+const APPLIES_LABEL = { all: 'All employees', ...CATEGORY_LABEL };
 
 /**
- * The holiday calendar (Attendance-Leave-Addendum §Holidays): Poya / public holidays per year,
- * the per-type paid / work-allowed defaults, the weekly holiday per category (effective-from),
- * per-employee rest days, and "Declare holiday" for sudden closures. Every write needs
- * `holidayCalendar: edit` (the Factory Manager — data-driven, checked here, not only in the UI)
- * and is audited. `facts()` is what attendance, leave and payroll read (working-days.ts).
+ * The holiday calendar (Attendance-Leave-Addendum §4): Poya / public holidays per year, the
+ * per-type paid / work-allowed defaults, the weekly holiday per category (effective-from),
+ * per-employee rest days, "Declare holiday" for closures, and the Administrator's approvals.
+ * Every write asks `decide()` (holiday-permissions.ts — the data-driven matrix) and is audited.
+ * A pending request is stored in `holiday_requests` only, so `facts()` — what attendance, leave
+ * and payroll read (working-days.ts) — never sees it until it is approved.
  */
 @Injectable()
 export class HolidayService {
@@ -107,6 +156,12 @@ export class HolidayService {
     private readonly notifier: DispatchNotifier,
     private readonly deliveries: FertilizerDeliveryService,
     private readonly audit: AuditService,
+    @InjectRepository(HolidayRequestEntity)
+    private readonly requests: Repository<HolidayRequestEntity>,
+    @InjectRepository(PayrollRunEntity)
+    private readonly payroll: Repository<PayrollRunEntity>,
+    @InjectRepository(User)
+    private readonly users: Repository<User>,
   ) {}
 
   // ── reads ───────────────────────────────────────────────────────────────
@@ -146,25 +201,46 @@ export class HolidayService {
     };
   }
 
-  /** The calendar page: a year's holidays, the type defaults, weekly rules, rest days. */
-  async year(year: number, now: Date = new Date()) {
-    const [rows, typeRows, weekly, rest, employees] = await Promise.all([
-      this.holidays.find(),
-      this.types.find(),
-      this.weekly.find(),
-      this.restDays.find(),
-      this.employees.find(),
-    ]);
+  /** The calendar page: a year's holidays, pending requests, the type defaults, weekly rules, rest days. */
+  async year(year: number, actor: HolidayActor, now: Date = new Date()) {
+    const [rows, typeRows, weekly, rest, employees, pending, levels, locks] =
+      await Promise.all([
+        this.holidays.find(),
+        this.types.find(),
+        this.weekly.find(),
+        this.restDays.find(),
+        this.employees.find(),
+        this.requests.find({ where: { status: 'pending' } }),
+        this.levels(actor),
+        this.payrollLocks(),
+      ]);
     const types = this.typeMap(typeRows);
     const inYear = (y: number) =>
       rows.filter((h) => h.date.startsWith(`${y}-`));
     const today = localDate(now);
     const nextYear = Number(today.slice(0, 4)) + 1;
+    const live = inYear(year).filter((h) => !h.cancelledAt);
     return {
       year,
       holidays: inYear(year)
         .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
-        .map((h) => this.toPublic(h, types)),
+        .map((h) =>
+          this.toPublic(
+            h,
+            types,
+            allowed(
+              this.changeOutcome(h, rows, actor, levels, employees, locks, now),
+            ),
+          ),
+        ),
+      counts: {
+        poya: live.filter((h) => h.type === 'poya').length,
+        public: live.filter((h) => h.type === 'public').length,
+        closure: live.filter((h) => h.type === 'closure').length,
+      },
+      pending: pending
+        .sort((a, b) => a.dateFrom.localeCompare(b.dateFrom) || a.id - b.id)
+        .map((r) => this.toPublicRequest(r)),
       types: (['poya', 'public', 'weekly', 'closure'] as const).map((t) => ({
         type: t,
         ...types[t],
@@ -214,10 +290,22 @@ export class HolidayService {
       .map((h) => ({ name: h.name, type: h.type, lastDate: h.date }));
   }
 
-  // ── Poya / public holidays ──────────────────────────────────────────────
+  /** Requests for the Administrator's panel (pending first, then the last decided ones). */
+  async listRequests(): Promise<PublicHolidayRequest[]> {
+    return (await this.requests.find())
+      .sort(
+        (a, b) =>
+          Number(b.status === 'pending') - Number(a.status === 'pending') ||
+          new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime(),
+      )
+      .slice(0, 50)
+      .map((r) => this.toPublicRequest(r));
+  }
+
+  // ── Poya / public holidays (holidayStatutory) ──────────────────────────────
 
   async create(dto: HolidayDto, actor: HolidayActor): Promise<PublicHoliday> {
-    await this.requireEdit(actor);
+    await this.gate(actor, 'statutory');
     const saved = await this.holidays.save(
       this.holidays.create({
         date: dto.date,
@@ -230,6 +318,10 @@ export class HolidayService {
         declareGroup: null,
         reason: null,
         createdBy: actor.name,
+        createdByUserId: actor.sub ?? null,
+        source: 'manual',
+        externalUid: null,
+        importedAt: null,
         cancelledAt: null,
         cancelledBy: null,
         cancelReason: null,
@@ -239,9 +331,9 @@ export class HolidayService {
       action: `Added ${dto.type === 'poya' ? 'Poya day' : 'public holiday'}`,
       module: 'Holidays',
       record: `${saved.name} · ${saved.date}`,
-      recordHref: '/admin/holidays',
+      recordHref: '/holidays',
     });
-    return this.toPublic(saved, this.typeMap(await this.types.find()));
+    return this.toPublic(saved, this.typeMap(await this.types.find()), true);
   }
 
   async update(
@@ -249,7 +341,6 @@ export class HolidayService {
     dto: HolidayDto,
     actor: HolidayActor,
   ): Promise<PublicHoliday> {
-    await this.requireEdit(actor);
     const h = await this.holidays.findOne({ where: { id } });
     if (!h || h.cancelledAt) throw new NotFoundException(`No holiday ${id}.`);
     if (h.type === 'closure') {
@@ -257,6 +348,7 @@ export class HolidayService {
         'A declared holiday is changed by cancelling it and declaring again.',
       );
     }
+    await this.gate(actor, 'statutory');
     const before = `${h.name} · ${h.date}`;
     Object.assign(h, {
       date: dto.date,
@@ -270,10 +362,10 @@ export class HolidayService {
       action: 'Changed a holiday',
       module: 'Holidays',
       record: `${saved.name} · ${saved.date}`,
-      recordHref: '/admin/holidays',
+      recordHref: '/holidays',
       details: `was ${before}`,
     });
-    return this.toPublic(saved, this.typeMap(await this.types.find()));
+    return this.toPublic(saved, this.typeMap(await this.types.find()), true);
   }
 
   /** Cancel one Poya / public holiday (a declared closure is cancelled as a group). */
@@ -283,12 +375,15 @@ export class HolidayService {
     actor: HolidayActor,
     now: Date = new Date(),
   ): Promise<void> {
-    await this.requireEdit(actor);
     const h = await this.holidays.findOne({ where: { id } });
     if (!h || h.cancelledAt) throw new NotFoundException(`No holiday ${id}.`);
     if (h.declareGroup) {
       return this.cancelDeclared(h.declareGroup, reason, actor, now);
     }
+    await this.gate(
+      actor,
+      h.type === 'closure' ? 'changeHoliday' : 'statutory',
+    );
     const why = this.reasonIfPast(h.date, reason, now);
     Object.assign(h, {
       cancelledAt: now,
@@ -300,7 +395,7 @@ export class HolidayService {
       action: 'Cancelled a holiday',
       module: 'Holidays',
       record: `${h.name} · ${h.date}`,
-      recordHref: '/admin/holidays',
+      recordHref: '/holidays',
       details: why ?? undefined,
     });
   }
@@ -312,7 +407,7 @@ export class HolidayService {
     dto: HolidayTypeDto,
     actor: HolidayActor,
   ): Promise<void> {
-    await this.requireEdit(actor);
+    await this.gate(actor, 'types');
     const row =
       (await this.types.findOne({ where: { type } })) ??
       this.types.create({ type, label: DEFAULT_TYPES[type].label });
@@ -328,18 +423,21 @@ export class HolidayService {
       action: `Changed holiday type "${row.label}"`,
       module: 'Holidays',
       record: row.label,
-      recordHref: '/admin/holidays',
+      recordHref: '/holidays',
       details: `${before} → paid ${dto.paid}, work ${dto.workAllowed}`,
     });
   }
 
-  /** A new weekly holiday for a category — from `effectiveFrom` on; past weeks keep theirs. */
+  /**
+   * A new weekly holiday for a category — from `effectiveFrom` on; past weeks keep theirs.
+   * The Administrator sets it; a Manager's change is a proposal until the Administrator approves.
+   */
   async setWeeklyRule(
     dto: WeeklyRuleDto,
     actor: HolidayActor,
     now: Date = new Date(),
-  ): Promise<void> {
-    await this.requireEdit(actor);
+  ): Promise<ChangeResult> {
+    const outcome = await this.gate(actor, 'weeklyRule');
     this.assertNotPast(dto.effectiveFrom, now);
     const half = dto.halfDayWeekday ?? null;
     if (half !== null && dto.weekdays.includes(half)) {
@@ -347,22 +445,26 @@ export class HolidayService {
         'The half day can’t also be a weekly holiday.',
       );
     }
-    await this.weekly.save(
-      this.weekly.create({
-        category: dto.category,
-        weekdays: [...new Set(dto.weekdays)].sort(),
-        halfDayWeekday: half,
-        effectiveFrom: dto.effectiveFrom,
-        createdBy: actor.name,
-      }),
-    );
-    await this.audit.record(actor, {
-      action: 'Changed the weekly holiday',
-      module: 'Holidays',
-      record: dto.category === 'office' ? 'Office staff' : 'Factory workers',
-      recordHref: '/admin/holidays',
-      details: `${dayNames(dto.weekdays)}${half !== null ? `, half day ${dayNames([half])}` : ''} from ${dto.effectiveFrom}`,
-    });
+    if (outcome.kind === 'request') {
+      const req = await this.openRequest(
+        'weekly_rule',
+        { ...dto, halfDayWeekday: half },
+        dto.effectiveFrom,
+        dto.effectiveFrom,
+        actor,
+        now,
+      );
+      await this.audit.record(actor, {
+        action: 'Proposed a weekly holiday',
+        module: 'Holidays',
+        record: CATEGORY_LABEL[dto.category],
+        recordHref: '/holidays',
+        details: `${weeklyText(dto.weekdays, half)} from ${dto.effectiveFrom} — waiting for the Administrator`,
+      });
+      return { status: 'pending', requestId: req.id };
+    }
+    await this.writeWeekly(dto, actor.name, actor);
+    return { status: 'applied' };
   }
 
   async setRestDay(
@@ -371,7 +473,7 @@ export class HolidayService {
     actor: HolidayActor,
     now: Date = new Date(),
   ): Promise<void> {
-    await this.requireEdit(actor);
+    await this.gate(actor, 'restDay');
     this.assertNotPast(dto.effectiveFrom, now);
     const employee = await this.employees.findOne({
       where: { id: employeeId },
@@ -395,9 +497,9 @@ export class HolidayService {
     });
   }
 
-  // ── Declare holiday (sudden closures) ──────────────────────────────────────
+  // ── Declare holiday (closures, category holidays) ──────────────────────────
 
-  /** What declaring would touch — shown to the Manager before they confirm. */
+  /** What declaring would touch — shown before confirming. */
   async declarePreview(dto: DeclareHolidayDto): Promise<DeclarePreview> {
     const dates = this.rangeOf(dto);
     const [marked, employees, routes] = await Promise.all([
@@ -440,18 +542,353 @@ export class HolidayService {
     };
   }
 
+  /**
+   * Declare a holiday over a date or range.
+   *   • Factory workers / Office staff only → a category holiday (Manager or Administrator).
+   *   • All employees → a factory closure: the Administrator declares it; a Manager's is a request.
+   *   • `emergency` (today only, all employees) → in force now; the Administrator reviews it after.
+   */
   async declare(
     dto: DeclareHolidayDto,
     actor: HolidayActor,
     now: Date = new Date(),
-  ): Promise<{ group: string; preview: DeclarePreview }> {
-    await this.requireEdit(actor);
+  ): Promise<ChangeResult & { group?: string; preview: DeclarePreview }> {
+    const action: HolidayAction =
+      dto.appliesTo !== 'all'
+        ? 'categoryHoliday'
+        : dto.emergency
+          ? 'emergencyClosure'
+          : 'factoryClosure';
+    const outcome = await this.gate(actor, action);
+    const today = localDate(now);
+    if (
+      action === 'emergencyClosure' &&
+      (dto.from !== today || dto.to !== today)
+    ) {
+      throw new BadRequestException('An emergency closure is for today only.');
+    }
     const preview = await this.declarePreview(dto);
     if (preview.attendance.length > 0 && !dto.attendance) {
       throw new ConflictException(
         'Attendance is already marked on those dates — choose to keep it as "Worked on holiday" or clear it.',
       );
     }
+
+    if (outcome.kind === 'request') {
+      const req = await this.openRequest(
+        'closure',
+        { ...dto },
+        preview.dates[0],
+        preview.dates.at(-1)!,
+        actor,
+        now,
+      );
+      await this.audit.record(actor, {
+        action: 'Requested a factory closure',
+        module: 'Holidays',
+        record: `${dto.name.trim()} · ${rangeText(preview.dates)}`,
+        recordHref: '/holidays',
+        details: `${dto.reason.trim()} — waiting for the Administrator`,
+      });
+      return { status: 'pending', requestId: req.id, preview };
+    }
+
+    const { group, snapshot } = await this.applyDeclare(
+      dto,
+      preview,
+      actor,
+      { name: actor.name, userId: actor.sub ?? null },
+      now,
+    );
+    if (outcome.kind === 'review') {
+      const req = await this.openRequest(
+        'emergency',
+        { ...dto },
+        today,
+        today,
+        actor,
+        now,
+        { declareGroup: group, snapshot },
+      );
+      return { status: 'review', requestId: req.id, group, preview };
+    }
+    return { status: 'applied', group, preview };
+  }
+
+  /** Before the date: reverses the declaration. After it: only with a reason. */
+  async cancelDeclared(
+    group: string,
+    reason: string | undefined,
+    actor: HolidayActor,
+    now: Date = new Date(),
+  ): Promise<void> {
+    const all = await this.holidays.find();
+    const rows = all.filter((h) => h.declareGroup === group && !h.cancelledAt);
+    if (rows.length === 0)
+      throw new NotFoundException('No such declared holiday.');
+    const [levels, employees, locks] = await Promise.all([
+      this.levels(actor),
+      this.employees.find(),
+      this.payrollLocks(),
+    ]);
+    this.orThrow(
+      this.changeOutcome(rows[0], all, actor, levels, employees, locks, now),
+    );
+    const first = rows.map((r) => r.date).sort()[0];
+    const why = this.reasonIfPast(first, reason, now);
+    const restored = await this.undoGroup(rows, why, actor, now);
+    // an emergency closure still waiting for review is settled by cancelling it
+    const review = (await this.requests.find()).find(
+      (r) => r.declareGroup === group && r.status === 'pending',
+    );
+    if (review) {
+      Object.assign(review, {
+        status: 'reverted',
+        decidedBy: actor.name,
+        decidedAt: now,
+        decisionReason: why ?? 'Cancelled',
+      });
+      await this.requests.save(review);
+    }
+    await this.audit.record(actor, {
+      action: 'Cancelled a declared holiday',
+      module: 'Holidays',
+      record: `${rows[0].name} · ${first}`,
+      recordHref: '/holidays',
+      details:
+        (why ? `${why} · ` : '') + `${restored.length} route day(s) restored`,
+    });
+  }
+
+  // ── the Administrator's decisions ─────────────────────────────────────────
+
+  /**
+   * Approve or reject a request (a reason is always required). For an emergency closure,
+   * approve = keep it, reject = revert it: the holiday goes, the route days come back,
+   * attendance is put back as it was and the agents are told collection is back on.
+   */
+  async decideRequest(
+    id: number,
+    decision: 'approve' | 'reject',
+    reason: string,
+    actor: HolidayActor,
+    now: Date = new Date(),
+  ): Promise<PublicHolidayRequest> {
+    await this.gate(actor, 'approve');
+    const why = reason?.trim();
+    if (!why) throw new BadRequestException('A reason is required.');
+    const req = await this.requests.findOne({ where: { id } });
+    if (!req) throw new NotFoundException(`No holiday request ${id}.`);
+    if (req.status !== 'pending') {
+      throw new ConflictException('This request has already been decided.');
+    }
+    const requester = { name: req.requestedBy, userId: req.requestedByUserId };
+    const today = localDate(now);
+    let action: string;
+    let note = '';
+
+    if (req.kind === 'weekly_rule') {
+      if (decision === 'approve') {
+        const dto = req.payload as unknown as WeeklyRuleDto;
+        const from = dto.effectiveFrom < today ? today : dto.effectiveFrom;
+        if (from !== dto.effectiveFrom)
+          note = ` · applies from ${from} (asked ${dto.effectiveFrom})`;
+        await this.writeWeekly(
+          { ...dto, effectiveFrom: from },
+          requester.name,
+          actor,
+        );
+      }
+      req.status = decision === 'approve' ? 'approved' : 'rejected';
+      action =
+        decision === 'approve'
+          ? 'Approved a weekly holiday'
+          : 'Rejected a weekly holiday';
+    } else if (req.kind === 'closure') {
+      if (decision === 'approve') {
+        const dto = req.payload as unknown as DeclareHolidayDto;
+        if (req.dateTo < today) {
+          throw new BadRequestException(
+            'These dates have passed — reject the request instead.',
+          );
+        }
+        const preview = await this.declarePreview(dto);
+        const { group } = await this.applyDeclare(
+          { ...dto, attendance: dto.attendance ?? 'keep' },
+          preview,
+          actor,
+          requester,
+          now,
+        );
+        req.declareGroup = group;
+      }
+      req.status = decision === 'approve' ? 'approved' : 'rejected';
+      action =
+        decision === 'approve'
+          ? 'Approved a factory closure'
+          : 'Rejected a factory closure';
+    } else {
+      if (decision === 'reject') {
+        const rows = (await this.holidays.find()).filter(
+          (h) => h.declareGroup === req.declareGroup && !h.cancelledAt,
+        );
+        const restored = await this.undoGroup(
+          rows,
+          `Reverted: ${why}`,
+          actor,
+          now,
+        );
+        await this.restoreAttendance(req.snapshot ?? []);
+        for (const o of restored) {
+          const agent = await this.resolver.getAgentForRoute(o.routeId, o.date);
+          if (agent) {
+            await this.notifier.notifyAgent(agent.agentId, {
+              type: 'holiday_cancelled',
+              title: `Collection is back on ${o.date}`,
+              body: `${req.payload.name as string} was cancelled — your route is collected as usual.`,
+            });
+          }
+        }
+        if (restored.length > 0) await this.deliveries.reconcile(now);
+        note = ` · ${restored.length} route day(s) restored, ${(req.snapshot ?? []).length} attendance record(s) put back`;
+      }
+      req.status = decision === 'approve' ? 'kept' : 'reverted';
+      action =
+        decision === 'approve'
+          ? 'Kept an emergency closure'
+          : 'Reverted an emergency closure';
+    }
+
+    Object.assign(req, {
+      decidedBy: actor.name,
+      decidedAt: now,
+      decisionReason: why,
+    });
+    await this.requests.save(req);
+    const pub = this.toPublicRequest(req);
+    await this.audit.record(actor, {
+      action,
+      module: 'Holidays',
+      record: `${pub.name} · ${rangeText([req.dateFrom, req.dateTo])}`,
+      recordHref: '/holidays',
+      details: `${why}${note} · requested by ${req.requestedBy}`,
+    });
+    if (requester.userId) {
+      await this.notifier.notifyUser(requester.userId, {
+        type: 'holiday_request',
+        title: `${action} — ${pub.name}`,
+        body: why,
+        referenceId: req.id,
+        referenceType: 'holiday_request',
+      });
+    }
+    return pub;
+  }
+
+  /** The day type of `date` for one employee (attendance, leave and payroll use this). */
+  async dayFor(
+    date: string,
+    employee: { id: number; category: 'factory' | 'office' },
+  ) {
+    return dayInfo(date, employee, await this.facts(date, date));
+  }
+
+  // ── helpers ────────────────────────────────────────────────────────────
+
+  private async levels(actor: HolidayActor): Promise<HolidayLevels> {
+    const [calendar, statutory] = await Promise.all([
+      this.access.levelFor(actor.role, 'holidayCalendar'),
+      this.access.levelFor(actor.role, 'holidayStatutory'),
+    ]);
+    return { calendar, statutory };
+  }
+
+  /** The matrix's answer for this person and action — throws 403 on "deny". */
+  private async gate(
+    actor: HolidayActor,
+    action: HolidayAction,
+    ctx?: ChangeContext,
+  ): Promise<Outcome> {
+    return this.orThrow(decide(action, await this.levels(actor), ctx));
+  }
+
+  private orThrow(outcome: Outcome): Outcome {
+    if (outcome.kind === 'deny') throw new ForbiddenException(outcome.message);
+    return outcome;
+  }
+
+  /** May `actor` change / cancel holiday `h`? Poya / public → holidayStatutory; closures → the Manager limits. */
+  private changeOutcome(
+    h: HolidayEntity,
+    all: HolidayEntity[],
+    actor: HolidayActor,
+    levels: HolidayLevels,
+    employees: EmployeeEntity[],
+    locks: Set<string>,
+    now: Date,
+  ): Outcome {
+    if (h.cancelledAt) return { kind: 'deny', message: 'Already cancelled.' };
+    if (h.type !== 'closure') return decide('statutory', levels);
+    const dates = h.declareGroup
+      ? all
+          .filter((x) => x.declareGroup === h.declareGroup && !x.cancelledAt)
+          .map((x) => x.date)
+      : [h.date];
+    const today = localDate(now);
+    const covered = employees.filter(
+      (e) => h.appliesTo === 'all' || e.category === h.appliesTo,
+    );
+    return decide('changeHoliday', levels, {
+      own: h.createdByUserId != null && h.createdByUserId === actor.sub,
+      future: dates.every((d) => d > today),
+      payrollProcessed: dates.some((d) =>
+        covered.some((e) => locks.has(`${e.id}:${keyToLabel(d.slice(0, 7))}`)),
+      ),
+      appliesTo: h.appliesTo,
+    });
+  }
+
+  /** "employeeId:Month YYYY" for every Processed payroll row. */
+  private async payrollLocks(): Promise<Set<string>> {
+    return new Set(
+      (await this.payroll.find())
+        .filter((p) => p.status === 'Processed')
+        .map((p) => `${p.employeeId}:${p.period}`),
+    );
+  }
+
+  private async writeWeekly(
+    dto: WeeklyRuleDto,
+    createdBy: string,
+    actor: HolidayActor,
+  ): Promise<void> {
+    const half = dto.halfDayWeekday ?? null;
+    await this.weekly.save(
+      this.weekly.create({
+        category: dto.category,
+        weekdays: [...new Set(dto.weekdays)].sort(),
+        halfDayWeekday: half,
+        effectiveFrom: dto.effectiveFrom,
+        createdBy,
+      }),
+    );
+    await this.audit.record(actor, {
+      action: 'Changed the weekly holiday',
+      module: 'Holidays',
+      record: CATEGORY_LABEL[dto.category],
+      recordHref: '/holidays',
+      details: `${weeklyText(dto.weekdays, half)} from ${dto.effectiveFrom}`,
+    });
+  }
+
+  /** Writes the closure rows, settles attendance, cancels routes; returns what attendance looked like before. */
+  private async applyDeclare(
+    dto: DeclareHolidayDto,
+    preview: DeclarePreview,
+    actor: HolidayActor,
+    creator: { name: string; userId: number | null },
+    now: Date,
+  ): Promise<{ group: string; snapshot: AttendanceSnapshot[] }> {
     const group = randomUUID();
     for (const date of preview.dates) {
       await this.holidays.save(
@@ -465,7 +902,11 @@ export class HolidayService {
           collectionStops: dto.collectionStops,
           declareGroup: group,
           reason: dto.reason.trim(),
-          createdBy: actor.name,
+          createdBy: creator.name,
+          createdByUserId: creator.userId,
+          source: 'manual',
+          externalUid: null,
+          importedAt: null,
           cancelledAt: null,
           cancelledBy: null,
           cancelReason: null,
@@ -480,6 +921,7 @@ export class HolidayService {
         (p) => p.date === a.date && p.employeeId === fmtEmp(a.employeeId),
       ),
     );
+    const snapshot = marked.map((a) => ({ ...a }));
     for (const a of marked) {
       if (
         dto.attendance === 'keep' &&
@@ -519,37 +961,33 @@ export class HolidayService {
     if (cancelled > 0) await this.deliveries.reconcile(now);
 
     await this.audit.record(actor, {
-      action: 'Declared a holiday',
+      action: dto.emergency
+        ? 'Declared an emergency closure'
+        : 'Declared a holiday',
       module: 'Holidays',
-      record: `${dto.name.trim()} · ${preview.dates[0]}${preview.dates.length > 1 ? ` – ${preview.dates.at(-1)}` : ''}`,
-      recordHref: '/admin/holidays',
+      record: `${dto.name.trim()} · ${rangeText(preview.dates)}`,
+      recordHref: '/holidays',
       details:
-        `${dto.reason.trim()} · ${dto.paid ? 'paid' : 'unpaid'} · ${dto.appliesTo}` +
+        `${dto.reason.trim()} · ${dto.paid ? 'paid' : 'unpaid'} · ${APPLIES_LABEL[dto.appliesTo]}` +
         (dto.collectionStops
           ? ` · ${cancelled} route day(s) cancelled`
           : ' · collection continues') +
         (marked.length
           ? ` · ${marked.length} attendance record(s) ${dto.attendance === 'keep' ? 'kept' : 'cleared'}`
-          : ''),
+          : '') +
+        (creator.name !== actor.name ? ` · requested by ${creator.name}` : ''),
     });
-    return { group, preview };
+    return { group, snapshot };
   }
 
-  /** Before the date: reverses the declaration. After it: only with a reason. */
-  async cancelDeclared(
-    group: string,
-    reason: string | undefined,
+  /** Cancels a declared group's rows and gives back the route days still ahead. */
+  private async undoGroup(
+    rows: HolidayEntity[],
+    why: string | null,
     actor: HolidayActor,
-    now: Date = new Date(),
-  ): Promise<void> {
-    await this.requireEdit(actor);
-    const rows = (await this.holidays.find()).filter(
-      (h) => h.declareGroup === group && !h.cancelledAt,
-    );
-    if (rows.length === 0)
-      throw new NotFoundException('No such declared holiday.');
-    const first = rows.map((r) => r.date).sort()[0];
-    const why = this.reasonIfPast(first, reason, now);
+    now: Date,
+  ): Promise<RouteScheduleOverrideEntity[]> {
+    const group = rows[0]?.declareGroup;
     for (const h of rows) {
       Object.assign(h, {
         cancelledAt: now,
@@ -558,7 +996,7 @@ export class HolidayService {
       });
       await this.holidays.save(h);
     }
-    // put back the route days it cancelled (only those still ahead)
+    if (!group) return [];
     const today = localDate(now);
     const mine = (await this.overrides.find()).filter(
       (o) =>
@@ -569,33 +1007,73 @@ export class HolidayService {
     for (const o of mine) {
       await this.schedule.removeOverride(o.routeId, o.id, actor, now);
     }
-    await this.audit.record(actor, {
-      action: 'Cancelled a declared holiday',
-      module: 'Holidays',
-      record: `${rows[0].name} · ${first}`,
-      recordHref: '/admin/holidays',
-      details:
-        (why ? `${why} · ` : '') + `${mine.length} route day(s) restored`,
-    });
+    return mine;
   }
 
-  /** The day type of `date` for one employee (attendance, leave and payroll use this). */
-  async dayFor(
-    date: string,
-    employee: { id: number; category: 'factory' | 'office' },
-  ) {
-    return dayInfo(date, employee, await this.facts(date, date));
+  /** Puts attendance back as it was before an emergency closure (revert). */
+  private async restoreAttendance(
+    snapshot: AttendanceSnapshot[],
+  ): Promise<void> {
+    for (const s of snapshot) {
+      const row = await this.attendance.findOne({ where: { id: s.id } });
+      if (row) {
+        row.holidayWorked = s.holidayWorked;
+        row.editReason = s.editReason;
+        await this.attendance.save(row);
+      } else {
+        await this.attendance.save(
+          this.attendance.create(s as unknown as EmployeeAttendanceEntity),
+        );
+      }
+    }
   }
 
-  // ── helpers ────────────────────────────────────────────────────────────
-
-  private async requireEdit(actor: HolidayActor): Promise<void> {
-    await this.access.require(
-      actor.role,
-      'edit',
-      'change the holiday calendar',
-      'holidayCalendar',
+  private async openRequest(
+    kind: HolidayRequestEntity['kind'],
+    payload: object,
+    dateFrom: string,
+    dateTo: string,
+    actor: HolidayActor,
+    now: Date,
+    extra: Partial<HolidayRequestEntity> = {},
+  ): Promise<HolidayRequestEntity> {
+    const req = await this.requests.save(
+      this.requests.create({
+        kind,
+        status: 'pending',
+        payload: payload as Record<string, unknown>,
+        dateFrom,
+        dateTo,
+        requestedBy: actor.name,
+        requestedByUserId: actor.sub ?? null,
+        requestedAt: now,
+        decidedBy: null,
+        decidedAt: null,
+        decisionReason: null,
+        declareGroup: null,
+        snapshot: null,
+        ...extra,
+      }),
     );
+    const pub = this.toPublicRequest(req);
+    await this.notifyAdmins({
+      type: 'holiday_request',
+      title:
+        kind === 'emergency'
+          ? `Emergency closure to review — ${pub.name}`
+          : `Holiday request to approve — ${pub.name}`,
+      body: `${pub.summary} · requested by ${actor.name}`,
+      referenceId: req.id,
+      referenceType: 'holiday_request',
+    });
+    return req;
+  }
+
+  private async notifyAdmins(input: NotifyInput): Promise<void> {
+    const admins = (await this.users.find()).filter(
+      (u) => u.role === 'factory_admin' && u.status === 'active',
+    );
+    for (const a of admins) await this.notifier.notifyUser(a.id, input);
   }
 
   private typeMap(rows: HolidayTypeEntity[]): CalendarFacts['types'] {
@@ -613,6 +1091,7 @@ export class HolidayService {
   private toPublic(
     h: HolidayEntity,
     types: CalendarFacts['types'],
+    canChange: boolean,
   ): PublicHoliday {
     return {
       id: h.id,
@@ -626,8 +1105,50 @@ export class HolidayService {
       declareGroup: h.declareGroup,
       reason: h.reason,
       createdBy: h.createdBy,
+      createdAt: h.createdAt ? new Date(h.createdAt).toISOString() : null,
+      source: h.source ?? 'manual',
+      importedAt: h.importedAt ? new Date(h.importedAt).toISOString() : null,
       cancelled: !!h.cancelledAt,
       cancelReason: h.cancelReason,
+      canChange,
+    };
+  }
+
+  private toPublicRequest(r: HolidayRequestEntity): PublicHolidayRequest {
+    const p = r.payload;
+    const iso = (d: Date | string | null) =>
+      d ? new Date(d).toISOString() : null;
+    let name: string;
+    let summary: string;
+    let appliesTo: PublicHolidayRequest['appliesTo'] = null;
+    if (r.kind === 'weekly_rule') {
+      const w = p as unknown as WeeklyRuleDto;
+      name = `Weekly holiday — ${CATEGORY_LABEL[w.category]}`;
+      summary = `${CATEGORY_LABEL[w.category]}: ${weeklyText(w.weekdays, w.halfDayWeekday ?? null)} from ${w.effectiveFrom}`;
+      appliesTo = w.category;
+    } else {
+      const d = p as unknown as DeclareHolidayDto;
+      name = d.name;
+      appliesTo = d.appliesTo;
+      summary =
+        `${APPLIES_LABEL[d.appliesTo]} · ${rangeText([r.dateFrom, r.dateTo])} · ${d.paid ? 'paid' : 'unpaid'} · ` +
+        (d.collectionStops ? 'collection stops' : 'collection continues');
+    }
+    return {
+      id: r.id,
+      kind: r.kind,
+      status: r.status,
+      name,
+      dateFrom: r.dateFrom,
+      dateTo: r.dateTo,
+      appliesTo,
+      summary,
+      reason: r.kind === 'weekly_rule' ? null : ((p.reason as string) ?? null),
+      requestedBy: r.requestedBy,
+      requestedAt: iso(r.requestedAt)!,
+      decidedBy: r.decidedBy,
+      decidedAt: iso(r.decidedAt),
+      decisionReason: r.decisionReason,
     };
   }
 
@@ -677,4 +1198,12 @@ const DAY_NAMES = [
 ];
 function dayNames(days: number[]): string {
   return days.length ? days.map((d) => DAY_NAMES[d]).join(', ') : 'none';
+}
+function weeklyText(days: number[], half: number | null): string {
+  return `${dayNames(days)}${half !== null ? `, half day ${dayNames([half])}` : ''}`;
+}
+function rangeText(dates: string[]): string {
+  const first = dates[0];
+  const last = dates.at(-1);
+  return last && last !== first ? `${first} – ${last}` : first;
 }

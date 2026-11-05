@@ -5,10 +5,13 @@ import { DispatchModule } from '../dispatch/dispatch.module';
 import { RouteScheduleOverrideEntity } from '../dispatch/route-schedule.entity';
 import { EmployeeAttendanceEntity } from '../employees/employee-attendance.entity';
 import { EmployeeEntity } from '../employees/employee.entity';
+import { PayrollRunEntity } from '../employees/payroll-run.entity';
 import { RouteEntity } from '../estates/route.entity';
 import { FertilizerModule } from '../fertilizer/fertilizer.module';
+import { User } from '../users/user.entity';
 import { UsersModule } from '../users/users.module';
 import { EmployeeRestDayEntity } from './employee-rest-day.entity';
+import { HolidayRequestEntity } from './holiday-request.entity';
 import { HolidayTypeEntity } from './holiday-type.entity';
 import { HolidayEntity } from './holiday.entity';
 import { HolidayService } from './holiday.service';
@@ -27,6 +30,9 @@ import { WeeklyHolidayRuleEntity } from './weekly-holiday-rule.entity';
       EmployeeEntity,
       RouteEntity,
       RouteScheduleOverrideEntity,
+      HolidayRequestEntity,
+      PayrollRunEntity,
+      User,
     ]),
     DispatchModule,
     FertilizerModule,

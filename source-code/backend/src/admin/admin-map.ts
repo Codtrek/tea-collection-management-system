@@ -17,6 +17,7 @@ export type ModuleKey =
   | 'estateOwners'
   | 'estateAdvances'
   | 'holidayCalendar'
+  | 'holidayStatutory'
   | 'payroll'
   | 'advances'
   | 'employees'
@@ -30,7 +31,11 @@ export type ModuleKey =
   | 'fertilizerManagerApproval'
   | 'administration';
 
-export const PORTAL_ROLES: PortalRole[] = ['Administrator', 'Officer', 'Manager'];
+export const PORTAL_ROLES: PortalRole[] = [
+  'Administrator',
+  'Officer',
+  'Manager',
+];
 
 export const MODULE_KEYS: ModuleKey[] = [
   'dashboard',
@@ -39,6 +44,7 @@ export const MODULE_KEYS: ModuleKey[] = [
   'estateOwners',
   'estateAdvances',
   'holidayCalendar',
+  'holidayStatutory',
   'payroll',
   'advances',
   'employees',
@@ -65,8 +71,6 @@ export const ADMIN_EDITABLE_MODULES: ModuleKey[] = [
   // above the limit, the Administrator audits (Fertilizer-Delivery-Addendum §4).
   'fertilizerApproval',
   'fertilizerManagerApproval',
-  // Holidays are the Factory Manager's call; the Administrator only views (Attendance-Leave-Addendum).
-  'holidayCalendar',
 ];
 
 export type PermissionMatrix = Record<
