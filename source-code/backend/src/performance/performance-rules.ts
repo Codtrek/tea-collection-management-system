@@ -117,6 +117,9 @@ export function attendanceMeasures(days: AttendanceDay[]): {
       den: null,
       trend: null,
       previous: null,
+      ...(enough
+        ? {}
+        : { reason: `Fewer than ${MIN_WORKING_DAYS} working days marked` }),
     },
     leave: {
       key: 'leave',
