@@ -1,6 +1,8 @@
 .server
 report.*
 projectProposal.*
+database-migration-dev-procedure.*
+!database-migration-dev-procedure.tex
 .env
 .env.demo
 node_modules
