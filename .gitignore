@@ -5,3 +5,4 @@ projectProposal.*
 .env.demo
 node_modules
 database
+.claude/worktrees/
