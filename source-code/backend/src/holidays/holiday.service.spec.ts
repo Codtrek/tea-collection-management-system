@@ -113,6 +113,7 @@ function setup(opts: { attendanceDate?: string } = {}) {
     ),
   };
   const audit = { record: jest.fn().mockResolvedValue(undefined) };
+  const settings = fake<{ key: string; value: object }>();
   const service = new HolidayService(
     holidays as unknown as Repository<never>,
     fake() as unknown as Repository<never>,
@@ -136,6 +137,7 @@ function setup(opts: { attendanceDate?: string } = {}) {
       { id: 1, role: 'factory_admin', status: 'active' },
       { id: 3, role: 'factory_manager', status: 'active' },
     ]) as unknown as Repository<never>,
+    settings as unknown as Repository<never>,
   );
   return {
     service,
@@ -522,6 +524,37 @@ describe('HolidayService', () => {
       );
       expect(live[0].canChange).toBe(true);
     });
+  });
+
+  it('the day drawer shows the holiday, who it applies to and what it touches', async () => {
+    const { service } = setup();
+    await service.declare({ ...staffDay, attendance: 'keep' }, manager, NOW);
+    const d = await service.day('2026-11-12', manager, NOW);
+    expect(d.holidays).toEqual([
+      expect.objectContaining({
+        name: 'Office outing',
+        appliesTo: 'office',
+        canChange: true,
+      }),
+    ]);
+    // office staff are off; factory workers work as usual
+    expect(d.dayType.office.working).toBe(false);
+    expect(d.dayType.factory.working).toBe(true);
+    expect(d.impact).toMatchObject({
+      attendanceMarked: 2,
+      routes: [{ id: 3, name: 'Route 3' }],
+      approvedLeave: null,
+    });
+  });
+
+  it('week starts on Monday by default; only the Administrator changes it', async () => {
+    const { service } = setup();
+    expect((await service.year(2026, officer, NOW)).weekStartsOn).toBe(1);
+    await expect(service.setWeekStartsOn(0, manager)).rejects.toThrow(
+      ForbiddenException,
+    );
+    await service.setWeekStartsOn(0, admin);
+    expect(await service.weekStartsOn()).toBe(0);
   });
 
   it('weekly rules apply from today on — never to past weeks', async () => {

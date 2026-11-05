@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -19,6 +20,7 @@ import { DispatchAccessService } from '../dispatch/dispatch-access.service';
 import { parseEmployeeId } from '../employees/employee-map';
 import { UsersService } from '../users/users.service';
 import {
+  CalendarSettingsDto,
   CancelHolidayDto,
   DeclareHolidayDto,
   DecideRequestDto,
@@ -50,6 +52,24 @@ export class HolidaysController {
     await this.view(req);
     const y = Number(year) || new Date().getFullYear();
     return this.holidays.year(y, await this.actor(req));
+  }
+
+  /** The day drawer: holidays, requests, day type per category and the impact. */
+  @Get('day/:date')
+  async day(@Param('date') date: string, @Req() req: AuthedRequest) {
+    await this.view(req);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new BadRequestException('Use a date like 2026-11-05.');
+    }
+    return this.holidays.day(date, await this.actor(req));
+  }
+
+  @Patch('settings')
+  async settings(@Body() dto: CalendarSettingsDto, @Req() req: AuthedRequest) {
+    await this.holidays.setWeekStartsOn(
+      dto.weekStartsOn,
+      await this.actor(req),
+    );
   }
 
   /** Requests and emergency reviews (pending first) — the Administrator's "Pending approvals". */

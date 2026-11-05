@@ -153,6 +153,37 @@ Two data-driven keys in `role_permissions`:
   - **Cancelling:** before the date it reverses the declaration and restores the route days still ahead. After the date it needs a reason (Administrator only; a Manager changes only future holidays).
   - **Phase 2:** approved leave on those dates will be refunded, with a notice to the Officer.
 
+### 4.4 The calendar page (`features/holidays/`, built 2026-11-05)
+- **Views:**
+  - **Month** (default): ‹ › arrows and a "Today" button.
+  - **Year:** 12 mini-months with a dot per holiday, plus counts per type.
+  - **List:** the old table, kept for printing and CSV export.
+- **The URL holds the state:** `?view=&month=YYYY-MM&show=factory|office&day=YYYY-MM-DD`. Defaults are left out, so `/holidays` is this month. The open day drawer is in the URL too.
+- **Month grid:**
+  - 7 columns; "Week starts on" (`system_settings.holidays.weekStartsOn`, default Monday) is set by the Administrator.
+  - Each day shows its number and up to two chips, then "+N more".
+  - Chips are coloured by type **with an icon and a label**: Moon = Poya, Flag = Public, DoorClosed = Factory closure, Users = Category holiday, Hourglass + dashed = Awaiting approval.
+  - **"Show for: Factory workers / Office staff"** shades that category's weekly holiday (the rule in force that week, same as `working-days.ts`), its half day, and its category holidays.
+  - Today is outlined; past days are muted.
+  - **Below `md`** the grid becomes an agenda list of the days that have something on them.
+- **Day drawer** (`GET /holidays/day/:date`):
+  - the day type for each category;
+  - each holiday's type, paid / work allowed, who it applies to, who created it and when, and its source (manual / Google / file);
+  - requests awaiting approval;
+  - the impact: attendance already marked, routes scheduled, and approved leave (shown once leave requests exist);
+  - Edit / Delete only when `canChange` is true.
+- **Right panel:**
+  - Pending approvals (Administrator), Upcoming (next 5), Legend;
+  - Holiday type settings (read-only text without `holidayStatutory: edit`);
+  - Weekly holiday by category ("Propose" for a Manager, "Save" for the Administrator);
+  - Rest days.
+- **Top actions by permission:**
+  - "Add holiday": Poya / public for the Administrator; a category holiday for a Manager.
+  - "Declare factory closure": a request for a Manager, with an "Emergency, today only" option.
+  - Officers see "View only".
+- **Colours** come only from the tokens. The new `components/ui/Drawer.tsx` is the side panel.
+- **Phone width:** the portal shell (sidebar) is desktop-only today. The calendar itself switches to the agenda list, but the shell does not collapse its sidebar.
+
 ## 5. Agent Dispatch: one record, two views
 - **The record:** `employee_attendance` is the record. `agent_day_status` is the board's view of it, plus shift times. Agents link through `collection_agents.hr_employee_id`.
 - **Attendance → board:** marking an agent **Absent** or **Leave** in attendance makes him ABSENT on the board for that date (the board shows "On leave" for leave) and excludes him from cover candidates. From today on, he also hands back any cover he holds. Marking him Present again lifts it.

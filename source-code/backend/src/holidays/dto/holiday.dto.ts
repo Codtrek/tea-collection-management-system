@@ -127,6 +127,12 @@ export class DecideRequestDto {
   reason: string;
 }
 
+export class CalendarSettingsDto {
+  /** 0 = Sunday, 1 = Monday */
+  @IsIn([0, 1])
+  weekStartsOn: 0 | 1;
+}
+
 export class CancelHolidayDto {
   @IsOptional()
   @IsString()

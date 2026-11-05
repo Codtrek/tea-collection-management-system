@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
 import { Repository } from 'typeorm';
+import { SystemSettingEntity } from '../admin/system-setting.entity';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { DispatchAccessService } from '../dispatch/dispatch-access.service';
@@ -162,6 +163,8 @@ export class HolidayService {
     private readonly payroll: Repository<PayrollRunEntity>,
     @InjectRepository(User)
     private readonly users: Repository<User>,
+    @InjectRepository(SystemSettingEntity)
+    private readonly settings: Repository<SystemSettingEntity>,
   ) {}
 
   // ── reads ───────────────────────────────────────────────────────────────
@@ -201,19 +204,117 @@ export class HolidayService {
     };
   }
 
-  /** The calendar page: a year's holidays, pending requests, the type defaults, weekly rules, rest days. */
-  async year(year: number, actor: HolidayActor, now: Date = new Date()) {
-    const [rows, typeRows, weekly, rest, employees, pending, levels, locks] =
+  /** The calendar's first weekday (0 = Sunday, 1 = Monday) — `system_settings.holidays.weekStartsOn`. */
+  async weekStartsOn(): Promise<0 | 1> {
+    const row = await this.settings.findOne({ where: { key: 'holidays' } });
+    const v = (row?.value as { weekStartsOn?: unknown } | undefined)
+      ?.weekStartsOn;
+    return v === 0 ? 0 : 1;
+  }
+
+  async setWeekStartsOn(day: 0 | 1, actor: HolidayActor): Promise<void> {
+    await this.gate(actor, 'types');
+    const row =
+      (await this.settings.findOne({ where: { key: 'holidays' } })) ??
+      this.settings.create({ key: 'holidays', value: {} });
+    row.value = { ...(row.value as object), weekStartsOn: day };
+    Object.assign(row, { updatedBy: actor.name, updatedAt: new Date() });
+    await this.settings.save(row);
+    await this.audit.record(actor, {
+      action: 'Changed the calendar week start',
+      module: 'Holidays',
+      record: 'Holiday calendar',
+      recordHref: '/holidays',
+      details: `Week starts on ${DAY_NAMES[day]}`,
+    });
+  }
+
+  /**
+   * The day drawer: that day's holidays (with who / where from), requests awaiting approval,
+   * the day type per category, and what a change would touch — attendance already marked,
+   * routes scheduled, approved leave (null until leave requests exist, Phase 2).
+   */
+  async day(date: string, actor: HolidayActor, now: Date = new Date()) {
+    const [all, typeRows, pending, levels, employees, locks, marked, routes] =
       await Promise.all([
         this.holidays.find(),
         this.types.find(),
-        this.weekly.find(),
-        this.restDays.find(),
-        this.employees.find(),
         this.requests.find({ where: { status: 'pending' } }),
         this.levels(actor),
+        this.employees.find(),
         this.payrollLocks(),
+        this.attendance.find({ where: { date } }),
+        this.routes.find(),
       ]);
+    const types = this.typeMap(typeRows);
+    const facts = await this.facts(date, date);
+    const scheduled = await this.schedule.scheduledRoutesOn(date);
+    const names = marked
+      .map((a) => employees.find((e) => e.id === a.employeeId)?.name)
+      .filter((n): n is string => !!n)
+      .sort();
+    return {
+      date,
+      holidays: all
+        .filter((h) => h.date === date)
+        .sort(
+          (a, b) =>
+            Number(!!a.cancelledAt) - Number(!!b.cancelledAt) || a.id - b.id,
+        )
+        .map((h) =>
+          this.toPublic(
+            h,
+            types,
+            allowed(
+              this.changeOutcome(h, all, actor, levels, employees, locks, now),
+            ),
+          ),
+        ),
+      pending: pending
+        .filter((r) => r.dateFrom <= date && r.dateTo >= date)
+        .map((r) => this.toPublicRequest(r)),
+      dayType: {
+        factory: dayInfo(date, { id: 0, category: 'factory' }, facts),
+        office: dayInfo(date, { id: 0, category: 'office' }, facts),
+      },
+      impact: {
+        attendanceMarked: names.length,
+        attendanceNames: names.slice(0, 12),
+        routes: [...scheduled]
+          .map((id) => ({
+            id,
+            name: routes.find((r) => r.id === id)?.name ?? `Route ${id}`,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+        /** approved leave that day — leave requests arrive in Phase 2 */
+        approvedLeave: null as number | null,
+      },
+    };
+  }
+
+  /** The calendar page: a year's holidays, pending requests, the type defaults, weekly rules, rest days. */
+  async year(year: number, actor: HolidayActor, now: Date = new Date()) {
+    const [
+      rows,
+      typeRows,
+      weekly,
+      rest,
+      employees,
+      pending,
+      levels,
+      locks,
+      weekStartsOn,
+    ] = await Promise.all([
+      this.holidays.find(),
+      this.types.find(),
+      this.weekly.find(),
+      this.restDays.find(),
+      this.employees.find(),
+      this.requests.find({ where: { status: 'pending' } }),
+      this.levels(actor),
+      this.payrollLocks(),
+      this.weekStartsOn(),
+    ]);
     const types = this.typeMap(typeRows);
     const inYear = (y: number) =>
       rows.filter((h) => h.date.startsWith(`${y}-`));
@@ -222,6 +323,7 @@ export class HolidayService {
     const live = inYear(year).filter((h) => !h.cancelledAt);
     return {
       year,
+      weekStartsOn,
       holidays: inYear(year)
         .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
         .map((h) =>

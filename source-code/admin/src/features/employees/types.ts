@@ -404,6 +404,8 @@ export type HolidayChangeResult = { status: 'applied' } | { status: 'pending' | 
 
 export interface HolidayYear {
   year: number
+  /** the calendar's first weekday: 0 = Sunday, 1 = Monday */
+  weekStartsOn: 0 | 1
   holidays: Holiday[]
   counts: { poya: number; public: number; closure: number }
   pending: HolidayRequest[]
@@ -412,6 +414,30 @@ export interface HolidayYear {
   restDays: { id: number; employeeId: string; employeeName: string; weekday: number | null; effectiveFrom: string }[]
   nextYearMissing: boolean
   nextYear: number
+}
+
+/** One employee category's day type (backend working-days.ts `dayInfo`). */
+export interface HolidayDayInfo {
+  type: 'working' | 'half' | 'weekly' | 'rest' | 'poya' | 'public' | 'closure'
+  label: string | null
+  working: boolean
+  paid: boolean
+  workAllowed: boolean
+}
+
+/** The day drawer (`GET /holidays/day/:date`). */
+export interface HolidayDay {
+  date: string
+  holidays: Holiday[]
+  pending: HolidayRequest[]
+  dayType: { factory: HolidayDayInfo; office: HolidayDayInfo }
+  impact: {
+    attendanceMarked: number
+    attendanceNames: string[]
+    routes: { id: number; name: string }[]
+    /** null until leave requests exist (Phase 2) */
+    approvedLeave: number | null
+  }
 }
 
 export interface DeclarePreview {

@@ -11,7 +11,7 @@ import { EmployeeRegistrationPage } from './features/employees/EmployeeRegistrat
 import { EmployeeDetailPage } from './features/employees/EmployeeDetailPage'
 import { EmployeeEditPage } from './features/employees/EmployeeEditPage'
 import { AttendanceOverviewPage } from './features/employees/AttendanceOverviewPage'
-import { HolidayCalendarPage } from './features/employees/HolidayCalendarPage'
+import { HolidayCalendarPage } from './features/holidays/HolidayCalendarPage'
 import { AttendanceEntryPage } from './features/employees/AttendanceEntryPage'
 import { AdvanceListPage } from './features/employees/AdvanceListPage'
 import { AdvanceDetailPage } from './features/employees/AdvanceDetailPage'

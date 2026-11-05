@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { SystemSettingEntity } from '../admin/system-setting.entity';
 import { AuditModule } from '../audit/audit.module';
 import { DispatchModule } from '../dispatch/dispatch.module';
 import { RouteScheduleOverrideEntity } from '../dispatch/route-schedule.entity';
@@ -33,6 +34,7 @@ import { WeeklyHolidayRuleEntity } from './weekly-holiday-rule.entity';
       HolidayRequestEntity,
       PayrollRunEntity,
       User,
+      SystemSettingEntity,
     ]),
     DispatchModule,
     FertilizerModule,

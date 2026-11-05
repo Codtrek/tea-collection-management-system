@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api'
-import type { DeclarePreview, Holiday, HolidayChangeResult, HolidayRequest, HolidayYear } from '@/features/employees/types'
+import type { DeclarePreview, Holiday, HolidayChangeResult, HolidayDay, HolidayRequest, HolidayYear } from '@/features/employees/types'
 
 /*
   The holiday calendar (Attendance-Leave-Addendum §4). The server decides every change with the
@@ -10,6 +10,16 @@ import type { DeclarePreview, Holiday, HolidayChangeResult, HolidayRequest, Holi
 
 export function getYear(year: number): Promise<HolidayYear> {
   return apiFetch<HolidayYear>(`/holidays?year=${year}`)
+}
+
+/** The day drawer: holidays, requests awaiting approval, day type per category, and the impact. */
+export function getDay(date: string): Promise<HolidayDay> {
+  return apiFetch<HolidayDay>(`/holidays/day/${date}`)
+}
+
+/** "Week starts on" (holidayStatutory: edit). */
+export function setWeekStartsOn(weekStartsOn: 0 | 1): Promise<void> {
+  return apiFetch<void>('/holidays/settings', { method: 'PATCH', body: JSON.stringify({ weekStartsOn }) })
 }
 
 /** Last year's Poya / public holiday names (dates blank) — a template for a new year. */

@@ -68,7 +68,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Estate Owners', to: '/estates', icon: Mountain, module: 'estateOwners' },
       { label: 'Employees', to: '/employees', icon: Users, module: 'employees' },
       { label: 'Attendance', to: '/employees/attendance', icon: CalendarCheck, module: 'attendance' },
-      // Attendance-Leave-Addendum — the Factory Manager's (holidayCalendar: edit); everyone else views
+      // Attendance-Leave-Addendum §4 — everyone with holidayCalendar: view; changes follow the holiday matrix
       { label: 'Holiday Calendar', to: '/holidays', icon: CalendarDays, module: 'holidayCalendar' },
       { label: 'Performance', to: '/employees/performance', icon: TrendingUp, module: 'performance' },
     ],
