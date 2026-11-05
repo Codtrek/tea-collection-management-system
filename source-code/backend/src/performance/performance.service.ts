@@ -1,6 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { gradedTotalKg, isGraded } from '../collections/collection-map';
@@ -18,8 +23,10 @@ import {
 import { EmployeeAttendanceEntity } from '../employees/employee-attendance.entity';
 import { formatEmployeeId } from '../employees/employee-map';
 import { EmployeeEntity } from '../employees/employee.entity';
+import { EstateEntity } from '../estates/estate.entity';
 import { RouteEntity } from '../estates/route.entity';
 import { FertilizerDeliveryEntity } from '../fertilizer/fertilizer-delivery.entity';
+import { FAIL_REASON_LABEL } from '../fertilizer/fertilizer-map';
 import { HolidayService } from '../holidays/holiday.service';
 import {
   type CalendarFacts,
@@ -34,6 +41,8 @@ import {
   fertilizerFirstAttempt,
   type GradedDelivery,
   kgMeasure,
+  OWNER_SIDE,
+  outsideTolerance,
   MIN_ROUTE_HISTORY_DAYS,
   type Measure,
   type MeasureKey,
@@ -43,6 +52,7 @@ import {
   trendOf,
   weightAccuracy,
 } from './performance-rules';
+import { PerformanceNoteEntity } from './performance-note.entity';
 
 /** A collection request on a route day that ran: it was the agent's stop. */
 const SCHEDULED = new Set([
@@ -97,6 +107,24 @@ export interface PersonMeasures {
 
 interface Actor {
   role: AppRole;
+  name?: string;
+  sub?: number | null;
+}
+
+/** One row of a drill-down: the record behind a measure. */
+export interface DrillRow {
+  date: string;
+  title: string;
+  detail: string | null;
+  /** e.g. "Owner-side" for a fertilizer failure that wasn't the agent's doing */
+  tag: string | null;
+}
+
+export interface PublicNote {
+  id: number;
+  note: string;
+  author: string;
+  createdAt: string;
 }
 
 /** Everything the measures read, loaded once per request. */
@@ -138,6 +166,11 @@ export class PerformanceService {
     private readonly schedule: RouteScheduleService,
     private readonly collectionSettings: CollectionSettingsService,
     private readonly access: DispatchAccessService,
+    @InjectRepository(PerformanceNoteEntity)
+    private readonly notes: Repository<PerformanceNoteEntity>,
+    @InjectRepository(EstateEntity)
+    private readonly estates: Repository<EstateEntity>,
+    private readonly audit: AuditService,
   ) {}
 
   async requireView(actor: Actor): Promise<void> {
@@ -284,6 +317,240 @@ export class PerformanceService {
         .map((a) => a.status),
     );
     return out;
+  }
+
+  // ── one employee: the last 6 months, drill-downs, notes ──────────────────
+
+  /** The same measures month by month (the employee's Performance tab), each against their own previous 3 months. */
+  async employee(
+    employeeId: number,
+    months: number,
+    actor: Actor,
+    now: Date = new Date(),
+  ) {
+    await this.requireView(actor);
+    const { e, agentId } = await this.person(employeeId);
+    const today = localDate(now);
+    const last = lastCompleteMonth(today);
+    const list = Array.from({ length: months }, (_, i) =>
+      shiftMonth(last, i - months + 1),
+    );
+    const data = await this.load(
+      previousThreeMonths(`${list[0]}-01`).from,
+      periodOf(last, 1, today).to,
+      now,
+    );
+    const keys = agentId === null ? STAFF_MEASURES : AGENT_MEASURES;
+    return {
+      employeeId: formatEmployeeId(e.id),
+      name: e.name,
+      role: e.role,
+      isAgent: agentId !== null,
+      tolerancePct: data.tolerancePct,
+      measures: keys,
+      months: list.map((month) => {
+        const period = periodOf(month, 1, today);
+        const cur = this.measuresFor(e, agentId, period, data);
+        const prev = this.measuresFor(
+          e,
+          agentId,
+          previousThreeMonths(period.from),
+          data,
+        );
+        return {
+          month,
+          label: period.label,
+          measures: Object.fromEntries(
+            keys
+              .filter((k) => cur[k])
+              .map((k) => [k, trendOf(cur[k]!, prev[k] ?? null)]),
+          ),
+        };
+      }),
+      comingSoon: agentId === null ? [] : COMING_SOON,
+      notes: await this.listNotes(e.id),
+    };
+  }
+
+  /** The records behind one measure in one month — missed stops, deliveries outside the tolerance … */
+  async drill(
+    employeeId: number,
+    measure: MeasureKey,
+    month: string,
+    actor: Actor,
+    now: Date = new Date(),
+  ): Promise<{
+    measure: MeasureKey;
+    month: string;
+    label: string;
+    rows: DrillRow[];
+  }> {
+    await this.requireView(actor);
+    const { e, agentId } = await this.person(employeeId);
+    const today = localDate(now);
+    const period = periodOf(month, 1, today);
+    const data = await this.load(
+      previousThreeMonths(period.from).from,
+      period.to,
+      now,
+    );
+    const routeName = (id: number) =>
+      data.routes.find((r) => r.id === id)?.name ?? `Route ${id}`;
+    const kg = (v: number) => `${Math.round(v * 10) / 10} kg`;
+    let rows: DrillRow[] = [];
+
+    if (
+      measure === 'attendance' ||
+      measure === 'absences' ||
+      measure === 'leave'
+    ) {
+      rows = this.attendanceDays(e, period, data)
+        .filter(
+          (d) =>
+            d.working && d.status !== 'Present' && d.status !== 'Short leave',
+        )
+        .filter((d) => measure !== 'absences' || d.status === 'Absent')
+        .filter((d) => measure !== 'leave' || d.status === 'Leave')
+        .map((d) => ({
+          date: d.date,
+          title: d.status ?? 'Not marked',
+          detail:
+            d.status === null
+              ? 'Left out of the rate — nobody marked this day'
+              : d.status === 'Leave'
+                ? 'Leave — left out of the rate'
+                : null,
+          tag: null,
+        }));
+    } else {
+      if (agentId === null) {
+        throw new BadRequestException('This measure is for collection agents.');
+      }
+      const routeDays = this.routeDays(agentId, period, data);
+      if (measure === 'routeCompletion') {
+        rows = this.stopsOn(routeDays, data)
+          .filter((s) => !s.visited)
+          .map((s) => ({
+            date: s.date,
+            title: s.estateName,
+            detail: `${routeName(s.routeId)} · reason not recorded`,
+            tag: null,
+          }));
+      } else if (measure === 'kg') {
+        rows = this.kgByRouteDay(agentId, routeDays, period, data).map((d) => ({
+          date: d.date,
+          title: routeName(d.routeId),
+          detail: `${kg(d.kg)} · route average ${d.routeAverage === null ? 'not enough history' : kg(d.routeAverage)}`,
+          tag: null,
+        }));
+      } else if (measure === 'weightAccuracy') {
+        rows = outsideTolerance(
+          this.graded(this.collectedBy(agentId, period, data)),
+          data.tolerancePct,
+        ).map((d) => ({
+          date: d.date,
+          title: `${d.estateName} (${d.id})`,
+          detail: `Estate ${kg(d.estateKg)} · factory ${kg(d.factoryKg)} · ${Math.round((Math.abs(d.estateKg - d.factoryKg) / d.estateKg) * 1000) / 10}% apart (tolerance ${data.tolerancePct}%)`,
+          tag: null,
+        }));
+      } else if (measure === 'fertilizer') {
+        const estates = await this.estates.find();
+        rows = this.firstAttempts(agentId, period, data)
+          .filter((d) => d.outcome === 'failed')
+          .map((d) => ({
+            date: d.scheduledDate,
+            title:
+              estates.find((x) => x.id === d.estateId)?.name ??
+              d.ownerName ??
+              `Estate ${d.estateId}`,
+            detail: FAIL_REASON_LABEL[d.failReason ?? 'other'],
+            tag:
+              d.failReason && OWNER_SIDE.includes(d.failReason)
+                ? 'Owner-side'
+                : null,
+          }));
+      } else if (measure === 'coverHelp') {
+        rows = data.assignments
+          .filter(
+            (a) =>
+              a.type === 'COVER' &&
+              a.agentId === agentId &&
+              a.validFrom >= period.from &&
+              a.validFrom <= period.to,
+          )
+          .map((a) => ({
+            date: a.validFrom,
+            title: routeName(a.routeId),
+            detail: COVER_STATUS[a.status] ?? a.status,
+            tag: null,
+          }));
+      }
+    }
+    return {
+      measure,
+      month,
+      label: period.label,
+      rows: rows.sort((a, b) => a.date.localeCompare(b.date)),
+    };
+  }
+
+  /** A dated note from a conversation — `performance: edit` (Manager, Administrator); audited. */
+  async addNote(
+    employeeId: number,
+    note: string,
+    actor: Actor,
+    now: Date = new Date(),
+  ): Promise<PublicNote> {
+    await this.access.require(
+      actor.role,
+      'edit',
+      'add performance notes',
+      'performance',
+    );
+    const text = note.trim();
+    if (!text) throw new BadRequestException('Write the note first.');
+    const { e } = await this.person(employeeId);
+    const saved = await this.notes.save(
+      this.notes.create({
+        employeeId: e.id,
+        note: text,
+        author: actor.name ?? 'Unknown',
+        authorUserId: actor.sub ?? null,
+        createdAt: now,
+      }),
+    );
+    await this.audit.record(
+      { name: actor.name ?? 'Unknown', role: actor.role, sub: actor.sub },
+      {
+        action: 'Added a performance note',
+        module: 'Performance',
+        record: e.name,
+        recordHref: `/employees/${formatEmployeeId(e.id)}?tab=performance`,
+      },
+    );
+    return toNote(saved);
+  }
+
+  private async listNotes(employeeId: number): Promise<PublicNote[]> {
+    return (await this.notes.find({ where: { employeeId } }))
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
+      .map(toNote);
+  }
+
+  private async person(employeeId: number) {
+    const [e, agents] = await Promise.all([
+      this.employees.findOne({ where: { id: employeeId } }),
+      this.agents.find(),
+    ]);
+    if (!e)
+      throw new NotFoundException(
+        `No employee ${formatEmployeeId(employeeId)}.`,
+      );
+    const agentId = agents.find((a) => a.hrEmployeeId === e.id)?.id ?? null;
+    return { e, agentId };
   }
 
   // ── data ───────────────────────────────────────────────────────────────
@@ -549,4 +816,21 @@ export function previousThreeMonths(from: string): Period {
 /** The last month that has fully ended — the page's default. */
 export function lastCompleteMonth(today: string): string {
   return shiftMonth(today.slice(0, 7), -1);
+}
+
+const COVER_STATUS: Record<string, string> = {
+  ACTIVE: 'Accepted',
+  DECLINED: 'Declined',
+  EXPIRED: 'Expired — no answer',
+  PENDING: 'Waiting for an answer',
+  CANCELLED: 'Cancelled',
+};
+
+function toNote(n: PerformanceNoteEntity): PublicNote {
+  return {
+    id: n.id,
+    note: n.note,
+    author: n.author,
+    createdAt: new Date(n.createdAt).toISOString(),
+  };
 }

@@ -37,3 +37,32 @@ export interface TeamPerformance {
   averages: Record<string, Partial<Record<MeasureKey, number | null>>>
   comingSoon: { key: string; label: string; reason: string }[]
 }
+
+/** One employee month by month — the Performance tab. */
+export interface EmployeePerformance {
+  employeeId: string
+  name: string
+  role: string
+  isAgent: boolean
+  tolerancePct: number
+  measures: MeasureKey[]
+  months: { month: string; label: string; measures: Partial<Record<MeasureKey, Measure>> }[]
+  comingSoon: { key: string; label: string; reason: string }[]
+  notes: PerformanceNote[]
+}
+
+/** A record behind a measure (a missed stop, a delivery outside the tolerance …). */
+export interface DrillRow {
+  date: string
+  title: string
+  detail: string | null
+  /** e.g. "Owner-side" */
+  tag: string | null
+}
+
+export interface PerformanceNote {
+  id: number
+  note: string
+  author: string
+  createdAt: string
+}

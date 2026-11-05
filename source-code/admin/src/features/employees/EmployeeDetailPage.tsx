@@ -1,4 +1,5 @@
 import { EmployeeAttendanceTab } from './EmployeeAttendanceTab'
+import { EmployeePerformanceTab } from '@/features/performance/EmployeePerformanceTab'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -242,6 +243,8 @@ export function EmployeeDetailPage() {
         />
       ),
     },
+    // Performance-Addendum §5 — Manager and Administrator only (data-driven)
+    ...(can('performance', 'view') ? [{ id: 'performance', label: 'Performance', content: <EmployeePerformanceTab employeeId={employee.id} /> }] : []),
     { id: 'documents', label: 'Documents', content: <EmptyState title="No documents uploaded" description="NIC copy and photo appear here." /> },
   ]
 

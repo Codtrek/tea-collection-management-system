@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
+import type { AuditService } from '../audit/audit.service';
 import type { CollectionSettingsService } from '../collections/collection-settings.service';
 import type { DispatchAccessService } from '../dispatch/dispatch-access.service';
 import type { RouteScheduleService } from '../dispatch/route-schedule.service';
@@ -8,8 +9,18 @@ import { DEFAULT_TYPES } from '../holidays/working-days';
 import { PerformanceService, periodOf } from './performance.service';
 
 const NOW = new Date('2026-11-05T06:00:00Z');
-const repo = <T>(rows: T[]) =>
-  ({ find: () => Promise.resolve(rows) }) as unknown as Repository<never>;
+const repo = <T extends object>(rows: T[]) =>
+  ({
+    find: () => Promise.resolve(rows),
+    findOne: (o: { where: Partial<T> }) =>
+      Promise.resolve(
+        rows.find((r) =>
+          Object.entries(o.where).every(
+            ([k, v]) => (r as Record<string, unknown>)[k] === v,
+          ),
+        ) ?? null,
+      ),
+  }) as unknown as Repository<never>;
 
 const rec = (
   id: string,
@@ -182,6 +193,23 @@ function setup(role = 'Manager', historyDays = 5) {
         : Promise.resolve(),
     ),
   };
+  const saved: {
+    id?: number;
+    employeeId: number;
+    note: string;
+    author: string;
+    createdAt: Date;
+  }[] = [];
+  const notes = {
+    find: () => Promise.resolve(saved),
+    create: (x: (typeof saved)[number]) => ({ ...x }),
+    save: (x: (typeof saved)[number]) => {
+      x.id = saved.length + 1;
+      saved.push(x);
+      return Promise.resolve(x);
+    },
+  };
+  const audit = { record: jest.fn().mockResolvedValue(undefined) };
   const service = new PerformanceService(
     repo([
       {
@@ -223,8 +251,11 @@ function setup(role = 'Manager', historyDays = 5) {
       get: jest.fn().mockResolvedValue({ mismatchTolerancePct: 5 }),
     } as unknown as CollectionSettingsService,
     access as unknown as DispatchAccessService,
+    notes as unknown as Repository<never>,
+    repo([{ id: 50, name: 'Hill Top Estate' }]),
+    audit as unknown as AuditService,
   );
-  return { service, role };
+  return { service, role, audit, saved };
 }
 
 const agentRow = async (s = setup()) => {
@@ -347,6 +378,105 @@ describe('PerformanceService', () => {
       'leave',
     ]);
     expect(Object.keys(t.averages)).toEqual(['Machine Operator']);
+  });
+
+  describe('the employee tab', () => {
+    it('shows the same measures month by month (last 6 complete months)', async () => {
+      const { service } = setup();
+      const emp = await service.employee(7, 6, { role: 'Manager' }, NOW);
+      expect(emp.months.map((m) => m.month)).toEqual([
+        '2026-05',
+        '2026-06',
+        '2026-07',
+        '2026-08',
+        '2026-09',
+        '2026-10',
+      ]);
+      const oct = emp.months.at(-1)!;
+      // the same numbers the team table shows
+      const { row } = await agentRow();
+      expect(oct.measures.routeCompletion).toEqual(
+        row.measures.routeCompletion,
+      );
+      expect(oct.measures.kg).toEqual(row.measures.kg);
+    });
+
+    it('drill-downs list exactly the records behind the counts', async () => {
+      const { service } = setup();
+      const missed = await service.drill(
+        7,
+        'routeCompletion',
+        '2026-10',
+        { role: 'Manager' },
+        NOW,
+      );
+      expect(missed.rows).toEqual([
+        {
+          date: '2026-10-13',
+          title: 'Estate F',
+          detail: 'Route 3 · reason not recorded',
+          tag: null,
+        },
+      ]);
+      const weight = await service.drill(
+        7,
+        'weightAccuracy',
+        '2026-10',
+        { role: 'Manager' },
+        NOW,
+      );
+      expect(weight.rows.map((r) => r.title)).toEqual(['Estate B (B)']);
+      expect(weight.rows[0].detail).toMatch(
+        /Estate 110 kg · factory 104 kg · 5.5% apart \(tolerance 5%\)/,
+      );
+      const fert = await service.drill(
+        7,
+        'fertilizer',
+        '2026-10',
+        { role: 'Manager' },
+        NOW,
+      );
+      expect(fert.rows.map((r) => [r.detail, r.tag])).toEqual([
+        ['Owner not available', 'Owner-side'],
+        ['Road not passable', null],
+      ]);
+      const leave = await service.drill(
+        7,
+        'leave',
+        '2026-10',
+        { role: 'Manager' },
+        NOW,
+      );
+      expect(leave.rows.map((r) => r.date)).toEqual(['2026-10-14']);
+    });
+
+    it('notes: Manager and Administrator write them (audited); an Officer can’t', async () => {
+      const { service, audit, saved } = setup();
+      await service.addNote(
+        7,
+        '  Talked about the Route 3 Tuesday stops.  ',
+        { role: 'Manager', name: 'R. Jayasuriya', sub: 3 },
+        NOW,
+      );
+      expect(saved[0]).toMatchObject({
+        employeeId: 7,
+        note: 'Talked about the Route 3 Tuesday stops.',
+        author: 'R. Jayasuriya',
+      });
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'R. Jayasuriya' }),
+        expect.objectContaining({
+          action: 'Added a performance note',
+          module: 'Performance',
+        }),
+      );
+      await expect(
+        service.addNote(7, 'x', { role: 'Officer', name: 'S. Fernando' }, NOW),
+      ).rejects.toThrow(ForbiddenException);
+      expect(
+        (await service.employee(7, 6, { role: 'Manager' }, NOW)).notes,
+      ).toHaveLength(1);
+    });
   });
 
   it('the permission is enforced on the server', async () => {
