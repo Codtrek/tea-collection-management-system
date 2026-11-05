@@ -1,6 +1,9 @@
-import type { Advance, Employee, PayrollRow } from './types'
+import type { Employee } from './types'
 
-/* Example roster — figures drawn from the module doc's example data. */
+/* Trimmed to just the roster (Employees + Payroll vertical slice, 2026-07-26)
+   — every other page now reads real data via `services/employees.ts`.
+   Kept intentionally: `PerformancePage` (EMP-14) stays mock (self-contained
+   charts, no backend dependency), and its employee picker reads this array. */
 export const EMPLOYEES: Employee[] = [
   {
     id: 'EMP-0001',
@@ -96,20 +99,3 @@ export const EMPLOYEES: Employee[] = [
   },
 ]
 
-export const ADVANCES: Advance[] = [
-  { id: 'EMP-ADV-0231', employeeId: 'EMP-0003', employeeName: 'S. Fernando', amount: 15000, reason: 'Medical expenses', dateRequested: '2026-07-10', status: 'Pending' },
-  { id: 'EMP-ADV-0230', employeeId: 'EMP-0001', employeeName: 'K. Perera', amount: 20000, reason: 'School fees', dateRequested: '2026-07-08', status: 'Approved', decidedBy: 'A. Bandara', decidedOn: '2026-07-09' },
-  { id: 'EMP-ADV-0229', employeeId: 'EMP-0002', employeeName: 'N. Silva', amount: 8000, reason: 'Family event', dateRequested: '2026-07-05', status: 'Rejected', decidedBy: 'A. Bandara', decidedOn: '2026-07-06' },
-]
-
-export const PAYROLL: PayrollRow[] = [
-  { id: 'PR-0001', employeeId: 'EMP-0001', employeeName: 'K. Perera', period: 'July 2026', gross: 85000, deductions: { advances: 20000, other: 4200 }, status: 'Pending' },
-  { id: 'PR-0002', employeeId: 'EMP-0002', employeeName: 'N. Silva', period: 'July 2026', gross: 62000, deductions: { advances: 0, other: 3100 }, status: 'Pending' },
-  { id: 'PR-0003', employeeId: 'EMP-0003', employeeName: 'S. Fernando', period: 'July 2026', gross: 85000, deductions: { advances: 15000, other: 4200 }, status: 'Pending' },
-  { id: 'PR-0004', employeeId: 'EMP-0004', employeeName: 'T. Rajapaksa', period: 'July 2026', gross: 48000, deductions: { advances: 0, other: 2400 }, status: 'Pending', missingBank: true },
-  { id: 'PR-0005', employeeId: 'EMP-0005', employeeName: 'M. Gunawardena', period: 'July 2026', gross: 120000, deductions: { advances: 0, other: 6000 }, status: 'Pending' },
-]
-
-export function netPay(row: PayrollRow): number {
-  return row.gross - row.deductions.advances - row.deductions.other
-}

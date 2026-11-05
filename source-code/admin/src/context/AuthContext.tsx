@@ -79,7 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const level = useCallback(
-    (module: ModuleKey): PermissionLevel => (user ? DEFAULT_PERMISSIONS[user.role][module] : 'none'),
+    (module: ModuleKey): PermissionLevel => {
+      if (!user) return 'none'
+      // Server-driven (ADM-02) wins; DEFAULT_PERMISSIONS is the fallback when the
+      // backend didn't supply a map (older token, unseeded role_permissions).
+      return user.permissions?.[module] ?? DEFAULT_PERMISSIONS[user.role][module] ?? 'none'
+    },
     [user],
   )
 

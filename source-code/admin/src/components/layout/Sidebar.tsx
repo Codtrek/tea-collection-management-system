@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { PanelLeftClose, PanelLeft } from 'lucide-react'
 import { NAV_GROUPS } from './nav'
 import { useAuth } from '@/context/AuthContext'
@@ -8,6 +8,11 @@ import brandMark from '@/assets/brand/brandLogoGreen.svg'
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { can } = useAuth()
+  const { pathname } = useLocation()
+  // Agent Dispatch lives under /collections/…, so the plain Collection entry (which matches by
+  // prefix, to stay lit on record pages) must step aside on the dispatch page.
+  const onDispatchPage = pathname.startsWith('/collections/dispatch')
+  const isLit = (to: string, isActive: boolean) => isActive && !(to === '/collections' && onDispatchPage)
 
   // Permission-aware: whole group hides when no child is permitted (§4 — hidden, never greyed).
   const groups = NAV_GROUPS.map((g) => ({
@@ -43,7 +48,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                       cn(
                         'group relative flex items-center gap-3 rounded-[var(--radius-sm)] px-2 py-2 text-sm font-medium transition-colors',
                         collapsed && 'justify-center',
-                        isActive
+                        isLit(item.to, isActive)
                           ? 'bg-brand-soft text-primary'
                           : 'text-text-muted hover:bg-surface-hover hover:text-text',
                       )
@@ -51,7 +56,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                   >
                     {({ isActive }) => (
                       <>
-                        {isActive && <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand" />}
+                        {isLit(item.to, isActive) && <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand" />}
                         <item.icon className="size-5 shrink-0" strokeWidth={1.5} />
                         {!collapsed && <span className="truncate">{item.label}</span>}
                       </>

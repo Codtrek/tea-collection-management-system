@@ -12,7 +12,7 @@ import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
 import Avatar from "@/components/ui/Avatar";
-import Header from "@/components/ui/Header";
+import Header from "@/components/ui/GeneralHeader";
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";

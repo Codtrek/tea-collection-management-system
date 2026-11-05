@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Plus, Upload } from 'lucide-react'
+import { Plus, Upload, Loader2 } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { AdminGuard } from './AdminGuard'
 import { Tabs } from '@/components/ui/Tabs'
@@ -8,30 +9,22 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { DataTable, type Column } from '@/components/data/DataTable'
+import { ErrorState } from '@/components/data/ErrorState'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { useToast } from '@/components/ui/Toast'
+import { ApiError } from '@/lib/api'
+import * as adminService from '@/services/admin'
+import type { GradeRate } from './types'
 import { formatCurrency, formatDate } from '@/lib/format'
 
 /*
   ADM-01 — factory details + the business-rule values other modules calculate
   against. Grade rates are VERSIONED with effective dates (the doc's
-  correctness concern): EST-08 uses the rate at collection time, so past
-  settlements never silently recalculate when a rate changes.
+  correctness concern) and now persisted server-side (grade_rates): EST-08
+  snapshots the rate at collection time, so past settlements never silently
+  recalculate when a rate changes. General info / transport / beneficiary items
+  remain static config UI for now (no backing table this slice).
 */
-
-interface RateVersion {
-  effective: string
-  superRate: number
-  normalRate: number
-  setBy: string
-  current?: boolean
-}
-
-const RATE_HISTORY: RateVersion[] = [
-  { effective: '2026-07-01', superRate: 185, normalRate: 95, setBy: 'A. Bandara', current: true },
-  { effective: '2026-04-01', superRate: 180, normalRate: 92, setBy: 'A. Bandara' },
-  { effective: '2026-01-01', superRate: 172, normalRate: 88, setBy: 'A. Bandara' },
-]
 
 const ITEM_TYPES = [
   { name: 'Rice', unit: 'kg' },
@@ -48,17 +41,50 @@ const TABS = [
 
 export function FactorySetupPage() {
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [tab, setTab] = useState('general')
   const [confirming, setConfirming] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const rateColumns: Column<RateVersion>[] = [
+  // New-rate-version form (Grade Rates tab)
+  const [newSuper, setNewSuper] = useState('185')
+  const [newNormal, setNewNormal] = useState('95')
+  const [newEffective, setNewEffective] = useState('2026-08-01')
+  const [confirmVersion, setConfirmVersion] = useState(false)
+
+  const {
+    data: rates,
+    isPending: ratesLoading,
+    isError: ratesError,
+    refetch: refetchRates,
+  } = useQuery({
+    queryKey: ['admin', 'grade-rates'],
+    queryFn: adminService.getGradeRates,
+  })
+
+  const publishMutation = useMutation({
+    mutationFn: () =>
+      adminService.createGradeRate({
+        superRate: Number(newSuper),
+        normalRate: Number(newNormal),
+        effectiveDate: newEffective,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'grade-rates'] })
+      toast('New grade-rate version published — audit entry recorded')
+      setConfirmVersion(false)
+    },
+    onError: (err) =>
+      toast(err instanceof ApiError ? err.message : 'Could not publish the rate version', 'danger'),
+  })
+
+  const rateColumns: Column<GradeRate>[] = [
     {
-      key: 'effective',
+      key: 'effectiveDate',
       header: 'Effective from',
       render: (r) => (
         <span className="flex items-center gap-2">
-          {formatDate(r.effective)}
+          {formatDate(r.effectiveDate)}
           {r.current && <StatusBadge tone="success">Current</StatusBadge>}
         </span>
       ),
@@ -71,10 +97,10 @@ export function FactorySetupPage() {
   const save = () => {
     setSaving(true)
     setTimeout(() => {
-      toast('Factory setup saved — audit entry recorded')
+      toast('Factory setup saved')
       setSaving(false)
       setConfirming(false)
-    }, 600)
+    }, 400)
   }
 
   return (
@@ -82,7 +108,13 @@ export function FactorySetupPage() {
       <PageHeader
         title="Factory Setup"
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Administration' }, { label: 'Factory Setup' }]}
-        actions={<Button onClick={() => setConfirming(true)}>Save Changes</Button>}
+        actions={
+          tab === 'grades' ? (
+            <Button onClick={() => setConfirmVersion(true)}>Publish New Version</Button>
+          ) : (
+            <Button onClick={() => setConfirming(true)}>Save Changes</Button>
+          )
+        }
       />
 
       <Tabs tabs={TABS} active={tab} onChange={setTab} className="mb-5" />
@@ -117,12 +149,21 @@ export function FactorySetupPage() {
               <span className="text-xs text-text-muted">Applies from its effective date — past settlements keep their rate</span>
             </div>
             <div className="mt-3 grid gap-4 sm:grid-cols-3">
-              <Input label="Super grade (Rs./kg)" type="number" min="0" defaultValue="185" />
-              <Input label="Normal grade (Rs./kg)" type="number" min="0" defaultValue="95" />
-              <Input label="Effective date" type="date" defaultValue="2026-08-01" />
+              <Input label="Super grade (Rs./kg)" type="number" min="0" value={newSuper} onChange={(e) => setNewSuper(e.target.value)} />
+              <Input label="Normal grade (Rs./kg)" type="number" min="0" value={newNormal} onChange={(e) => setNewNormal(e.target.value)} />
+              <Input label="Effective date" type="date" value={newEffective} onChange={(e) => setNewEffective(e.target.value)} />
             </div>
           </Card>
-          <DataTable columns={rateColumns} rows={RATE_HISTORY} rowKey={(r) => r.effective} />
+
+          {ratesLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+            </div>
+          ) : ratesError || !rates ? (
+            <ErrorState title="Couldn't load grade rates" onRetry={() => void refetchRates()} />
+          ) : (
+            <DataTable columns={rateColumns} rows={rates} rowKey={(r) => r.id} />
+          )}
         </div>
       )}
 
@@ -161,6 +202,24 @@ export function FactorySetupPage() {
         </Card>
       )}
 
+      {/* Publish a new grade-rate version — the one real write on this page. */}
+      <LightConfirmModal
+        open={confirmVersion}
+        onClose={() => setConfirmVersion(false)}
+        onConfirm={() => publishMutation.mutate()}
+        loading={publishMutation.isPending}
+        title="Publish new grade rates"
+        confirmLabel="Publish Version"
+        message={
+          <>
+            New rates of <strong>Super Rs. {newSuper}/kg</strong> · <strong>Normal Rs. {newNormal}/kg</strong> take
+            effect from <strong>{formatDate(newEffective)}</strong>. Settlements before that date keep the rates in
+            force at collection time. This is recorded in the audit log.
+          </>
+        }
+      />
+
+      {/* General / transport / items aren't backed by a table yet — save is a stub. */}
       <LightConfirmModal
         open={confirming}
         onClose={() => setConfirming(false)}
@@ -168,7 +227,7 @@ export function FactorySetupPage() {
         loading={saving}
         title="Save factory setup"
         confirmLabel="Save Changes"
-        message="Rate changes affect every future settlement calculation and are recorded in the audit log. Past settlements keep the rates in force at collection time."
+        message="General info, transport rates and beneficiary items aren't persisted server-side yet — this is a demo save."
       />
     </AdminGuard>
   )

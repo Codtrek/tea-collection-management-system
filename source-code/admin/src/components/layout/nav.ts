@@ -1,12 +1,14 @@
 import {
   LayoutDashboard,
   Leaf,
+  Radar,
   Sprout,
   ClipboardList,
   Wallet,
   Banknote,
   HandCoins,
   Users,
+  Mountain,
   CalendarCheck,
   TrendingUp,
   BarChart3,
@@ -39,6 +41,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Operations',
     items: [
       { label: 'Tea Leaf Collection', to: '/collections', icon: Leaf, module: 'collection' },
+      // Agent Dispatch (COL-05) — its own page, gated by the data-driven `dispatch` module
+      { label: 'Agent Dispatch', to: '/collections/dispatch', icon: Radar, module: 'dispatch' },
       { label: 'Fertilizer Inventory', to: '/fertilizer', icon: Sprout, module: 'fertilizer' },
       { label: 'Fertilizer Requests', to: '/fertilizer/requests', icon: ClipboardList, module: 'fertilizer' },
     ],
@@ -46,7 +50,10 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Finance',
     items: [
-      { label: 'Estate Owner Payments', to: '/estates', icon: Wallet, module: 'estateOwners' },
+      // EST-01 amended — was pointed at the roster itself; now the actual
+      // payments action (Process Settlements), since browsing owners moved
+      // to its own People entry below and would otherwise duplicate this one.
+      { label: 'Estate Owner Payments', to: '/estates/settlements', icon: Wallet, module: 'estateOwners' },
       { label: 'Payroll', to: '/employees/payroll', icon: Banknote, module: 'payroll' },
       { label: 'Salary Advances', to: '/employees/advances', icon: HandCoins, module: 'advances' },
     ],
@@ -54,6 +61,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'People',
     items: [
+      { label: 'Estate Owners', to: '/estates', icon: Mountain, module: 'estateOwners' },
       { label: 'Employees', to: '/employees', icon: Users, module: 'employees' },
       { label: 'Attendance', to: '/employees/attendance', icon: CalendarCheck, module: 'attendance' },
       { label: 'Performance', to: '/employees/performance', icon: TrendingUp, module: 'performance' },

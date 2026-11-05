@@ -11,11 +11,24 @@ export interface DetailPageWithTabsProps {
   header: ReactNode
   tabs: DetailTab[]
   defaultTab?: string
+  /**
+   * Controlled mode — pass both to drive the active tab from outside (e.g. a
+   * `?tab=` URL param) instead of internal state. `defaultTab` is ignored
+   * when `activeTab` is provided. Needed because a `useState` initializer
+   * only runs on mount: a same-route navigation that just changes the query
+   * string (EST-03's Timeline "View" deep-link) would otherwise never move
+   * the tab. Omit both to keep the original uncontrolled behaviour.
+   */
+  activeTab?: string
+  onTabChange?: (id: string) => void
 }
 
 /* Profile header + tabbed sections (master EMP-03). Reused by EST-03. */
-export function DetailPageWithTabs({ header, tabs, defaultTab }: DetailPageWithTabsProps) {
-  const [active, setActive] = useState(defaultTab ?? tabs[0]?.id)
+export function DetailPageWithTabs({ header, tabs, defaultTab, activeTab: controlledActive, onTabChange }: DetailPageWithTabsProps) {
+  const [uncontrolledActive, setUncontrolledActive] = useState(defaultTab ?? tabs[0]?.id)
+  const isControlled = controlledActive !== undefined
+  const active = isControlled ? controlledActive : uncontrolledActive
+  const setActive = isControlled ? (onTabChange ?? (() => {})) : setUncontrolledActive
   const activeTab = tabs.find((t) => t.id === active) ?? tabs[0]
 
   return (

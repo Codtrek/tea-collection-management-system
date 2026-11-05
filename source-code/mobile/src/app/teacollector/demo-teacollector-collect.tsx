@@ -7,8 +7,8 @@ import {
   StyleSheet,
 } from "react-native";
 import {
+  collectionFilters,
   RequestFilterTabs,
-  RequestFilter,
 } from "@/components/ui/demo-teacollector-requestfilter";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -31,6 +31,12 @@ export default function DemoTeaCollectorCollect({
   onGoToEstate,
   setSheet,
   history,
+  selectionMode,
+  selectedRequestIds,
+  onToggleRequestSelection,
+  onStartSelectionWithRequest,
+  onCancelRequestSelection,
+  onCancelSelectedRequests,
 }: any) {
   /*
    * ========================================================
@@ -50,14 +56,8 @@ export default function DemoTeaCollectorCollect({
       sum + (s.actualWeight || 0),
     0
   );
-
-  const normalLoaded = loaded.reduce(
-    (sum: number, s: any) => sum + (s.actualNormalWeight || 0),
-    0
-  );
-  const supperLoaded = loaded.reduce(
-    (sum: number, s: any) => sum + (s.actualSupperWeight || 0),
-    0
+  const deliveredToday = stops.filter(
+    (s: any) => s.status === "delivered"
   );
 
   /*
@@ -89,6 +89,11 @@ export default function DemoTeaCollectorCollect({
       ),
     },
     {
+      key: "delivered",
+      label: "Delivered",
+      items: deliveredToday,
+    },
+    {
       key: "cancelled",
       label: "Cancelled",
       items: stops.filter(
@@ -103,8 +108,10 @@ export default function DemoTeaCollectorCollect({
    * ========================================================
    */
 
-  const deliveredToday = stops.filter(
-    (s: any) => s.status === "delivered"
+  const visibleSelectableRequests = stops.filter(
+    (stop: any) =>
+      (stop.status === "pending" || stop.status === "accepted") &&
+      (filter === "all" || filter === stop.status)
   );
 
   return (
@@ -116,6 +123,7 @@ export default function DemoTeaCollectorCollect({
       <RequestFilterTabs
         filter={filter}
         setFilter={setFilter}
+        filters={collectionFilters}
       />
       </View>
     <ScrollView
@@ -124,12 +132,35 @@ export default function DemoTeaCollectorCollect({
       showsVerticalScrollIndicator={false}
     >
 
+      {filter !== "history" && (
+        <View style={styles.selectionActions}>
+          {selectionMode && (
+            <>
+              <Text style={styles.selectionCount}>
+                {selectedRequestIds.length} request{selectedRequestIds.length === 1 ? "" : "s"} selected
+              </Text>
+              <View style={styles.selectionButtons}>
+                <Btn variant="ghost" small onPress={onCancelRequestSelection}>Done</Btn>
+                <Btn
+                  variant="danger"
+                  small
+                  disabled={selectedRequestIds.length === 0}
+                  onPress={onCancelSelectedRequests}
+                >
+                  Cancel selected
+                </Btn>
+              </View>
+             </>
+          )} 
+            
+        </View>
+      )}
 
       {/* ===================================================
           LOADED / FACTORY
       =================================================== */}
 
-      {filter !== "history" && loaded.length > 0 && (
+      {filter !== "history" && (
         <Card style={styles.loadedCard}>
           <View style={styles.loadedHeader}>
             <View style={styles.factoryIconContainer}>
@@ -142,16 +173,15 @@ export default function DemoTeaCollectorCollect({
 
             <View style={styles.loadedTextContainer}>
               <Text style={styles.loadedTitle}>
-                {loaded.length} stop{loaded.length > 1 ? "s" : ""} loaded · {totalLoaded} kg
+                {loaded.length > 0
+                  ? `${loaded.length} stop${loaded.length > 1 ? "s" : ""} loaded · ${totalLoaded} kg`
+                  : "No tea currently loaded"}
               </Text>
 
-              <View style={styles.loadedBreakdown}>
-                <Text style={styles.loadedBreakdownText}>Normal: {normalLoaded} kg</Text>
-                <Text style={styles.loadedBreakdownText}>Supper: {supperLoaded} kg</Text>
-              </View>
-
               <Text style={styles.loadedSubtitle}>
-                Ready whenever you head to Kotmale MPT
+                {loaded.length > 0
+                  ? "Ready whenever you head to Kotmale MPT"
+                  : "Load a tea request to prepare a factory delivery"}
               </Text>
             </View>
           </View>
@@ -159,6 +189,7 @@ export default function DemoTeaCollectorCollect({
           <Btn
             variant="forest"
             block
+            disabled={loaded.length === 0}
             style={styles.factoryButton}
             onPress={onGoToFactory}
           >
@@ -187,6 +218,10 @@ export default function DemoTeaCollectorCollect({
                     onViewDetails={onViewDetails}
                     onArrivedDetails={onArrivedDetails}
                     onGoToEstate={onGoToEstate}
+                    selectionMode={selectionMode}
+                    selected={selectedRequestIds.includes(s.id)}
+                    onToggleSelect={onToggleRequestSelection}
+                    onStartSelection={onStartSelectionWithRequest}
                   />
                 ))}
               </View>
@@ -215,6 +250,10 @@ export default function DemoTeaCollectorCollect({
                     onViewDetails={onViewDetails}
                     onArrivedDetails={onArrivedDetails}
                     onGoToEstate={onGoToEstate}
+                    selectionMode={selectionMode}
+                    selected={selectedRequestIds.includes(s.id)}
+                    onToggleSelect={onToggleRequestSelection}
+                    onStartSelection={onStartSelectionWithRequest}
                   />
                 ))}
               </View>
@@ -254,8 +293,14 @@ export default function DemoTeaCollectorCollect({
                     </Text>
 
                     <Text style={styles.historySubtitle}>
-                      Today · Normal {s.actualNormalWeight || 0} kg · Supper {s.actualSupperWeight || 0} kg
+                      Today · {s.actualWeight || 0} kg
+                      {s.receivingOfficer ? ` · Received by ${s.receivingOfficer}` : ""}
                     </Text>
+                    {s.collectionNote?.trim() && (
+                      <Text style={styles.historySubtitle}>
+                        Note: {s.collectionNote.trim()}
+                      </Text>
+                    )}
                   </View>
 
                   <Pill
@@ -309,14 +354,24 @@ export default function DemoTeaCollectorCollect({
       =================================================== */}
 
       {filter !== "history" && (
-        <Btn
-          variant="secondary"
-          block
-          style={styles.registerButton}
-          onPress={() => setSheet("register")}
-        >
-          + Register New Estate
-        </Btn>
+        <>
+          <Btn
+            variant="primary"
+            block
+            style={styles.registerButton}
+            onPress={() => setSheet("manualRequest")}
+          >
+            + Create Manual Collection Request
+          </Btn>
+          <Btn
+            variant="secondary"
+            block
+            style={styles.registerButton}
+            onPress={() => setSheet("register")}
+          >
+            + Register New Estate
+          </Btn>
+        </>
       )}
     </ScrollView>
     </View>
@@ -347,6 +402,25 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 10,
     zIndex: 10,
+  },
+
+  selectionActions: {
+    marginBottom: 14,
+  },
+
+  selectionCount: {
+    color: colors.text.primary,
+    fontFamily: fonts.default,
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+
+  selectionButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
   },
 
   /* =======================================================
@@ -390,20 +464,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
     color: colors.text.secondary,
-  },
-
-  loadedBreakdown: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 6,
-  },
-
-  loadedBreakdownText: {
-    color: colors.text.secondary,
-    fontFamily: fonts.default,
-    fontSize: 12,
-    fontWeight: "600",
   },
 
   factoryButton: {

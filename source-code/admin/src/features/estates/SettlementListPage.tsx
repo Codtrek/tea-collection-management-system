@@ -1,13 +1,16 @@
 import { useNavigate } from 'react-router-dom'
-import { Banknote, Eye, FileDown, Play } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Banknote, Eye, FileDown, Loader2, Play } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, RowAction, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
+import { ErrorState } from '@/components/data/ErrorState'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { SETTLEMENTS, grossRevenue, netPayable } from './data'
+import * as estatesService from '@/services/estates'
+import { grossRevenue, netPayable } from './calc'
 import type { Settlement } from './types'
 import { formatCurrency } from '@/lib/format'
 
@@ -17,6 +20,13 @@ export function SettlementListPage() {
   const { toast } = useToast()
   const { can } = useAuth()
   const canProcess = can('estateOwners', 'edit')
+
+  const {
+    data: settlements,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({ queryKey: ['estates', 'settlements'], queryFn: estatesService.listSettlements })
 
   const columns: Column<Settlement>[] = [
     {
@@ -45,6 +55,18 @@ export function SettlementListPage() {
     },
   ]
 
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return <ErrorState title="Couldn't load settlements" description="Something went wrong fetching payment settlements." onRetry={() => void refetch()} />
+  }
+
   return (
     <div>
       <PageHeader
@@ -66,7 +88,7 @@ export function SettlementListPage() {
 
       <DataTable
         columns={columns}
-        rows={SETTLEMENTS}
+        rows={settlements}
         rowKey={(s) => s.id}
         onRowClick={(s) => navigate(`/estates/${s.estateId}`)}
         emptyState={

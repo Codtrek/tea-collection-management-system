@@ -10,9 +10,13 @@ export interface LightConfirmModalProps {
   title: string
   message: ReactNode
   confirmLabel?: string
+  /** defaults to Cancel; a multi-step flow can say Back */
+  cancelLabel?: string
   /** danger tone for destructive-but-reversible actions (deactivate, discard) */
   tone?: 'default' | 'danger'
   loading?: boolean
+  /** opt-in: keep the confirm button disabled (e.g. a blocking validation warning) */
+  confirmDisabled?: boolean
   /** optional extra content (e.g. a required reason field) */
   children?: ReactNode
 }
@@ -25,8 +29,10 @@ export function LightConfirmModal({
   title,
   message,
   confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
   tone = 'default',
   loading,
+  confirmDisabled,
   children,
 }: LightConfirmModalProps) {
   return (
@@ -36,9 +42,14 @@ export function LightConfirmModal({
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={loading}>
-            Cancel
+            {cancelLabel}
           </Button>
-          <Button variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>
+          <Button
+            variant={tone === 'danger' ? 'danger' : 'primary'}
+            onClick={onConfirm}
+            loading={loading}
+            disabled={confirmDisabled}
+          >
             {confirmLabel}
           </Button>
         </>

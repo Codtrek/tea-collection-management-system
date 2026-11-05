@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Check, X, Ban } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, X, Ban, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -8,10 +9,11 @@ import { Input } from '@/components/ui/Input'
 import { Toggle } from '@/components/ui/Toggle'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
+import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { requestById, REQUESTS } from './data'
-import { availableForItem, fefoAllocation, remainderOf } from './position'
+import * as fertilizerService from '@/services/fertilizer'
+import { availableForItem, fefoAllocation, remainderOf } from './lib'
 import { REQUEST_TONE } from './status'
 import { formatCurrency, formatDate, formatWeight } from '@/lib/format'
 
@@ -22,28 +24,84 @@ export function RequestDetailPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { can } = useAuth()
+  const queryClient = useQueryClient()
   const canApprove = can('fertilizer', 'approve')
 
-  const request = (id && requestById(id)) || REQUESTS[0]
-  const available = availableForItem(request.item)
-  const isPending = request.status === 'Submitted'
+  const {
+    data: request,
+    isPending: requestPending,
+    isError: requestError,
+    refetch: refetchRequest,
+  } = useQuery({
+    queryKey: ['fertilizer', 'requests', id],
+    queryFn: () => fertilizerService.getRequest(id!),
+    enabled: !!id,
+  })
+  const { data: positions, isPending: positionsPending } = useQuery({
+    queryKey: ['fertilizer', 'positions'],
+    queryFn: fertilizerService.listPositions,
+  })
+  const { data: batches, isPending: batchesPending } = useQuery({
+    queryKey: ['fertilizer', 'batches'],
+    queryFn: fertilizerService.listBatches,
+  })
 
-  const [approveQty, setApproveQty] = useState(request.quantityKg)
+  const [approveQty, setApproveQty] = useState<number | null>(null)
   const [keepRemainder, setKeepRemainder] = useState(true)
   const [override, setOverride] = useState(false)
   const [reason, setReason] = useState('')
   const [decision, setDecision] = useState<'approve' | 'reject' | 'cancel' | null>(null)
 
-  const isPartial = approveQty < request.quantityKg
-  const exceedsAvailable = approveQty > available
-  const allocation = fefoAllocation(request.item, Math.max(0, approveQty))
+  const decideMutation = useMutation({
+    mutationFn: (input: fertilizerService.DecideRequestInput) => fertilizerService.decideRequest(id!, input),
+    onSuccess: (updated) => {
+      const msg =
+        updated.status === 'Approved'
+          ? `Approved ${formatWeight(updated.approvedQtyKg ?? updated.quantityKg)} of ${updated.item} for ${updated.estateName}${override ? ' (over-commitment)' : ''}`
+          : updated.status === 'Rejected'
+            ? `Rejected the request for ${updated.estateName}`
+            : `Cancelled the request for ${updated.estateName}`
+      toast(msg, updated.status === 'Approved' ? undefined : 'warning')
+      setDecision(null)
+      void queryClient.invalidateQueries({ queryKey: ['fertilizer'] })
+      navigate('/fertilizer/requests')
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not record this decision', 'danger'),
+  })
+
+  if (requestPending || positionsPending || batchesPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (requestError || !request || !positions || !batches) {
+    return (
+      <ErrorState title="Request not found" description={`No fertilizer request with ID “${id}”.`} onRetry={() => void refetchRequest()} />
+    )
+  }
+
+  const available = availableForItem(request.item, positions)
+  const isPending = request.status === 'Submitted'
+  const qty = approveQty ?? request.quantityKg
+
+  const isPartial = qty < request.quantityKg
+  const exceedsAvailable = qty > available
+  const allocation = fefoAllocation(request.item, Math.max(0, qty), batches)
   const reasonRequired = decision === 'reject' || (decision === 'approve' && (isPartial || override))
   const confirmDisabled = reasonRequired && !reason.trim()
 
-  const finish = (msg: string, tone?: 'success' | 'warning') => {
-    toast(msg, tone)
-    setDecision(null)
-    navigate('/fertilizer/requests')
+  const confirmDecision = () => {
+    if (confirmDisabled) return
+    if (decision === 'approve') {
+      decideMutation.mutate({ decision: 'approve', approvedQtyKg: qty })
+    } else if (decision === 'reject') {
+      decideMutation.mutate({ decision: 'reject' })
+    } else if (decision === 'cancel') {
+      decideMutation.mutate({ decision: 'cancel' })
+    }
   }
 
   return (
@@ -95,8 +153,8 @@ export function RequestDetailPage() {
               <Snapshot label="Requested" value={formatWeight(isPending ? request.quantityKg : remainderOf(request))} />
               <Snapshot
                 label="After approval"
-                value={formatWeight(available - approveQty)}
-                danger={available - approveQty < 0}
+                value={formatWeight(available - qty)}
+                danger={available - qty < 0}
               />
             </div>
           </Card>
@@ -110,9 +168,9 @@ export function RequestDetailPage() {
                   label="Quantity to approve (kg)"
                   type="number"
                   min="0"
-                  value={String(approveQty)}
+                  value={String(qty)}
                   onChange={(e) => setApproveQty(Number(e.target.value))}
-                  hint={isPartial ? `Partial — ${formatWeight(request.quantityKg - approveQty)} short of the request` : undefined}
+                  hint={isPartial ? `Partial — ${formatWeight(request.quantityKg - qty)} short of the request` : undefined}
                 />
 
                 {/* FEFO allocation suggestion */}
@@ -153,7 +211,7 @@ export function RequestDetailPage() {
                     <div>
                       <p className="text-sm font-medium text-text">Over-commitment</p>
                       <p className="text-xs text-text-muted">
-                        Approving {formatWeight(approveQty)} against {formatWeight(available)} available. Allowed only with a
+                        Approving {formatWeight(qty)} against {formatWeight(available)} available. Allowed only with a
                         reason (e.g. an inbound delivery).
                       </p>
                     </div>
@@ -164,7 +222,7 @@ export function RequestDetailPage() {
                 <div className="flex flex-wrap gap-2 border-t border-border pt-4">
                   <Button
                     onClick={() => setDecision('approve')}
-                    disabled={approveQty <= 0 || (exceedsAvailable && !override)}
+                    disabled={qty <= 0 || (exceedsAvailable && !override)}
                   >
                     <Check className="size-4" /> {isPartial ? 'Approve Partially' : 'Approve'}
                   </Button>
@@ -216,25 +274,14 @@ export function RequestDetailPage() {
       <LightConfirmModal
         open={!!decision}
         onClose={() => setDecision(null)}
-        onConfirm={() => {
-          if (confirmDisabled) return
-          if (decision === 'approve') {
-            finish(
-              `Approved ${formatWeight(approveQty)} of ${request.item} for ${request.estateName}${override ? ' (over-commitment)' : ''}`,
-            )
-          } else if (decision === 'reject') {
-            finish(`Rejected the request for ${request.estateName}`, 'warning')
-          } else {
-            finish(`Cancelled the request for ${request.estateName}`, 'warning')
-          }
-        }}
+        onConfirm={confirmDecision}
         tone={decision === 'approve' ? 'default' : 'danger'}
         title={decision === 'approve' ? (isPartial ? 'Approve partially' : 'Approve request') : decision === 'reject' ? 'Reject request' : 'Cancel request'}
         confirmLabel={decision === 'approve' ? 'Approve' : decision === 'reject' ? 'Reject' : 'Cancel request'}
-        loading={false}
+        loading={decideMutation.isPending}
         message={
           decision === 'approve' ? (
-            <>Approve <strong>{formatWeight(approveQty)}</strong> of {request.item} for {request.estateName}? This commits stock and creates a future settlement deduction — reversible until dispatch.</>
+            <>Approve <strong>{formatWeight(qty)}</strong> of {request.item} for {request.estateName}? This commits stock and creates a future settlement deduction — reversible until dispatch.</>
           ) : decision === 'reject' ? (
             <>Reject the fertilizer request for {request.estateName}?</>
           ) : (

@@ -12,7 +12,11 @@ export default defineConfig({
     },
   },
   server: {
-    host: '0.0.0.0',  
+    // Listen on all interfaces (needed inside the deploy/preview containers).
+    host: '0.0.0.0',
+    // Pin the port so a stray second `npm run dev` fails loudly instead of
+    // silently drifting to 5174/5175 and leaving stale tabs on dead ports.
     port: 5173,
+    strictPort: true,
   },
 })

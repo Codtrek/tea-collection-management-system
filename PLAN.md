@@ -12,11 +12,11 @@ decisions*); this file holds the *execution order*.
 
 | Layer | State |
 |---|---|
-| **Web portal** | All 6 modules UI-complete (~40 screens). **Running entirely on static fixtures.** |
-| **Backend** | Stock 5-file NestJS scaffold. No DB, auth, or validation dependencies installed. |
-| **Database** | `init.sql` is the *old* schema — does not match the domain model in `Claude.md`. |
+| **Web portal** | All 6 modules UI-complete (~40 screens). **All six now backend-wired (Phase 2 complete, 2026-07-28)** — no module on mock fixtures; a few individual config tabs stay static by design. |
+| **Backend** | NestJS + TypeORM + JWT auth. Auth + all six module slices built (Collections, Estates, Employees, Fertilizer, Reports, Administration) + cross-cutting audit. |
+| **Database** | `init.sql` reconciled to the `Claude.md` domain model across the slices; dev DB runs in the isolated `tea_authslice` schema (`synchronize:false`, migrated by hand per slice). |
 | **Infra** | Done. `source-code/docker-compose.yml` = postgres 16 + redis + api + admin + nginx. |
-| **Mobile** | Shared shell only (theme tokens, minimal layout). No flows. |
+| **Mobile** | Shared shell only (theme tokens, minimal layout). No flows. **This is the only phase left.** |
 
 ### Two things to know before starting
 
@@ -72,11 +72,16 @@ module instead of being baked into all six.
       - `tea_collection_records.self_delivered` — skips the transport deduction
       - `tea_collection_records.owner_confirmed` — separate from photo evidence
 - [ ] Add tables the web portal needs that the schema has never had:
-      - `employee_attendance`, `payroll_runs`, `salary_advances`
-      - `fertilizer_batches`, `stock_movements`
-      - `grade_rates` — **effective-dated**; ADM-01 depends on past settlements never
-        recalculating when a rate changes
-      - `system_settings`, `audit_logs`
+      - [x] `employee_attendance`, `payroll_runs`, `salary_advances` — done 2026-07-26 with the
+        Employees + Payroll slice (2.3), plus a new `employees` table not listed here originally
+      - [x] `fertilizer_batches`, `stock_movements` — done 2026-07-27 with the Fertilizer slice (2.4)
+      - [x] `expense_entries` — done 2026-07-27 with the Reports slice (2.5), RPT-04's manual
+        daily-expense table
+      - [x] `grade_rates` — **effective-dated**; done 2026-07-28 with the Administration slice
+        (2.6). Settlements snapshot their rate, so past settlements never recalculate.
+      - [x] `system_settings`, `audit_logs` — done 2026-07-28 with the Administration slice (2.6);
+        plus a new `role_permissions` table (server-driven ADM-02 matrix) and `users.status`/
+        `users.last_login_at` columns.
 
 **Done when:** `docker compose up postgres` applies `init.sql` cleanly on an empty volume, and
 inserting a `factory_officer` user succeeds (it fails today).
@@ -130,21 +135,60 @@ sidebar (proving the permission matrix runs off the server-provided role).
 
 Order is by dependency, not by sidebar order:
 
-- [ ] **2.1 Collections (COL-01..04)** — the core domain; exercises the Route/Pickup/Collection
+- [x] **2.1 Collections (COL-01..04)** — the core domain; exercises the Route/Pickup/Collection
       state machines. Preserve: COL-02 is a *provisional exception entry*, never a weight
       override (only agents enter actual weight); Confirmed records stay locked behind the
-      Flag-for-Correction audit path.
-- [ ] **2.2 Estates + Payments (EST-01..09)** — settlement math needs collection data to exist
+      Flag-for-Correction audit path. Done 2026-07-26, `feature/collections-backend`.
+- [x] **2.2 Estates + Payments (EST-01..09)** — settlement math needs collection data to exist
       first. Resolve the ~Rs. 3 bank-charge open item here (currently shown as a note, never
-      deducted).
-- [ ] **2.3 Employees (EMP-01..14)** — largest surface, fully greenfield backend
-      (attendance, payroll, advances).
-- [ ] **2.4 Fertilizer (FERT-01..04)** — feeds the estate settlement deduction breakdown.
-- [ ] **2.5 Reports (RPT-01..04)** — pure aggregation; needs the others populated to be
-      meaningful. Must aggregate **Confirmed records only**.
-- [ ] **2.6 Administration (ADM-01..04)** — last, because it makes previously-static things
-      server-driven: versioned grade rates and the ADM-02 editable permission matrix (which is
-      what the data-driven `permissions.ts` model was designed for).
+      deducted). Done 2026-07-26, `feature/estates-payments-backend` — resolved: never deducted
+      from estate owners, factory billed a separate periodic fee instead. Settlement processing
+      is done; auto-generation from live data is deferred to when 2.4/2.6 land (see Claude.md).
+- [x] **2.3 Employees (EMP-01..14)** — largest surface, fully greenfield backend
+      (attendance, payroll, advances). Done 2026-07-26, `feature/employees-payroll-backend` — new
+      `employees` table (separate from `factory_employees`); payroll is live-computed
+      (attendance × pay rates via a "Generate" step, snapshotted for immutability), not seeded;
+      roster writes are Administrator-only (stricter than Estates' Officer-can-edit).
+- [x] **2.4 Fertilizer (FERT-01..04)** — feeds the estate settlement deduction breakdown. Done
+      2026-07-27, `feature/fertilizer-backend` — resolved: both ad-hoc and request-linked dispatch
+      allowed (matches the portal's optional `linkedRequest`); extended the pre-existing
+      `fertilizer_requests` table in place (added `fertilizer_batches`/`stock_movements`) rather
+      than splitting a new table, since it's the same entity the portal manages; `requested_by`
+      made nullable — neither the Estates module nor the portal ever populates a manager row.
+      Settlement auto-generation from live fertilizer data is still deferred (unchanged from 2.2).
+- [x] **2.5 Reports (RPT-01..04)** — pure aggregation; needs the others populated to be
+      meaningful. Must aggregate **Confirmed records only**. Done 2026-07-27,
+      `feature/reports-backend` — collection/revenue reports are computed server-side from
+      Collections/Estates data (no new tables); RPT-04's manual daily-expense entries got a new
+      `expense_entries` table + write path, resolving the last "no backing table" gap. Seeded
+      Mar–Jul 2026 history (collection records, processed settlements, a few payroll rows) so
+      the trend charts show a real multi-point line instead of a single July point.
+- [x] **2.6 Administration (ADM-01..04)** — last, because it makes previously-static things
+      server-driven. Done 2026-07-28, `feature/administration-backend` — versioned grade rates
+      (`grade_rates`), the ADM-02 editable permission matrix now server-backed (`role_permissions`,
+      attached to the login/`/auth/me` response; `permissions.ts` becomes a fallback default),
+      system settings (`system_settings`), and a cross-cutting best-effort `AuditService` that
+      writes a real `audit_logs` row on every mutation across all six modules (ADM-04). Suspend is
+      real (blocks login); password-reset delivery and per-user overrides deferred (see Claude.md).
+- [x] **2.2+ Estate Owner Lifetime History (EST-03 amended + EST-10, new)** — not a new numbered
+      module; deepens 2.2 from a design-addendum doc (`estate-owner-lifetime-history-addendum.md`)
+      once 2.6 unblocked it (needed `grade_rates` + `audit_logs`). Done 2026-08-05,
+      `feature/estate-lifetime-history` — a server-side lifetime selector (`EstateLifetimeService`)
+      backs a new Lifetime Summary strip on EST-03's Overview and the new EST-10 unified timeline
+      tab (Tenure Ribbon signature); EST-09 Analytics is de-mocked and reused pre-scoped as a third
+      new tab. Redefined the never-modeled `fertilizer_charges` table (1-row-per-dispatch, not
+      1:1-on-request) to finally give Fertilizer a money figure, resolving the Outstanding-to-
+      factory figure the addendum calls its most important number; dropped two long-orphaned
+      tables (`monthly_payments`, `payment_deduction_items`). Deliveries/Payments/Advances tabs
+      moved to server-side pagination (25/page, last-90-days default).
+- [x] **2.2++ Estate Owner Directory (EST-01 amended)** — the roster page existed but was
+      unreachable (no sidebar entry) and moneyless (YTD kg only, no sort). Done 2026-08-05,
+      `feature/estate-owner-directory` — turned EST-01 into three role-driven views (Management/
+      Payments/Oversight, picked by `level('estateOwners')`, never `user.role`) over one new
+      grouped backend selector (`GET /estates/directory`); gave `DataTable` opt-in sorting +
+      column-visibility (18 existing consumers unaffected); added a sidebar **Estate Owners**
+      entry. See Claude.md for the two spec gaps this surfaced (no per-row settlement action;
+      per-role screen-design docs not present in this repo).
 
 ---
 
@@ -169,8 +213,9 @@ Fold these into whichever phase touches the relevant code.
 - [ ] `Toggle` hit area is 20×36px, under the 44px minimum
 
 **Open business questions** — decide before the module that needs them ships:
-- [ ] Who absorbs the ~Rs. 3 per-transaction bank charge (blocks 2.2)
-- [ ] Ad-hoc vs request-linked fertilizer dispatch (blocks 2.4)
+- [x] Who absorbs the ~Rs. 3 per-transaction bank charge — resolved 2026-07-26: nobody, it's
+      never deducted from estate owners/employees; the factory is billed a separate periodic fee.
+- [x] Ad-hoc vs request-linked fertilizer dispatch — resolved 2026-07-27: both allowed.
 - [ ] Beneficiary-items scope
 
 ---

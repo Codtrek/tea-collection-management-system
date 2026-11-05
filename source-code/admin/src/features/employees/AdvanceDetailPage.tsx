@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Check, X } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, X, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge, type BadgeTone } from '@/components/ui/StatusBadge'
+import { ErrorState } from '@/components/data/ErrorState'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { ADVANCES } from './data'
+import * as employeesService from '@/services/employees'
 import type { AdvanceStatus } from './types'
 import { formatCurrency, formatDate } from '@/lib/format'
 
@@ -19,9 +21,40 @@ export function AdvanceDetailPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { can } = useAuth()
-  const advance = ADVANCES.find((a) => a.id === id) ?? ADVANCES[0]
+  const queryClient = useQueryClient()
   const [decision, setDecision] = useState<'approve' | 'reject' | null>(null)
   const canApprove = can('advances', 'approve')
+
+  // No "get one advance" endpoint yet — fetch the (dev-scale) full list and find by id.
+  const { data: advances, isPending, isError, refetch } = useQuery({ queryKey: ['employees', 'advances'], queryFn: employeesService.listAdvances })
+  const advance = (advances ?? []).find((a) => a.id === id)
+
+  const decideMutation = useMutation({
+    mutationFn: (d: 'approve' | 'reject') => employeesService.decideAdvance(id!, d),
+    onSuccess: (updated) => {
+      if (updated.status === 'Approved') {
+        toast(`Approved advance of ${formatCurrency(updated.amount)} for ${updated.employeeName}`)
+      } else {
+        toast(`Rejected advance for ${updated.employeeName}`, 'warning')
+      }
+      setDecision(null)
+      void queryClient.invalidateQueries({ queryKey: ['employees', 'advances'] })
+      navigate('/employees/advances')
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not record this decision', 'danger'),
+  })
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+      </div>
+    )
+  }
+
+  if (isError || !advance) {
+    return <ErrorState title="Advance request not found" description={`No advance request with ID “${id}”.`} onRetry={() => void refetch()} />
+  }
 
   return (
     <div>
@@ -72,15 +105,8 @@ export function AdvanceDetailPage() {
       <LightConfirmModal
         open={!!decision}
         onClose={() => setDecision(null)}
-        onConfirm={() => {
-          if (decision === 'approve') {
-            toast(`Approved advance of ${formatCurrency(advance.amount)} for ${advance.employeeName}`)
-          } else {
-            toast(`Rejected advance for ${advance.employeeName}`, 'warning')
-          }
-          setDecision(null)
-          navigate('/employees/advances')
-        }}
+        onConfirm={() => decision && decideMutation.mutate(decision)}
+        loading={decideMutation.isPending}
         tone={decision === 'reject' ? 'danger' : 'default'}
         title={decision === 'approve' ? 'Approve advance' : 'Reject advance'}
         confirmLabel={decision === 'approve' ? 'Approve' : 'Reject'}

@@ -78,7 +78,7 @@ export default function ChangePasswordScreen() {
             Remember your password?{" "}
           </AppText>
 
-          <Link href="/auth/signin">
+          <Link href="/auth/login">
             <AppText
               variant="bodySmall"
               style={styles.link}

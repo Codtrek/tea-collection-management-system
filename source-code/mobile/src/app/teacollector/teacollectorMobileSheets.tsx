@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, ScrollView } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Sheet } from '@/components/ui/demo-teacollector-sheet';
 import { DetailRow } from '@/components/ui/demo-teacollector-detail-row';
@@ -10,6 +10,7 @@ import { Pill } from '@/components/ui/demo-teacollector-pill';
 import { STATUS_STYLE } from '@/theme/teacollector-statusStyle';
 import { colors } from '@/theme/colors';
 import { fonts } from '@/theme/fonts';
+import ConfirmationWarning from '@/components/ui/demo-teacollector-confirmationWarning';
 import * as ImagePicker from 'expo-image-picker';
 
 const c = {
@@ -32,41 +33,98 @@ const teaWeight = (weight: number | null | undefined) => `${weight || 0} kg`;
 const RECEIVING_OFFICERS = ["K. Abeysekera", "M. Rathnayake", "S. Weerasinghe", "T. Gunasekara"];
 const PICKUP_REASONS = ["Estate not ready", "Road blocked", "Vehicle issue", "Other"];
 
-export const FertDetailsSheet = ({ open, request, onClose }: any) => {
+export const FertDetailsSheet = ({
+  open,
+  request,
+  onClose,
+  onAccept,
+  onLoad,
+  onNavigate,
+  onCancel,
+}: any) => {
+  const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
+
   if (!request) return null;
   return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDefault.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>
-        Fertilizer Request
-      </Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>{request.estateName}</Text>
-      <DetailRow k="Owner" v={request.owner} />
-      <DetailRow k="Phone" v={request.phone} />
-      <DetailRow k="Fertilizer Type" v={request.fertilizerType} />
-      <DetailRow k="Quantity" v={`${request.quantity} kg`} />
-      <DetailRow k="Requested" v={request.requestedAt} />
-      <DetailRow k="Status" v={STATUS_STYLE[request.status].label} />
-      {request.notes && <DetailRow k="Notes" v={request.notes} />}
-      <Btn variant="ghost" block style={{ marginTop: 16 }} onPress={onClose}>Close</Btn>
-    </Sheet>
+    <>
+      <Sheet open={open && !showAcceptConfirmation} onClose={onClose}>
+        <Text style={{
+          fontFamily: fontDefault.fontFamily,
+          fontWeight: 'bold',
+          textTransform: 'uppercase',
+          letterSpacing: 1.8,
+          fontSize: 11,
+          color: c.sageDeep,
+        }}>
+          Fertilizer Request {STATUS_STYLE[request.status]?.label || request.status}
+        </Text>
+        <Text style={{
+          fontFamily: fontDisplay.fontFamily,
+          fontWeight: '600',
+          marginTop: 2,
+          marginBottom: 12,
+          fontSize: 20,
+        }}>{request.estateName}</Text>
+        <DetailRow k="Owner" v={request.owner} />
+        <DetailRow k="Phone" v={request.phone} />
+        <DetailRow k="Fertilizer Type" v={request.fertilizerType} />
+        <DetailRow k="Quantity" v={`${request.quantity} kg`} />
+        <DetailRow k="Requested" v={request.requestedAt} />
+        {request.notes && <DetailRow k="Notes by Estate Owner" v={request.notes} />}
+        <DetailRow k="Status" v={STATUS_STYLE[request.status]?.label || request.status} />
+        {request.reason && <DetailRow k="Reason" v={request.reason} />}
+        {request.note && <DetailRow k="Additional Note" v={request.note} />}
+        {request.status === "pending" && (
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Btn variant="danger" block onPress={onCancel}>Cancel Request</Btn>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Btn variant="primary" block onPress={() => setShowAcceptConfirmation(true)}>
+                Accept Request
+              </Btn>
+            </View>
+          </View>
+        )}
+        {request.status === "confirmed" && (
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Btn variant="danger" block onPress={onCancel}>Cancel Request</Btn>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Btn variant="primary" block onPress={onLoad}>Load Fertilizer</Btn>
+            </View>
+          </View>
+        )}
+        {request.status === "loaded" && (
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Btn variant="danger" block onPress={onCancel}>Cancel</Btn>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Btn variant="primary" block onPress={onNavigate}>Navigate to Estate</Btn>
+            </View>
+          </View>
+        )}
+      </Sheet>
+      <ConfirmationWarning
+        visible={showAcceptConfirmation}
+        title="Accept this fertilizer request?"
+        message={`You are confirming the fertilizer request from ${request.estateName || "this estate"}.`}
+        confirmLabel="Accept request"
+        intent="success"
+        onCancel={() => setShowAcceptConfirmation(false)}
+        onConfirm={() => {
+          setShowAcceptConfirmation(false);
+          onClose();
+          onAccept?.();
+        }}
+      />
+    </>
   );
 };
 
 export const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
-  const [notes, setNotes] = useState('');
   if (!request) return null;
   return (
     <Sheet open={open} onClose={onClose}>
@@ -101,26 +159,6 @@ export const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
         <DetailRow k="Destination" v={request.estateName} />
       </View>
 
-      <Field label="Loading Notes (optional)">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: c.line,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Any loading details..."
-          value={notes}
-          onChangeText={setNotes}
-        />
-      </Field>
-
       <Btn variant="primary" block onPress={onConfirm}>
         Confirm Loaded
       </Btn>
@@ -128,7 +166,7 @@ export const LoadFertSheet = ({ open, request, onClose, onConfirm }: any) => {
   );
 };
 
-export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => {
+export const FertilizerNavigateSheet = ({ open, request, onClose, onDeliver }: any) => {
   if (!request) return null;
   return (
     <Sheet open={open} onClose={onClose}>
@@ -140,7 +178,7 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
         fontSize: 11,
         color: c.sageDeep,
       }}>
-        Deliver to Estates
+        Navigate to Estate
       </Text>
       <Text style={{
         fontFamily: fontDisplay.fontFamily,
@@ -151,6 +189,57 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
       }}>{request.estateName}</Text>
       
       <View style={{
+        height: 200,
+        borderRadius: 14,
+        padding: 16,
+        marginBottom: 14,
+        backgroundColor: "#E8F1E7",
+        borderWidth: 1,
+        borderColor: c.line,
+        overflow: "hidden",
+        justifyContent: "center",
+        alignItems: "center",
+      }}>
+        <View style={{
+          position: "absolute",
+          width: "130%",
+          height: 18,
+          backgroundColor: "#FFFFFF",
+          transform: [{ rotate: "-18deg" }],
+        }} />
+        <View style={{
+          position: "absolute",
+          width: "130%",
+          height: 10,
+          backgroundColor: "#D5E3D1",
+          transform: [{ rotate: "32deg" }],
+        }} />
+        <View style={{
+          width: 82,
+          height: 82,
+          borderRadius: 41,
+          backgroundColor: "rgba(83, 207, 129, 0.2)",
+          alignItems: "center",
+          justifyContent: "center",
+        }}>
+          <Ionicons name="location" size={38} color={colors.primary} />
+        </View>
+        <Text style={{
+          marginTop: 8,
+          paddingHorizontal: 10,
+          paddingVertical: 5,
+          borderRadius: 12,
+          overflow: "hidden",
+          backgroundColor: colors.white,
+          color: colors.text.primary,
+          fontSize: 12,
+          fontWeight: "600",
+        }}>
+          {request.estateName}
+        </Text>
+      </View>
+
+      <View style={{
         borderRadius: 14,
         padding: 14,
         marginBottom: 14,
@@ -160,192 +249,344 @@ export const DeliverFertSheet = ({ open, request, onClose, onConfirm }: any) => 
       }}>
         <DetailRow k="Fertilizer" v={request.fertilizerType} />
         <DetailRow k="Quantity" v={`${request.quantity} kg`} />
+        {request.estimatedDistanceKm != null && (
+          <DetailRow k="Estimated distance" v={`~${request.estimatedDistanceKm} km`} />
+        )}
       </View>
 
-      <Btn variant="primary" block onPress={onConfirm}>
-        Confirm Delivered
+      <Btn variant="primary" block onPress={onDeliver}>
+        Deliver
       </Btn>
     </Sheet>
   );
 };
 
 export const PickupSheet = ({ open, stop, onClose, onAccept, onDecline }: any) => {
+  const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
+
   if (!stop) return null;
   return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDefault.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>Pickup request</Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>{stop.name}</Text>
+    <>
+      <Sheet open={open && !showAcceptConfirmation} onClose={onClose}>
+        <Text style={{
+          fontFamily: fontDefault.fontFamily,
+          fontWeight: 'bold',
+          textTransform: 'uppercase',
+          letterSpacing: 1.8,
+          fontSize: 11,
+          color: c.sageDeep,
+        }}>Pickup request</Text>
+        <Text style={{
+          fontFamily: fontDisplay.fontFamily,
+          fontWeight: '600',
+          marginTop: 2,
+          marginBottom: 12,
+          fontSize: 20,
+        }}>{stop.name}</Text>
 
-      <View style={{
-        backgroundColor: colors.surface,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.border.light,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        marginBottom: 16,
-      }}>
-        <DetailRow k="Owner" v={stop.owner} />
-        <DetailRow k="Phone" v={stop.phone} />
-        {stop.estNormalWeight > 0 && <DetailRow k="Normal tea" v={teaWeight(stop.estNormalWeight)} />}
-        {stop.estSupperWeight > 0 && <DetailRow k="Supper tea" v={teaWeight(stop.estSupperWeight)} />}
-        {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="danger" block onPress={onDecline}>Decline</Btn>
+        <View style={{
+          backgroundColor: colors.surface,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: colors.border.light,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          marginBottom: 16,
+        }}>
+          <DetailRow k="Owner" v={stop.owner} />
+          <DetailRow k="Phone" v={stop.phone} />
+          {(stop.location || stop.address) && (
+            <DetailRow k="Location" v={stop.location || stop.address} />
+          )}
+          <DetailRow k="Estate-reported weight" v={teaWeight(stop.estimatedWeight)} />
+          {stop.notes && <DetailRow k="Notes" v={stop.notes} />}
         </View>
-        <View style={{ flex: 1 }}>
-          <Btn variant="primary" block onPress={onAccept}>Accept Pickup</Btn>
+
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Btn variant="danger" block onPress={onDecline}>Decline</Btn>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Btn variant="primary" block onPress={() => setShowAcceptConfirmation(true)}>
+              Accept Pickup
+            </Btn>
+          </View>
         </View>
-      </View>
-    </Sheet>
-  );
-};
-
-export const DeclineSheet = ({ open, onClose, onConfirm }: any) => {
-  const [reason, setReason] = useState<string | null>(null);
-  const [note, setNote] = useState('');
-
-  useEffect(() => {
-    if (open) {
-      setReason(null);
-      setNote('');
-    }
-  }, [open]);
-
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Decline pickup</Text>
-      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>Select a reason — this is required.</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {PICKUP_REASONS.map((r) => (
-          <Chip
-            key={r}
-            active={reason === r}
-            onPress={() => setReason(reason === r ? null : r)}
-          >
-            {r}
-          </Chip>
-        ))}
-      </View>
-      <Field label="Add a note (optional)">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: colors.border.light,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Anything the factory should know..."
-          value={note}
-          onChangeText={setNote}
-        />
-      </Field>
-      <Btn
-        variant="primary"
-        block
-        disabled={!reason}
-        onPress={() => {
-          if (reason) {
-            onConfirm(reason, note);
-          }
+      </Sheet>
+      <ConfirmationWarning
+        visible={showAcceptConfirmation}
+        title="Accept this pickup?"
+        message={`You are confirming the pickup request from ${stop.name}.`}
+        confirmLabel="Accept pickup"
+        intent="success"
+        onCancel={() => setShowAcceptConfirmation(false)}
+        onConfirm={() => {
+          setShowAcceptConfirmation(false);
+          onAccept();
         }}
-      >
-        Confirm Decline
-      </Btn>
-    </Sheet>
+      />
+    </>
   );
 };
 
-export const CancelPickupSheet = ({ open, onBack, onConfirm }: any) => {
+export const DeclineSheet = ({
+  open,
+  onClose,
+  onConfirm,
+  requestLabel = "pickup",
+  confirmationMessage = "This request will be declined and the estate owner will need to submit another request.",
+}: any) => {
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [showWarning, setShowWarning] = useState(false);
+  const actionLabel = requestLabel === "pickup" ? "Decline pickup" : "Decline request";
 
   useEffect(() => {
     if (open) {
       setReason(null);
       setNote('');
+      setShowWarning(false);
     }
   }, [open]);
 
   return (
-    <Sheet open={open} onClose={onBack}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Cancel pickup</Text>
-      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
-        Select a reason — this is required.
-      </Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        {PICKUP_REASONS.map((pickupReason) => (
-          <Chip
-            key={pickupReason}
-            active={reason === pickupReason}
-            onPress={() => setReason(reason === pickupReason ? null : pickupReason)}
-          >
-            {pickupReason}
-          </Chip>
-        ))}
-      </View>
-      <Field label="Add a note (optional)">
-        <TextInput
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: colors.border.light,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 64,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={3}
-          placeholder="Anything the factory should know..."
-          value={note}
-          onChangeText={setNote}
-        />
-      </Field>
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="danger" block disabled={!reason} onPress={() => reason && onConfirm(reason, note)}>
-            Confirm Cancel
-          </Btn>
+    <>
+      <Sheet open={open && !showWarning} onClose={onClose}>
+        <Text style={{
+          fontFamily: fontDisplay.fontFamily,
+          fontWeight: '600',
+          marginBottom: 4,
+          fontSize: 20,
+        }}>Decline {requestLabel}</Text>
+        <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>Select a reason — this is required.</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {PICKUP_REASONS.map((r) => (
+            <Chip
+              key={r}
+              active={reason === r}
+              onPress={() => setReason(reason === r ? null : r)}
+            >
+              {r}
+            </Chip>
+          ))}
         </View>
-        <View style={{ flex: 1 }}>
-          <Btn variant="ghost" block onPress={onBack}>Back</Btn>
+        <Field label="Add a note (optional)">
+          <TextInput
+            style={{
+              borderRadius: 14,
+              borderWidth: 1.5,
+              borderColor: colors.border.light,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 15,
+              height: 64,
+              textAlignVertical: 'top',
+            }}
+            multiline
+            numberOfLines={3}
+            placeholder="Anything the factory should know..."
+            value={note}
+            onChangeText={setNote}
+          />
+        </Field>
+        <Btn
+          variant="primary"
+          block
+          disabled={!reason}
+          onPress={() => setShowWarning(true)}
+        >
+          Confirm Decline
+        </Btn>
+      </Sheet>
+      <ConfirmationWarning
+        visible={showWarning}
+        title={`Decline this ${requestLabel}?`}
+        message={confirmationMessage}
+        confirmLabel={actionLabel}
+        onCancel={() => setShowWarning(false)}
+        onConfirm={() => {
+          if (!reason) return;
+          setShowWarning(false);
+          onConfirm(reason, note);
+        }}
+      />
+    </>
+  );
+};
+
+export const CancelPickupSheet = ({ open, onBack, onConfirm, requestLabel = "pickup" }: any) => {
+  const [reason, setReason] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [showWarning, setShowWarning] = useState(false);
+  const actionLabel = requestLabel === "pickup"
+    ? "Cancel pickup"
+    : requestLabel === "fertilizer request"
+      ? "Cancel request"
+      : "Cancel delivery";
+
+  useEffect(() => {
+    if (open) {
+      setReason(null);
+      setNote('');
+      setShowWarning(false);
+    }
+  }, [open]);
+
+  return (
+    <>
+      <Sheet open={open && !showWarning} onClose={onBack}>
+        <Text style={{
+          fontFamily: fontDisplay.fontFamily,
+          fontWeight: '600',
+          marginBottom: 4,
+          fontSize: 20,
+        }}>Cancel {requestLabel}</Text>
+        <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
+          Select a reason — this is required.
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {PICKUP_REASONS.map((pickupReason) => (
+            <Chip
+              key={pickupReason}
+              active={reason === pickupReason}
+              onPress={() => setReason(reason === pickupReason ? null : pickupReason)}
+            >
+              {pickupReason}
+            </Chip>
+          ))}
         </View>
-      </View>
-    </Sheet>
+        <Field label="Add a note (optional)">
+          <TextInput
+            style={{
+              borderRadius: 14,
+              borderWidth: 1.5,
+              borderColor: colors.border.light,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 15,
+              height: 64,
+              textAlignVertical: 'top',
+            }}
+            multiline
+            numberOfLines={3}
+            placeholder="Anything the factory should know..."
+            value={note}
+            onChangeText={setNote}
+          />
+        </Field>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Btn variant="danger" block disabled={!reason} onPress={() => setShowWarning(true)}>
+              Confirm Cancel
+            </Btn>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Btn variant="ghost" block onPress={onBack}>Back</Btn>
+          </View>
+        </View>
+      </Sheet>
+      <ConfirmationWarning
+        visible={showWarning}
+        title={`Cancel this ${requestLabel}?`}
+        message={`This ${requestLabel} will be cancelled. This action cannot be undone.`}
+        confirmLabel={actionLabel}
+        onCancel={() => setShowWarning(false)}
+        onConfirm={() => {
+          if (!reason) return;
+          setShowWarning(false);
+          onConfirm(reason, note);
+        }}
+      />
+    </>
+  );
+};
+
+export const BatchCancelRequestsSheet = ({
+  open,
+  requestCount,
+  onClose,
+  onConfirm,
+  requestLabel = "pickup request",
+}: any) => {
+  const [reason, setReason] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [showWarning, setShowWarning] = useState(false);
+  const pluralRequestLabel = `${requestLabel}${requestCount === 1 ? '' : 's'}`;
+
+  useEffect(() => {
+    if (open) {
+      setReason(null);
+      setNote('');
+      setShowWarning(false);
+    }
+  }, [open]);
+
+  return (
+    <>
+      <Sheet open={open && !showWarning} onClose={onClose}>
+        <Text style={{
+          fontFamily: fontDisplay.fontFamily,
+          fontWeight: '600',
+          marginBottom: 4,
+          fontSize: 20,
+        }}>Cancel selected {pluralRequestLabel}</Text>
+        <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>
+          This will cancel {requestCount} selected {pluralRequestLabel}. Select a reason.
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {PICKUP_REASONS.map((pickupReason) => (
+            <Chip
+              key={pickupReason}
+              active={reason === pickupReason}
+              onPress={() => setReason(reason === pickupReason ? null : pickupReason)}
+            >
+              {pickupReason}
+            </Chip>
+          ))}
+        </View>
+        <Field label="Add a note (optional)">
+          <TextInput
+            style={{
+              borderRadius: 14,
+              borderWidth: 1.5,
+              borderColor: colors.border.light,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 15,
+              height: 64,
+              textAlignVertical: 'top',
+            }}
+            multiline
+            numberOfLines={3}
+            placeholder="Anything the factory or owners should know..."
+            value={note}
+            onChangeText={setNote}
+          />
+        </Field>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Btn variant="danger" block disabled={!reason} onPress={() => setShowWarning(true)}>
+              Confirm Cancel
+            </Btn>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Btn variant="ghost" block onPress={onClose}>Back</Btn>
+          </View>
+        </View>
+      </Sheet>
+      <ConfirmationWarning
+        visible={showWarning}
+        title={`Cancel ${requestCount} ${pluralRequestLabel}?`}
+        message={`These ${pluralRequestLabel} will be cancelled. This action cannot be undone.`}
+        confirmLabel="Cancel requests"
+        onCancel={() => setShowWarning(false)}
+        onConfirm={() => {
+          if (!reason) return;
+          setShowWarning(false);
+          onConfirm(reason, note);
+        }}
+      />
+    </>
   );
 };
 
@@ -388,8 +629,10 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall, o
         }}>Tea Collection</Text>
         <DetailRow k="Owner" v={stop.owner} />
         <DetailRow k="Phone" v={stop.phone} />
-        {stop.estNormalWeight > 0 && <DetailRow k="Normal tea" v={teaWeight(stop.estNormalWeight)} />}
-        {stop.estSupperWeight > 0 && <DetailRow k="Supper tea" v={teaWeight(stop.estSupperWeight)} />}
+        {(stop.location || stop.address) && (
+          <DetailRow k="Location" v={stop.location || stop.address} />
+        )}
+        <DetailRow k="Estate-reported weight" v={teaWeight(stop.estimatedWeight)} />
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -404,24 +647,20 @@ export const ArrivedSheet = ({ open, stop, onClose, onStartCollection, onCall, o
   );
 };
 
-export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
-  const [normalWeight, setNormalWeight] = useState("");
-  const [supperWeight, setSupperWeight] = useState("");
-  const [normalPhotoUri, setNormalPhotoUri] = useState<string>();
-  const [supperPhotoUri, setSupperPhotoUri] = useState<string>();
+export const CollectSheet = ({ open, stop, onClose, onBack, onSubmit }: any) => {
+  const [weight, setWeight] = useState("");
+  const [photoUri, setPhotoUri] = useState<string>();
   const [remark, setRemark] = useState('');
   
   useEffect(() => {
     if (stop) {
-      setNormalWeight("");
-      setSupperWeight("");
-      setNormalPhotoUri(undefined);
-      setSupperPhotoUri(undefined);
+      setWeight("");
+      setPhotoUri(undefined);
       setRemark('');
     }
   }, [stop?.id]);
 
-  const addPhoto = async (setPhotoUri: (uri: string) => void) => {
+  const addPhoto = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) return;
     const result = await ImagePicker.launchCameraAsync({
@@ -434,9 +673,6 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
   };
 
   if (!stop) return null;
-  const hasNormalTea = (stop.estNormalWeight || 0) > 0;
-  const hasSupperTea = (stop.estSupperWeight || 0) > 0;
-  const showBothTeaTypes = !hasNormalTea && !hasSupperTea;
 
   return (
     <Sheet open={open} onClose={onClose}>
@@ -456,41 +692,19 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
         fontSize: 20,
       }}>Log Tea Collection</Text>
 
-      {(hasNormalTea || showBothTeaTypes) && (
-        <>
-          <Field label="Normal tea weight (kg)">
-            <Input
-              value={normalWeight}
-              onChangeText={setNormalWeight}
-              keyboardType="decimal-pad"
-              placeholder="Enter Normal tea weight"
-              placeholderTextColor={c.muted}
-            />
-          </Field>
+      <Field label="Total tea weight (kg)">
+        <Input
+          value={weight}
+          onChangeText={setWeight}
+          keyboardType="decimal-pad"
+          placeholder="Enter the full measured weight"
+          placeholderTextColor={c.muted}
+        />
+      </Field>
 
-          <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={() => addPhoto((uri) => setNormalPhotoUri(uri))}>
-            {normalPhotoUri ? "Normal tea bag photo added" : "Add Normal Tea Bags Photo"}
-          </Btn>
-        </>
-      )}
-
-      {(hasSupperTea || showBothTeaTypes) && (
-        <>
-          <Field label="Supper tea weight (kg)">
-            <Input
-              value={supperWeight}
-              onChangeText={setSupperWeight}
-              keyboardType="decimal-pad"
-              placeholder="Enter Supper tea weight"
-              placeholderTextColor={c.muted}
-            />
-          </Field>
-
-          <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={() => addPhoto((uri) => setSupperPhotoUri(uri))}>
-            {supperPhotoUri ? "Supper tea bag photo added" : "Add Supper Tea Bags Photo"}
-          </Btn>
-        </>
-      )}
+      <Btn variant="ghost" block style={{ marginBottom: 14 }} onPress={addPhoto}>
+        {photoUri ? "Tea weight photo added" : "Add Tea Weight Photo"}
+      </Btn>
       
       <Field label="Remarks (optional)">
         <TextInput 
@@ -530,40 +744,36 @@ export const CollectSheet = ({ open, stop, onClose, onSubmit }: any) => {
         <Pill status="waiting" />
       </View>
       
-      <Btn
-        variant="primary"
-        block
-        onPress={() => onSubmit({ normal: normalWeight, supper: supperWeight, normalPhotoUri, supperPhotoUri })}
-      >
-        Submit Collection
-      </Btn>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Btn variant="ghost" block onPress={onBack}>Back</Btn>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Btn
+            variant="primary"
+            block
+            onPress={() => onSubmit({ weight, photoUri, remark })}
+          >
+            Submit Collection
+          </Btn>
+        </View>
+      </View>
     </Sheet>
   );
 };
 
 type ConfirmSheetProps = {
   open: boolean;
-  weights: { normal: number; supper: number };
+  weight: number;
   stop?: {
     name: string;
-    estNormalWeight?: number;
-    estSupperWeight?: number;
+    estimatedWeight?: number;
   } | null;
   onBack: () => void;
   onClose: () => void;
 };
 
-export const ConfirmSheet = ({ open, weights, stop, onBack, onClose }: ConfirmSheetProps) => {
-  const normal = weights?.normal || 0;
-  const supper = weights?.supper || 0;
-  const estateNormal = stop?.estNormalWeight || 0;
-  const estateSupper = stop?.estSupperWeight || 0;
-  const weightRows = [
-    { label: "Normal", estate: estateNormal, collector: normal },
-    { label: "Supper", estate: estateSupper, collector: supper },
-    { label: "Total", estate: estateNormal + estateSupper, collector: normal + supper },
-  ];
-
+export const ConfirmSheet = ({ open, weight, stop, onBack, onClose }: ConfirmSheetProps) => {
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
@@ -580,11 +790,11 @@ export const ConfirmSheet = ({ open, weights, stop, onBack, onClose }: ConfirmSh
       
       <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 16 }}>
         {[
-          { key: "estate", title: "Estate measured", field: "estate" as const },
-          { key: "collector", title: "Tea collector", field: "collector" as const },
-        ].map((column) => (
+          { title: "Estate-reported", value: stop?.estimatedWeight || 0 },
+          { title: "Collector measured", value: weight || 0 },
+        ].map((item) => (
           <View
-            key={column.key}
+            key={item.title}
             style={{
               flex: 1,
               padding: 12,
@@ -595,39 +805,22 @@ export const ConfirmSheet = ({ open, weights, stop, onBack, onClose }: ConfirmSh
             }}
           >
             <Text style={{ fontSize: 12, fontWeight: '700', color: c.forestDeep, marginBottom: 10 }}>
-              {column.title}
+              {item.title}
             </Text>
-            {weightRows.map((row) => (
-              <View
-                key={row.label}
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  paddingVertical: 5,
-                  borderTopWidth: row.label === "Normal" ? 0 : 1,
-                  borderTopColor: c.line,
-                }}
-              >
-                <Text style={{ fontSize: 12, color: c.muted }}>{row.label}</Text>
-                <Text style={{ fontSize: 12, fontWeight: row.label === "Total" ? '700' : '500', color: c.ink }}>
-                  {row[column.field].toFixed(1)} kg
-                </Text>
-              </View>
-            ))}
+            <Text style={{ fontSize: 16, fontWeight: '700', color: c.ink }}>
+              {item.value.toFixed(1)} kg
+            </Text>
           </View>
         ))}
       </View>
 
       <View style={{ paddingBottom: 8 }}>
-        <Pill status="waiting">Waiting for confirmation…</Pill>
         <Text style={{
           textAlign: 'center',
           fontSize: 15,
-          marginTop: 10,
           color: c.muted,
         }}>
-          Sent to the estate owner. This stop moves to Tea Loaded — you can head to the factory once you've picked up everything on your list.
+          This stop moves to Tea Loaded — you can head to the factory once you've picked up everything on your list.
         </Text>
       </View>
 
@@ -746,10 +939,9 @@ export const FactoryMapSheet = ({ open, stopCount, totalWeight, onClose, onArriv
   );
 };
 
-export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSubmit }: any) => {
-  const normalTotal = stops.reduce((sum: number, s: any) => sum + (s.actualNormalWeight || 0), 0);
-  const supperTotal = stops.reduce((sum: number, s: any) => sum + (s.actualSupperWeight || 0), 0);
-  const total = normalTotal + supperTotal;
+export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onBack, onSubmit }: any) => {
+  const estimatedTotal = stops.reduce((sum: number, s: any) => sum + (s.estimatedWeight || 0), 0);
+  const total = stops.reduce((sum: number, s: any) => sum + (s.actualWeight || 0), 0);
   return (
     <Sheet open={open} onClose={onClose}>
       <Text style={{
@@ -781,12 +973,9 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
               {[
                 { label: "Factory", width: 150 },
                 { label: "Estate", width: 150 },
-                { label: "Estate normal", width: 115 },
-                { label: "Collector normal", width: 125 },
-                { label: "Normal difference", width: 130 },
-                { label: "Estate supper", width: 115 },
-                { label: "Collector supper", width: 125 },
-                { label: "Supper difference", width: 130 },
+                { label: "Estate-reported weight", width: 150 },
+                { label: "Collector-measured weight", width: 175 },
+                { label: "Difference", width: 120 },
               ].map((column) => (
                 <Text
                   key={column.label}
@@ -807,28 +996,18 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
                 }}
               >
                 {(() => {
-                  const estateNormal = s.estNormalWeight || 0;
-                  const collectorNormal = s.actualNormalWeight || 0;
-                  const normalDifference = Math.round((collectorNormal - estateNormal) * 10) / 10;
-                  const estateSupper = s.estSupperWeight || 0;
-                  const collectorSupper = s.actualSupperWeight || 0;
-                  const supperDifference = Math.round((collectorSupper - estateSupper) * 10) / 10;
+                  const estimatedWeight = s.estimatedWeight || 0;
+                  const actualWeight = s.actualWeight || 0;
+                  const difference = Math.round((actualWeight - estimatedWeight) * 10) / 10;
                   const cells = [
                     { value: "Kotmale MPT Factory", width: 150, color: c.ink },
                     { value: s.name, width: 150, color: c.ink },
-                    { value: `${estateNormal.toFixed(1)} kg`, width: 115, color: c.forest },
-                    { value: `${collectorNormal.toFixed(1)} kg`, width: 125, color: c.forest },
+                    { value: `${estimatedWeight.toFixed(1)} kg`, width: 150, color: c.forest },
+                    { value: `${actualWeight.toFixed(1)} kg`, width: 175, color: c.forest },
                     {
-                      value: `${normalDifference > 0 ? "+" : ""}${normalDifference.toFixed(1)} kg`,
-                      width: 130,
-                      color: normalDifference === 0 ? c.forest : colors.error,
-                    },
-                    { value: `${estateSupper.toFixed(1)} kg`, width: 115, color: c.forest },
-                    { value: `${collectorSupper.toFixed(1)} kg`, width: 125, color: c.forest },
-                    {
-                      value: `${supperDifference > 0 ? "+" : ""}${supperDifference.toFixed(1)} kg`,
-                      width: 130,
-                      color: supperDifference === 0 ? c.forest : colors.error,
+                      value: `${difference > 0 ? "+" : ""}${difference.toFixed(1)} kg`,
+                      width: 120,
+                      color: difference === 0 ? c.forest : colors.error,
                     },
                   ];
 
@@ -840,7 +1019,7 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
                       paddingHorizontal: 4,
                       fontSize: 13,
                       color: cell.color,
-                      fontWeight: cellIndex === 4 || cellIndex === 7 ? '700' : '400',
+                      fontWeight: cellIndex === 4 ? '700' : '400',
                     }}
                   >
                     {cell.value}
@@ -854,8 +1033,7 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
       </Field>
 
       <DetailRow k="Total collection weight" v={`${total} kg`} />
-      <DetailRow k="Normal tea total" v={`${normalTotal} kg`} />
-      <DetailRow k="Supper tea total" v={`${supperTotal} kg`} />
+      <DetailRow k="Estate-reported total" v={`${estimatedTotal} kg`} />
 
       <View style={{ marginTop: 14 }}>
         <Field label="Receiving officer">
@@ -868,9 +1046,16 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
         </Field>
       </View>
 
-      <Btn variant="primary" block style={{ marginTop: 8 }} disabled={!officer} onPress={() => onSubmit(total)}>
-        Submit to Factory
-      </Btn>
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Btn variant="ghost" block onPress={onBack}>Back</Btn>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Btn variant="primary" block disabled={!officer} onPress={() => onSubmit(total)}>
+            Submit to Factory
+          </Btn>
+        </View>
+      </View>
       {!officer && (
         <Text style={{
           fontSize: 12,
@@ -879,104 +1064,6 @@ export const DeliverySheet = ({ open, stops, officer, setOfficer, onClose, onSub
           color: c.muted,
         }}>Select a receiving officer to continue</Text>
       )}
-    </Sheet>
-  );
-};
-
-export const FactoryWeightSheet = ({ open, collectionWeight, factoryWeight, onClose, onApprove, onReportMismatch }: any) => {
-  const diff = factoryWeight - collectionWeight;
-  const matches = diff === 0;
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDefault.fontFamily,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1.8,
-        fontSize: 11,
-        color: c.sageDeep,
-      }}>Kotmale MPT Factory</Text>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginTop: 2,
-        marginBottom: 12,
-        fontSize: 20,
-      }}>Factory Weight Received</Text>
-      <DetailRow k="Your collection weight" v={`${collectionWeight} kg`} />
-      <DetailRow k="Factory recorded weight" v={`${factoryWeight} kg`} />
-      <DetailRow k="Difference" v={`${diff > 0 ? "+" : ""}${diff} kg`} />
-      {!matches && (
-        <View style={{
-          borderRadius: 14,
-          paddingHorizontal: 14,
-          paddingVertical: 12,
-          marginTop: 12,
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-          gap: 10,
-          backgroundColor: "#FBEFD8",
-        }}>
-          <Ionicons name="alert-circle-outline" size={16} color={c.amberDeep} style={{ marginTop: 2 }} />
-          <Text style={{
-            fontSize: 12,
-            color: c.amberDeep,
-            flex: 1,
-          }}>
-            The factory's figure differs from what you recorded. Approve it if this looks right, or report it for review.
-          </Text>
-        </View>
-      )}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-        <View style={{ flex: 1 }}>
-          <Btn variant="danger" block onPress={onReportMismatch}>Report Mismatch</Btn>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Btn variant="primary" block onPress={onApprove}>Approve Weight</Btn>
-        </View>
-      </View>
-    </Sheet>
-  );
-};
-
-export const MismatchSheet = ({ open, onClose, onSubmit }: any) => {
-  const [reason, setReason] = useState<string | null>(null);
-  const [explanation, setExplanation] = useState('');
-  
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={{
-        fontFamily: fontDisplay.fontFamily,
-        fontWeight: '600',
-        marginBottom: 4,
-        fontSize: 20,
-      }}>Report Weight Mismatch</Text>
-      <Text style={{ fontSize: 15, marginBottom: 14, color: c.muted }}>What do you think caused the difference?</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {["Scale calibration", "Moisture loss in transit", "Miscount at estate", "Other"].map((r) => (
-          <Chip key={r} active={reason === r} onPress={() => setReason(r)}>{r}</Chip>
-        ))}
-      </View>
-      <Field label="Explanation">
-        <TextInput 
-          style={{
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: c.line,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            fontSize: 15,
-            height: 80,
-            textAlignVertical: 'top',
-          }}
-          multiline
-          numberOfLines={4}
-          placeholder="Add any detail for the receiving officer..."
-          value={explanation}
-          onChangeText={setExplanation}
-        />
-      </Field>
-      <Btn variant="primary" block onPress={() => onSubmit(reason || "Other")}>Submit for Review</Btn>
     </Sheet>
   );
 };
@@ -1001,6 +1088,266 @@ export const RegisterSheet = ({ open, onClose }: any) => {
       <Field label="BR number (optional)"><Input placeholder="Business registration no." /></Field>
       
       <Btn variant="primary" block onPress={onClose}>Submit for Factory Approval</Btn>
+    </Sheet>
+  );
+};
+
+type RegisteredEstate = {
+  id: number;
+  name: string;
+  owner: string;
+  phone: string;
+  location: string;
+  gps?: string;
+};
+
+type ManualRequestValues = {
+  estate: RegisteredEstate;
+  estimatedWeight: number;
+  pickupDate: Date;
+  reason: string;
+};
+
+const dateAtMidnight = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const formatRequestDate = (date: Date) =>
+  date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
+export const ManualCollectionRequestSheet = ({
+  open,
+  estates,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  estates: RegisteredEstate[];
+  onClose: () => void;
+  onSubmit: (values: ManualRequestValues) => void;
+}) => {
+  const [selectedEstate, setSelectedEstate] = useState<RegisteredEstate | null>(null);
+  const [estateListOpen, setEstateListOpen] = useState(false);
+  const [estimatedWeight, setEstimatedWeight] = useState('');
+  const [pickupDate, setPickupDate] = useState<Date | null>(null);
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const tomorrow = dateAtMidnight(new Date());
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return new Date(tomorrow.getFullYear(), tomorrow.getMonth(), 1);
+  });
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  const today = dateAtMidnight(new Date());
+  const firstWeekday = (new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate();
+  const calendarCells: (number | null)[] = [
+    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+  ];
+  const earliestDate = new Date(today);
+  earliestDate.setDate(earliestDate.getDate() + 1);
+  const previousMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
+  const previousMonthDisabled = previousMonth < new Date(earliestDate.getFullYear(), earliestDate.getMonth(), 1);
+
+  const createRequest = () => {
+    const weight = Number(estimatedWeight);
+    if (!selectedEstate || !Number.isFinite(weight) || weight <= 0 || !pickupDate || pickupDate <= today || !reason.trim()) {
+      setError('Select an owner, enter a valid weight, choose a future date, and provide a reason.');
+      return;
+    }
+
+    onSubmit({ estate: selectedEstate, estimatedWeight: weight, pickupDate, reason: reason.trim() });
+    setSelectedEstate(null);
+    setEstateListOpen(false);
+    setEstimatedWeight('');
+    setPickupDate(null);
+    setReason('');
+    setError('');
+  };
+
+  return (
+    <Sheet open={open} onClose={onClose}>
+      <Text style={{
+        fontFamily: fontDisplay.fontFamily,
+        fontWeight: '600',
+        marginBottom: 4,
+        fontSize: 20,
+      }}>Create Manual Collection Request</Text>
+      <Text style={{ fontSize: 14, marginBottom: 16, color: c.muted }}>
+        Record a collection arranged by phone with an estate owner.
+      </Text>
+
+      <Field label="Tea estate owner">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Choose a registered tea estate owner"
+          onPress={() => setEstateListOpen((isOpen) => !isOpen)}
+          style={{
+            minHeight: 46,
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderColor: c.line,
+            backgroundColor: colors.background,
+            paddingHorizontal: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Text style={{ fontSize: 15, color: selectedEstate ? c.ink : c.muted }}>
+            {selectedEstate ? `${selectedEstate.owner} · ${selectedEstate.name}` : 'Select registered owner'}
+          </Text>
+          <Ionicons name={estateListOpen ? 'chevron-up' : 'chevron-down'} size={18} color={c.muted} />
+        </Pressable>
+        {estateListOpen && (
+          <View style={{
+            marginTop: 6,
+            borderWidth: 1,
+            borderColor: c.line,
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}>
+            {estates.map((estate, index) => (
+              <Pressable
+                key={estate.id}
+                onPress={() => {
+                  setSelectedEstate(estate);
+                  setEstateListOpen(false);
+                  setError('');
+                }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderBottomWidth: index === estates.length - 1 ? 0 : 1,
+                  borderBottomColor: c.line,
+                  backgroundColor: colors.background,
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: c.ink }}>{estate.owner}</Text>
+                <Text style={{ fontSize: 12, color: c.muted }}>{estate.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </Field>
+
+      <Field label="Estimated tea weight (kg)">
+        <Input
+          value={estimatedWeight}
+          onChangeText={setEstimatedWeight}
+          keyboardType="decimal-pad"
+          placeholder="Weight reported by the owner"
+          placeholderTextColor={c.muted}
+        />
+      </Field>
+
+      <Field label="Collection date (future dates only)">
+        <Btn variant="secondary" block onPress={() => setCalendarOpen((isOpen) => !isOpen)}>
+          {pickupDate ? formatRequestDate(pickupDate) : 'Choose a future date'}
+        </Btn>
+        {calendarOpen && (
+          <View style={{
+            marginTop: 8,
+            padding: 12,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: c.line,
+            backgroundColor: colors.background,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Previous month"
+                disabled={previousMonthDisabled}
+                onPress={() => setVisibleMonth(previousMonth)}
+                style={{ padding: 6, opacity: previousMonthDisabled ? 0.35 : 1 }}
+              >
+                <Ionicons name="chevron-back" size={18} color={c.ink} />
+              </Pressable>
+              <Text style={{ fontWeight: '700', color: c.ink }}>
+                {visibleMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Next month"
+                onPress={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+                style={{ padding: 6 }}
+              >
+                <Ionicons name="chevron-forward" size={18} color={c.ink} />
+              </Pressable>
+            </View>
+            <View style={{ flexDirection: 'row' }}>
+              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, index) => (
+                <Text key={`${day}-${index}`} style={{ flex: 1, textAlign: 'center', paddingVertical: 6, color: c.muted, fontSize: 12 }}>
+                  {day}
+                </Text>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {calendarCells.map((day, index) => {
+                if (day === null) {
+                  return <View key={`empty-${index}`} style={{ width: '14.2857%', height: 38 }} />;
+                }
+                const date = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
+                const disabled = date <= today;
+                const selected = pickupDate?.getTime() === date.getTime();
+                return (
+                  <Pressable
+                    key={day}
+                    accessibilityRole="button"
+                    accessibilityLabel={formatRequestDate(date)}
+                    accessibilityState={{ disabled, selected }}
+                    disabled={disabled}
+                    onPress={() => {
+                      setPickupDate(date);
+                      setCalendarOpen(false);
+                      setError('');
+                    }}
+                    style={{
+                      width: '14.2857%',
+                      height: 38,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 19,
+                      backgroundColor: selected ? c.forest : 'transparent',
+                      opacity: disabled ? 0.35 : 1,
+                    }}
+                  >
+                    <Text style={{ color: selected ? colors.white : c.ink, fontWeight: selected ? '700' : '400' }}>
+                      {day}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+      </Field>
+
+      <Field label="Reason for creating this request">
+        <TextInput
+          value={reason}
+          onChangeText={setReason}
+          placeholder="Why was the request made by phone?"
+          placeholderTextColor={c.muted}
+          multiline
+          textAlignVertical="top"
+          style={{
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderColor: c.line,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            fontSize: 15,
+            minHeight: 76,
+            color: c.ink,
+          }}
+        />
+      </Field>
+
+      {error ? <Text style={{ color: colors.error, fontSize: 13, marginBottom: 12 }}>{error}</Text> : null}
+      <Btn variant="primary" block onPress={createRequest}>Create Request</Btn>
+      <Btn variant="ghost" block style={{ marginTop: 8 }} onPress={onClose}>Cancel</Btn>
     </Sheet>
   );
 };

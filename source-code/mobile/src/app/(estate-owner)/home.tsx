@@ -1,53 +1,133 @@
-import { useState } from "react"
-import { View, StyleSheet } from "react-native" 
-import { Screen, StatCard, Header, EstateOwnerBottomTab, AppText } from "@/components/ui"
-import { Hstack, Vstack } from "@/components/layout"
-import { BottomTabItem } from "@/components/ui/BottomTab";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
 
-
+import { Screen, Header, EstateOwnerBottomTab, GeneralHeader } from "@/components/ui";
+import type { BottomTabItem } from "@/components/ui/BottomTab";
+import {
+  MonthSummaryCard,
+  SectionHeader,
+  EstateListItem,
+  RequestListItem,
+  DeliveryListItem,
+} from "@/components/estate-owner";
+import {
+  activeDeliveries,
+  monthlySummary,
+  ownerName,
+  pendingRequests,
+  registeredEstates,
+  todayLabel,
+} from "@/data/estateOwnerHome";
+import { colors, spacing } from "@/theme";
 
 export default function EstateOwnerHome() {
-    const [activeTab, setActiveTab] = useState("Home");
-    const handleTabPress = (tab: BottomTabItem) => {
-        setActiveTab(tab.key);
+  // const router = useRouter();
+
+  // const handleTabPress = (tab: BottomTabItem) => {
+  //   if (tab.key === "home") {
+  //     router.navigate("/(estate-owner)/home");
+  //   } else if (tab.key === "estates") {
+  //     router.navigate("/(estate-owner)/estates");
+  //   }
+  // };
+
+  return (
+    <>
+      {/* <Header
+        username={ownerName}
+        greeting="Good morning,"
+        date={todayLabel}
+        notificationCount={3}
+        onNotificationPress={() => {
+          // TODO: navigate to notifications once the route exists
+        }}
+      /> */}
+
+      <Screen 
+        // style={styles.container}
+        header={
+          <GeneralHeader
+            title="Home"
+            description="Welcome Back!"
+            notificationCount={3}
+            onNotificationPress={() => {
+              // TODO: navigate to notifications once the route exists
+            }}
+          />
+        }
+        scroll={true}
+        >
+        {/* <GeneralHeader
+          title="Home"
+          description="Welcome Back!"
+          notificationCount={3}
+          onNotificationPress={() => {
+            // TODO: navigate to notifications once the route exists
+          }}
+        /> */}
+
+        {/* <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        > */}
+          <MonthSummaryCard summary={monthlySummary} />
+
+          <SectionHeader
+            title="Active Deliveries"
+            count={activeDeliveries.length}
+            onViewAll={() => {}}
+          />
+          <View style={styles.list}>
+            {activeDeliveries.map((delivery) => (
+              <DeliveryListItem
+                key={delivery.id}
+                delivery={delivery}
+                onPress={() => {}}
+              />
+            ))}
+          </View>
+
+          <SectionHeader
+            title="Pending Requests"
+            count={pendingRequests.length}
+            onViewAll={() => {}}
+          />
+          <View style={styles.list}>
+            {pendingRequests.map((request) => (
+              <RequestListItem
+                key={request.id}
+                request={request}
+                onPress={() => {}}
+              />
+            ))}
+          </View>
+        {/* </ScrollView> */}
+              
         
-        // Later you can navigate here if needed
-        // router.push(...)
-    };
-    return(
-        <>
-            <Screen style={styles.container}>
-                <View style={styles.content}>
-                    <Header companyName="Radeesh"/>
-                    <StatCard title="CURRENT MONTH COLLECTION" value1="12398 kg" value2="Rs. 345,045,690" variant="primary" width="full"/>
-                    
-
-                        <StatCard title="Today's Plucking" value2="23,345 kg" variant="surface" width="half"/>
-                        <StatCard title="Today's Collection" value2="Rs. 345,690" variant="surface" width="half"/>
-                    
-                    <AppText variant="subheading">Quick Actions</AppText>
-                    
-                </View>
-
-                <EstateOwnerBottomTab activeTab={activeTab} onTabPress={handleTabPress} style={styles.bottomTab}/>
-            </Screen>
-        </>
-    )
+      </Screen>
+    </>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        width: "100%",
-    },
-    content: {
-        flex: 1,
-        width: "100%",
-    },
+  container: {
+    flex: 1,
+    width: "100%",
+    backgroundColor: colors.white,
+  },
 
-    bottomTab:{
-        width: "100%",
-        marginTop: 20,
-        alignSelf: "stretch",
-    }
-})
+  scroll: {
+    flex: 1,
+    width: "100%",
+  },
+
+  scrollContent: {
+    // paddingBottom: spacing.lg,
+  },
+
+  list: {
+    gap: spacing.sm,
+  },
+
+});

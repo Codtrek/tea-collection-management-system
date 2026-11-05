@@ -5,18 +5,22 @@ export const userRoles: UserRole[] = [
     id: '1',
     role: 'Estate Owner',
     description: 'Manage your tea estate operations efficiently and effectively.',
-    route: '../(estate-owner)/home'
+    route: '/auth/login'
   },
   {
     id: '2',
     role: 'Estate Manager',
     description: 'Oversee and coordinate the daily operations of the tea estate.',
+<<<<<<< HEAD
     route: '../estatemanager'
+=======
+    route: '/auth/login'
+>>>>>>> 132f973071a6d2b4762eb96014bc702088adf24a
   },
   {
     id: '3',
     role: 'Factory Collector',
     description: 'Collect tea leaves from the fields.',
-    route: '../teacollector/teacollectorMobile'
+    route: '/auth/login'
   }
 ];

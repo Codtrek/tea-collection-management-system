@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Upload } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Radar, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -11,12 +12,20 @@ import { Select } from '@/components/ui/Select'
 import { Toggle } from '@/components/ui/Toggle'
 import { MultiStepWizard } from '@/components/patterns/MultiStepWizard'
 import { useToast } from '@/components/ui/Toast'
-import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS, ROLES } from './schema'
+import * as employeesService from '@/services/employees'
+import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS } from './schema'
+import { InitialPasswordModal } from './InitialPasswordModal'
+import { useEmployeeRoles } from './useEmployeeRoles'
+import type { Employee } from './types'
 import { formatDate } from '@/lib/format'
 
 const STEPS = [
   { id: 'personal', label: 'Personal Information', fields: ['name', 'nic', 'dob', 'contact', 'address'] },
-  { id: 'employment', label: 'Employment Details', fields: ['role', 'department', 'hireDate', 'employmentType'] },
+  {
+    id: 'employment',
+    label: 'Employment Details',
+    fields: ['role', 'department', 'hireDate', 'employmentType', 'dayRate', 'dayOtRate', 'nightRate', 'nightOtRate'],
+  },
   { id: 'bank', label: 'Bank Details', fields: ['bank', 'branch', 'account'] },
   { id: 'documents', label: 'Documents', fields: [] },
   { id: 'permissions', label: 'Permissions / Role', fields: [] },
@@ -26,6 +35,7 @@ const STEPS = [
 export function EmployeeRegistrationPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [step, setStep] = useState(0)
 
   const {
@@ -38,7 +48,14 @@ export function EmployeeRegistrationPage() {
   } = useForm<EmployeeForm>({
     resolver: zodResolver(employeeSchema),
     mode: 'onBlur',
-    defaultValues: { employmentType: 'Permanent', hasLogin: false },
+    defaultValues: {
+      employmentType: 'Permanent',
+      hasLogin: false,
+      dayRate: 0,
+      dayOtRate: 0,
+      nightRate: 0,
+      nightOtRate: 0,
+    },
   })
 
   // useWatch is the memoization-safe reactive read (works with React Compiler).
@@ -50,11 +67,25 @@ export function EmployeeRegistrationPage() {
     if (ok) setStep((s) => Math.min(STEPS.length - 1, s + 1))
   }
 
+  const { roles, agentRole } = useEmployeeRoles()
+  const isAgent = !!agentRole && values.role === agentRole
+  // a newly provisioned agent's one-time temporary password — shown before leaving this page
+  const [provisioned, setProvisioned] = useState<Employee | null>(null)
+
+  const createMutation = useMutation({
+    mutationFn: (data: EmployeeForm) => employeesService.create(data),
+    onSuccess: (employee) => {
+      toast('Employee registered')
+      void queryClient.invalidateQueries({ queryKey: ['employees'] })
+      void queryClient.invalidateQueries({ queryKey: ['dispatch'] })
+      if (employee.initialPassword) setProvisioned(employee)
+      else navigate(`/employees/${employee.id}`)
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not register this employee', 'danger'),
+  })
+
   const onSubmit = (data: EmployeeForm) => {
-    toast('Employee registered')
-    // In a real build this POSTs and redirects to the new record.
-    void data
-    navigate('/employees/EMP-0001')
+    createMutation.mutate(data)
   }
 
   return (
@@ -80,11 +111,35 @@ export function EmployeeRegistrationPage() {
             )}
 
             {step === 1 && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Select label="Role / position" placeholder="Select role" error={errors.role?.message} options={ROLES.map((r) => ({ value: r, label: r }))} {...register('role')} />
-                <Select label="Department" placeholder="Select department" error={errors.department?.message} options={DEPARTMENTS.map((d) => ({ value: d, label: d }))} {...register('department')} />
-                <Input label="Hire date" type="date" error={errors.hireDate?.message} {...register('hireDate')} />
-                <Select label="Employment type" options={['Permanent', 'Contract', 'Casual'].map((t) => ({ value: t, label: t }))} {...register('employmentType')} />
+              <div className="flex flex-col gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Select label="Role / position" placeholder="Select role" error={errors.role?.message} options={roles.map((r) => ({ value: r, label: r }))} {...register('role')} />
+                  <Select label="Department" placeholder="Select department" error={errors.department?.message} options={DEPARTMENTS.map((d) => ({ value: d, label: d }))} {...register('department')} />
+                  <Input label="Hire date" type="date" error={errors.hireDate?.message} {...register('hireDate')} />
+                  <Select label="Employment type" options={['Permanent', 'Contract', 'Casual'].map((t) => ({ value: t, label: t }))} {...register('employmentType')} />
+                </div>
+
+                {isAgent && (
+                  <p className="flex items-start gap-2 rounded-[var(--radius-md)] border border-border bg-surface-sunken p-3.5 text-sm text-text-muted">
+                    <Radar className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                    <span>
+                      Registering a <strong className="text-text">{agentRole}</strong> adds them to <strong className="text-text">Agent Dispatch</strong> (no
+                      route yet — assign one there) and creates their <strong className="text-text">mobile login</strong>: the contact number plus a
+                      one-time temporary password shown once after you register.
+                    </span>
+                  </p>
+                )}
+
+                {/* Feeds payroll generation (shift-based Day/Day-OT/Night/Night-OT pay). */}
+                <div>
+                  <p className="mb-2 text-sm font-medium text-text">Pay rates (Rs. / hour)</p>
+                  <div className="grid gap-4 sm:grid-cols-4">
+                    <Input label="Day" type="number" step="0.01" error={errors.dayRate?.message} {...register('dayRate', { valueAsNumber: true })} />
+                    <Input label="Day OT" type="number" step="0.01" error={errors.dayOtRate?.message} {...register('dayOtRate', { valueAsNumber: true })} />
+                    <Input label="Night" type="number" step="0.01" error={errors.nightRate?.message} {...register('nightRate', { valueAsNumber: true })} />
+                    <Input label="Night OT" type="number" step="0.01" error={errors.nightOtRate?.message} {...register('nightOtRate', { valueAsNumber: true })} />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -114,9 +169,13 @@ export function EmployeeRegistrationPage() {
                 <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-border p-4">
                   <div>
                     <p className="text-sm font-medium text-text">System login access</p>
-                    <p className="text-xs text-text-muted">Non-workflow roles (operators, drivers) are HR records only and don't get login (§3.2.2).</p>
+                    <p className="text-xs text-text-muted">
+                      {isAgent
+                        ? `${agentRole}s always get a mobile login — it is created on registration.`
+                        : "Non-workflow roles (operators, drivers) are HR records only and don't get login (§3.2.2)."}
+                    </p>
                   </div>
-                  <Toggle checked={values.hasLogin ?? false} onChange={(v) => setValue('hasLogin', v)} />
+                  <Toggle checked={isAgent || (values.hasLogin ?? false)} onChange={(v) => !isAgent && setValue('hasLogin', v)} />
                 </div>
               </div>
             )}
@@ -124,14 +183,28 @@ export function EmployeeRegistrationPage() {
             {step === 5 && (
               <div className="flex flex-col gap-4">
                 <ReviewGroup title="Personal" rows={[['Full name', values.name], ['NIC', values.nic], ['Date of birth', values.dob && formatDate(values.dob)], ['Contact', values.contact], ['Address', values.address]]} />
-                <ReviewGroup title="Employment" rows={[['Role', values.role], ['Department', values.department], ['Hire date', values.hireDate && formatDate(values.hireDate)], ['Type', values.employmentType]]} />
+                <ReviewGroup
+                  title="Employment"
+                  rows={[
+                    ['Role', values.role],
+                    ['Department', values.department],
+                    ['Hire date', values.hireDate && formatDate(values.hireDate)],
+                    ['Type', values.employmentType],
+                    ['Pay rates', `Day Rs. ${values.dayRate ?? 0} · Day OT Rs. ${values.dayOtRate ?? 0} · Night Rs. ${values.nightRate ?? 0} · Night OT Rs. ${values.nightOtRate ?? 0}`],
+                  ]}
+                />
                 <ReviewGroup title="Bank" rows={[['Bank', values.bank], ['Branch', values.branch], ['Account', values.account]]} />
-                <ReviewGroup title="Permissions" rows={[['System login', values.hasLogin ? 'Enabled' : 'Disabled']]} />
+                <ReviewGroup title="Permissions" rows={[['System login', isAgent ? 'Mobile login — created on registration' : values.hasLogin ? 'Enabled' : 'Disabled']]} />
               </div>
             )}
 
             <div className="flex justify-between border-t border-border pt-4">
-              <Button type="button" variant="secondary" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setStep((s) => Math.max(0, s - 1))}
+                disabled={step === 0 || createMutation.isPending}
+              >
                 Back
               </Button>
               {step < STEPS.length - 1 ? (
@@ -139,12 +212,23 @@ export function EmployeeRegistrationPage() {
                   Continue
                 </Button>
               ) : (
-                <Button type="submit">Register Employee</Button>
+                <Button type="submit" loading={createMutation.isPending}>
+                  Register Employee
+                </Button>
               )}
             </div>
           </form>
         </Card>
       </MultiStepWizard>
+
+      {provisioned?.initialPassword && (
+        <InitialPasswordModal
+          name={provisioned.name}
+          phone={provisioned.contact}
+          password={provisioned.initialPassword}
+          onDone={() => navigate(`/employees/${provisioned.id}`)}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { Pill } from "@/components/ui/demo-teacollector-pill";
 import { Btn } from "@/components/ui/demo-teacollector-button";
+import ConfirmationWarning from "@/components/ui/demo-teacollector-confirmationWarning";
 
 import { colors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
@@ -149,17 +150,36 @@ export const HomeStatsRow: React.FC<HomeStatsRowProps> = ({ stats, style }) => {
 interface FertRequestCardProps {
   request: any;
   onViewDetails?: (request: any) => void;
+  onAcceptFertilizer?: (request: any) => void;
   onLoadFertilizer?: (request: any) => void;
-  onDeliverFertilizer?: (request: any) => void;
+  onNavigateToFertilizerEstate?: (request: any) => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (request: any) => void;
+  onStartSelection?: (request: any) => void;
 }
 
 export const FertRequestCard = ({
   request,
   onViewDetails,
+  onAcceptFertilizer,
   onLoadFertilizer,
-  onDeliverFertilizer,
+  onNavigateToFertilizerEstate,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onStartSelection,
 }: FertRequestCardProps) => {
+  const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
+  const canCancel = ["pending", "confirmed", "loaded"].includes(request.status);
+
   const statusMap: any = {
+    pending: {
+      label: "Pending",
+      action: "Accept Request",
+      handler: onAcceptFertilizer,
+    },
+
     confirmed: {
       label: "Confirmed",
       action: "Load Fertilizer",
@@ -168,12 +188,24 @@ export const FertRequestCard = ({
 
     loaded: {
       label: "Loaded",
-      action: "Deliver",
-      handler: onDeliverFertilizer,
+      action: "Navigate to Estate",
+      handler: onNavigateToFertilizerEstate,
     },
 
     delivered: {
       label: "Delivered",
+      action: null,
+      handler: null,
+    },
+
+    declined: {
+      label: "Declined",
+      action: null,
+      handler: null,
+    },
+
+    cancelled: {
+      label: "Cancelled",
       action: null,
       handler: null,
     },
@@ -182,12 +214,34 @@ export const FertRequestCard = ({
   const currentStatus = statusMap[request.status];
 
   return (
-    <View style={styles.card}>
+    <>
+    <View style={[styles.card, selected && styles.selectedCard]}>
       {/* =========================
           HEADER
       ========================= */}
 
-      <View style={styles.header}>
+      <TouchableOpacity
+        style={styles.header}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${request.estateName || "tea estate"} fertilizer request details`}
+        disabled={selectionMode && !canCancel}
+        onLongPress={() => {
+          if (!canCancel) return;
+          if (selectionMode) {
+            onToggleSelect?.(request);
+          } else {
+            onStartSelection?.(request);
+          }
+        }}
+        onPress={() => {
+          if (selectionMode) {
+            onToggleSelect?.(request);
+            return;
+          }
+          onViewDetails?.(request);
+        }}
+      >
         <View style={styles.mainInfo}>
           <Text style={styles.title}>
             {request.estateName || "Tea Estate"}
@@ -199,6 +253,9 @@ export const FertRequestCard = ({
           </Text>
 
           <Text style={styles.timeText}>
+            {request.status === "pending" &&
+              `Requested at ${request.requestedAt}`}
+
             {request.status === "confirmed" &&
               `Confirmed at ${request.confirmedAt}`}
 
@@ -207,48 +264,87 @@ export const FertRequestCard = ({
 
             {request.status === "delivered" &&
               `Delivered at ${request.deliveredAt}`}
+
+            {request.status === "cancelled" &&
+              `Cancelled at ${request.cancelledAt}`}
           </Text>
+
+          {["pending", "confirmed", "loaded"].includes(request.status) &&
+            request.estimatedDistanceKm != null && (
+              <Text style={styles.estimatedDistance}>
+                Estimated distance: ~{request.estimatedDistanceKm} km
+              </Text>
+            )}
+
+          {(request.status === "declined" || request.status === "cancelled") &&
+            request.reason && (
+              <Text style={styles.reasonText}>Reason: {request.reason}</Text>
+            )}
         </View>
 
-        <Pill status={request.status} />
-      </View>
+        <View style={styles.statusSelection}>
+          <Pill status={request.status} />
+          {selectionMode && canCancel && (
+            <Ionicons
+              name={selected ? "checkmark-circle" : "ellipse-outline"}
+              size={24}
+              color={selected ? colors.primary : colors.text.tertiary}
+            />
+          )}
+        </View>
+      </TouchableOpacity>
 
       {/* =========================
           BUTTONS
       ========================= */}
 
-      <View style={styles.buttonRow}>
-        {/* View Details */}
-
-        <View style={styles.buttonWrapper}>
-          <Btn
-            variant="secondary"
-            small
-            block
-            onPress={() => onViewDetails?.(request)}
-          >
-            View Details
-          </Btn>
-        </View>
-
-        {/* Status Action */}
-
-        {currentStatus?.action && (
+      {!selectionMode && (
+        <View style={styles.buttonRow}>
           <View style={styles.buttonWrapper}>
             <Btn
-              variant="primary"
+              variant="secondary"
               small
               block
-              onPress={() =>
-                currentStatus.handler?.(request)
-              }
+              onPress={() => onViewDetails?.(request)}
             >
-              {currentStatus.action}
+              View Details
             </Btn>
           </View>
-        )}
-      </View>
+
+          {currentStatus?.action && (
+            <View style={styles.buttonWrapper}>
+              <Btn
+                variant="primary"
+                small
+                block
+                onPress={() => {
+                  if (request.status === "pending") {
+                    setShowAcceptConfirmation(true);
+                    return;
+                  }
+                  currentStatus.handler?.(request);
+                }}
+              >
+                {currentStatus.action}
+              </Btn>
+            </View>
+          )}
+        </View>
+      )}
     </View>
+    <ConfirmationWarning
+      visible={showAcceptConfirmation}
+      title="Accept this fertilizer request?"
+      message={`You are confirming the fertilizer request from ${request.estateName || "this estate"}.`}
+      confirmLabel="Accept request"
+      intent="success"
+      onCancel={() => setShowAcceptConfirmation(false)}
+      onConfirm={() => {
+        setShowAcceptConfirmation(false);
+        onAcceptFertilizer?.(request);
+      }}
+    />
+    </>
   );
 };
 
@@ -271,6 +367,11 @@ interface StopCardProps {
    */
   onArrivedDetails?: (stop: any) => void;
 
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (stop: any) => void;
+  onStartSelection?: (stop: any) => void;
+
   /*
    * NEW:
    * Accepted -> navigate to particular tea estate
@@ -283,6 +384,10 @@ export const StopCard = ({
   onViewDetails,
   onArrivedDetails,
   onGoToEstate,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onStartSelection,
 }: StopCardProps) => {
   const isPending = stop.status === "pending";
   const isAccepted = stop.status === "accepted";
@@ -291,7 +396,7 @@ export const StopCard = ({
   const isCancelled = stop.status === "cancelled";
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, selected && styles.selectedCard]}>
       {/* =================================================
           MAIN CARD CONTENT
 
@@ -306,19 +411,36 @@ export const StopCard = ({
           onArrivedDetails.
       ================================================== */}
 
-      <TouchableOpacity
-        disabled={!isPending && !isAccepted}
-        activeOpacity={0.85}
-        onPress={() => {
-          if (isPending) {
-            onViewDetails?.(stop);
-          }
+        <TouchableOpacity
+          disabled={!isPending && !isAccepted}
+          activeOpacity={0.85}
+          onLongPress={() => {
+            if (!isPending && !isAccepted) return;
 
-          if (isAccepted) {
-            onArrivedDetails?.(stop);
-          }
-        }}
-      >
+            if (!selectionMode) {
+              onStartSelection?.(stop);
+            } else {
+              onToggleSelect?.(stop);
+            }
+          }}
+          onPress={() => {
+
+            if (selectionMode) {
+                  if (isPending || isAccepted) {
+                    onToggleSelect?.(stop);
+                }
+                return;
+            }
+
+            if (isPending) {
+              onViewDetails?.(stop);
+            }
+
+            if (isAccepted) {
+              onArrivedDetails?.(stop);
+            }
+          }}
+        >
         {/* =================================================
             HEADER
         ================================================== */}
@@ -327,19 +449,24 @@ export const StopCard = ({
           {/* Estate Information */}
 
           <View style={styles.mainInfo}>
-            <Text style={styles.title}>
-              {stop.name || "Tea Estate"}
-            </Text>
-
-            {stop.address && (
-              <Text style={styles.subtitle}>
-                {stop.address}
+            <View style={styles.estateNameRow}>
+              <Text style={styles.title}>
+                {stop.name || "Tea Estate"}
               </Text>
-            )}
+              {stop.manualRequest && (
+                <View
+                  accessible
+                  accessibilityLabel="Manually created request"
+                  style={styles.manualBadge}
+                >
+                  <Text style={styles.manualBadgeText}>M</Text>
+                </View>
+              )}
+            </View>
 
-            {stop.location && (
+            {(stop.location || stop.address) && (
               <Text style={styles.subtitle}>
-                {stop.location}
+                {stop.location || stop.address}
               </Text>
             )}
 
@@ -354,7 +481,9 @@ export const StopCard = ({
                 `Accepted at ${stop.acceptedAt || "—"}`}
 
               {isLoaded &&
-                "Awaiting factory drop-off"}
+                (stop.collectionNote?.trim()
+                  ? `Note: ${stop.collectionNote.trim()}`
+                  : "")}
 
               {isDelivered &&
                 "✓ Completed"}
@@ -370,22 +499,24 @@ export const StopCard = ({
                 : stop.status
             }
           />
+          {selectionMode && (isPending || isAccepted) && (
+            <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorSelected]}>
+              {selected && <Ionicons name="checkmark" size={15} color={colors.white} />}
+            </View>
+          )}
         </View>
 
         {/* =================================================
             PENDING REQUEST
         ================================================== */}
 
-        {isPending && (
+        {isPending && !selectionMode && (
           <>
             {/* Estimated weight + distance */}
 
             <View style={styles.metaRow}>
-              {stop.estNormalWeight > 0 && (
-                <Text style={styles.metaText}>Normal ~{stop.estNormalWeight} kg</Text>
-              )}
-              {stop.estSupperWeight > 0 && (
-                <Text style={styles.metaText}>Supper ~{stop.estSupperWeight} kg</Text>
+              {stop.estimatedWeight > 0 && (
+                <Text style={styles.metaText}>~{stop.estimatedWeight} kg estimated</Text>
               )}
 
               {stop.dist != null && (
@@ -413,16 +544,13 @@ export const StopCard = ({
             ACCEPTED REQUEST
         ================================================== */}
 
-        {isAccepted && (
+        {isAccepted && !selectionMode && (
           <>
             {/* Keep existing accepted information */}
 
             <View style={styles.metaRow}>
-              {stop.estNormalWeight > 0 && (
-                <Text style={styles.metaText}>Normal ~{stop.estNormalWeight} kg</Text>
-              )}
-              {stop.estSupperWeight > 0 && (
-                <Text style={styles.metaText}>Supper ~{stop.estSupperWeight} kg</Text>
+              {stop.estimatedWeight > 0 && (
+                <Text style={styles.metaText}>~{stop.estimatedWeight} kg estimated</Text>
               )}
 
               {stop.dist != null && (
@@ -445,13 +573,8 @@ export const StopCard = ({
         ================================================== */}
 
         {isLoaded && (
-          <View style={styles.weightBreakdown}>
-            {stop.actualNormalWeight > 0 && (
-              <Text style={styles.metaText}>Normal {stop.actualNormalWeight} kg</Text>
-            )}
-            {stop.actualSupperWeight > 0 && (
-              <Text style={styles.metaText}>Supper {stop.actualSupperWeight} kg</Text>
-            )}
+          <View style={styles.loadedDetails}>
+            <Text style={styles.metaText}>{stop.actualWeight || 0} kg collected</Text>
           </View>
         )}
 
@@ -461,12 +584,7 @@ export const StopCard = ({
 
         {isDelivered && (
           <View style={styles.weightBreakdown}>
-            {stop.actualNormalWeight > 0 && (
-              <Text style={styles.mutedMetaText}>Normal {stop.actualNormalWeight} kg delivered</Text>
-            )}
-            {stop.actualSupperWeight > 0 && (
-              <Text style={styles.mutedMetaText}>Supper {stop.actualSupperWeight} kg delivered</Text>
-            )}
+            <Text style={styles.mutedMetaText}>{stop.actualWeight || 0} kg delivered</Text>
           </View>
         )}
 
@@ -604,6 +722,29 @@ const styles = StyleSheet.create({
     borderColor: colors.border.light,
   },
 
+  selectedCard: {
+    backgroundColor: colors.successBackground,
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+
+  selectionIndicator: {
+    width: 24,
+    height: 24,
+    marginLeft: 8,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.border.focused,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background,
+  },
+
+  selectionIndicatorSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+
   /* =======================================================
      HEADER
   ======================================================= */
@@ -612,6 +753,35 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
+  },
+
+  statusSelection: {
+    alignItems: "center",
+    gap: 8,
+  },
+
+  estateNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  manualBadge: {
+    width: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 9,
+    backgroundColor: colors.successBackground,
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+
+  manualBadgeText: {
+    color: colors.success,
+    fontFamily: fonts.default,
+    fontSize: 11,
+    fontWeight: "700",
   },
 
   mainInfo: {
@@ -637,6 +807,19 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
   },
 
+  estimatedDistance: {
+    fontFamily: fonts.default,
+    fontSize: 12,
+    marginTop: 4,
+    color: colors.primary,
+  },
+
+  reasonText: {
+    fontSize: 12,
+    marginTop: 4,
+    color: colors.error,
+  },
+
   /* =======================================================
      META INFORMATION
   ======================================================= */
@@ -651,6 +834,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 14,
+    marginTop: 10,
+  },
+
+  loadedDetails: {
+    gap: 4,
     marginTop: 10,
   },
 
