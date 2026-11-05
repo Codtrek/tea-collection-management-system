@@ -207,8 +207,8 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: "100%",
     backgroundColor: "transparent",
-    paddingTop: spacing.xl,
-    paddingBottom: 40,
+    justifyContent: "center",
+    paddingVertical: spacing.xl,
   },
 
   page: {
