@@ -140,7 +140,10 @@ export default function LogInScreen() {
             <AppInput
               label="Phone number"
               placeholder="Enter your phone number"
+              leftIcon="phone-outline"
               keyboardType="phone-pad"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
               value={phoneNumber}
               error={fieldErrors.phoneNumber}
               onChangeText={(value) => {
@@ -152,6 +155,8 @@ export default function LogInScreen() {
             <PasswordInput
               label="Password"
               placeholder="Enter your password"
+              autoComplete="current-password"
+              textContentType="password"
               value={password}
               error={fieldErrors.password}
               onChangeText={(value) => {
