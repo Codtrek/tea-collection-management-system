@@ -479,6 +479,19 @@ describe('PerformanceService', () => {
     });
   });
 
+  it('the definitions page reads the live tolerance and minimums from the rules', async () => {
+    const { service } = setup();
+    expect(await service.definitions({ role: 'Manager' })).toMatchObject({
+      tolerancePct: 5,
+      minimums: {
+        workingDays: 5,
+        routeDays: 5,
+        deliveries: 5,
+        routeHistoryDays: 5,
+      },
+    });
+  });
+
   it('the permission is enforced on the server', async () => {
     const { service } = setup();
     await expect(

@@ -21,3 +21,15 @@ export function getDrill(employeeId: string, measure: MeasureKey, month: string)
 export function addNote(employeeId: string, note: string): Promise<PerformanceNote> {
   return apiFetch<PerformanceNote>(`/performance/employees/${encodeURIComponent(employeeId)}/notes`, { method: 'POST', body: JSON.stringify({ note }) })
 }
+
+export interface PerformanceDefinitions {
+  tolerancePct: number
+  minimums: { workingDays: number; routeDays: number; deliveries: number; routeHistoryDays: number }
+  sameWithinPoints: number
+  comingSoon: { key: string; label: string; reason: string }[]
+}
+
+/** The live tolerance and minimums behind "How performance is measured". */
+export function getDefinitions(): Promise<PerformanceDefinitions> {
+  return apiFetch<PerformanceDefinitions>('/performance/definitions')
+}

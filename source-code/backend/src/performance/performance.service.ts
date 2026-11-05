@@ -41,6 +41,10 @@ import {
   fertilizerFirstAttempt,
   type GradedDelivery,
   kgMeasure,
+  MIN_DELIVERIES,
+  MIN_ROUTE_DAYS,
+  MIN_WORKING_DAYS,
+  SAME_WITHIN_POINTS,
   OWNER_SIDE,
   outsideTolerance,
   MIN_ROUTE_HISTORY_DAYS,
@@ -317,6 +321,22 @@ export class PerformanceService {
         .map((a) => a.status),
     );
     return out;
+  }
+
+  /** The live settings behind the "How performance is measured" page — straight from the rules. */
+  async definitions(actor: Actor) {
+    await this.requireView(actor);
+    return {
+      tolerancePct: (await this.collectionSettings.get()).mismatchTolerancePct,
+      minimums: {
+        workingDays: MIN_WORKING_DAYS,
+        routeDays: MIN_ROUTE_DAYS,
+        deliveries: MIN_DELIVERIES,
+        routeHistoryDays: MIN_ROUTE_HISTORY_DAYS,
+      },
+      sameWithinPoints: SAME_WITHIN_POINTS,
+      comingSoon: COMING_SOON,
+    };
   }
 
   // ── one employee: the last 6 months, drill-downs, notes ──────────────────

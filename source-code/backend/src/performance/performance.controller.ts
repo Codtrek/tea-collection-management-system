@@ -66,6 +66,12 @@ export class PerformanceController {
     );
   }
 
+  /** Tolerance, minimum data and coming-soon measures — the "How performance is measured" page. */
+  @Get('definitions')
+  definitions(@Req() req: AuthedRequest) {
+    return this.performance.definitions({ role: req.user.role });
+  }
+
   /** One employee, month by month (`months`, default 6) — the Performance tab. */
   @Get('employees/:id')
   employee(

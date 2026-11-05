@@ -1091,6 +1091,15 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - Re-sync lists differences only and never touches manual rows.
 - **Attendance ↔ dispatch:** one record. `dispatch/agent-attendance-link.service.ts` + `DispatchService.syncFromAttendance`: attendance is the record, `agent_day_status` the board's view. Don't write one without the other.
 
+### Performance (`docs/specs/Performance-Addendum.md`; branch `feat/performance-overview`)
+
+- **One service:** `backend/src/performance/` — `performance-rules.ts` (pure formulas, minimum data, trends, fact notes) + `PerformanceService` compute every measure from real records.
+  - The team table, the employee tab and `GET /performance/definitions` read it. Never recalculate on a screen.
+- **Never** add an overall score, rank or badge; a spec checks for it. Trends compare only with the person's own previous 3 months; averages stay within the same role.
+- **Kg** is compared only with the same route's history (cover → the covered route). Weight accuracy uses `collection.mismatchTolerancePct`, shared with grading.
+- **Portal:** `features/performance/` (team overview, `EmployeePerformanceTab`, `HowMeasuredPage`). `MEASURE_DEFINITIONS` is the one copy of each measure's wording.
+- **Permission** `performance`: Manager edit, Administrator approve, Officer none.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

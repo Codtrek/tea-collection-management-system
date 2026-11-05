@@ -20,6 +20,7 @@ import { PayrollListPage } from './features/employees/PayrollListPage'
 import { PayrollProcessingPage } from './features/employees/PayrollProcessingPage'
 import { PayslipPage } from './features/employees/PayslipPage'
 import { PerformancePage } from './features/performance/PerformancePage'
+import { HowMeasuredPage } from './features/performance/HowMeasuredPage'
 import { CollectionListPage } from './features/collections/CollectionListPage'
 import { CollectionExceptionEntryPage } from './features/collections/CollectionExceptionEntryPage'
 import { DispatchBoardPage } from './features/dispatch/DispatchBoardPage'
@@ -109,6 +110,7 @@ export const router = createBrowserRouter([
       { path: 'employees/payroll/process', element: <PayrollProcessingPage /> },
       { path: 'employees/payroll/:id/payslip', element: <PayslipPage /> },
       { path: 'employees/performance', element: <PerformancePage /> },
+      { path: 'employees/performance/how', element: <HowMeasuredPage /> },
       { path: 'employees/:id', element: <EmployeeDetailPage /> },
       { path: 'employees/:id/edit', element: <EmployeeEditPage /> },
 
