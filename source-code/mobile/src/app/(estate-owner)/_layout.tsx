@@ -13,7 +13,7 @@ export default function EstateOwnerLayout() {
             ? "estates"
             : "home";
 
-    const showBottomTab = !pathname.includes("/estate/");
+    const showBottomTab = !pathname.includes("/estate/") && !pathname.includes("/workers/");
 
     useEffect(() => {
         router.prefetch("/(estate-owner)/home");

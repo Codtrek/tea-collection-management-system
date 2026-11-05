@@ -300,6 +300,7 @@ const styles = StyleSheet.create({
   },
 
   eyebrowRow: {
+    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 10,

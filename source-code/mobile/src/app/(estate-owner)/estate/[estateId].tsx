@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Alert, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
@@ -105,7 +105,7 @@ export default function EstateDetails() {
           placeholderContentFit="cover"
           style={styles.hero}
         />
-        <AppText variant="heading" style={ui.bold}>{estate.name}</AppText>
+        <AppText variant="subHeading" style={ui.bold}>{estate.name}</AppText>
         <View style={ui.row}>
           <EstateIcon name="location-outline" size={16} />
           <AppText variant="bodySmall" style={[ui.muted, ui.grow]}>{estate.location}</AppText>
@@ -115,7 +115,7 @@ export default function EstateDetails() {
           <AppText variant="bodySmall">{estate.areaAcres} acres</AppText>
           <View style={styles.divider} />
           <EstateIcon name="leaf-outline" size={17} />
-          <AppText variant="bodySmall">{estate.grade === "Not graded" ? estate.grade : `${estate.grade} grade`}</AppText>
+          {/* <AppText variant="bodySmall">{estate.grade === "Not graded" ? estate.grade : `${estate.grade} grade`}</AppText> */}
         </View>
       </View>
 
@@ -150,7 +150,17 @@ export default function EstateDetails() {
           <EstateIcon name="people-outline" size={26} />
           <View style={ui.grow}>
             <AppText variant="bodySmall" style={ui.bold}>Estate workers</AppText>
-            <AppText variant="caption" style={ui.muted}>{workers?.length ?? 0} workers · {attendanceTime && isToday(attendanceTime) ? presentCount : 0} active today</AppText>
+            <AppText variant="caption" style={ui.muted}>{workers?.length ?? 0} workers</AppText>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color={colors.text.secondary} />
+        </Pressable>
+        <Pressable accessibilityRole="button" style={[ui.card, ui.row]} onPress={() => router.push({
+          pathname: "/(estate-owner)/estate/[estateId]/attendance", params: { estateId: estate.id },
+        })}>
+          <EstateIcon name="calendar-outline" size={26} />
+          <View style={ui.grow}>
+            <AppText variant="bodySmall" style={ui.bold}>Worker attendance</AppText>
+            <AppText variant="caption" style={ui.muted}>{attendanceTime && isToday(attendanceTime) ? `${presentCount} marked present today` : "Mark today’s attendance"}</AppText>
           </View>
           <Ionicons name="chevron-forward" size={17} color={colors.text.secondary} />
         </Pressable>

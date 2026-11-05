@@ -57,7 +57,7 @@ export default function SelectPluckingWorker() {
             <AppText variant="subHeading" style={ui.bold}>{attendanceSavedToday ? "No workers marked present" : "Attendance required"}</AppText>
             <AppText variant="bodySmall" style={ui.muted}>Mark and save today’s attendance before adding a plucking record.</AppText>
             <Pressable accessibilityRole="button" style={ui.action} onPress={() => router.push({
-              pathname: "/(estate-owner)/workers/[estateId]", params: { estateId },
+              pathname: "/(estate-owner)/estate/[estateId]/attendance", params: { estateId },
             })}>
               <AppText variant="bodySmall" style={ui.white}>{attendanceSavedToday ? "Update attendance" : "Mark attendance"}</AppText>
             </Pressable>

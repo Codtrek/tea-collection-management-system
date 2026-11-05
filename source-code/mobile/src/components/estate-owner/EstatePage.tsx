@@ -28,12 +28,12 @@ export function EstatePage({ title, children, onEdit }: {
             onPress={() => router.canGoBack() ? router.back() : router.replace("/(estate-owner)/estates")}>
             <Ionicons name="arrow-back" size={23} color={colors.text.primary} />
           </Pressable>
-          <AppText variant="subHeading" style={estateStyles.bold}>{title}</AppText>
-          {onEdit ? (
+          <AppText variant="subHeading" style={[estateStyles.bold, estateStyles.title]}>{title}</AppText>
+          {onEdit && (
             <Pressable accessibilityRole="button" accessibilityLabel="Edit estate" style={estateStyles.iconButton} onPress={onEdit}>
               <Ionicons name="pencil-outline" size={21} color={colors.text.primary} />
             </Pressable>
-          ) : <View style={estateStyles.iconButton} />}
+          )}
         </View>
       </SafeAreaView>
     }>
@@ -44,9 +44,10 @@ export function EstatePage({ title, children, onEdit }: {
 
 export const estateStyles = StyleSheet.create({
   content: { paddingHorizontal: 16, gap: 12 },
-  header: { backgroundColor: colors.white },
-  toolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", maxWidth: 480, alignSelf: "center", paddingHorizontal: 8, minHeight: 56 },
+  header: { backgroundColor: colors.white, marginBottom: 8 },
+  toolbar: { flexDirection: "row", alignItems: "center", width: "100%", maxWidth: 480, alignSelf: "center", paddingHorizontal: 8, minHeight: 56 },
   iconButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  title: { flex: 1, textAlign: "left" },
   bold: { color: colors.text.primary, fontWeight: "700" },
   muted: { color: colors.text.secondary },
   section: { gap: 8, marginTop: 8 },

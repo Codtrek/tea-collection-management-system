@@ -30,6 +30,15 @@ export function getAttendanceSavedAt(estateId: string): number | undefined {
   return attendanceSavedAt.get(estateId);
 }
 
+export function addEstateWorker(estateId: string, name: string, contactNumber: string): void {
+  const workers = savedWorkersByEstate.get(estateId) ?? [];
+  savedWorkersByEstate.set(estateId, [
+    ...workers,
+    { id: `worker-${Date.now()}-${workers.length}`, name, contactNumber, role: "Tea plucker", present: false },
+  ]);
+  listeners.forEach((listener) => listener());
+}
+
 export function saveEstateWorkers(
   estateId: string,
   workers: EstateWorker[]
