@@ -64,7 +64,7 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     advances: 'approve',
     employees: 'view',
     attendance: 'edit',
-    performance: 'view',
+    performance: 'none',  // Performance-Addendum: Manager + Administrator only, for now
     // RPT-04 (log a daily expense) is a real write path once Reports is
     // backend-wired — Officer edits like every other module's `edit` tier,
     // Manager stays read-only (§4 three-role model).
@@ -91,7 +91,7 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     employees: 'view',
     // approve = older-than-window edits, with a reason (Attendance-Leave-Addendum)
     attendance: 'approve',
-    performance: 'approve',
+    performance: 'edit',  // view the measures + private notes
     reports: 'view',
     dispatch: 'approve',
     grading: 'view',

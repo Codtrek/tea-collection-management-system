@@ -1297,6 +1297,14 @@ INSERT INTO role_permissions (role, module, level) VALUES
     ('ReceivingOfficer', 'holidayStatutory', 'none')
 ON CONFLICT (role, module) DO NOTHING;
 
+-- Performance-Addendum: Manager edit (measures + notes), Administrator approve, Officer none.
+INSERT INTO role_permissions (role, module, level) VALUES
+    ('Administrator',    'performance', 'approve'),
+    ('Manager',          'performance', 'edit'),
+    ('Officer',          'performance', 'none'),
+    ('ReceivingOfficer', 'performance', 'none')
+ON CONFLICT (role, module) DO NOTHING;
+
 INSERT INTO system_settings (key, value, updated_by)
 VALUES ('fertilizer', '{"managerApprovalAboveKg": 500, "maxDeliveryAttempts": 3}'::jsonb, 'migration')
 ON CONFLICT (key) DO NOTHING;
