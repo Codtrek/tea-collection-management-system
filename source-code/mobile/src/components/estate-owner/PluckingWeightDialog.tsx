@@ -2,24 +2,28 @@ import { useRef, useState } from "react";
 import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { AppInput, AppText } from "@/components/ui";
+import { colors } from "@/theme";
 import { EstateIcon, estateStyles as ui } from "./EstatePage";
 
-export default function PluckingWeightDialog({ workerName, initialWeight, onClose, onConfirm }: {
+export function parsePluckingWeight(amount: string): number | null {
+  const input = amount.trim().replace(",", ".");
+  const weight = Number(input);
+  return /^\d*\.?\d+$/.test(input) && Number.isFinite(weight) && weight > 0 ? weight : null;
+}
+
+export default function PluckingWeightDialog({ workerName, onClose, onConfirm }: {
   workerName: string;
-  initialWeight?: number;
   onClose: () => void;
   onConfirm: (weight: number) => void;
 }) {
-  const editing = initialWeight !== undefined;
-  const [amount, setAmount] = useState(editing ? String(initialWeight) : "");
+  const [amount, setAmount] = useState("");
   const [confirmedWeight, setConfirmedWeight] = useState<number | null>(null);
   const [error, setError] = useState("");
   const submitted = useRef(false);
 
   function reviewWeight() {
-    const input = amount.trim().replace(",", ".");
-    const weight = Number(input);
-    if (!/^\d*\.?\d+$/.test(input) || !Number.isFinite(weight) || weight <= 0) {
+    const weight = parsePluckingWeight(amount);
+    if (weight === null) {
       setError("Enter a weight greater than zero.");
       return;
     }
@@ -42,9 +46,9 @@ export default function PluckingWeightDialog({ workerName, initialWeight, onClos
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.backdrop}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.container}>
           <View accessibilityViewIsModal style={[ui.card, styles.dialog]}>
-            <View style={styles.icon}><EstateIcon name={editing ? "pencil-outline" : "leaf-outline"} /></View>
+            <View style={styles.icon}><EstateIcon name="leaf-outline" /></View>
             <AppText variant="subHeading" style={ui.bold}>
-              {confirmedWeight === null ? (editing ? "Edit plucking weight" : "Enter plucking weight") : (editing ? "Confirm weight change" : "Confirm plucking record")}
+              {confirmedWeight === null ? "Enter plucking weight" : "Confirm plucking record"}
             </AppText>
             <AppText variant="bodySmall" style={ui.muted}>{workerName}</AppText>
             {confirmedWeight === null ? (
@@ -55,9 +59,9 @@ export default function PluckingWeightDialog({ workerName, initialWeight, onClos
                 }} />
             ) : (
               <View style={styles.summary}>
-                <AppText variant="bodySmall" style={ui.muted}>{editing ? "Replace the recorded weight?" : "Save this weight for the selected worker?"}</AppText>
+                <AppText variant="bodySmall" style={ui.muted}>Save this weight for the selected worker?</AppText>
                 <AppText variant="subHeading" style={ui.bold}>
-                  {editing ? `${initialWeight.toLocaleString()} kg → ` : ""}{confirmedWeight.toLocaleString()} kg
+                  {confirmedWeight.toLocaleString()} kg
                 </AppText>
               </View>
             )}
@@ -85,10 +89,10 @@ export default function PluckingWeightDialog({ workerName, initialWeight, onClos
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "#10241c80" },
+  backdrop: { flex: 1, backgroundColor: colors.overlay },
   container: { flexGrow: 1, justifyContent: "center", padding: 20 },
   dialog: { width: "100%", maxWidth: 420, alignSelf: "center", padding: 20, gap: 12 },
-  icon: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "#e8fae4" },
-  summary: { backgroundColor: "#e8fae4", padding: 12, borderRadius: 8, gap: 4 },
-  error: { color: "#ad2020" },
+  icon: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: colors.brandSurface },
+  summary: { backgroundColor: colors.brandSurface, padding: 12, borderRadius: 8, gap: 4 },
+  error: { color: colors.error },
 });

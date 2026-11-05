@@ -5,9 +5,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { isToday } from "date-fns";
 
-import { EstateIcon, EstatePage, estateGreen, estateStyles as ui } from "@/components/estate-owner/EstatePage";
+import { EstateIcon, EstatePage, estateStyles as ui } from "@/components/estate-owner/EstatePage";
 import { RequestListItem } from "@/components/estate-owner";
 import { AppButton, AppInput, AppText, Avatar } from "@/components/ui";
+import { colors } from "@/theme";
 import { getAttendanceSavedAt, useSavedEstateWorkers } from "@/data/estateWorkers";
 import { useEstateStore } from "@/store/estateStore";
 
@@ -151,7 +152,7 @@ export default function EstateDetails() {
             <AppText variant="bodySmall" style={ui.bold}>Estate workers</AppText>
             <AppText variant="caption" style={ui.muted}>{workers?.length ?? 0} workers · {attendanceTime && isToday(attendanceTime) ? presentCount : 0} active today</AppText>
           </View>
-          <Ionicons name="chevron-forward" size={17} color="#46566b" />
+          <Ionicons name="chevron-forward" size={17} color={colors.text.secondary} />
         </Pressable>
       </View>
 
@@ -173,7 +174,7 @@ export default function EstateDetails() {
         <Pressable accessibilityRole="button" style={ui.action} onPress={() => router.push({
           pathname: "/(estate-owner)/estate/[estateId]/add-plucking-record", params: { estateId: estate.id },
         })}>
-          <Ionicons name="add" size={20} color="#fff" />
+          <Ionicons name="add" size={20} color={colors.white} />
           <AppText variant="bodySmall" style={ui.white}>Add plucking record</AppText>
         </Pressable>
         <Pressable accessibilityRole="button" style={[ui.action, ui.outline]} onPress={() => router.push({
@@ -200,7 +201,7 @@ export default function EstateDetails() {
           <AppText variant="bodySmall" style={ui.bold}>Estate performance</AppText>
           <AppText variant="caption" style={ui.muted}>Plucking, revenue and worker insights</AppText>
         </View>
-        <Ionicons name="chevron-forward" size={17} color="#46566b" />
+        <Ionicons name="chevron-forward" size={17} color={colors.text.secondary} />
       </Pressable>
 
       <View style={ui.section}>
@@ -239,19 +240,19 @@ export default function EstateDetails() {
 
 const styles = StyleSheet.create({
   identity: { gap: 5 },
-  hero: { width: "100%", height: 128, borderRadius: 8, backgroundColor: "#e5f6e2" },
-  divider: { width: 1, height: 16, backgroundColor: "#e0e6e9", marginHorizontal: 6 },
+  hero: { width: "100%", height: 128, borderRadius: 8, backgroundColor: colors.brandSurface },
+  divider: { width: 1, height: 16, backgroundColor: colors.border.light, marginHorizontal: 6 },
   factories: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
-  chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: "#eefbea", borderWidth: 1, borderColor: "#bbebbb", color: "#10241c" },
-  addFactory: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: estateGreen, alignItems: "center", justifyContent: "center" },
-  call: { backgroundColor: "#eefbea", width: 44, height: 44, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  awaiting: { backgroundColor: "#e8fae4", borderRadius: 9, padding: 13 },
+  chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, backgroundColor: colors.brandSurface, borderWidth: 1, borderColor: colors.brandBorder, color: colors.text.primary },
+  addFactory: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.brandDark, alignItems: "center", justifyContent: "center" },
+  call: { backgroundColor: colors.brandSurface, width: 44, height: 44, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  awaiting: { backgroundColor: colors.brandSurface, borderRadius: 9, padding: 13 },
   pressed: { opacity: 0.75 },
-  recordsLink: { color: estateGreen, fontWeight: "700", marginTop: 6 },
-  activity: { paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#e0e6e9" },
-  activityIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#e8fae4", alignItems: "center", justifyContent: "center" },
-  modal: { flex: 1, backgroundColor: "#0007" },
+  recordsLink: { color: colors.brandDark, fontWeight: "700", marginTop: 6 },
+  activity: { paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border.light },
+  activityIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.brandSurface, alignItems: "center", justifyContent: "center" },
+  modal: { flex: 1, backgroundColor: colors.overlay },
   modalContent: { flexGrow: 1, justifyContent: "center", padding: 20 },
   form: { gap: 12, padding: 18, width: "100%", maxWidth: 420, alignSelf: "center" },
-  error: { color: "#ad2020" },
+  error: { color: colors.error },
 });

@@ -6,6 +6,7 @@ import { isToday } from "date-fns";
 import { EstateIcon, EstatePage, estateStyles as ui } from "@/components/estate-owner/EstatePage";
 import PluckingWeightDialog from "@/components/estate-owner/PluckingWeightDialog";
 import { AppInput, AppText, Avatar } from "@/components/ui";
+import { colors } from "@/theme";
 import { getAttendanceSavedAt, getSavedEstateWorkers, useSavedEstateWorkers } from "@/data/estateWorkers";
 import { useEstateStore } from "@/store/estateStore";
 
@@ -83,5 +84,5 @@ export default function SelectPluckingWorker() {
 const styles = StyleSheet.create({
   intro: { gap: 3, marginTop: 4 },
   empty: { gap: 10, padding: 16 },
-  pressed: { backgroundColor: "#eef9ec" },
+  pressed: { backgroundColor: colors.brandSurface },
 });

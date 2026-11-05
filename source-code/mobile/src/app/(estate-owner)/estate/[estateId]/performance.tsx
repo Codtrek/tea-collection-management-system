@@ -4,8 +4,9 @@ import { useLocalSearchParams } from "expo-router";
 import { differenceInCalendarDays, format, subDays, subMonths } from "date-fns";
 import Svg, { Circle, Line, Polygon, Polyline, Text as SvgText } from "react-native-svg";
 
-import { EstateIcon, EstatePage, estateGreen, estateStyles as ui } from "@/components/estate-owner/EstatePage";
+import { EstateIcon, EstatePage, estateStyles as ui } from "@/components/estate-owner/EstatePage";
 import { AppText } from "@/components/ui";
+import { colors } from "@/theme";
 import { useSavedEstateWorkers } from "@/data/estateWorkers";
 import { useEstateStore } from "@/store/estateStore";
 
@@ -183,19 +184,19 @@ function HarvestChart({ weights, from }: { weights: (number | null)[]; from: Dat
       accessible accessibilityLabel="Line chart of daily plucked tea weight in kilograms">
       {width > 70 && <Svg width={width} height={143}>
         {[0, 1, 2, 3].map((tick) => (
-          <SvgText key={tick} x={left - 6} y={y(tick * step) + 3} fontSize={10} textAnchor="end" fill="#46566b">{tick * step}</SvgText>
+          <SvgText key={tick} x={left - 6} y={y(tick * step) + 3} fontSize={10} textAnchor="end" fill={colors.text.secondary}>{tick * step}</SvgText>
         ))}
         {[0, 1, 2, 3].map((tick) => (
-          <Line key={tick} x1={left} x2={right} y1={y(tick * step)} y2={y(tick * step)} stroke="#e5ebe7" />
+          <Line key={tick} x1={left} x2={right} y1={y(tick * step)} y2={y(tick * step)} stroke={colors.border.light} />
         ))}
         {segments.map((segment) => {
           const line = segment.map((point) => `${point.x},${point.y}`).join(" ");
-          return <Polygon key={segment[0].index} points={`${segment[0].x},${bottom} ${line} ${segment[segment.length - 1].x},${bottom}`} fill="#dcf6d9" />;
+          return <Polygon key={segment[0].index} points={`${segment[0].x},${bottom} ${line} ${segment[segment.length - 1].x},${bottom}`} fill={colors.successBackground} />;
         })}
-        <Line x1={left} x2={left} y1={top} y2={bottom} stroke="#cdd9d1" />
-        {segments.map((segment) => <Polyline key={segment[0].index} points={segment.map((point) => `${point.x},${point.y}`).join(" ")} stroke={estateGreen} strokeWidth={2} fill="none" />)}
-        {points.map((point) => <Circle key={point.index} cx={point.x} cy={point.y} r={3} fill={estateGreen} />)}
-        {labelIndices.map((index) => <SvgText key={index} x={x(index)} y={135} fontSize={10} textAnchor="middle" fill="#46566b">
+        <Line x1={left} x2={left} y1={top} y2={bottom} stroke={colors.border.default} />
+        {segments.map((segment) => <Polyline key={segment[0].index} points={segment.map((point) => `${point.x},${point.y}`).join(" ")} stroke={colors.brandDark} strokeWidth={2} fill="none" />)}
+        {points.map((point) => <Circle key={point.index} cx={point.x} cy={point.y} r={3} fill={colors.brandDark} />)}
+        {labelIndices.map((index) => <SvgText key={index} x={x(index)} y={135} fontSize={10} textAnchor="middle" fill={colors.text.secondary}>
           {format(subDays(from, -index), "d MMM")}
         </SvgText>)}
       </Svg>}
@@ -211,11 +212,11 @@ const styles = StyleSheet.create({
   chart: { marginTop: 5 },
   chartPlot: { minHeight: 143, marginTop: 8 },
   empty: { paddingVertical: 20 },
-  listRow: { paddingVertical: 7, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: "#dce5e1" },
+  listRow: { paddingVertical: 7, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border.light },
   link: { minHeight: 44, justifyContent: "center", paddingHorizontal: 5 },
-  linkText: { color: estateGreen, fontWeight: "600" },
-  track: { width: "29%", height: 8, borderRadius: 4, backgroundColor: "#e2e7e8", overflow: "hidden" },
-  bar: { height: "100%", backgroundColor: estateGreen, borderRadius: 4 },
-  activityIcon: { width: 35, height: 35, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#e8fae4" },
-  collectionIcon: { backgroundColor: "#e1f2ff" },
+  linkText: { color: colors.brandDark, fontWeight: "600" },
+  track: { width: "29%", height: 8, borderRadius: 4, backgroundColor: colors.border.light, overflow: "hidden" },
+  bar: { height: "100%", backgroundColor: colors.brandDark, borderRadius: 4 },
+  activityIcon: { width: 35, height: 35, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.brandSurface },
+  collectionIcon: { backgroundColor: colors.backgroundGray },
 });
