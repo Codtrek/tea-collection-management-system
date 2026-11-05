@@ -15,6 +15,7 @@ import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
 import Avatar from "@/components/ui/Avatar";
+import GeneralHeader from "@/components/ui/GeneralHeader";
 
 
 import { colors } from "@/theme/colors";
@@ -142,45 +143,17 @@ export default function Employees() {
         >
           {/* HEADER */}
 
-          <View style={styles.header}>
-            <View style={styles.profileSection}>
-              <Avatar name="Rohan" size={42} />
-
-              <View style={styles.profileText}>
-                <AppText
-                  variant="body"
-                  style={styles.managerName}
-                >
-                  Manager Rohan
-                </AppText>
-
-                <AppText
-                  variant="caption"
-                  style={styles.estateName}
-                >
-                  Nuwara Eliya Highlands
-                </AppText>
-              </View>
-            </View>
-
-            <Pressable
-              style={styles.notificationButton}
-              onPress={openNotifications}
-              hitSlop={8}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={23}
-                color={colors.text.primaryGreen}
-              />
-            </Pressable>
-          </View>
+          <GeneralHeader
+            title="Your Estate Name"
+            description="Estate Manager"
+            onNotificationPress={() => router.push("/estatemanager/Notification")}
+          />
 
           {/* PAGE TITLE */}
 
           <View style={styles.titleRow}>
             <AppText
-              variant="subheading"
+              variant="subHeading"
               style={styles.pageTitle}
             >
               Employee Directory

@@ -208,7 +208,7 @@ export default function FertilizerRequestForm() {
       <View style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.headerTitle}>
-            <AppText variant="subheading">Fertilizer Supply Request</AppText>
+            <AppText variant="subHeading">Fertilizer Supply Request</AppText>
             <AppText variant="caption" style={styles.headerSubtitle}>
               Select quantities and dispatch details
             </AppText>
@@ -395,7 +395,7 @@ export default function FertilizerRequestForm() {
             </AppText>
           </View>
 
-          <AppText variant="subheading" style={styles.dispatchTitle}>
+          <AppText variant="subHeading" style={styles.dispatchTitle}>
             Dispatch &amp; Urgency
           </AppText>
 

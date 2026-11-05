@@ -364,7 +364,7 @@ export default function PhotoEvidence() {
 
             <AppText
 
-              variant="subheading"
+              variant="subHeading"
 
               style={styles.pageTitle}
 

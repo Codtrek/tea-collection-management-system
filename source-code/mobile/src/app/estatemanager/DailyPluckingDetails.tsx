@@ -83,7 +83,7 @@ export default function DailyPlucking() {
             </Pressable>
 
             <AppText
-              variant="subheading"
+              variant="subHeading"
               style={styles.headerTitle}
             >
               Daily Tea Plucking

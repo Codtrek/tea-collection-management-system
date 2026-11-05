@@ -52,7 +52,7 @@ export default function EmployeeProfile() {
           style: "destructive",
           onPress: () => {
             // Replace the current route with the sign-in page.
-            router.replace("/auth/signin");
+            router.replace("/auth/login");
           },
         },
       ],
@@ -168,7 +168,7 @@ export default function EmployeeProfile() {
             />
           </Pressable>
 
-          <AppText variant="subheading" style={styles.headerTitle}>
+          <AppText variant="subHeading" style={styles.headerTitle}>
             Manager Profile
           </AppText>
 
@@ -213,7 +213,7 @@ export default function EmployeeProfile() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Ionicons name="briefcase-outline" size={18} color={colors.primary} />
-              <AppText variant="subheading" style={styles.statValue}>
+              <AppText variant="subHeading" style={styles.statValue}>
                 {employee.experience}
               </AppText>
               <AppText variant="caption" style={styles.mutedText}>
@@ -225,7 +225,7 @@ export default function EmployeeProfile() {
 
             <View style={styles.statItem}>
               <Ionicons name="leaf-outline" size={18} color={colors.primary} />
-              <AppText variant="subheading" style={styles.statValue}>
+              <AppText variant="subHeading" style={styles.statValue}>
                 {employee.managedDivisions}
               </AppText>
               <AppText variant="caption" style={styles.mutedText}>
@@ -237,7 +237,7 @@ export default function EmployeeProfile() {
 
             <View style={styles.statItem}>
               <Ionicons name="people-outline" size={18} color={colors.primary} />
-              <AppText variant="subheading" style={styles.statValue}>
+              <AppText variant="subHeading" style={styles.statValue}>
                 {employee.workforce}
               </AppText>
               <AppText variant="caption" style={styles.mutedText}>
@@ -291,7 +291,7 @@ export default function EmployeeProfile() {
           <View style={styles.estateHeading}>
             <Ionicons name="leaf" size={21} color={colors.primary} />
             <View style={styles.estateDetails}>
-              <AppText variant="subheading" style={styles.estateName}>
+              <AppText variant="subHeading" style={styles.estateName}>
                 {employee.estate}
               </AppText>
               <AppText variant="caption" style={styles.mutedText}>
@@ -312,30 +312,7 @@ export default function EmployeeProfile() {
             </View>
           </View>
 
-          <AppText variant="body" style={styles.subsectionTitle}>
-            Supervised Field Operations
-          </AppText>
-
-          <View style={styles.chipContainer}>
-            {[
-              "Tea Plucking Cycles",
-              "Fertilizer Protocol",
-              "Daily Yield Scales",
-              "Pest & Flora Logs",
-            ].map((item) => (
-              <View key={item} style={styles.chip}>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={13}
-                  color={colors.primary}
-                />
-                <AppText variant="caption" style={styles.chipText}>
-                  {item}
-                </AppText>
-              </View>
-            ))}
-          </View>
-
+          
           <AppText variant="body" style={styles.subsectionTitle}>
             Official Licensing
           </AppText>
@@ -350,7 +327,7 @@ export default function EmployeeProfile() {
             </View>
             <View style={styles.licenseContent}>
               <AppText variant="body" style={styles.menuTitle}>
-                Certified Master Planter
+               .........
               </AppText>
               <AppText variant="caption" style={styles.mutedText}>
                 Professional certification record

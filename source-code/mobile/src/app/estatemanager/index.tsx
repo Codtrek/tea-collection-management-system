@@ -12,7 +12,7 @@ import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
 import Avatar from "@/components/ui/Avatar";
-import Header from "@/components/ui/GeneralHeader";
+import GeneralHeader from "@/components/ui/GeneralHeader";
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -43,10 +43,11 @@ export default function TeaEstateManagerDashboard() {
         >
           {/* Header */}
 
-          <Header
-          companyName="Estate Manager"
-          onNotificationPress={openNotifications}
-        />
+          <GeneralHeader
+          title="Your Estate Name"
+          description="Estate Manager"
+          onNotificationPress={() => router.push("/estatemanager/Notification")}
+          />
 
           {/* Dashboard title */}
 
@@ -140,7 +141,7 @@ export default function TeaEstateManagerDashboard() {
 
           <View style={styles.sectionHeader}>
             <AppText
-              variant="subheading"
+              variant="subHeading"
               style={styles.sectionTitle}
             >
               Quick Actions
@@ -237,7 +238,7 @@ export default function TeaEstateManagerDashboard() {
 
           <View style={styles.sectionHeader}>
             <AppText
-              variant="subheading"
+              variant="subHeading"
               style={styles.sectionTitle}
             >
               Today's Overview
@@ -282,7 +283,7 @@ export default function TeaEstateManagerDashboard() {
               </View>
 
               <AppText
-                variant="subheading"
+                variant="subHeading"
                 style={styles.overviewValue}
               >
                 21 / 24
@@ -321,7 +322,7 @@ export default function TeaEstateManagerDashboard() {
               </View>
 
               <AppText
-                variant="subheading"
+                variant="subHeading"
                 style={styles.overviewValue}
               >
                 1,250 kg
@@ -330,42 +331,6 @@ export default function TeaEstateManagerDashboard() {
 
             <View style={styles.divider} />
 
-            {/* Completed requests */}
-
-            <View style={styles.overviewRow}>
-              <View style={styles.overviewLeft}>
-                <View style={styles.smallIcon}>
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={18}
-                    color={colors.primary}
-                  />
-                </View>
-
-                <View style={styles.overviewText}>
-                  <AppText
-                    variant="bodySmall"
-                    style={styles.overviewTitle}
-                  >
-                    Completed Requests
-                  </AppText>
-
-                  <AppText
-                    variant="caption"
-                    style={styles.overviewSubtitle}
-                  >
-                    Collection requests
-                  </AppText>
-                </View>
-              </View>
-
-              <AppText
-                variant="subheading"
-                style={styles.overviewValue}
-              >
-                8
-              </AppText>
-            </View>
           </View>
 
           {/* Space above shared bottom navigation */}

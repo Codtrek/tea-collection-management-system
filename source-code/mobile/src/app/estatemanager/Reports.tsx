@@ -153,7 +153,7 @@ export default function Reports() {
           <View style={styles.header}>
             <View style={styles.headerText}>
               <AppText
-                variant="subheading"
+                variant="subHeading"
                 style={styles.headerTitle}
               >
                 Generate Reports

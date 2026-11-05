@@ -126,7 +126,7 @@ export default function NewEmployeeRegistration() {
             </Pressable>
 
             <AppText
-              variant="subheading"
+              variant="subHeading"
               style={styles.headerTitle}
             >
               New Employee Registration
