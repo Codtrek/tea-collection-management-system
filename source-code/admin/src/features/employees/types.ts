@@ -412,9 +412,41 @@ export interface HolidayYear {
   types: { type: 'poya' | 'public' | 'weekly' | 'closure'; label: string; paid: boolean; workAllowed: boolean }[]
   weeklyRules: { id: number; category: 'factory' | 'office'; weekdays: number[]; halfDayWeekday: number | null; effectiveFrom: string; createdBy: string | null }[]
   restDays: { id: number; employeeId: string; employeeName: string; weekday: number | null; effectiveFrom: string }[]
+  /** rows to check by hand — a Poya on the wrong month, duplicates (never changed automatically) */
+  suspicious: { id: number; date: string; name: string; problem: string }[]
+  /** December, and next year's holidays haven't been imported */
   nextYearMissing: boolean
   nextYear: number
 }
+
+/** One row of the Sri Lanka holiday import's review table. */
+export interface ImportPreviewRow {
+  uid: string
+  date: string
+  name: string
+  type: 'poya' | 'public'
+  include: boolean
+  /** why it is unticked (observance, bank-only …) or "Already imported" */
+  note: string | null
+  tentative: boolean
+  alreadyImported: boolean
+  conflict: string | null
+  sameDay: boolean
+}
+
+export interface ImportPreview {
+  year: number
+  source: 'google' | 'file'
+  feedUrl: string | null
+  note: string
+  rows: ImportPreviewRow[]
+}
+
+/** A re-sync difference between Google's feed and what was imported from it. */
+export type ResyncItem =
+  | { kind: 'added'; uid: string; date: string; name: string; type: 'poya' | 'public'; include: boolean; note: string | null }
+  | { kind: 'removed'; uid: string; holidayId: number; date: string; name: string }
+  | { kind: 'changed'; uid: string; holidayId: number; date: string; name: string; was: { date: string; name: string } }
 
 /** One employee category's day type (backend working-days.ts `dayInfo`). */
 export interface HolidayDayInfo {

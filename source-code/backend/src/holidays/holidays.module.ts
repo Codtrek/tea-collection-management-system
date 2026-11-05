@@ -12,6 +12,9 @@ import { FertilizerModule } from '../fertilizer/fertilizer.module';
 import { User } from '../users/user.entity';
 import { UsersModule } from '../users/users.module';
 import { EmployeeRestDayEntity } from './employee-rest-day.entity';
+import { HolidayImportSkipEntity } from './holiday-import-skip.entity';
+import { HolidayImportController } from './holiday-import.controller';
+import { HolidayImportService } from './holiday-import.service';
 import { HolidayRequestEntity } from './holiday-request.entity';
 import { HolidayTypeEntity } from './holiday-type.entity';
 import { HolidayEntity } from './holiday.entity';
@@ -35,14 +38,15 @@ import { WeeklyHolidayRuleEntity } from './weekly-holiday-rule.entity';
       PayrollRunEntity,
       User,
       SystemSettingEntity,
+      HolidayImportSkipEntity,
     ]),
     DispatchModule,
     FertilizerModule,
     UsersModule,
     AuditModule,
   ],
-  controllers: [HolidaysController],
-  providers: [HolidayService],
+  controllers: [HolidaysController, HolidayImportController],
+  providers: [HolidayService, HolidayImportService],
   exports: [HolidayService],
 })
 export class HolidaysModule {}

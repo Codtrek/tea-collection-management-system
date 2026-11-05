@@ -1,5 +1,15 @@
 import { apiFetch } from '@/lib/api'
-import type { DeclarePreview, Holiday, HolidayChangeResult, HolidayDay, HolidayRequest, HolidayYear } from '@/features/employees/types'
+import type {
+  DeclarePreview,
+  Holiday,
+  HolidayChangeResult,
+  HolidayDay,
+  HolidayRequest,
+  HolidayYear,
+  ImportPreview,
+  ImportPreviewRow,
+  ResyncItem,
+} from '@/features/employees/types'
 
 /*
   The holiday calendar (Attendance-Leave-Addendum §4). The server decides every change with the
@@ -97,4 +107,36 @@ export function decideRequest(id: number, decision: 'approve' | 'reject', reason
 
 export function cancelDeclared(group: string, reason?: string): Promise<void> {
   return apiFetch<void>(`/holidays/declared/${encodeURIComponent(group)}`, { method: 'DELETE', body: JSON.stringify({ reason }) })
+}
+
+// ── Import Sri Lanka holidays (holidayStatutory: edit; Attendance-Leave-Addendum §4.5) ──
+
+/** Google's public "Holidays in Sri Lanka" feed, fetched by the server, as a review table. */
+export function previewGoogleImport(year: number): Promise<ImportPreview> {
+  return apiFetch<ImportPreview>(`/holidays/import/google?year=${year}`)
+}
+
+/** The fallback: an uploaded .ics (trimmed to the year first) or CSV `date,name[,type]`. */
+export function previewFileImport(year: number, format: 'ics' | 'csv', content: string): Promise<ImportPreview> {
+  return apiFetch<ImportPreview>('/holidays/import/file', { method: 'POST', body: JSON.stringify({ year, format, content }) })
+}
+
+export function confirmImport(input: {
+  year: number
+  source: 'google' | 'file'
+  rows: Pick<ImportPreviewRow, 'uid' | 'date' | 'name' | 'type' | 'include'>[]
+}): Promise<{ added: number; skipped: number; counts: { poya: number; public: number; closure: number } }> {
+  return apiFetch('/holidays/import/confirm', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function getResync(year: number): Promise<{ year: number; note: string; items: ResyncItem[] }> {
+  return apiFetch(`/holidays/import/resync?year=${year}`)
+}
+
+export function acceptResync(input: { year: number; kind: ResyncItem['kind']; uid: string; type?: 'poya' | 'public' }): Promise<void> {
+  return apiFetch<void>('/holidays/import/resync/accept', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function ignoreResync(input: { year: number; kind: 'added'; uid: string }): Promise<void> {
+  return apiFetch<void>('/holidays/import/resync/ignore', { method: 'POST', body: JSON.stringify(input) })
 }

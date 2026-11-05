@@ -1080,7 +1080,15 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - holidays can't be Absent; working one is "Worked on holiday";
   - half-day AM/PM and short-leave times.
 - **Portal pages:** the month grid and day view read `GET /employees/attendance/month` and `/day`. The entry page never defaults to Present.
-- **The ONE working-day rule:** `holidays/working-days.ts` (`dayInfo`). The holiday calendar (`holidays/`) is the Manager's, through the data-driven `holidayCalendar` permission, enforced server-side.
+- **The ONE working-day rule:** `holidays/working-days.ts` (`dayInfo`).
+- **Holiday permissions** (addendum §4.1–4.2): two keys, `holidayCalendar` (Officer view · Manager edit · Administrator approve) and `holidayStatutory` (Poya / public, type settings, import: Administrator).
+  - `holidays/holiday-permissions.ts` `decide()` is the matrix; `HolidayService` asks it before every write. Never check a role by name.
+  - A Manager's weekly holiday and factory-wide closure are `holiday_requests` with **no effect** until approved, because `facts()` never reads requests.
+  - Emergency closures apply at once and keep an attendance snapshot for revert.
+- **Calendar page** (`admin/src/features/holidays/`, §4.4): month / year / list views; the state is in the URL (`calendar-model.ts`, tested); the day drawer reads `GET /holidays/day/:date`; `components/ui/Drawer.tsx`.
+- **Google import** (§4.5): `holidays/ical.ts` + `import-rules.ts` (pure, tested against the real 2026 feed in `holidays/testing/`) + `HolidayImportService`.
+  - The feed is fetched server-side; a .ics / CSV upload is the fallback.
+  - Re-sync lists differences only and never touches manual rows.
 - **Attendance ↔ dispatch:** one record. `dispatch/agent-attendance-link.service.ts` + `DispatchService.syncFromAttendance`: attendance is the record, `agent_day_status` the board's view. Don't write one without the other.
 
 ## Newcomer's guide (2026-10-18)

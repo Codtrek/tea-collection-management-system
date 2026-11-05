@@ -40,6 +40,23 @@ export function SidePanel({ data, today, can, onDone, onFailed, onOpenDay, onDec
     <div className="flex flex-col gap-4">
       {can.approver && data.pending.length > 0 && <PendingApprovals pending={data.pending} onDecide={onDecide} onOpenDay={onOpenDay} />}
 
+      {can.statutory && data.suspicious.length > 0 && (
+        <Card className="border-warning-fg/30">
+          <CardTitle className="mb-2">Check these ({data.suspicious.length})</CardTitle>
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {data.suspicious.map((s, i) => (
+              <li key={`${s.id}-${i}`}>
+                <button type="button" onClick={() => onOpenDay(s.date)} className="text-left hover:text-primary">
+                  <span className="font-medium text-text">{s.name}</span> <span className="text-xs text-text-muted">{formatDate(s.date)}</span>
+                  <span className="block text-xs text-warning-fg">{s.problem}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-text-muted">Nothing is changed automatically — open the day to edit or delete it.</p>
+        </Card>
+      )}
+
       <Card>
         <CardTitle className="mb-2">Upcoming holidays</CardTitle>
         {next.length === 0 ? (

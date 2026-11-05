@@ -1242,6 +1242,18 @@ CREATE TABLE IF NOT EXISTS holiday_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_holiday_requests_status ON holiday_requests(status);
 
+-- Imported events the Administrator unticked — a re-sync doesn't offer them again.
+CREATE TABLE IF NOT EXISTS holiday_import_skips (
+    id         SERIAL PRIMARY KEY,
+    uid        VARCHAR(200) NOT NULL UNIQUE,   -- the iCal UID
+    year       INTEGER NOT NULL,
+    name       VARCHAR(100) NOT NULL,
+    date       DATE NOT NULL,
+    skipped_by VARCHAR(100),
+    skipped_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_holiday_import_skips_year ON holiday_import_skips(year);
+
 -- Weekly holiday per category; a change adds a row with a later effective_from (past weeks keep theirs).
 CREATE TABLE IF NOT EXISTS weekly_holiday_rules (
     id               SERIAL PRIMARY KEY,

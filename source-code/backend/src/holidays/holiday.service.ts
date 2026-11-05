@@ -46,6 +46,7 @@ import {
   HolidayRequestEntity,
 } from './holiday-request.entity';
 import { HolidayTypeEntity } from './holiday-type.entity';
+import { suspicious } from './import-rules';
 import { HolidayEntity } from './holiday.entity';
 import { WeeklyHolidayRuleEntity } from './weekly-holiday-rule.entity';
 import {
@@ -371,10 +372,22 @@ export class HolidayService {
           weekday: r.weekday,
           effectiveFrom: r.effectiveFrom,
         })),
-      // December: warn when next year's Poya / public holidays aren't in yet
+      // rows to check by hand — never changed automatically (§4.6)
+      suspicious: suspicious(
+        inYear(year).map((h) => ({
+          id: h.id,
+          date: h.date,
+          name: h.name,
+          type: h.type,
+          source: h.source ?? 'manual',
+          externalUid: h.externalUid ?? null,
+          cancelled: !!h.cancelledAt,
+        })),
+      ),
+      // December: remind the Administrator when next year's holidays haven't been imported
       nextYearMissing:
         today.slice(5, 7) === '12' &&
-        !inYear(nextYear).some((h) => h.type !== 'closure' && !h.cancelledAt),
+        !inYear(nextYear).some((h) => h.source !== 'manual' && !h.cancelledAt),
       nextYear,
     };
   }

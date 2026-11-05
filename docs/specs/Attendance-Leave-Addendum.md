@@ -130,9 +130,8 @@ Two data-driven keys in `role_permissions`:
   | Factory closure | unpaid, no work |
 
 - **Poya and public holidays** (`holidays`): entered per year (date, name, type).
-  - "Copy last year's names" fills in the names; the Administrator sets the new dates.
-  - In **December** the page warns if next year's holidays aren't entered.
-  - Nothing is scraped from external sites.
+  - Normally **imported from Google** (§4.5). "Copy last year's names" and manual entry stay as fallbacks.
+  - In **December** the Administrator is reminded if next year hasn't been imported.
 - **Weekly holiday** per category (`weekly_holiday_rules`): one or more weekdays plus an optional half day.
   - A change takes an **effective-from** date (today or later) and adds a row, so **past weeks never change**.
   - The default is Sunday for both categories.
@@ -183,6 +182,53 @@ Two data-driven keys in `role_permissions`:
   - Officers see "View only".
 - **Colours** come only from the tokens. The new `components/ui/Drawer.tsx` is the side panel.
 - **Phone width:** the portal shell (sidebar) is desktop-only today. The calendar itself switches to the agenda list, but the shell does not collapse its sidebar.
+
+### 4.5 Import Sri Lanka holidays from Google (Administrator, `holidayStatutory: edit`)
+- **The source:** Google's public "Holidays in Sri Lanka" calendar, read as iCal with no API key.
+  - The **server** fetches it (`HolidayImportService`, 10 s timeout):
+    `https://calendar.google.com/calendar/ical/en.lk%23holiday%40group.v.calendar.google.com/public/basic.ics`
+  - Verified 2026-11-05: HTTP 200, 246 events for 2021–2027.
+  - Each event has a stable `UID`, and DESCRIPTION "Public holiday" or "Observance" (sometimes "Date is tentative").
+- **If Google can't be reached** (502): upload a **.ics** file (the portal trims it to the chosen year first) or a **CSV** (`date,name[,type]`), or enter holidays manually.
+- **The flow:**
+  1. Pick the year.
+  2. Review a table with date, name, suggested type (editable), an include checkbox, and flags: tentative, two holidays on one day, a clash with an existing holiday, already imported.
+  3. Confirm.
+  - Saved rows get `source = google` (or `file`), `external_uid`, `imported_at` and the importer as creator. Unticked rows go to `holiday_import_skips`.
+  - The note "The government gazette is the official source. Review before confirming." is always shown.
+- **Suggested types** (`import-rules.ts`):
+
+  | Feed entry | Suggestion |
+  |---|---|
+  | Name contains "Poya" | Poya, ticked |
+  | "Day after … Poya" | Public, ticked |
+  | Google "Public holiday" | Public, ticked |
+  | Name looks bank-only or public-sector-only (bank, public sector, fuel conservation, special … holiday) | Unticked |
+  | Google "Observance" (Valentine's Day, Mother's Day, Easter Sunday …) | Unticked |
+
+  The feed has no bank-only or public-sector-only marker, so those are matched by name and left for the Administrator to decide.
+- **2026 from the feed:** 36 events.
+  - 13 Poya and 13 public are ticked.
+  - 3 "Fuel Conservation Holiday" (18 Mar, 25 Mar, 1 Apr) and 7 observances are unticked.
+  - 1 Apr (Bak Poya + Fuel Conservation) and 1 May (Adhi Vesak Poya + May Day) are flagged as two holidays on one day.
+- **Re-sync** (the wizard's "Re-sync with Google" tab) lists only the **differences** from the Google-imported rows: added, removed, or changed date or name.
+  - Each one is accepted ("Remove it here too" for a removed one) or, for a new one, left out, **one by one**.
+  - Nothing is overwritten automatically, and **manual holidays are never touched**.
+  - The server looks each item up again, so the client only names it.
+- **Endpoints:** `GET /holidays/import/google?year`, `POST /holidays/import/file`, `POST /holidays/import/confirm`, `GET /holidays/import/resync?year`, `POST /holidays/import/resync/accept|ignore`.
+- **Migration:** `2026-11-06-holiday-import.sql`.
+- **Importing a year already under way** makes past dates holidays. Attendance and payroll are not recalculated: pay is still hours-based, and processed months stay locked.
+
+### 4.6 Data checks (2026-11-05; nothing changed silently)
+- **The page's "Check these" card** (Administrator; `year().suspicious`, `import-rules.ts suspicious()`) lists:
+  - a Poya name on a date that doesn't fit its month (±1 month allowed for the lunar drift);
+  - the same holiday twice in a year;
+  - a local holiday that Google has on another date.
+- **Found in local tea_dev, confirmed as test data by the user and removed (local only, never Neon):**
+  - **"Wesak" (Poya) on 05 Nov 2026**, entered from the portal by the Manager account on 4 Nov. It was wrong: Vesak 2026 is 30 May (Adhi Vesak 1 May), and 5 Nov isn't a Poya at all (Il Poya is 24 Nov). It was the only 2026 holiday.
+  - **Factory workers' weekly holiday Sun+Mon+Sat (from 2 Nov) and Sun+Mon+Tue (from 4 Nov)**, Manager edits. Removed, so both categories are back to Sunday.
+- **Still to confirm:** on 2 Nov the Manager changed the **"Weekly holiday" type from unpaid to paid**. It was left as it is.
+- **After the 2026 import** (local tea_dev): **13 Poya, 13 public, 0 closures**. 10 events were left out. There is no attendance on any imported date. 4 months of 2026 payroll were already processed; nothing is recalculated.
 
 ## 5. Agent Dispatch: one record, two views
 - **The record:** `employee_attendance` is the record. `agent_day_status` is the board's view of it, plus shift times. Agents link through `collection_agents.hr_employee_id`.

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarPlus, ChevronLeft, ChevronRight, DoorClosed, Loader2, TriangleAlert } from 'lucide-react'
+import { CalendarPlus, ChevronLeft, ChevronRight, CloudDownload, DoorClosed, Loader2, TriangleAlert } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -23,6 +23,7 @@ import { HolidayListView } from './HolidayListView'
 import { DayDrawer } from './DayDrawer'
 import { SidePanel, type HolidayAbilities } from './SidePanel'
 import { CancelHolidayModal, DecideModal, DeclareModal, StatutoryHolidayModal, TemplateModal } from './HolidayModals'
+import { ImportWizard } from './ImportWizard'
 
 type Dialog =
   | { kind: 'statutory'; holiday: Holiday | null; date?: string }
@@ -30,6 +31,7 @@ type Dialog =
   | { kind: 'declare'; initial: holidaysService.DeclareInput }
   | { kind: 'cancel'; holiday: Holiday }
   | { kind: 'decide'; request: HolidayRequest; decision: 'approve' | 'reject' }
+  | { kind: 'import'; year: number }
 
 /*
   Holiday Calendar (Attendance-Leave-Addendum §4.4). Month (default) / Year / List views; the
@@ -105,6 +107,11 @@ export function HolidayCalendarPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {!can.calendar && !can.statutory && <StatusBadge tone="neutral">View only</StatusBadge>}
+            {can.statutory && (
+              <Button variant="secondary" onClick={() => setDialog({ kind: 'import', year })}>
+                <CloudDownload className="size-4" /> Import Sri Lanka holidays
+              </Button>
+            )}
             {(can.statutory || can.calendar) && (
               <Button
                 variant="secondary"
@@ -125,9 +132,9 @@ export function HolidayCalendarPage() {
       {data.nextYearMissing && can.statutory && (
         <p className="mb-4 flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-warning-fg/25 bg-warning-bg/60 p-3 text-sm text-text">
           <TriangleAlert className="size-4 text-warning-fg" aria-hidden />
-          {data.nextYear}'s Poya and public holidays haven't been entered yet.
-          <button type="button" className="text-primary hover:underline" onClick={() => set({ month: `${data.nextYear}-01`, view: 'list' })}>
-            Go to {data.nextYear}
+          {data.nextYear}'s Sri Lanka holidays haven't been imported yet.
+          <button type="button" className="text-primary hover:underline" onClick={() => setDialog({ kind: 'import', year: data.nextYear })}>
+            Import {data.nextYear} now
           </button>
         </p>
       )}
@@ -249,6 +256,16 @@ export function HolidayCalendarPage() {
       {dialog?.kind === 'template' && <TemplateModal year={year} rows={dialog.rows} onClose={close} onDone={done} onFailed={failed} />}
       {dialog?.kind === 'declare' && <DeclareModal initial={dialog.initial} today={today} can={can} onClose={close} onDone={done} onFailed={failed} />}
       {dialog?.kind === 'cancel' && <CancelHolidayModal holiday={dialog.holiday} today={today} onClose={close} onDone={done} onFailed={failed} />}
+      {dialog?.kind === 'import' && (
+        <ImportWizard
+          initialYear={dialog.year}
+          today={today}
+          onClose={close}
+          onDone={done}
+          onFailed={failed}
+          onManual={() => setDialog({ kind: 'statutory', holiday: null })}
+        />
+      )}
       {dialog?.kind === 'decide' && <DecideModal request={dialog.request} decision={dialog.decision} onClose={close} onDone={done} onFailed={failed} />}
     </div>
   )
