@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -7,11 +8,21 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
+import { TransportStatusService } from './transport-status.service';
 import type { AppRole } from '../auth/role-map';
 import { UsersService } from '../users/users.service';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { SettlementAdjustmentEntity } from '../collections/settlement-adjustment.entity';
-import { labelToKey } from '../reports/reports-map';
+import { keyToLabel } from '../reports/reports-map';
+import {
+  addMonths,
+  monthsForInstallment,
+  planError,
+  planText,
+} from '../advances/installments';
+import { localDate } from '../dispatch/dispatch-map';
+import { EstateAdvanceSettingsService } from './estate-advance-settings.service';
+import { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
 import { EstateAdvanceEntity } from './estate-advance.entity';
 import { EstateDocumentEntity } from './estate-document.entity';
 import {
@@ -23,6 +34,7 @@ import {
   type PublicAdvance,
   type PublicEstate,
   type PublicSettlement,
+  settlementGross,
 } from './estate-map';
 import { EstateOwnerEntity } from './estate-owner.entity';
 import { EstateEntity } from './estate.entity';
@@ -31,11 +43,33 @@ import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import { UpdateEstateDto } from './dto/update-estate.dto';
 import { RouteEntity } from './route.entity';
 import { SettlementEntity } from './settlement.entity';
-import { payableDeliveries } from './settlement-calc';
+import {
+  transportLines,
+  type TransportSettlementFacts,
+} from './settlement-transport';
+import { type PublicTransportLine } from '../admin/transport-rules';
+
+/** The transport line a generated settlement carries in its own columns. */
+function generatedTransportLine(s: SettlementEntity): PublicTransportLine {
+  return {
+    status: s.transportStatus ?? 'not_configured',
+    charge: Number(s.transportCharge ?? 0),
+    carriedIn: Number(s.transportCarriedIn ?? 0),
+    taken: Number(s.transportCost),
+    carriedOut: Number(s.transportCarriedOut ?? 0),
+    versionId: s.transportVersionId,
+    versionMonth:
+      (s.calculation as { transport?: { versionMonth?: string | null } })
+        ?.transport?.versionMonth ?? null,
+    frozen: s.status === 'processed',
+  };
+}
 
 export interface Actor {
   name: string;
   role: AppRole;
+  /** users.id — for the no-self-approval check on reschedules */
+  sub?: number;
 }
 
 @Injectable()
@@ -57,8 +91,12 @@ export class EstatesService {
     private readonly collectionRepo: Repository<CollectionRecordEntity>,
     @InjectRepository(SettlementAdjustmentEntity)
     private readonly adjustmentRepo: Repository<SettlementAdjustmentEntity>,
+    @InjectRepository(EstateAdvanceRecoveryEntity)
+    private readonly recoveryRepo: Repository<EstateAdvanceRecoveryEntity>,
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
+    private readonly advanceSettings: EstateAdvanceSettingsService,
+    private readonly transport: TransportStatusService,
   ) {}
 
   async findAll(): Promise<PublicEstate[]> {
@@ -78,6 +116,7 @@ export class EstatesService {
     const ownerUser = await this.usersService.createUser(
       dto.contact,
       'estate_owner',
+      dto.ownerName,
     );
     let owner = await this.ownerRepo.findOne({
       where: { userId: ownerUser.id },
@@ -111,9 +150,10 @@ export class EstatesService {
       selfDelivery: dto.selfDelivery,
       status: 'active',
       ytdDeliveriesKg: '0',
-      bankName: dto.bank,
-      bankBranch: dto.branch,
-      bankAccount: dto.account,
+      bankName: dto.bank || null,
+      bankBranch: dto.branch || null,
+      bankAccount: dto.account || null,
+      paymentMethod: dto.paymentMethod ?? 'bank',
       lastUpdatedBy: actor.name,
       lastUpdatedOn: now,
     });
@@ -153,9 +193,10 @@ export class EstatesService {
     estate.location = dto.location;
     estate.address = dto.address;
     estate.selfDelivery = dto.selfDelivery;
-    estate.bankName = dto.bank;
-    estate.bankBranch = dto.branch;
-    estate.bankAccount = dto.account;
+    estate.bankName = dto.bank || null;
+    estate.bankBranch = dto.branch || null;
+    estate.bankAccount = dto.account || null;
+    estate.paymentMethod = dto.paymentMethod ?? estate.paymentMethod;
     estate.lastUpdatedBy = actor.name;
     estate.lastUpdatedOn = new Date();
 
@@ -186,20 +227,38 @@ export class EstatesService {
     return this.toPublicOne(saved);
   }
 
-  async listAdvances(): Promise<PublicAdvance[]> {
-    const advances = await this.advanceRepo.find({
-      order: { dateIssued: 'DESC' },
-    });
-    return advances.map((a) => this.toPublicAdvance(a));
-  }
-
-  /** EST-06 — money moves immediately; deducted at the estate's next processed settlement. */
+  /**
+   * EST-06 — money moves immediately; deducted by settlements per the repayment plan
+   * (Estate-Owner-Advances-Addendum §4): one deduction (default) or one installment a period,
+   * from `startMonth` (default: next calendar month). Never to an inactive estate.
+   */
   async issueAdvance(
     dto: IssueAdvanceDto,
     actor: Actor,
   ): Promise<PublicAdvance> {
     this.assertCanWrite(actor);
     const estate = await this.findEntity(dto.estateId);
+    if (estate.status !== 'active') {
+      throw new ConflictException(
+        `${estate.name} is inactive — inactive estates can't receive advances.`,
+      );
+    }
+    const { maxInstallmentMonths } = await this.advanceSettings.get();
+    const installment = dto.installmentAmount ?? dto.amount;
+    const error = planError(dto.amount, installment, maxInstallmentMonths);
+    if (error) throw new BadRequestException(error);
+    const thisMonth = localDate(new Date()).slice(0, 7);
+    const startKey = dto.startMonth ?? addMonths(thisMonth, 1);
+    if (startKey < thisMonth) {
+      throw new BadRequestException(
+        'The repayment can’t start in a month that has already passed.',
+      );
+    }
+    const plan = {
+      installment,
+      months: monthsForInstallment(dto.amount, installment),
+      startPeriod: keyToLabel(startKey),
+    };
 
     const advance = this.advanceRepo.create({
       id: this.generateAdvanceId(),
@@ -210,6 +269,9 @@ export class EstatesService {
       dateIssued: new Date().toISOString().slice(0, 10),
       issuedBy: actor.name,
       status: 'pending_deduction',
+      installmentAmount: String(plan.installment),
+      installmentMonths: plan.months,
+      startPeriod: plan.startPeriod,
     });
 
     const saved = await this.advanceRepo.save(advance);
@@ -218,7 +280,7 @@ export class EstatesService {
       module: 'Estate Owner',
       record: saved.id,
       recordHref: `/estates/${formatEstateId(estate.id)}`,
-      details: `${estate.name} — ${dto.reason}`,
+      details: `${estate.name} — ${dto.reason} — ${planText(plan)}`,
     });
     return this.toPublicAdvance(saved);
   }
@@ -232,112 +294,84 @@ export class EstatesService {
     const pending = (await this.adjustmentRepo.find()).filter(
       (a) => a.status === 'pending',
     );
+    const adjustmentOf = (s: SettlementEntity) =>
+      s.status === 'pending'
+        ? pending
+            .filter((a) => a.estateId === s.estateId)
+            .reduce((sum, a) => sum + Number(a.amountRs), 0)
+        : Number(s.adjustmentAmount ?? 0);
+    // Administration-Addendum §4: a pending settlement's transport is worked out live from the
+    // version covering its month; a processed one shows what was frozen.
+    const missingBank = new Set(
+      settlements.filter((s) => s.missingBank).map((s) => s.id),
+    );
+    const generated = new Set(
+      settlements.filter((s) => s.calculation != null).map((s) => s.id),
+    );
+    const lines = transportLines(
+      settlements.map((s) => this.transportFacts(s, adjustmentOf(s))),
+      await this.transport.versions(),
+      await this.deliveryCounter(),
+      (s) =>
+        s.status === 'pending' &&
+        !missingBank.has(s.id) &&
+        !generated.has(s.id),
+    );
     return settlements.map((s) => {
       const out = this.toPublicSettlement(s);
+      // a generated settlement carries its own calculation (Settlement-Addendum)
+      if (s.calculation != null) {
+        out.transport = generatedTransportLine(s);
+        return out;
+      }
+      if (s.status === 'legacy') return out;
+      const line = lines.get(s.id) ?? null;
+      out.transport = line;
       if (s.status === 'pending') {
-        out.adjustment = pending
-          .filter((a) => a.estateId === s.estateId)
-          .reduce((sum, a) => sum + Number(a.amountRs), 0);
+        out.adjustment = adjustmentOf(s);
+        if (line) out.transportCost = line.taken;
       }
       return out;
     });
   }
 
-  /**
-   * EST-08 — processes every currently-Pending settlement in one run
-   * (matches the portal's single "Process N Settlements" action; there's no
-   * per-settlement targeting). Missing-bank estates are excluded, not
-   * blocked (UC-054) — flip their bank details and they're picked up next
-   * run. Included estates' pending advances flip to Deducted. No
-   * per-transaction bank charge is applied (resolved 2026-07-26 — see
-   * Claude.md's Payment calculation section).
-   */
-  async processSettlements(actor: Actor): Promise<PublicSettlement[]> {
-    this.assertCanWrite(actor);
+  /** The settlement facts the transport walk needs. */
+  private transportFacts(
+    s: SettlementEntity,
+    adjustment: number,
+  ): TransportSettlementFacts {
+    return {
+      id: s.id,
+      estateId: s.estateId,
+      period: s.period,
+      status: s.status,
+      selfDelivery: s.selfDelivery,
+      gross: settlementGross(s),
+      adjustment,
+      others: Number(s.fertilizerDeduction) + Number(s.advanceDeduction),
+      transportStatus: s.transportStatus ?? null,
+      transportCharge: s.transportCharge ?? null,
+      transportVersionId: s.transportVersionId ?? null,
+      transportCarriedIn: s.transportCarriedIn ?? 0,
+      transportCarriedOut: s.transportCarriedOut ?? 0,
+      transportCost: s.transportCost,
+    };
+  }
 
-    const all = await this.settlementRepo.find();
-    const eligible = all.filter(
-      (s) => s.status === 'pending' && !s.missingBank,
-    );
-
-    if (eligible.length === 0) {
-      throw new ConflictException(
-        'No pending settlements are ready to process.',
-      );
+  /** Confirmed deliveries per (estate, 'YYYY-MM') — the ones a settlement pays for. */
+  private async deliveryCounter(
+    deliveries?: CollectionRecordEntity[],
+  ): Promise<(estateId: number, month: string) => number> {
+    const rows =
+      deliveries ??
+      (await this.collectionRepo.find({ where: { status: 'confirmed' } }));
+    const counts = new Map<string, number>();
+    for (const d of rows) {
+      if (d.estateId == null) continue;
+      const k = `${d.estateId}|${String(d.collectionDate).slice(0, 7)}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
     }
-
-    const now = new Date();
-    const processed: SettlementEntity[] = [];
-    const allAdvances = await this.advanceRepo.find();
-    const pendingAdjustments = (await this.adjustmentRepo.find()).filter(
-      (a) => a.status === 'pending',
-    );
-    const allDeliveries = await this.collectionRepo.find({
-      where: { status: 'confirmed' },
-    });
-    let skippedOpen = 0;
-    let linked = 0;
-
-    for (const settlement of eligible) {
-      // Signed corrections on deliveries paid in EARLIER settlements ride along here — the
-      // earlier payment is never rewritten, the difference is carried forward.
-      const carried = pendingAdjustments.filter(
-        (a) => a.estateId === settlement.estateId,
-      );
-      settlement.adjustmentAmount = String(
-        Math.round(carried.reduce((s, a) => s + Number(a.amountRs), 0) * 100) / 100,
-      );
-      settlement.status = 'processed';
-      settlement.processedBy = actor.name;
-      settlement.processedOn = now;
-      processed.push(await this.settlementRepo.save(settlement));
-      for (const a of carried) {
-        a.status = 'applied';
-        a.appliedSettlementId = settlement.id;
-        await this.adjustmentRepo.save(a);
-      }
-
-      // Link the deliveries this settlement pays for: same estate, same month, not already
-      // paid — and only those past the correction window. OPEN ones are skipped.
-      const monthKey = labelToKey(settlement.period);
-      const candidates = allDeliveries.filter(
-        (d) =>
-          d.estateId === settlement.estateId &&
-          !d.settlementId &&
-          monthKey !== '' &&
-          d.collectionDate.slice(0, 7) === monthKey,
-      );
-      const payable = payableDeliveries(candidates, now);
-      skippedOpen += candidates.length - payable.length;
-      for (const d of payable) {
-        d.settlementId = settlement.id;
-        await this.collectionRepo.save(d);
-        linked += 1;
-      }
-
-      for (const advance of allAdvances) {
-        if (
-          advance.estateId === settlement.estateId &&
-          advance.status === 'pending_deduction'
-        ) {
-          advance.status = 'deducted';
-          await this.advanceRepo.save(advance);
-        }
-      }
-    }
-
-    await this.audit.record(actor, {
-      action: 'Processed settlement run',
-      module: 'Estate Owner',
-      record: `${processed.length} settlement(s)`,
-      recordHref: '/estates/settlements',
-      details:
-        `${linked} deliver${linked === 1 ? 'y' : 'ies'} linked as paid` +
-        (skippedOpen > 0
-          ? `; ${skippedOpen} still inside the correction window and not included`
-          : ''),
-    });
-    return processed.map((s) => this.toPublicSettlement(s));
+    return (estateId, month) => counts.get(`${estateId}|${month}`) ?? 0;
   }
 
   private async findEntity(formattedId: string): Promise<EstateEntity> {
@@ -361,7 +395,7 @@ export class EstatesService {
   }
 
   /** Manager has read-only access to Estates + Payments (Administrator/Officer can write). */
-  private assertCanWrite(actor: Actor): void {
+  assertCanWrite(actor: Actor): void {
     if (actor.role === 'Manager') {
       throw new ForbiddenException(
         'Managers have read-only access to estates and payments.',
@@ -438,6 +472,7 @@ export class EstatesService {
         branch: estate.bankBranch ?? '',
         account: estate.bankAccount ?? '',
       },
+      paymentMethod: estate.paymentMethod ?? 'bank',
       documents: documents.map((d) => ({
         name: d.name,
         uploadedOn: d.uploadedOn,
@@ -449,7 +484,7 @@ export class EstatesService {
     };
   }
 
-  private toPublicAdvance(entity: EstateAdvanceEntity): PublicAdvance {
+  toPublicAdvance(entity: EstateAdvanceEntity): PublicAdvance {
     return {
       id: entity.id,
       estateId: formatEstateId(entity.estateId),
@@ -476,6 +511,13 @@ export class EstatesService {
       fertilizerDeduction: Number(entity.fertilizerDeduction),
       advanceDeduction: Number(entity.advanceDeduction),
       adjustment: Number(entity.adjustmentAmount ?? 0),
+      ...(entity.grossAmount != null
+        ? { grossAmount: Number(entity.grossAmount) }
+        : {}),
+      generated: entity.calculation != null || undefined,
+      legacyReason: entity.legacyReason ?? undefined,
+      excludedReason: entity.excludedReason ?? undefined,
+      payoutMethod: entity.payoutMethod ?? undefined,
       status: toAppSettlementStatus(entity.status),
       selfDelivery: entity.selfDelivery,
       missingBank: entity.missingBank || undefined,
@@ -483,6 +525,7 @@ export class EstatesService {
       processedOn: entity.processedOn
         ? entity.processedOn.toISOString()
         : undefined,
+      transport: null,
     };
   }
 

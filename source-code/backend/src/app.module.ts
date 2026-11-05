@@ -11,9 +11,12 @@ import { AuthModule } from './auth/auth.module';
 import { CollectionsModule } from './collections/collections.module';
 import { DispatchModule } from './dispatch/dispatch.module';
 import { EmployeesModule } from './employees/employees.module';
+import { HolidaysModule } from './holidays/holidays.module';
+import { PerformanceModule } from './performance/performance.module';
 import { EstatesModule } from './estates/estates.module';
 import { FertilizerModule } from './fertilizer/fertilizer.module';
 import { ReportsModule } from './reports/reports.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { UsersModule } from './users/users.module';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 
@@ -81,8 +84,11 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
     DispatchModule,
     EstatesModule,
     EmployeesModule,
+    HolidaysModule,
+    PerformanceModule,
     FertilizerModule,
     ReportsModule,
+    DashboardModule,
     AuditModule,
     AdminModule,
   ],

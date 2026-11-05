@@ -28,8 +28,8 @@ function Section({ id, title, children }: { id: string; title: string; children:
 const NEUTRAL_TOKENS: Array<[string, string, string]> = [
   ['background', '#f8fbf9', '#1a1a1a'],
   ['surface', '#ffffff', '#1a1a1a'],
-  ['primary', '#1b8b4e', '#ffffff'],
-  ['primary-hover', '#157a43', '#ffffff'],
+  ['primary', '#1d6839', '#ffffff'],
+  ['primary-hover', '#185a31', '#ffffff'],
   ['brand', '#53cf81', '#08120b'],
   ['text', '#1a1a1a', '#ffffff'],
   ['text-muted', '#566a5d', '#f8fbf9'],

@@ -18,4 +18,7 @@ export const GRADE_SUPER = '#c89a3d'
 export const GRADE_NORMAL = '#3e7d58'
 
 export const CHART_GRID = '#edf0ea'
+// mirrors --color-chart-track / --color-chart-compare (Recharts needs literal colours)
+export const CHART_TRACK = '#e8f4ed'
+export const CHART_COMPARE = '#566a5d'
 export const CHART_AXIS = '#566a5d'

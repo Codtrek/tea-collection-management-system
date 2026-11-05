@@ -1,3 +1,7 @@
+import {
+  DEFAULT_ESTATE_ADVANCE_SETTINGS,
+  type EstateAdvanceSettingsService,
+} from './estate-advance-settings.service';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import type { CollectionRecordEntity } from '../collections/collection-record.entity';
@@ -7,11 +11,13 @@ import type { EstateAdvanceEntity } from './estate-advance.entity';
 import type { EstateDocumentEntity } from './estate-document.entity';
 import type { EstateOwnerEntity } from './estate-owner.entity';
 import type { EstateEntity } from './estate.entity';
-import { settlementNet } from './estate-map';
 import { type Actor, EstatesService } from './estates.service';
+import type { TransportStatusService } from './transport-status.service';
+import type { TransportVersion } from '../admin/transport-rules';
 import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import type { RouteEntity } from './route.entity';
 import type { SettlementEntity } from './settlement.entity';
+import type { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
 
 /** Minimal in-memory stand-in for the TypeORM Repository surface the service uses. */
 class FakeRepository<T extends { id: string | number }> {
@@ -27,7 +33,9 @@ class FakeRepository<T extends { id: string | number }> {
       [...this.store.values()].filter(
         (r) =>
           !where ||
-          (Object.entries(where) as [keyof T, unknown][]).every(([k, v]) => r[k] === v),
+          (Object.entries(where) as [keyof T, unknown][]).every(
+            ([k, v]) => r[k] === v,
+          ),
       ),
     );
   }
@@ -44,6 +52,10 @@ class FakeRepository<T extends { id: string | number }> {
   }
 
   save(record: T): Promise<T> {
+    // a SERIAL id, like the DB, for rows created without one
+    if (record.id === undefined) {
+      (record as { id: number }).id = this.store.size + 1000;
+    }
     this.store.set(record.id, record);
     return Promise.resolve(record);
   }
@@ -64,6 +76,7 @@ function makeEstate(overrides: Partial<EstateEntity> = {}): EstateEntity {
     bankName: 'Bank of Ceylon',
     bankBranch: 'Nuwara Eliya',
     bankAccount: '8802345671',
+    paymentMethod: 'bank',
     lastUpdatedBy: null,
     lastUpdatedOn: null,
     lat: null,
@@ -87,49 +100,6 @@ function makeOwner(
   };
 }
 
-function makeSettlement(
-  overrides: Partial<SettlementEntity> = {},
-): SettlementEntity {
-  return {
-    id: 'SET-2026-07-001',
-    estateId: 1,
-    estateName: 'Green Valley Estate',
-    period: 'July 2026',
-    superKg: '408.00',
-    normalKg: '175.00',
-    superRate: '185.00',
-    normalRate: '95.00',
-    transportCost: '8400.00',
-    fertilizerDeduction: '22800.00',
-    advanceDeduction: '50000.00',
-    adjustmentAmount: '0',
-    status: 'pending',
-    selfDelivery: false,
-    missingBank: false,
-    processedBy: null,
-    processedOn: null,
-    createdAt: new Date('2026-07-01T00:00:00.000Z'),
-    ...overrides,
-  };
-}
-
-function makeAdvance(
-  overrides: Partial<EstateAdvanceEntity> = {},
-): EstateAdvanceEntity {
-  return {
-    id: 'EADV-2026-0031',
-    estateId: 1,
-    estateName: 'Green Valley Estate',
-    amount: '50000.00',
-    reason: 'Pre-season plucking labour costs',
-    dateIssued: '2026-07-05',
-    issuedBy: 'S. Fernando',
-    status: 'pending_deduction',
-    createdAt: new Date('2026-07-05T00:00:00.000Z'),
-    ...overrides,
-  };
-}
-
 describe('EstatesService', () => {
   let estateRepo: FakeRepository<EstateEntity>;
   let ownerRepo: FakeRepository<EstateOwnerEntity>;
@@ -139,13 +109,28 @@ describe('EstatesService', () => {
   let routeRepo: FakeRepository<RouteEntity>;
   let collectionRepo: FakeRepository<CollectionRecordEntity>;
   let adjustmentRepo: FakeRepository<SettlementAdjustmentEntity>;
+  let recoveryRepo: FakeRepository<EstateAdvanceRecoveryEntity>;
   let service: EstatesService;
 
   const admin: Actor = { name: 'A. Bandara', role: 'Administrator' };
   const officer: Actor = { name: 'S. Fernando', role: 'Officer' };
   const manager: Actor = { name: 'R. Jayasuriya', role: 'Manager' };
+  // one monthly transport charge covering every month unless a test changes it
+  const monthly = (o: Partial<TransportVersion> = {}): TransportVersion => ({
+    id: 1,
+    effectiveDate: '2019-01-01',
+    basis: 'fixed_month',
+    rate: 5000,
+    minimumCharge: 0,
+    basisConfirmed: true,
+    neverApplied: false,
+    cancelledAt: null,
+    ...o,
+  });
+  let transportVersions: TransportVersion[];
 
   beforeEach(() => {
+    transportVersions = [monthly()];
     estateRepo = new FakeRepository();
     ownerRepo = new FakeRepository();
     documentRepo = new FakeRepository();
@@ -154,6 +139,7 @@ describe('EstatesService', () => {
     routeRepo = new FakeRepository();
     collectionRepo = new FakeRepository();
     adjustmentRepo = new FakeRepository();
+    recoveryRepo = new FakeRepository();
     ownerRepo.seed(makeOwner());
     routeRepo.seed({ id: 3, factoryId: 1, name: 'Route 3' });
 
@@ -166,8 +152,19 @@ describe('EstatesService', () => {
       routeRepo as unknown as Repository<RouteEntity>,
       collectionRepo as unknown as Repository<CollectionRecordEntity>,
       adjustmentRepo as unknown as Repository<SettlementAdjustmentEntity>,
+      recoveryRepo as unknown as Repository<EstateAdvanceRecoveryEntity>,
       {} as UsersService,
-      { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
+      {
+        record: jest.fn().mockResolvedValue(undefined),
+      } as unknown as import('../audit/audit.service').AuditService,
+      {
+        get: () => Promise.resolve(DEFAULT_ESTATE_ADVANCE_SETTINGS),
+      } as unknown as EstateAdvanceSettingsService,
+      // transport configured, so these tests exercise the rest of processing; the
+      // not-configured block has its own test below
+      {
+        versions: () => Promise.resolve(transportVersions),
+      } as unknown as TransportStatusService,
     );
   });
 
@@ -267,132 +264,64 @@ describe('EstatesService', () => {
       expect(result.issuedBy).toBe(officer.name);
       expect(result.status).toBe('Pending deduction');
       expect(result.estateId).toBe('EST-0001');
+      const [saved] = await advanceRepo.find();
+      // default plan: one deduction
+      expect([saved.installmentAmount, saved.installmentMonths]).toEqual([
+        '25000',
+        1,
+      ]);
     });
-  });
 
-  describe('processSettlements — missing-bank exclusion (UC-054)', () => {
-    it('excludes missing-bank estates and processes the rest', async () => {
-      settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
-      settlementRepo.seed(
-        makeSettlement({ id: 'SET-B', estateId: 2, missingBank: true }),
+    it('refuses an inactive estate', async () => {
+      estateRepo.seed(makeEstate({ status: 'inactive' }));
+      await expect(
+        service.issueAdvance(
+          { estateId: 'EST-0001', amount: 25000, reason: 'x' },
+          officer,
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('stores an installment plan and validates it against the max months', async () => {
+      estateRepo.seed(makeEstate());
+      await service.issueAdvance(
+        {
+          estateId: 'EST-0001',
+          amount: 50000,
+          reason: 'x',
+          installmentAmount: 10000,
+          startMonth: '2099-12',
+        },
+        officer,
       );
-
-      const result = await service.processSettlements(officer);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('SET-A');
-      expect(result[0].status).toBe('Processed');
-      expect(result[0].processedBy).toBe(officer.name);
-
-      const stillPending = (await settlementRepo.find()).find(
-        (s) => s.id === 'SET-B',
-      );
-      expect(stillPending?.status).toBe('pending');
-    });
-
-    it('flips pending advances for processed estates to Deducted', async () => {
-      settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
-      advanceRepo.seed(makeAdvance({ id: 'EADV-1', estateId: 1 }));
-      advanceRepo.seed(
-        makeAdvance({ id: 'EADV-2', estateId: 2, status: 'deducted' }),
-      );
-
-      await service.processSettlements(officer);
-
-      const advances = await advanceRepo.find();
-      expect(advances.find((a) => a.id === 'EADV-1')?.status).toBe('deducted');
-    });
-
-    it('rejects Manager', async () => {
-      settlementRepo.seed(makeSettlement());
-      await expect(service.processSettlements(manager)).rejects.toThrow(
-        ForbiddenException,
-      );
-    });
-
-    it('rejects when there is nothing eligible to process', async () => {
-      settlementRepo.seed(makeSettlement({ status: 'processed' }));
-      settlementRepo.seed(makeSettlement({ id: 'SET-B', missingBank: true }));
-      await expect(service.processSettlements(officer)).rejects.toThrow(
-        ConflictException,
-      );
-    });
-  });
-
-  describe('processSettlements — deliveries linked as paid; OPEN ones skipped; corrections carried', () => {
-    const lockedAt = (minsFromNow: number) => new Date(Date.now() + minsFromNow * 60_000);
-    const delivery = (id: string, over: Partial<CollectionRecordEntity> = {}) =>
-      ({
-        id,
-        estateId: 1,
-        status: 'confirmed',
-        collectionDate: '2026-07-14',
-        gradeLines: [],
-        settlementId: null,
-        lockedAt: lockedAt(-60),
-        ...over,
-      }) as unknown as CollectionRecordEntity;
-
-    beforeEach(() => {
-      settlementRepo.seed(makeSettlement());
-    });
-
-    it('links locked deliveries of the same estate + month to the settlement that pays them', async () => {
-      collectionRepo.seed(delivery('D-LOCKED'));
-      collectionRepo.seed(delivery('D-LEGACY', { lockedAt: null }));
-      await service.processSettlements(officer);
-      const rows = await collectionRepo.find();
-      expect(rows.find((r) => r.id === 'D-LOCKED')?.settlementId).toBe('SET-2026-07-001');
-      expect(rows.find((r) => r.id === 'D-LEGACY')?.settlementId).toBe('SET-2026-07-001');
-    });
-
-    it('SKIPS deliveries still inside the correction window — they stay unlinked and unpaid', async () => {
-      collectionRepo.seed(delivery('D-OPEN', { lockedAt: lockedAt(+20) }));
-      collectionRepo.seed(delivery('D-LOCKED'));
-      await service.processSettlements(officer);
-      const rows = await collectionRepo.find();
-      expect(rows.find((r) => r.id === 'D-OPEN')?.settlementId).toBeNull();
-      expect(rows.find((r) => r.id === 'D-LOCKED')?.settlementId).toBe('SET-2026-07-001');
-    });
-
-    it('does not link other estates, other months, ungraded/collected records, or already-paid deliveries', async () => {
-      collectionRepo.seed(delivery('D-OTHER-ESTATE', { estateId: 2 }));
-      collectionRepo.seed(delivery('D-OTHER-MONTH', { collectionDate: '2026-06-30' }));
-      collectionRepo.seed(delivery('D-COLLECTED', { status: 'collected' }));
-      collectionRepo.seed(delivery('D-PAID', { settlementId: 'SET-OLD' }));
-      await service.processSettlements(officer);
-      const byId = new Map((await collectionRepo.find()).map((r) => [r.id, r.settlementId]));
-      expect(byId.get('D-OTHER-ESTATE')).toBeNull();
-      expect(byId.get('D-OTHER-MONTH')).toBeNull();
-      expect(byId.get('D-COLLECTED')).toBeNull();
-      expect(byId.get('D-PAID')).toBe('SET-OLD');
-    });
-
-    it('carries pending signed adjustments for the estate into the settlement, marks them applied, and nets them in', async () => {
-      adjustmentRepo.seed({ id: 1, estateId: 1, amountRs: '1800.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
-      adjustmentRepo.seed({ id: 2, estateId: 1, amountRs: '-300.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
-      adjustmentRepo.seed({ id: 3, estateId: 2, amountRs: '999.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
-
-      const before = (await service.listSettlements())[0];
-      expect(before.adjustment).toBe(1500); // a pending settlement previews what it will carry
-
-      const [processed] = await service.processSettlements(officer);
-      expect(processed.adjustment).toBe(1500);
-      const adj = await adjustmentRepo.find();
-      expect(adj.find((a) => a.id === 1)).toMatchObject({ status: 'applied', appliedSettlementId: 'SET-2026-07-001' });
-      expect(adj.find((a) => a.id === 2)).toMatchObject({ status: 'applied' });
-      expect(adj.find((a) => a.id === 3)).toMatchObject({ status: 'pending', appliedSettlementId: null }); // another estate
-      // net = gross − deductions + adjustment
-      expect(settlementNet(await settlementRepo.findOne({ where: { id: 'SET-2026-07-001' } }) as SettlementEntity))
-        .toBe(408 * 185 + 175 * 95 - 8400 - 22800 - 50000 + 1500);
-    });
-
-    it('an adjustment is applied once — the next run does not carry it again', async () => {
-      adjustmentRepo.seed({ id: 1, estateId: 1, amountRs: '1800.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
-      await service.processSettlements(officer);
-      settlementRepo.seed(makeSettlement({ id: 'SET-2026-08-001', period: 'August 2026' }));
-      const [second] = await service.processSettlements(officer);
-      expect(second.adjustment).toBe(0);
+      const [saved] = await advanceRepo.find();
+      expect([
+        saved.installmentAmount,
+        saved.installmentMonths,
+        saved.startPeriod,
+      ]).toEqual(['10000', 5, 'December 2099']);
+      await expect(
+        service.issueAdvance(
+          {
+            estateId: 'EST-0001',
+            amount: 50000,
+            reason: 'x',
+            installmentAmount: 5000,
+          },
+          officer,
+        ),
+      ).rejects.toThrow('That plan runs 10 months — the most allowed is 6.');
+      await expect(
+        service.issueAdvance(
+          {
+            estateId: 'EST-0001',
+            amount: 50000,
+            reason: 'x',
+            installmentAmount: 60000,
+          },
+          officer,
+        ),
+      ).rejects.toThrow('The installment can’t be more than the advance.');
     });
   });
 

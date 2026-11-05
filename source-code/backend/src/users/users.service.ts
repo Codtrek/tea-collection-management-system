@@ -61,14 +61,20 @@ export class UsersService {
    * random hash is stored to satisfy the schema in the meantime. Reuses the
    * existing row if this phone is already registered.
    */
-  async createUser(phone: string, role: DbRole): Promise<User> {
+  /** `name` fills `users.name` (VARCHAR(32), NOT NULL in the hosted schema). */
+  async createUser(phone: string, role: DbRole, name: string): Promise<User> {
     const existing = await this.findByPhone(phone);
     if (existing) return existing;
     const password_hash = await bcrypt.hash(
       randomBytes(24).toString('hex'),
       10,
     );
-    const user = this.usersRepository.create({ phone, password_hash, role });
+    const user = this.usersRepository.create({
+      phone,
+      password_hash,
+      role,
+      name: name.trim().slice(0, 32),
+    });
     return this.usersRepository.save(user);
   }
 
@@ -103,6 +109,14 @@ export class UsersService {
     });
   }
   /** Name + factory affiliation for a factory-side user (Administrator/Officer/Manager). */
+  /** The portal user's NIC (null when none is on file) — for the no-self-approval check. */
+  async getNic(userId: number): Promise<string | null> {
+    const employee = await this.factoryEmployeesRepository.findOne({
+      where: { user_id: userId },
+    });
+    return employee?.nic ?? null;
+  }
+
   async getProfile(userId: number): Promise<UserProfile | null> {
     const employee = await this.factoryEmployeesRepository.findOne({
       where: { user_id: userId },

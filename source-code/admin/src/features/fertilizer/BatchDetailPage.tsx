@@ -1,32 +1,29 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, Loader2, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DetailPageWithTabs } from '@/components/patterns/DetailPageWithTabs'
-import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { DataTable, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorState } from '@/components/data/ErrorState'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
-import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as fertilizerService from '@/services/fertilizer'
 import { batchStatus, daysToExpiry } from './lib'
 import { BATCH_TONE } from './status'
 import type { StockMovement } from './types'
+import { WriteOffModal } from './WriteOffModal'
 import { formatDate, formatWeight } from '@/lib/format'
 
 /* FERT-03 — batch detail: Overview | Movement History | Linked Dispatches. */
 export function BatchDetailPage() {
   const { batchId } = useParams()
   const navigate = useNavigate()
-  const { toast } = useToast()
   const { can } = useAuth()
-  const queryClient = useQueryClient()
   const canEdit = can('fertilizer', 'edit')
-  const [discarding, setDiscarding] = useState(false)
+  const [writingOff, setWritingOff] = useState(false)
 
   const {
     data: batch,
@@ -41,17 +38,6 @@ export function BatchDetailPage() {
   const { data: movementsList } = useQuery({
     queryKey: ['fertilizer', 'movements'],
     queryFn: fertilizerService.listMovements,
-  })
-
-  const discardMutation = useMutation({
-    mutationFn: (id: string) => fertilizerService.discardBatch(id),
-    onSuccess: (updated) => {
-      toast(`${updated.id} marked as discarded`, 'warning')
-      setDiscarding(false)
-      void queryClient.invalidateQueries({ queryKey: ['fertilizer'] })
-      navigate('/fertilizer')
-    },
-    onError: (err) => toast(err instanceof Error ? err.message : 'Could not discard this batch', 'danger'),
   })
 
   if (batchPending) {
@@ -84,16 +70,19 @@ export function BatchDetailPage() {
         <span className="flex items-center gap-1.5 text-sm text-text">
           {m.type === 'Incoming' ? (
             <ArrowDownToLine className="size-4 text-success-fg" aria-hidden />
+          ) : m.type === 'Write-off' ? (
+            <Trash2 className="size-4 text-danger-fg" aria-hidden />
           ) : (
             <ArrowUpFromLine className="size-4 text-warning-fg" aria-hidden />
           )}
           {m.type}
+          {m.writeOffReason && <span className="text-text-muted">({m.writeOffReason})</span>}
         </span>
       ),
     },
     { key: 'quantityKg', header: 'Quantity', align: 'right', render: (m) => formatWeight(m.quantityKg) },
     { key: 'date', header: 'Date', render: (m) => formatDate(m.date) },
-    { key: 'party', header: 'From / To', render: (m) => m.supplier ?? m.destination ?? '—' },
+    { key: 'party', header: 'From / To', render: (m) => m.supplier ?? m.destination ?? (m.type === 'Write-off' ? m.notes ?? 'Written off' : '—') },
     { key: 'recordedBy', header: 'Recorded by' },
   ]
 
@@ -119,9 +108,11 @@ export function BatchDetailPage() {
               <Button variant="secondary" onClick={() => navigate(`/fertilizer/movement/new?batch=${batch.id}`)}>
                 <ArrowLeftRight className="size-4" /> Log Movement
               </Button>
-              <Button variant="secondary" onClick={() => setDiscarding(true)}>
-                <Trash2 className="size-4" /> Mark as Expired / Discard
-              </Button>
+              {(status === 'Expired' ? batch.quantityKg : batch.freeKg) > 0 && (
+                <Button variant="secondary" onClick={() => setWritingOff(true)}>
+                  <Trash2 className="size-4" /> Write off
+                </Button>
+              )}
             </>
           ) : undefined
         }
@@ -174,7 +165,7 @@ export function BatchDetailPage() {
                 columns={movementColumns}
                 rows={movements}
                 rowKey={(m) => m.id}
-                emptyState={<EmptyState title="No movements yet" description="Incoming and outgoing entries appear here." />}
+                emptyState={<EmptyState title="No movements yet" description="Incoming, outgoing and write-off entries appear here." />}
               />
             ),
           },
@@ -198,21 +189,7 @@ export function BatchDetailPage() {
         ]}
       />
 
-      <LightConfirmModal
-        open={discarding}
-        onClose={() => setDiscarding(false)}
-        onConfirm={() => discardMutation.mutate(batch.id)}
-        loading={discardMutation.isPending}
-        tone="danger"
-        title="Discard this batch"
-        confirmLabel="Mark as Discarded"
-        message={
-          <>
-            <strong>{batch.item}</strong> ({batch.id}) will be marked as discarded and removed from available stock.
-            This can only be reversed with a new correcting entry — not undone directly.
-          </>
-        }
-      />
+      {writingOff && <WriteOffModal batch={batch} onClose={() => setWritingOff(false)} />}
     </div>
   )
 }

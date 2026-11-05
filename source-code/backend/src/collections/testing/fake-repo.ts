@@ -50,6 +50,14 @@ export class FakeRepo<T extends object> {
     return Promise.resolve(entity);
   }
 
+  remove<E extends T | T[]>(entity: E): Promise<E> {
+    for (const item of (Array.isArray(entity) ? entity : [entity]) as T[]) {
+      const i = this.rows.indexOf(item);
+      if (i >= 0) this.rows.splice(i, 1);
+    }
+    return Promise.resolve(entity);
+  }
+
   update(
     criteria: Partial<T>,
     patch: Partial<T>,

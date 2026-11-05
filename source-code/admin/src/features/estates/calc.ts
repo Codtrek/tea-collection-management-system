@@ -5,8 +5,9 @@ import type { Settlement } from './types'
   that settlement records come from the real backend with the same
   denormalized snapshot fields (EST-07/08).
 */
+/** Gross leaf value: what the generator priced (rate periods), or kg × rate on a seeded row. */
 export function grossRevenue(s: Settlement): number {
-  return s.superKg * s.superRate + s.normalKg * s.normalRate
+  return s.grossAmount ?? s.superKg * s.superRate + s.normalKg * s.normalRate
 }
 
 export function netPayable(s: Settlement): number {

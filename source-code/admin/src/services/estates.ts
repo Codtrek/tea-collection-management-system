@@ -1,15 +1,25 @@
 import { apiFetch } from '@/lib/api'
 import type { CollectionRecord } from '@/features/collections/types'
+import type { RunTotals, SettlementRun } from '@/features/estates/settlement-run-types'
 import type {
   EstateAdvance,
+  EstateAdvanceContext,
+  EstateAdvanceReschedule,
+  EstateAdvanceDetail,
+  EstateAdvanceListResult,
+  EstateAdvanceRecovery,
   EstateAnalytics,
   EstateDirectoryRow,
   EstateFertilizerRecord,
   EstateLifetimeMetrics,
   EstateOwner,
+  OwnerPaymentMethod,
   PaginatedResult,
   Settlement,
+  SettlementDetail,
+  SettlementListResult,
   TimelinePage,
+  UnsettledOwner,
 } from '@/features/estates/types'
 
 export interface EstateInput {
@@ -21,6 +31,7 @@ export interface EstateInput {
   address: string
   location: string
   selfDelivery: boolean
+  paymentMethod: OwnerPaymentMethod
   bank: string
   branch: string
   account: string
@@ -30,6 +41,10 @@ export interface IssueAdvanceInput {
   estateId: string
   amount: number
   reason: string
+  /** per settlement period; omitted = one deduction */
+  installmentAmount?: number
+  /** 'YYYY-MM' — the first settlement period */
+  startMonth?: string
 }
 
 export function list(): Promise<EstateOwner[]> {
@@ -67,8 +82,61 @@ export function deactivate(id: string): Promise<EstateOwner> {
   return apiFetch<EstateOwner>(`/estates/${id}/deactivate`, { method: 'PATCH' })
 }
 
-export function listAdvances(): Promise<EstateAdvance[]> {
-  return apiFetch<EstateAdvance[]>('/estates/advances')
+export interface EstateAdvanceQuery {
+  search?: string
+  routeId?: number
+  status?: EstateAdvanceRecovery
+  issuedBy?: string
+  /** date issued, inclusive — advances still pending deduction show whatever the dates */
+  from?: string
+  to?: string
+  page?: number
+  limit?: number
+}
+
+export function listAdvances(q: EstateAdvanceQuery): Promise<EstateAdvanceListResult> {
+  return apiFetch<EstateAdvanceListResult>(`/estates/advances${toQueryString(q)}`)
+}
+
+export function getAdvance(id: string): Promise<EstateAdvanceDetail> {
+  return apiFetch<EstateAdvanceDetail>(`/estates/advances/${encodeURIComponent(id)}`)
+}
+
+/** Issue form helper: open advance balance, 3-period average net, plan limits. */
+export function getAdvanceContext(estateId: string): Promise<EstateAdvanceContext> {
+  return apiFetch<EstateAdvanceContext>(`/estates/${encodeURIComponent(estateId)}/advance-context`)
+}
+
+export function requestAdvanceReschedule(
+  id: string,
+  input: { installmentAmount: number; startMonth: string; note: string },
+): Promise<EstateAdvanceReschedule> {
+  return apiFetch<EstateAdvanceReschedule>(`/estates/advances/${encodeURIComponent(id)}/reschedules`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function decideAdvanceReschedule(
+  id: string,
+  rid: number,
+  input: { decision: 'approve' | 'reject'; reason?: string },
+): Promise<EstateAdvanceReschedule> {
+  return apiFetch<EstateAdvanceReschedule>(`/estates/advances/${encodeURIComponent(id)}/reschedules/${rid}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })
+}
+
+/** An early repayment, in cash or by bank transfer. */
+export function recordAdvanceRepayment(
+  id: string,
+  input: { kind: 'cash' | 'bank'; amount: number; paidOn: string; reference: string },
+): Promise<{ remaining: number }> {
+  return apiFetch<{ remaining: number }>(`/estates/advances/${encodeURIComponent(id)}/repayments`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }
 
 export function issueAdvance(input: IssueAdvanceInput): Promise<EstateAdvance> {
@@ -78,12 +146,75 @@ export function issueAdvance(input: IssueAdvanceInput): Promise<EstateAdvance> {
   })
 }
 
-export function listSettlements(): Promise<Settlement[]> {
-  return apiFetch<Settlement[]>('/estates/settlements')
+export interface SettlementQuery {
+  month: string // 'YYYY-MM' | 'all'
+  search?: string
+  routeId?: number
+  status?: string
+  method?: string
+  nonPositive?: boolean
+  noBank?: boolean
+  sort?: string
+  dir?: 'asc' | 'desc'
+  page?: number
+  /** 0 = every filtered row (CSV export) */
+  limit?: number
 }
 
-export function processSettlements(): Promise<Settlement[]> {
-  return apiFetch<Settlement[]>('/estates/settlements/process', { method: 'POST' })
+/** EST-07 period view — filtered, sorted and paged server-side; `summary` is the whole period. */
+export function listSettlements(q: SettlementQuery): Promise<SettlementListResult> {
+  return apiFetch<SettlementListResult>(`/estates/settlements${toQueryString(q)}`)
+}
+
+export function getSettlement(id: string): Promise<SettlementDetail> {
+  return apiFetch<SettlementDetail>(`/estates/settlements/${encodeURIComponent(id)}`)
+}
+
+export function listUnsettledOwners(month: string): Promise<UnsettledOwner[]> {
+  return apiFetch<UnsettledOwner[]>(`/estates/settlements/unsettled?month=${month}`)
+}
+
+/**
+ * Whether transport can be charged for a settlement period (Administration-Addendum §4). Until the
+ * factory's method is configured, processing estates that pay transport is refused.
+ */
+export function getTransportStatus(period: string): Promise<{ configured: boolean; reason: string | null }> {
+  return apiFetch(`/estates/settlements/transport-status?period=${encodeURIComponent(period)}`)
+}
+
+/** Settlement generator (Settlement-Addendum): the month's run — every estate's calculation. */
+export function getSettlementRun(month: string): Promise<SettlementRun> {
+  return apiFetch<SettlementRun>(`/estates/settlements/run?month=${month}`)
+}
+
+/** "Prepare settlements for <month>": creates or recalculates the drafts. */
+export function prepareSettlements(month: string): Promise<SettlementRun> {
+  return apiFetch<SettlementRun>('/estates/settlements/prepare', {
+    method: 'POST',
+    body: JSON.stringify({ month }),
+  })
+}
+
+/** A Manager leaves an ungraded delivery out of the month, with a reason; it rolls to the next one. */
+export function excludeDelivery(deliveryId: string, month: string, reason: string): Promise<SettlementRun> {
+  return apiFetch<SettlementRun>(`/estates/settlements/deliveries/${encodeURIComponent(deliveryId)}/exclude`, {
+    method: 'POST',
+    body: JSON.stringify({ month, reason }),
+  })
+}
+
+/**
+ * EST-08 — processes the month's ready drafts. `expectedNet` is the total the officer reviewed and
+ * re-typed; if the figures moved since, the backend refuses and nothing is processed.
+ */
+export function processSettlements(
+  month: string,
+  expectedNet: number,
+): Promise<{ processed: string[]; totals: RunTotals }> {
+  return apiFetch('/estates/settlements/process', {
+    method: 'POST',
+    body: JSON.stringify({ month, expectedNet }),
+  })
 }
 
 /* ── Estate Owner Lifetime History (EST-03 amended + EST-10) ───────── */
@@ -97,8 +228,8 @@ export interface DateRangeQuery {
 
 function toQueryString(q: object): string {
   const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(q as Record<string, string | number | undefined>)) {
-    if (value !== undefined) params.set(key, String(value))
+  for (const [key, value] of Object.entries(q as Record<string, string | number | boolean | undefined>)) {
+    if (value !== undefined && value !== '' && value !== false) params.set(key, String(value))
   }
   const s = params.toString()
   return s ? `?${s}` : ''

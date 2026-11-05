@@ -1,8 +1,11 @@
+import { EmployeeAttendanceTab } from './EmployeeAttendanceTab'
+import { EmployeePerformanceTab } from '@/features/performance/EmployeePerformanceTab'
 import { useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, UserX, CalendarPlus, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { EmployeePayTab } from './EmployeePayTab'
 import { DetailPageWithTabs } from '@/components/patterns/DetailPageWithTabs'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { DataTable, type Column } from '@/components/data/DataTable'
@@ -15,14 +18,14 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as employeesService from '@/services/employees'
 import { AgentCollectionsTab } from './AgentCollectionsTab'
+import { AgentFertilizerTab } from './AgentFertilizerTab'
 import { netPay } from './calc'
-import { COLLECTIONS_TAB, resolveEmployeeTab } from './links'
+import { COLLECTIONS_TAB, FERTILIZER_TAB, resolveEmployeeTab } from './links'
 import { useEmployeeRoles } from './useEmployeeRoles'
-import type { AttendanceRecord, PayrollRow } from './types'
+import type { PayrollRow } from './types'
 import { formatCurrency, formatDate, initials, maskAccount } from '@/lib/format'
 
 const statusTone: Record<string, BadgeTone> = { Active: 'success', Suspended: 'warning', Inactive: 'danger' }
-const attendanceTone: Record<string, BadgeTone> = { Present: 'success', Absent: 'danger', Leave: 'warning', 'Half-day': 'submitted' }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -62,8 +65,13 @@ export function EmployeeDetailPage() {
   })
   // Attendance/payroll have no "for this employee" endpoint yet — fetch the
   // (dev-scale) full lists and filter client-side, same as Estates' pattern.
-  const { data: allAttendance } = useQuery({ queryKey: ['employees', 'attendance'], queryFn: () => employeesService.listAttendance() })
   const { data: allPayroll } = useQuery({ queryKey: ['employees', 'payroll'], queryFn: () => employeesService.listPayroll() })
+  // the same balance the Salary Advances page and payroll use (backend advance-balance.ts)
+  const { data: advances } = useQuery({
+    queryKey: ['employees', 'advances', 'employee', id],
+    queryFn: () => employeesService.getEmployeeAdvances(id!),
+    enabled: !!id && can('advances', 'view'),
+  })
 
   const deactivateMutation = useMutation({
     mutationFn: (employeeId: string) => employeesService.deactivate(employeeId),
@@ -89,17 +97,8 @@ export function EmployeeDetailPage() {
     return <ErrorState title="Employee not found" description={`No employee with ID “${id}”.`} onRetry={() => void refetch()} />
   }
 
-  const attendance = (allAttendance ?? []).filter((a) => a.employeeId === employee.id)
   const payroll = (allPayroll ?? []).filter((p) => p.employeeId === employee.id)
 
-  const attendanceColumns: Column<AttendanceRecord>[] = [
-    { key: 'date', header: 'Date', render: (a) => formatDate(a.date) },
-    { key: 'status', header: 'Status', render: (a) => <StatusBadge tone={attendanceTone[a.status]}>{a.status}</StatusBadge> },
-    { key: 'dayHours', header: 'Day', align: 'right', render: (a) => a.dayHours },
-    { key: 'dayOtHours', header: 'Day OT', align: 'right', render: (a) => a.dayOtHours },
-    { key: 'nightHours', header: 'Night', align: 'right', render: (a) => a.nightHours },
-    { key: 'nightOtHours', header: 'Night OT', align: 'right', render: (a) => a.nightOtHours },
-  ]
 
   const payrollColumns: Column<PayrollRow>[] = [
     { key: 'period', header: 'Period' },
@@ -143,6 +142,7 @@ export function EmployeeDetailPage() {
 
   const isAgent = !!agentRole && employee.role === agentRole
   const canSeeCollections = can('employees', 'view') && can('collection', 'view')
+  const canSeeFertilizer = can('employees', 'view') && can('fertilizer', 'view')
 
   const tabs = [
     {
@@ -157,6 +157,16 @@ export function EmployeeDetailPage() {
             <Field label="Address" value={employee.address} />
             <Field label="Employment type" value={employee.employmentType} />
             <Field label="System login" value={employee.hasLogin ? 'Enabled' : 'HR record only'} />
+            {advances && (
+              <Field
+                label="Outstanding advances"
+                value={
+                  <Link to={`/employees/advances?tab=all&range=custom&q=${encodeURIComponent(employee.name)}`} className="tabular text-primary hover:underline">
+                    {formatCurrency(advances.outstanding)}
+                  </Link>
+                }
+              />
+            )}
           </dl>
         </div>
       ),
@@ -190,11 +200,16 @@ export function EmployeeDetailPage() {
     ...(isAgent && canSeeCollections
       ? [{ id: COLLECTIONS_TAB, label: 'Collections', content: <AgentCollectionsTab employeeId={employee.id} /> }]
       : []),
+    // the fertilizer the agent took out on their stops — same rule, with Fertilizer access instead
+    ...(isAgent && canSeeFertilizer
+      ? [{ id: FERTILIZER_TAB, label: 'Fertilizer deliveries', content: <AgentFertilizerTab employeeId={employee.id} /> }]
+      : []),
     {
       id: 'bank',
       label: 'Bank Details',
       content: (
         <div className="rounded-[var(--radius-lg)] bg-surface p-6 shadow-[var(--shadow-1)]">
+          <p className="mb-4 text-sm text-text-muted">Paid by {employee.paymentMethod === 'cash' ? 'cash' : 'bank transfer'}</p>
           {employee.bank.account ? (
             <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="Bank" value={employee.bank.bank} />
@@ -202,22 +217,19 @@ export function EmployeeDetailPage() {
               <Field label="Account" value={<span className="id">{unmask ? employee.bank.account : maskAccount(employee.bank.account)}</span>} />
             </dl>
           ) : (
-            <p className="text-sm text-danger-fg">No bank details on file — this employee is excluded from payroll runs.</p>
+            <p className={`text-sm ${employee.paymentMethod === 'cash' ? 'text-text-muted' : 'text-danger-fg'}`}>
+              {employee.paymentMethod === 'cash'
+                ? 'No bank details on file — not needed, this employee is paid in cash.'
+                : "No bank details on file — payroll can't be processed for them until they're added (or they're excluded from a run with a reason)."}
+            </p>
           )}
         </div>
       ),
     },
     {
       id: 'attendance',
-      label: 'Attendance History',
-      content: (
-        <DataTable
-          columns={attendanceColumns}
-          rows={attendance}
-          rowKey={(a) => a.date}
-          emptyState={<EmptyState title="No attendance yet" description="Attendance records appear here once marked." />}
-        />
-      ),
+      label: 'Attendance & Leave',
+      content: <EmployeeAttendanceTab employeeId={employee.id} />,
     },
     {
       id: 'salary',
@@ -232,6 +244,29 @@ export function EmployeeDetailPage() {
         />
       ),
     },
+    // Administration-Addendum §6 — pay history (payRates: view)
+    ...(can('payRates', 'view')
+      ? [
+          {
+            id: 'pay',
+            label: 'Pay',
+            content: (
+              <EmployeePayTab
+                employeeId={employee.id}
+                actions={
+                  can('payRates', 'edit') && employee.status === 'Active' ? (
+                    <Button variant="secondary" onClick={() => navigate(`/employees/pay-rates/change?employee=${employee.id}`)}>
+                      Change pay
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ),
+          },
+        ]
+      : []),
+    // Performance-Addendum §5 — Manager and Administrator only (data-driven)
+    ...(can('performance', 'view') ? [{ id: 'performance', label: 'Performance', content: <EmployeePerformanceTab employeeId={employee.id} /> }] : []),
     { id: 'documents', label: 'Documents', content: <EmptyState title="No documents uploaded" description="NIC copy and photo appear here." /> },
   ]
 

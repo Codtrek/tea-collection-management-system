@@ -6,15 +6,88 @@
 
 export type DbItemCategory = 'Fertilizer' | 'Beneficiary';
 export type DbUnit = 'kg' | 'bags';
-export type DbMovementType = 'Incoming' | 'Outgoing';
+export type DbMovementType = 'Incoming' | 'Outgoing' | 'Write-off';
+/** Why stock left the books without going to anyone (Expiry Alerts / FERT-03 "Write off"). */
+export type WriteOffReason = 'expired' | 'damaged' | 'other';
+export const WRITE_OFF_REASONS: readonly WriteOffReason[] = [
+  'expired',
+  'damaged',
+  'other',
+];
 export type DbRequestOrigin = 'mobile' | 'web';
+
+/**
+ * Fertilizer-Delivery-Addendum §3. Stored exactly as shown (Title Case), like the old
+ * lifecycle. 'Partially delivered' is the one status beyond the task's list: the owner took
+ * part of the load and the agent still holds the rest until it's checked in.
+ */
 export type DbRequestStatus =
-  | 'Submitted'
+  | 'Requested'
+  | 'Awaiting manager approval'
   | 'Approved'
-  | 'Partially Dispatched'
-  | 'Dispatched'
-  | 'Deducted'
+  | 'Partially approved'
   | 'Rejected'
+  | 'Ready for dispatch'
+  | 'Picked up'
+  | 'Out for delivery'
+  | 'Partially delivered'
+  | 'Delivered'
+  | 'Failed'
+  | 'Returned to factory'
+  | 'Rescheduled'
+  | 'Needs review'
+  | 'Cancelled';
+
+export type PaymentMethod = 'deduct' | 'cash' | 'bank';
+
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  deduct: 'Deduct from tea payment',
+  cash: 'Cash',
+  bank: 'Bank transfer',
+};
+
+export type FailReason =
+  | 'owner_not_available'
+  | 'road_not_passable'
+  | 'owner_refused'
+  | 'wrong_estate'
+  | 'other';
+
+export const FAIL_REASON_LABEL: Record<FailReason, string> = {
+  owner_not_available: 'Owner not available',
+  road_not_passable: 'Road not passable',
+  owner_refused: 'Owner refused',
+  wrong_estate: 'Wrong address / estate',
+  other: 'Other',
+};
+
+export type AllocationState = 'active' | 'picked' | 'released';
+export type DeliveryOutcome = 'delivered' | 'partial' | 'failed';
+
+export type NotificationKind =
+  | 'approved'
+  | 'partially_approved'
+  | 'rejected'
+  | 'dispatched'
+  | 'delivered'
+  | 'failed'
+  | 'cancelled';
+
+/** Payment state shown on FERT-05/06 — derived by `paymentStatus()` in fertilizer-flow.ts, never stored. */
+export type PaymentStatus =
+  | 'Not due'
+  | 'Pending deduction'
+  | 'Deducted'
+  | 'Unpaid'
+  | 'Part paid'
+  | 'Paid';
+
+/** What the owner-notice column shows. "Stored, not delivered" = saved for the owner, no device to push to. */
+export type NoticeStatus =
+  | 'Queued'
+  | 'Sent'
+  | 'Stored, not delivered'
+  | 'Failed'
   | 'Cancelled';
 
 /** 'FB-0001' — formatted from fertilizer_batches.id, not stored directly. */
@@ -33,6 +106,11 @@ export function formatMovementId(id: number): string {
 
 export function parseMovementId(formatted: string): number {
   return Number(formatted.replace(/^MV-/, ''));
+}
+
+/** 'FO-0001' — the shared reference of one order (one request per item). */
+export function formatOrderRef(firstRequestId: number): string {
+  return `FO-${String(firstRequestId).padStart(4, '0')}`;
 }
 
 /**
@@ -80,6 +158,12 @@ export interface PublicBatch {
   discarded?: boolean;
   lastUpdatedBy?: string;
   lastUpdatedOn?: string;
+  /** server-computed on the factory calendar with the expiring-soon window */
+  status: BatchStatus;
+  /** days until expiry (negative once past) */
+  daysToExpiry: number;
+  /** kg not promised to any request (quantity − active allocations, never below 0) */
+  freeKg: number;
 }
 
 export interface PublicMovement {
@@ -91,34 +175,298 @@ export interface PublicMovement {
   destination?: string;
   linkedRequest?: string;
   supplier?: string;
+  /** Incoming: Rs per kg paid; absent on stock received before costs were recorded */
+  unitCost?: number;
+  /** set only on a Write-off */
+  writeOffReason?: WriteOffReason;
   notes?: string;
   recordedBy: string;
 }
 
+export interface PublicPaymentSummary {
+  method: PaymentMethod;
+  /** Σ charges (delivered qty × snapshot rate) */
+  amountOwedRs: number;
+  /** recovered by a processed settlement (deduct method) */
+  recoveredRs: number;
+  /** cash / bank payments recorded by an officer */
+  paidRs: number;
+  outstandingRs: number;
+  status: PaymentStatus;
+}
+
+export interface PublicAttempt {
+  id: number;
+  attemptNo: number;
+  scheduledDate: string;
+  routeId: number;
+  routeName: string;
+  /** before pickup: who runs the route that day (cover-aware); after: the pickup agent */
+  agentId: number | null;
+  agentName: string | null;
+  covering: boolean;
+  /** true once handed over — the task then stays with this agent */
+  pinned: boolean;
+  handoverQtyKg: number | null;
+  handoverBy: string | null;
+  handoverAt: string | null;
+  agentConfirmQtyKg: number | null;
+  agentConfirmedAt: string | null;
+  pickupMismatch: boolean;
+  outForDeliveryAt: string | null;
+  outcome: DeliveryOutcome | null;
+  deliveredQtyKg: number | null;
+  shortfallReason: string | null;
+  ownerName: string | null;
+  ownerConfirmedAt: string | null;
+  photos: DeliveryPhoto[];
+  failReason: FailReason | null;
+  failReasonLabel: string | null;
+  failNote: string | null;
+  recordedAt: string | null;
+  checkedInQtyKg: number | null;
+  checkedInBy: string | null;
+  checkedInAt: string | null;
+  cancelled: boolean;
+}
+
+export interface DeliveryPhoto {
+  label: 'Delivery photo' | 'Failed delivery photo';
+  takenAt: string;
+  takenBy: string;
+  photoUrl?: string;
+}
+
 export interface PublicRequest {
   id: string;
+  /** shared by the requests one phone call / order produced (one per item) */
+  orderRef: string | null;
+  estateId: string;
   estateName: string;
+  routeId: number | null;
+  routeName: string | null;
   item: string;
   quantityKg: number;
   requestedDate: string;
   origin: DbRequestOrigin;
   status: DbRequestStatus;
   reason?: string;
+  /** set once approved (may be < requested for a partial approval) */
   approvedQtyKg?: number;
-  dispatchedQtyKg?: number;
+  deliveredQtyKg: number;
+  /** reason for a partial approval or a rejection — shown to the owner */
+  decisionReason?: string;
   decidedBy?: string;
   decidedOn?: string;
+  /** approved above the limit → a Factory Manager also signs off */
+  needsManager: boolean;
+  managerDecidedBy?: string;
+  managerDecidedOn?: string;
+  /** Rs./kg snapshotted at approval; never recalculated */
+  ratePerKg: number | null;
+  /** stock currently promised to this request (active FEFO allocations) */
+  committedKg: number;
+  /** the part of `committedKg` sitting on a batch that has since expired or been discarded */
+  staleCommittedKg: number;
+  payment: PublicPaymentSummary;
+  /** the latest delivery attempt, if any */
+  attempt: PublicAttempt | null;
+  /** "Attempt 2 of 3" while a delivery is in play; null before dispatch / after it ends */
+  attemptLabel: string | null;
+  /** an agent's pickup quantity differs from the officer's handover */
+  pickupMismatch: boolean;
+  /** status of the latest owner notice */
+  noticeStatus: NoticeStatus | null;
+  /** only while Requested: whether stock covers it now (FertilizerPositionService) */
+  availability: PublicRequestAvailability | null;
 }
 
-export type CoverageStatus = 'Healthy' | 'Tight' | 'Short';
+/** Expiry Alerts buckets — never overlapping (Fertilizer-Delivery-Addendum §5.2). */
+export type ExpiryBucket = 'expired' | 'soon' | 'later';
+
+export interface PublicExpiryAlertBatch extends PublicBatch {
+  bucket: ExpiryBucket;
+  /** active allocations still sitting on this batch */
+  allocatedTo: { requestId: string; kg: number }[];
+  /**
+   * Open requests for the item (oldest first) that fit fully in this batch's remaining
+   * quantity. Null for an expired batch: it can't be used.
+   */
+  cover: { count: number; coveredKg: number; requestedKg: number } | null;
+}
+
+export interface PublicExpiryAlerts {
+  today: string;
+  /** the "use first" bucket's upper bound (days) */
+  soonDays: number;
+  /** the expiring-soon window (`expiringSoonDays`) — the "later" bucket's upper bound */
+  windowDays: number;
+  summary: Record<ExpiryBucket, { count: number; kg: number }>;
+  batches: PublicExpiryAlertBatch[];
+}
+
+export interface PublicAllocation {
+  batchId: string;
+  lotNumber: string;
+  expiryDate: string;
+  qtyKg: number;
+  state: AllocationState;
+}
+
+export interface PublicRequestEvent {
+  at: string;
+  deviceAt: string | null;
+  actor: string;
+  actorRole: string;
+  action: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  note: string | null;
+}
+
+export interface PublicCharge {
+  id: string;
+  deliveryId: number | null;
+  qtyKg: number;
+  ratePerKg: number;
+  totalRs: number;
+  method: PaymentMethod;
+  /** settlement that recovered it (deduct method); null = still pending */
+  settlementId: string | null;
+  calculatedAt: string;
+}
+
+export interface PublicPayment {
+  id: number;
+  amountRs: number;
+  paidOn: string;
+  method: 'cash' | 'bank';
+  reference: string | null;
+  recordedBy: string;
+}
+
+export interface PublicNotice {
+  kind: NotificationKind;
+  status: NoticeStatus;
+  createdAt: string;
+  sentAt: string | null;
+}
+
+export interface PublicRequestDetail extends PublicRequest {
+  allocations: PublicAllocation[];
+  attempts: PublicAttempt[];
+  timeline: PublicRequestEvent[];
+  charges: PublicCharge[];
+  payments: PublicPayment[];
+  notices: PublicNotice[];
+  /** "Attempt n of N" — N from system_settings.fertilizer.maxDeliveryAttempts */
+  maxAttempts: number;
+  /** Officer-approval threshold from settings, so the UI can say when a Manager is needed */
+  managerApprovalAboveKg: number;
+}
+
+/** A fertilizer task on the agent's phone (`GET /dispatch/me/fertilizer`). */
+export interface PublicAgentTask {
+  deliveryId: number;
+  requestId: string;
+  orderRef: string | null;
+  estateId: number;
+  estateName: string;
+  routeId: number;
+  routeName: string;
+  scheduledDate: string;
+  item: string;
+  /** what to take (before handover) or what he carries (after) */
+  qtyKg: number;
+  status: DbRequestStatus;
+  /** awaiting_handover → the factory still has to hand it over; carrying → he has it */
+  stage: 'awaiting_handover' | 'carrying';
+  covering: boolean;
+  handoverQtyKg: number | null;
+  agentConfirmQtyKg: number | null;
+}
+
+export type AgentDeliveryOutcome =
+  | 'Delivered'
+  | 'Partially delivered'
+  | 'Failed';
+
+/** One finished delivery attempt in an agent's history (Employee detail → Fertilizer deliveries). */
+export interface PublicAgentFertilizerRow {
+  deliveryId: number;
+  date: string;
+  /** 'FR-2026-0001' — the row links to the request; null only if the request is gone */
+  requestId: string | null;
+  estateName: string;
+  route: string;
+  /** set when the agent was COVERING this route that day */
+  coveringRoute: string | null;
+  item: string;
+  /** what the officer handed over at the store */
+  handedOverKg: number | null;
+  /** what the owner received (0 for a failed attempt) */
+  deliveredKg: number;
+  outcome: AgentDeliveryOutcome;
+  failReason: string | null;
+  /** the agent's note on a failure, or the shortfall reason on a part delivery */
+  note: string | null;
+}
+
+/** FERT-01 status, worst first (Fertilizer-Delivery-Addendum §5) — computed only in FertilizerPositionService. */
+export type CoverageStatus =
+  | 'Out of stock'
+  | 'Short'
+  | 'Fully committed'
+  | 'Expiring soon'
+  | 'Healthy';
 
 export interface PublicItemPosition {
   item: string;
   category: DbItemCategory;
+  /** live (unexpired, not discarded) stock only */
   onHand: number;
+  /** expired, not yet written off — never part of On Hand */
+  expiredKg: number;
   committed: number;
+  /** Rs. value of the committed stock at each request's snapshot rate */
+  committedValueRs: number;
   available: number;
   pendingDemand: number;
+  pendingCount: number;
+  /** live stock expiring within the expiring-soon window */
+  expiringSoonKg: number;
+  /** earliest expiry among live batches */
+  nearestExpiry: string | null;
+  /** Available ÷ Pending; null when nothing is pending */
   coverageRatio: number | null;
   status: CoverageStatus;
+  /** "Short X kg": how much more is needed (Pending − Available); 0 otherwise */
+  shortKg: number;
+  /** the window behind "Expiring soon" (system_settings.fertilizer.expiringSoonDays) */
+  expiringSoonDays: number;
+}
+
+export type BatchStatus = 'Fresh' | 'Expiring soon' | 'Expired' | 'Discarded';
+
+export type RequestVerdict =
+  | 'covered'
+  | 'covered-expiring'
+  | 'partial'
+  | 'none'
+  | 'none-expired';
+
+/** Can a Requested request be met now? Same service and window as FERT-01's status. */
+export interface PublicRequestAvailability {
+  verdict: RequestVerdict;
+  available: number;
+  /** the FEFO plan over free stock for min(requested, available) — what approval would take */
+  fefo: Array<{
+    batchId: string;
+    lotNumber: string;
+    expiryDate: string;
+    daysToExpiry: number;
+    take: number;
+  }>;
+  /** the first batch in that plan that expires within the window, if any */
+  expiringBatch: { expiryDate: string; daysToExpiry: number } | null;
 }
