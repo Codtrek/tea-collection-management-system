@@ -34,6 +34,8 @@ export interface WeeklyRuleFacts {
   weekdays: number[];
   halfDayWeekday: number | null;
   effectiveFrom: string;
+  /** the row id — on the same effective date, the newest rule (highest id) wins */
+  id?: number;
 }
 
 export interface RestDayFacts {
@@ -41,6 +43,8 @@ export interface RestDayFacts {
   /** null = back to the category's weekly holiday */
   weekday: number | null;
   effectiveFrom: string;
+  /** the row id — on the same effective date, the newest rule (highest id) wins */
+  id?: number;
 }
 
 export interface TypeDefaults {
@@ -109,14 +113,22 @@ export function datesBetween(from: string, to: string): string[] {
   return out;
 }
 
-/** The rule in force on `date`: the latest one whose effectiveFrom is on or before it. */
-function inForce<T extends { effectiveFrom: string }>(
+/**
+ * The rule in force on `date`: the latest one whose effectiveFrom is on or before it. Two rules
+ * with the same effective date: the newest (highest id) wins — the later change replaces the
+ * earlier one, as the person making it expects.
+ */
+function inForce<T extends { effectiveFrom: string; id?: number }>(
   rows: T[],
   date: string,
 ): T | undefined {
   return rows
     .filter((r) => r.effectiveFrom <= date)
-    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+    .sort(
+      (a, b) =>
+        b.effectiveFrom.localeCompare(a.effectiveFrom) ||
+        (b.id ?? 0) - (a.id ?? 0),
+    )[0];
 }
 
 export function dayInfo(

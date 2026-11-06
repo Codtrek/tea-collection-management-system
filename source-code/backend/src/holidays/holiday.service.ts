@@ -191,12 +191,14 @@ export class HolidayService {
           appliesTo: h.appliesTo,
         })),
       weekly: weekly.map((w) => ({
+        id: w.id,
         category: w.category,
         weekdays: w.weekdays.map(Number),
         halfDayWeekday: w.halfDayWeekday,
         effectiveFrom: w.effectiveFrom,
       })),
       restDays: rest.map((r) => ({
+        id: r.id,
         employeeId: r.employeeId,
         weekday: r.weekday,
         effectiveFrom: r.effectiveFrom,
