@@ -1100,6 +1100,15 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Portal:** `features/performance/` (team overview, `EmployeePerformanceTab`, `HowMeasuredPage`). `MEASURE_DEFINITIONS` is the one copy of each measure's wording.
 - **Permission** `performance`: Manager edit, Administrator approve, Officer none.
 
+### Demo data (local only)
+
+- **Commands:** `npm run seed:demo` / `npm run seed:demo:reset` (backend) seed realistic data for 1 May – 5 Nov 2026 (collections from May for route history; attendance, covers and fertilizer from Aug) so Performance can be tested.
+- **Safety:** it refuses any non-local `DATABASE_URL`. Every row is recorded in `demo_seed_rows` (created by the script, outside migrations), and reset deletes exactly those rows.
+  - Reset refuses if a non-demo row points at demo data (made by using the app on demo data).
+- **How it inserts:** no services are called, so no notifications, payroll, settlements, stock movements or audit rows. The plan (`src/demo/demo-plan.ts`) is checked with `dayInfo`, `isScheduledOn` and `pickResponsible`.
+- **Checking:** `docs/demo-seed-expected.md` holds the independent expected figures (`demo-expected.ts`).
+- **While seeded:** don't run payroll "Recalculate from Attendance" or a settlement run for Aug–Nov — they would pick up demo data.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React
