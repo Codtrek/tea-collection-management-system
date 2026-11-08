@@ -14,6 +14,16 @@ export interface LoginResult {
   user: PublicUser;
 }
 
+export interface AgentLoginResult {
+  accessToken: string;
+  agent: {
+    id: number;
+    name: string;
+    phone: string;
+  };
+  mustChangePassword: boolean;
+}
+
 export async function login(
   phone: string,
   password: string,
@@ -24,6 +34,30 @@ export async function login(
       phone,
       password,
     }),
+  });
+}
+
+export async function loginAgent(
+  phone: string,
+  password: string,
+): Promise<AgentLoginResult> {
+  return apiRequest<AgentLoginResult>("/auth/agent/login", {
+    method: "POST",
+    body: JSON.stringify({ phone, password }),
+  });
+}
+
+export async function changeAgentPassword(
+  accessToken: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: true }> {
+  return apiRequest<{ ok: true }>("/auth/agent/change-password", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 }
 
