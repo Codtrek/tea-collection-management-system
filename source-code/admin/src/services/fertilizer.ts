@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api'
 import type {
+  ExpiryAlerts,
   FailReason,
   FertilizerBatch,
   FertilizerPrice,
@@ -9,6 +10,7 @@ import type {
   MovementType,
   PaymentMethod,
   StockMovement,
+  WriteOffReason,
 } from '@/features/fertilizer/types'
 
 export interface CreateBatchInput {
@@ -73,8 +75,22 @@ export function createBatch(input: CreateBatchInput): Promise<FertilizerBatch> {
   })
 }
 
-export function discardBatch(id: string): Promise<FertilizerBatch> {
-  return apiFetch<FertilizerBatch>(`/fertilizer/batches/${id}/discard`, { method: 'PATCH' })
+/** Expiry Alerts — expired / within 7 days / within the window, never overlapping. */
+export function getExpiryAlerts(): Promise<ExpiryAlerts> {
+  return apiFetch<ExpiryAlerts>('/fertilizer/alerts')
+}
+
+export interface WriteOffInput {
+  reason: WriteOffReason
+  /** defaults to everything left in the batch */
+  quantityKg?: number
+  /** required when the reason is "other" */
+  note?: string
+}
+
+/** Writes a Write-off movement; refused (409) while an expired batch is still allocated to a request. */
+export function writeOffBatch(id: string, input: WriteOffInput): Promise<FertilizerBatch> {
+  return apiFetch<FertilizerBatch>(`/fertilizer/batches/${id}/write-off`, { method: 'POST', body: JSON.stringify(input) })
 }
 
 export function listPositions(): Promise<ItemPosition[]> {
@@ -103,6 +119,8 @@ export const decideRequest = (id: string, input: DecideRequestInput) => send(`${
 export const managerDecide = (id: string, input: { decision: 'approve' | 'reject'; reason?: string }) =>
   send(`${id}/manager-decide`, 'PATCH', input)
 export const markReady = (id: string) => send(`${id}/ready`, 'POST')
+/** Re-take a commitment stuck on an expired batch from live stock (FEFO). */
+export const moveToLive = (id: string) => send(`${id}/move-to-live`, 'POST')
 export const changeDeliveryDate = (id: string, date: string, reason: string) =>
   send(`${id}/delivery-date`, 'PATCH', { date, reason })
 export const recordHandover = (id: string, qtyKg: number) => send(`${id}/handover`, 'POST', { qtyKg })

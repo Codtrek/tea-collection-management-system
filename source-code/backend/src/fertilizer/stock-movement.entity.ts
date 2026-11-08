@@ -4,10 +4,11 @@ import {
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import type { DbMovementType } from './fertilizer-map';
+import type { DbMovementType, WriteOffReason } from './fertilizer-map';
 
 /**
- * FERT-02/03 — one row per stock event. `linkedRequestId` is nullable:
+ * FERT-02/03 — one row per stock event (Incoming, Outgoing, or a Write-off of stock that
+ * left the books without going to anyone). `linkedRequestId` is nullable:
  * an Outgoing movement may fulfil an approved request or be ad-hoc (resolved
  * 2026-07-27, see PLAN.md) — both draw down the same batch.
  */
@@ -45,6 +46,10 @@ export class StockMovementEntity {
 
   @Column({ type: 'varchar', nullable: true })
   supplier: string | null;
+
+  /** Write-off only (expired / damaged / other); null on Incoming and Outgoing. */
+  @Column({ name: 'write_off_reason', type: 'varchar', nullable: true })
+  writeOffReason: WriteOffReason | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;

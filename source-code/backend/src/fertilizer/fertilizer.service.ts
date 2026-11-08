@@ -8,9 +8,11 @@ import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { DispatchAccessService } from '../dispatch/dispatch-access.service';
+import { localDate } from '../dispatch/dispatch-map';
 import { parseEstateId } from '../estates/estate-map';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { RecordMovementDto } from './dto/record-movement.dto';
+import { WriteOffDto } from './dto/write-off.dto';
 import { FertilizerAllocationEntity } from './fertilizer-allocation.entity';
 import { FertilizerBatchEntity } from './fertilizer-batch.entity';
 import { FertilizerChargeEntity } from './fertilizer-charge.entity';
@@ -20,15 +22,20 @@ import {
   formatRequestId,
   parseBatchId,
   type PublicBatch,
+  type PublicExpiryAlertBatch,
+  type PublicExpiryAlerts,
   type PublicItemPosition,
   type PublicMovement,
 } from './fertilizer-map';
 import { FertilizerRequestEntity } from './fertilizer-request.entity';
 import {
+  batchCover,
+  expiryBucketOf,
   FertilizerPositionService,
+  USE_FIRST_DAYS,
   type StockSnapshot,
 } from './fertilizer-position.service';
-import { round2 } from './fertilizer-stock-ledger.service';
+import { isLive, round2 } from './fertilizer-stock-ledger.service';
 import { StockMovementEntity } from './stock-movement.entity';
 
 export interface Actor {
@@ -83,21 +90,151 @@ export class FertilizerService {
     return this.toPublicBatch(batch, await this.stock.snapshot());
   }
 
-  /** FERT-03 — marks a batch discarded; excluded from on-hand from that point on. */
-  async discardBatch(id: string, actor: Actor): Promise<PublicBatch> {
+  /**
+   * Expiry Alerts — three non-overlapping buckets on the factory calendar (expired with stock
+   * left, live within 7 days, live within the expiring-soon window), each batch with what's
+   * still allocated on it and, while usable, how many open requests it could fully cover.
+   */
+  async expiryAlerts(now: Date = new Date()): Promise<PublicExpiryAlerts> {
+    const snap = await this.stock.snapshot(now);
+    const createdAt = new Map(snap.requests.map((r) => [r.id, r.createdAt]));
+    const summary: PublicExpiryAlerts['summary'] = {
+      expired: { count: 0, kg: 0 },
+      soon: { count: 0, kg: 0 },
+      later: { count: 0, kg: 0 },
+    };
+    const rows: PublicExpiryAlertBatch[] = [];
+    for (const b of [...snap.batches].sort(
+      (x, y) => x.expiryDate.localeCompare(y.expiryDate) || x.id - y.id,
+    )) {
+      const bucket = expiryBucketOf(b, snap.today, snap.windowDays);
+      if (!bucket) continue;
+      summary[bucket].count += 1;
+      summary[bucket].kg = round2(summary[bucket].kg + Number(b.quantityKg));
+      rows.push({
+        ...this.toPublicBatch(b, snap),
+        bucket,
+        allocatedTo: snap.active
+          .filter((a) => a.batchId === b.id)
+          .map((a) => ({
+            requestId: formatRequestId(
+              a.requestId,
+              createdAt.get(a.requestId) ?? new Date(0),
+            ),
+            kg: Number(a.qtyKg),
+          })),
+        cover:
+          bucket === 'expired'
+            ? null
+            : batchCover(
+                Number(b.quantityKg),
+                this.stock.openDemand(b.item, snap),
+              ),
+      });
+    }
+    return {
+      today: snap.today,
+      soonDays: USE_FIRST_DAYS,
+      windowDays: snap.windowDays,
+      summary,
+      batches: rows,
+    };
+  }
+
+  /**
+   * Expiry Alerts / FERT-03 — take stock off the books that never went to anyone (expired,
+   * damaged, other). Writes a Write-off movement and lowers the batch, so the batch drops out
+   * of Expired and FERT-01's "kg expired" falls by the same amount. Stock still promised to a
+   * request can't be written off: an expired batch with active allocations is refused until
+   * those requests are moved to live stock; on a live batch only the free kg may go.
+   */
+  async writeOffBatch(
+    id: string,
+    dto: WriteOffDto,
+    actor: Actor,
+    now: Date = new Date(),
+  ): Promise<PublicBatch> {
     await this.assertCanWrite(actor);
-    const batch = await this.findBatch(id);
-    batch.discarded = true;
-    batch.lastUpdatedBy = actor.name;
-    batch.lastUpdatedOn = new Date();
-    const saved = await this.batchRepo.save(batch);
-    await this.audit.record(actor, {
-      action: 'Discarded fertilizer batch',
-      module: 'Fertilizer',
-      record: formatBatchId(saved.id),
-      recordHref: `/fertilizer/${formatBatchId(saved.id)}`,
+    const batchId = parseBatchId(id);
+    const today = localDate(now);
+    const result = await this.batchRepo.manager.transaction(async (em) => {
+      const batchRepo = em.getRepository(FertilizerBatchEntity);
+      const [batch] = Number.isNaN(batchId)
+        ? []
+        : await batchRepo.find({
+            where: { id: batchId },
+            lock: { mode: 'pessimistic_write' },
+          });
+      if (!batch) throw new NotFoundException(`No fertilizer batch "${id}".`);
+      const remaining = Number(batch.quantityKg);
+      if (remaining <= 0) {
+        throw new ConflictException(`${id} has no stock left to write off.`);
+      }
+      const qty = round2(dto.quantityKg ?? remaining);
+      if (qty > remaining) {
+        throw new ConflictException(
+          `Only ${remaining} kg is left in ${id} — write off at most that.`,
+        );
+      }
+      const active = await em
+        .getRepository(FertilizerAllocationEntity)
+        .find({ where: { batchId: batch.id, state: 'active' } });
+      const committed = round2(
+        active.reduce((sum, a) => sum + Number(a.qtyKg), 0),
+      );
+      if (!isLive(batch, today) && active.length > 0) {
+        const requests = await em.getRepository(FertilizerRequestEntity).find();
+        const list = active.map((a) => {
+          const r = requests.find((x) => x.id === a.requestId);
+          return {
+            id: r ? formatRequestId(r.id, r.createdAt) : String(a.requestId),
+            kg: Number(a.qtyKg),
+          };
+        });
+        throw new ConflictException({
+          message: `${committed} kg of ${id} is still allocated to ${list
+            .map((r) => r.id)
+            .join(
+              ', ',
+            )}. Move ${list.length === 1 ? 'that request' : 'those requests'} to live stock first.`,
+          requests: list,
+        });
+      }
+      if (qty > round2(remaining - committed)) {
+        throw new ConflictException(
+          `Only ${round2(remaining - committed)} kg of ${id} is free — the rest is committed to approved requests.`,
+        );
+      }
+      batch.quantityKg = String(round2(remaining - qty));
+      batch.lastUpdatedBy = actor.name;
+      batch.lastUpdatedOn = now;
+      await batchRepo.save(batch);
+      const movementRepo = em.getRepository(StockMovementEntity);
+      await movementRepo.save(
+        movementRepo.create({
+          batchId: batch.id,
+          type: 'Write-off',
+          writeOffReason: dto.reason,
+          quantityKg: String(qty),
+          movementDate: today,
+          destination: null,
+          estateId: null,
+          linkedRequestId: null,
+          supplier: null,
+          notes: dto.note?.trim() || null,
+          recordedBy: actor.name,
+        }),
+      );
+      return { batch, qty };
     });
-    return this.toPublicBatch(saved, await this.stock.snapshot());
+    await this.audit.record(actor, {
+      action: 'Wrote off fertilizer batch stock',
+      module: 'Fertilizer',
+      record: formatBatchId(result.batch.id),
+      recordHref: `/fertilizer/${formatBatchId(result.batch.id)}`,
+      details: `${result.batch.item} — ${result.qty} kg (${dto.reason})${dto.note ? `: ${dto.note.trim()}` : ''}`,
+    });
+    return this.toPublicBatch(result.batch, await this.stock.snapshot(now));
   }
 
   // ── Positions (FERT-01 — the single source of stock arithmetic) ────
@@ -220,6 +357,12 @@ export class FertilizerService {
     }
 
     const batch = await this.findBatch(dto.batchId);
+    // Expired or discarded stock never leaves the factory — it is written off instead.
+    if (!isLive(batch, localDate(new Date()))) {
+      throw new ConflictException(
+        `${dto.batchId} has expired${batch.discarded ? ' or been discarded' : ''} — it can't be dispatched. Write it off from Expiry Alerts instead.`,
+      );
+    }
     if (dto.quantityKg > Number(batch.quantityKg)) {
       throw new ConflictException(
         `Cannot exceed available stock (${batch.quantityKg} kg).`,
@@ -374,6 +517,7 @@ export class FertilizerService {
         ? formatRequestId(linkedRequest.id, linkedRequest.createdAt)
         : undefined,
       supplier: entity.supplier ?? undefined,
+      writeOffReason: entity.writeOffReason ?? undefined,
       notes: entity.notes ?? undefined,
       recordedBy: entity.recordedBy ?? 'Unknown',
     };

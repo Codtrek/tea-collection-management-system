@@ -115,6 +115,11 @@ export interface ExpenseReport {
   split: { category: string; amount: number }[];
   trend: TrendPoint[];
   rows: ExpenseRow[];
+  /**
+   * Fertilizer written off in the period (expired / damaged / other), in kg. Information only:
+   * never part of `total`, `split` or `trend` — the stock's cost was counted when it was bought.
+   */
+  stockLost: { item: string; reason: string; kg: number }[];
 }
 
 export interface PublicExpenseEntry {

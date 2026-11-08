@@ -8,6 +8,8 @@ import {
   formatBatchId,
   type BatchStatus,
   type CoverageStatus,
+  type DbRequestStatus,
+  type ExpiryBucket,
   type PublicItemPosition,
   type PublicRequestAvailability,
 } from './fertilizer-map';
@@ -22,7 +24,64 @@ export interface StockSnapshot {
   batches: FertilizerBatchEntity[];
   /** batch id → kg promised by ACTIVE allocations */
   activeByBatch: Map<number, number>;
+  /** every ACTIVE allocation row */
+  active: FertilizerAllocationEntity[];
+  requests: FertilizerRequestEntity[];
   positions: Map<string, PublicItemPosition>;
+}
+
+/** Expiry Alerts' "use first" bucket: live batches expiring within this many days. */
+export const USE_FIRST_DAYS = 7;
+
+/** Not yet decided — the "To decide" queue. Their need is the requested quantity. */
+const UNDECIDED: readonly DbRequestStatus[] = [
+  'Requested',
+  'Awaiting manager approval',
+];
+
+/**
+ * Which Expiry Alerts section a batch belongs to, or null when it doesn't alert. Expired
+ * means past expiry with stock left; the three buckets never overlap.
+ */
+export function expiryBucketOf(
+  batch: Pick<FertilizerBatchEntity, 'discarded' | 'expiryDate' | 'quantityKg'>,
+  today: string,
+  windowDays: number,
+): ExpiryBucket | null {
+  if (batch.discarded || Number(batch.quantityKg) <= 0) return null;
+  const days = daysUntil(today, batch.expiryDate);
+  if (days < 0) return 'expired';
+  if (days <= USE_FIRST_DAYS) return 'soon';
+  return days <= windowDays ? 'later' : null;
+}
+
+/**
+ * How many of the item's open requests one batch could fully cover. Open = undecided
+ * (needing the requested kg) or holding stock (needing what's committed to it). Walk them
+ * oldest first and count only those that fit whole in what's left of the batch; a request
+ * that doesn't fit is skipped, never split. `coveredKg` therefore never exceeds `batchKg`.
+ */
+export function batchCover(
+  batchKg: number,
+  open: { requestedDate: string; id: number; needKg: number }[],
+): { count: number; coveredKg: number; requestedKg: number } {
+  let left = batchKg;
+  let count = 0;
+  let coveredKg = 0;
+  let requestedKg = 0;
+  const sorted = [...open].sort(
+    (a, b) => a.requestedDate.localeCompare(b.requestedDate) || a.id - b.id,
+  );
+  for (const r of sorted) {
+    if (r.needKg <= 0) continue;
+    requestedKg = round2(requestedKg + r.needKg);
+    if (r.needKg <= left) {
+      left = round2(left - r.needKg);
+      coveredKg = round2(coveredKg + r.needKg);
+      count += 1;
+    }
+  }
+  return { count, coveredKg, requestedKg };
 }
 
 /** Whole days from `today` to `date` (both 'YYYY-MM-DD'); negative once past. */
@@ -151,7 +210,43 @@ export class FertilizerPositionService {
         expiringSoonDays: windowDays,
       });
     }
-    return { today, windowDays, batches, activeByBatch, positions };
+    return {
+      today,
+      windowDays,
+      batches,
+      activeByBatch,
+      active,
+      requests,
+      positions,
+    };
+  }
+
+  /** The open requests for an item, each with the kg it still needs (see `batchCover`). */
+  openDemand(
+    item: string,
+    snap: StockSnapshot,
+  ): { requestedDate: string; id: number; needKg: number }[] {
+    const committed = new Map<number, number>();
+    for (const a of snap.active) {
+      committed.set(
+        a.requestId,
+        round2((committed.get(a.requestId) ?? 0) + Number(a.qtyKg)),
+      );
+    }
+    return snap.requests
+      .filter(
+        (r) =>
+          r.item === item &&
+          (UNDECIDED.includes(r.status) || committed.has(r.id)),
+      )
+      .map((r) => ({
+        requestedDate: r.createdAt.toISOString(),
+        id: r.id,
+        needKg:
+          r.status === 'Requested'
+            ? Number(r.quantityKg)
+            : (committed.get(r.id) ?? Number(r.approvedQtyKg ?? r.quantityKg)),
+      }));
   }
 
   async listPositions(now: Date = new Date()): Promise<PublicItemPosition[]> {

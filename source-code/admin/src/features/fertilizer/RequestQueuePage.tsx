@@ -17,6 +17,8 @@ import { useAuth } from '@/context/AuthContext'
 import * as fertilizerService from '@/services/fertilizer'
 import {
   availabilityLabel,
+  hasStaleCommitment,
+  QUEUE_SCOPES,
   QUEUE_TAB_STATUSES,
   QUEUE_TABS,
   queueParams,
@@ -73,8 +75,16 @@ export function RequestQueuePage() {
   })
 
   const rows = useMemo(
-    () => queueRows(requests ?? [], { tab: filters.tab, search: filters.search, status: filters.status, origin: filters.origin }),
-    [requests, filters.tab, filters.search, filters.status, filters.origin],
+    () =>
+      queueRows(requests ?? [], {
+        tab: filters.tab,
+        search: filters.search,
+        status: filters.status,
+        origin: filters.origin,
+        item: filters.item,
+        scope: filters.scope,
+      }),
+    [requests, filters.tab, filters.search, filters.status, filters.origin, filters.item, filters.scope],
   )
   // FERT-06 is opened with the queue's filters, for its "Back to queue" and "Next request"
   const openRequest = (id: string) => {
@@ -171,6 +181,11 @@ export function RequestQueuePage() {
               <AlertTriangle className="size-3" aria-hidden /> Pickup qty differs
             </span>
           )}
+          {hasStaleCommitment(r) && (
+            <StatusBadge tone="danger" icon={<AlertTriangle />}>
+              Allocated stock expired: move to live stock
+            </StatusBadge>
+          )}
         </div>
       ),
     },
@@ -218,6 +233,21 @@ export function RequestQueuePage() {
           ]}
         />
       </div>
+
+      {(filters.item || filters.scope) && (
+        // set by a deep link (FERT-01 cards, Expiry Alerts) — these have no control of their own
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-text-muted">
+          <span>Showing</span>
+          {filters.item && <StatusBadge tone="neutral">Item: {filters.item}</StatusBadge>}
+          {filters.scope && <StatusBadge tone="neutral">{QUEUE_SCOPES[filters.scope].label}</StatusBadge>}
+          <span className="tabular">
+            · {rows.length} {rows.length === 1 ? 'request' : 'requests'}
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => setFilters({ item: '', scope: '' })}>
+            <X className="size-4" /> Clear
+          </Button>
+        </div>
+      )}
 
       <DataTable
         columns={columns}

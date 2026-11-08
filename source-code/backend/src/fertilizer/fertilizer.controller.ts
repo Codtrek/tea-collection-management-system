@@ -26,9 +26,11 @@ import {
   SetPriceDto,
 } from './dto/fertilizer-flow.dto';
 import { RecordMovementDto } from './dto/record-movement.dto';
+import { WriteOffDto } from './dto/write-off.dto';
 import { FertilizerDeliveryService } from './fertilizer-delivery.service';
 import type {
   PublicBatch,
+  PublicExpiryAlerts,
   PublicItemPosition,
   PublicMovement,
   PublicPrice,
@@ -78,13 +80,22 @@ export class FertilizerController {
     return this.fertilizerService.getBatch(id);
   }
 
-  @Patch('batches/:id/discard')
-  async discardBatch(
+  /** Expiry Alerts: expired / within 7 days / within the window — never overlapping. */
+  @Get('alerts')
+  expiryAlerts(): Promise<PublicExpiryAlerts> {
+    return this.fertilizerService.expiryAlerts();
+  }
+
+  /** Expiry Alerts / FERT-03: write off expired, damaged or other lost stock (`fertilizer: edit`). */
+  @Post('batches/:id/write-off')
+  async writeOffBatch(
     @Param('id') id: string,
+    @Body() dto: WriteOffDto,
     @Req() req: AuthedRequest,
   ): Promise<PublicBatch> {
-    return this.fertilizerService.discardBatch(
+    return this.fertilizerService.writeOffBatch(
       id,
+      dto,
       await this.resolveActor(req),
     );
   }
@@ -143,6 +154,15 @@ export class FertilizerController {
     @Req() req: AuthedRequest,
   ): Promise<PublicRequestDetail> {
     return this.deliveries.markReady(id, await this.resolveActor(req));
+  }
+
+  /** FERT-06: re-take a commitment stuck on an expired batch from live stock (FEFO). */
+  @Post('requests/:id/move-to-live')
+  async moveToLive(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.deliveries.moveToLive(id, await this.resolveActor(req));
   }
 
   @Patch('requests/:id/delivery-date')

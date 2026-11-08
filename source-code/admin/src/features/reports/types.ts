@@ -54,6 +54,8 @@ export interface ExpenseReport {
   split: { category: string; amount: number }[]
   trend: TrendPoint[]
   rows: ExpenseRow[]
+  /** fertilizer written off in the period (kg) — information only, never part of total / split / trend */
+  stockLost: { item: string; reason: string; kg: number }[]
 }
 
 export interface ExpenseEntry {

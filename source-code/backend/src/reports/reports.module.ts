@@ -4,6 +4,8 @@ import { AuditModule } from '../audit/audit.module';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
 import { SettlementEntity } from '../estates/settlement.entity';
+import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
+import { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import { UsersModule } from '../users/users.module';
 import { ExpenseEntryEntity } from './expense-entry.entity';
 import { ReportsController } from './reports.controller';
@@ -20,6 +22,9 @@ import { ReportsService } from './reports.service';
       CollectionRecordEntity,
       SettlementEntity,
       PayrollRunEntity,
+      // Write-offs — shown as "Stock lost", for information only.
+      StockMovementEntity,
+      FertilizerBatchEntity,
     ]),
     UsersModule,
     AuditModule,

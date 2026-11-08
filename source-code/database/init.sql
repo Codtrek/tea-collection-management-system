@@ -408,7 +408,7 @@ CREATE TABLE stock_movements (
     id                 SERIAL PRIMARY KEY,
     batch_id           INTEGER NOT NULL REFERENCES fertilizer_batches(id),
     type               VARCHAR(10) NOT NULL
-        CHECK (type IN ('Incoming', 'Outgoing')),
+        CHECK (type IN ('Incoming', 'Outgoing', 'Write-off')),
     quantity_kg        DECIMAL(10,2) NOT NULL,
     movement_date      DATE NOT NULL DEFAULT CURRENT_DATE,
     destination        VARCHAR(100), -- Outgoing: free-text label (estate, agent, or other location)
@@ -421,9 +421,14 @@ CREATE TABLE stock_movements (
     estate_id          INTEGER REFERENCES estates(id),
     linked_request_id  INTEGER REFERENCES fertilizer_requests(id),
     supplier           VARCHAR(100), -- Incoming
+    -- Write-off only (Fertilizer-Delivery-Addendum §5.2, 2026-11-08)
+    write_off_reason   VARCHAR(10)
+        CHECK (write_off_reason IN ('expired', 'damaged', 'other')),
     notes              TEXT,
     recorded_by        VARCHAR(100),
-    created_at         TIMESTAMP DEFAULT NOW()
+    created_at         TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT stock_movements_write_off_reason_required
+        CHECK (type <> 'Write-off' OR write_off_reason IS NOT NULL)
 );
 
 -- ─── COMPLAINTS ───────────────────────────────────────────────────

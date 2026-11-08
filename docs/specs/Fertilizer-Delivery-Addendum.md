@@ -129,10 +129,18 @@ Requested … Rescheduled / Needs review ─▶ Cancelled   (anything not with a
 
 - Handover and check-in write `stock_movements` rows (Outgoing / Incoming, linked to the
   request), so FERT-03's batch ledger stays complete.
-- A commitment on a batch that has since expired shows as a shortfall (negative Available).
-  Mark ready and Retry move it to live stock (FEFO) or refuse.
+- **Expired stock never leaves the factory (amended 2026-11-08).** FEFO allocates live
+  batches only, but a batch can expire *after* approval. Such a commitment:
+  - shows as `staleCommittedKg` on the request and as the chip **"Allocated stock expired:
+    move to live stock"** on FERT-05, FERT-06 and Expiry Alerts;
+  - still counts in Committed (it can make Available negative, a shortfall);
+  - is moved by **Move to live stock** on FERT-06 (`fertilizer: edit`): the expired
+    allocation is released and the same kg re-taken from live stock, FEFO, or the move is
+    refused and nothing changes. Mark ready and Retry do the same;
+  - is re-taken automatically at **handover**, which is refused if live stock can't cover it.
 - **FERT-02 amended:** Outgoing movements are **ad-hoc only**. A request's fertilizer leaves
-  through its handover. An ad-hoc movement can't take a batch's committed stock.
+  through its handover. An ad-hoc movement can't take a batch's committed stock, and can't
+  come from an expired or discarded batch (refused server-side; the batch picker hides them).
 
 ### 5.1 One stock-position service (decided 2026-10-29)
 
@@ -143,7 +151,7 @@ Requested … Rescheduled / Needs review ─▶ Cancelled   (anything not with a
 | Figure | Meaning |
 |---|---|
 | On Hand | **Live** batches only (not expired, not discarded) |
-| Expired | Expired and not yet written off. **Never part of On Hand.** Shown on FERT-01 as "N kg expired", which links to Expiry Alerts to be written off with an Outgoing movement. |
+| Expired | Expired and not yet written off. **Never part of On Hand.** Shown on FERT-01 as "N kg expired", which links to Expiry Alerts to be written off with a Write-off movement (§5.2). |
 | Committed | Σ ACTIVE allocations (value = each request's snapshot rate) |
 | Available | On Hand − Committed |
 | Pending | Σ Requested quantities, and how many requests |
@@ -171,6 +179,45 @@ Requested … Rescheduled / Needs review ─▶ Cancelled   (anything not with a
   | **Not available (stock expired)** | Available ≤ 0 and the item has expired stock |
 
   FERT-06 shows that plan, and a partial approval previews its first N kg.
+
+### 5.2 Expiry Alerts and Write off (decided 2026-11-08)
+
+`GET /fertilizer/alerts` (the stock-position service; the page computes nothing). "Today" is
+the Asia/Colombo date. Only batches with stock left (`quantity > 0`, not discarded) appear,
+each in exactly **one** section:
+
+| Section | Rule | Actions |
+|---|---|---|
+| **Expired: write off** | days to expiry < 0 | View batch · Write off |
+| **Expires within 7 days: use first** | 0 ≤ days ≤ 7 | View requests that can use this batch · View batch |
+| **Expires in 8–N days** | 8 ≤ days ≤ `expiringSoonDays` (N, default 30) | same |
+
+The three summary cards show count and kg for the same three buckets, so they never overlap.
+
+- **No dispatch action anywhere on the page.** Expired stock is written off. Usable stock
+  reaches owners only through request → approval (FEFO, which already takes the
+  earliest-expiring batch first) → handover. "View requests that can use this batch" opens
+  FERT-05 at `?tab=all&item=<item>&scope=open`.
+- **"Can fully cover N requests (X kg of Y kg requested)"**, usable batches only. Open
+  requests for the item are those to decide (Requested, Awaiting manager approval; they need
+  the requested kg) and those holding stock (they need their committed kg). Walk them oldest
+  first. A request counts only if it fits **whole** in what is left of the batch; one that
+  doesn't fit is skipped, never split. X therefore never exceeds the batch quantity. Expired
+  batches show nothing.
+- **Write off** replaces "Mark Discarded" (`POST /fertilizer/batches/:id/write-off`,
+  `fertilizer: edit`, audited, `LightConfirmModal`):
+  - Reason is required: expired / damaged / other (other needs a note). Quantity defaults to
+    what's left in the batch.
+  - It writes a `stock_movements` row of type **Write-off** (with `write_off_reason`) and
+    lowers the batch. The batch leaves Expired, and FERT-01's "N kg expired" falls by the
+    same kg, because both read the batch quantity.
+  - **Blocked while allocated:** an expired batch with active allocations is refused (409,
+    listing the requests and kg). Move those requests to live stock first. On a live batch
+    (e.g. damaged stock), only the free kg can be written off.
+  - `fertilizer_batches.discarded` stays for legacy rows only; nothing sets it any more.
+- **Expense reports (RPT-03):** write-offs appear as **"Stock lost"** per item and reason, in kg,
+  for information only. They are never part of the total, split or trend: the stock's cost
+  was counted when it was bought.
 
 ## 6. Dispatch, pickup and delivery
 
@@ -259,7 +306,9 @@ How they're sent:
 | FERT-05 (queue) | Order ref, attempt, delivery date + agent, payment method + status, mismatch flag, status filter |
 | FERT-06 (detail) | Officer decision (no override), Manager decision, action bar by status (Mark ready · Record handover · Check in · Change date · Retry · Release remainder · Cancel), attempt label, allocations, attempts, full timeline, payment panel (method, charges, payments, outstanding, Record payment), notices |
 | FERT-07 (log request) | Item lines + payment method; one order → one request per item |
-| FERT-02 (movement) | Linked-request dispatch removed |
+| FERT-02 (movement) | Linked-request dispatch removed; expired/discarded batches can't go out |
+| FERT-03 (batch) | "Write off" replaces "Mark as Expired / Discard"; the ledger shows Write-off rows |
+| FERT-04 (Expiry Alerts) | Three non-overlapping sections, no dispatch action, "can fully cover", Write off (§5.2) |
 | ADM-03 (system settings) | New Fertilizer prices section |
 
 **Approval UX: review on the page, confirm in a modal (decided 2026-10-29)**
@@ -267,6 +316,7 @@ How they're sent:
 - **FERT-05 (queue):**
   - Opening a row goes to FERT-06.
   - The queue's tab, search, status and origin filters live in the URL (`?tab=&q=&status=&origin=`), so returning keeps them along with the sort.
+  - Two deep-link filters have no control of their own; a "Showing …  Clear" line names them: `item=` (exact item) and `scope=holding` (requests holding stock) or `scope=open` (to decide or holding stock). They use the same predicates the FERT-01 cards and Expiry Alerts count with.
   - **No bulk approve.** Approval commits stock, so it never happens from the list.
   - The only quick action is **Reject from the row**. It uses a modal with a required reason, because rejecting commits nothing.
   - **The way in is visible:** on "To decide" each row has a text button **Review** (other tabs: **View**), and the whole row opens FERT-06. Reject stays an ✕ icon with a "Reject" tooltip.
@@ -293,6 +343,8 @@ How they're sent:
 - `POST requests/:id/{ready,handover,check-in,retry,release-shortfall,cancel,payments}`
 - `PATCH requests/:id/{delivery-date,payment-method}`
 - `GET prices`, `POST prices`
+- `GET alerts`, `POST batches/:id/write-off` (§5.2), `POST requests/:id/move-to-live` (§5)
+- Removed: `PATCH batches/:id/discard`
 
 **Agent API** (`/dispatch/me/fertilizer`, agent token, own tasks only):
 - `GET` (today's tasks + what he carries)

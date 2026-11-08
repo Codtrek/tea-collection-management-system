@@ -4,6 +4,8 @@ import type { CollectionRecordEntity } from '../collections/collection-record.en
 import type { DeliveryGradeLineEntity } from '../collections/delivery-grade-line.entity';
 import type { PayrollRunEntity } from '../employees/payroll-run.entity';
 import type { SettlementEntity } from '../estates/settlement.entity';
+import type { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
+import type { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import type { ExpenseEntryEntity } from './expense-entry.entity';
 import { type Actor, ReportsService } from './reports.service';
 
@@ -61,7 +63,9 @@ function makeCollection(
     routeName: 'Route 3',
     weightKg: '210.00',
     gradeLines:
-      grade === 'pending' ? [] : [{ grade, weightKg } as DeliveryGradeLineEntity],
+      grade === 'pending'
+        ? []
+        : [{ grade, weightKg } as DeliveryGradeLineEntity],
     status: 'confirmed',
     collectionDate: '2026-07-14',
     agentId: 1,
@@ -150,6 +154,8 @@ describe('ReportsService', () => {
   let settlementRepo: FakeRepository<SettlementEntity>;
   let payrollRepo: FakeRepository<PayrollRunEntity>;
   let expenseRepo: FakeRepository<ExpenseEntryEntity>;
+  let movementRepo: FakeRepository<StockMovementEntity>;
+  let batchRepo: FakeRepository<FertilizerBatchEntity>;
   let service: ReportsService;
 
   const officer: Actor = { name: 'S. Fernando', role: 'Officer' };
@@ -160,6 +166,8 @@ describe('ReportsService', () => {
     settlementRepo = new FakeRepository();
     payrollRepo = new FakeRepository();
     expenseRepo = new FakeRepository();
+    movementRepo = new FakeRepository();
+    batchRepo = new FakeRepository();
 
     const audit = { record: jest.fn().mockResolvedValue(undefined) };
     service = new ReportsService(
@@ -167,6 +175,8 @@ describe('ReportsService', () => {
       collectionRepo as unknown as Repository<CollectionRecordEntity>,
       settlementRepo as unknown as Repository<SettlementEntity>,
       payrollRepo as unknown as Repository<PayrollRunEntity>,
+      movementRepo as unknown as Repository<StockMovementEntity>,
+      batchRepo as unknown as Repository<FertilizerBatchEntity>,
       audit as unknown as import('../audit/audit.service').AuditService,
     );
   });
@@ -239,7 +249,14 @@ describe('ReportsService', () => {
   describe('revenueReport — RPT-02', () => {
     it('excludes pending settlements — only processed revenue is realized', async () => {
       settlementRepo.seed(
-        makeSettlement({ id: 'A', status: 'processed', superKg: '100.00', normalKg: '0.00', superRate: '185.00', normalRate: '95.00' }),
+        makeSettlement({
+          id: 'A',
+          status: 'processed',
+          superKg: '100.00',
+          normalKg: '0.00',
+          superRate: '185.00',
+          normalRate: '95.00',
+        }),
       );
       settlementRepo.seed(
         makeSettlement({ id: 'B', status: 'pending', superKg: '1000.00' }),
@@ -304,12 +321,49 @@ describe('ReportsService', () => {
       );
     });
 
+    it('shows write-offs as "Stock lost" without counting them as an expense', async () => {
+      payrollRepo.seed(makePayroll({ id: 'PR-1', gross: '80000.00' }));
+      batchRepo.seed({
+        id: 7,
+        item: 'Muriate of Potash',
+      } as FertilizerBatchEntity);
+      for (const [id, qty, date] of [
+        [1, '200.00', '2026-07-05'],
+        [2, '100.00', '2026-07-20'],
+        [3, '50.00', '2026-08-01'], // another month
+      ] as const) {
+        movementRepo.seed({
+          id,
+          batchId: 7,
+          type: 'Write-off',
+          writeOffReason: 'expired',
+          quantityKg: qty,
+          movementDate: date,
+        } as StockMovementEntity);
+      }
+
+      const report = await service.expenseReport('2026-07');
+      expect(report.stockLost).toEqual([
+        { item: 'Muriate of Potash', reason: 'expired', kg: 300 },
+      ]);
+      expect(report.total).toBe(80000);
+      expect(report.split).toEqual([{ category: 'Payroll', amount: 80000 }]);
+    });
+
     it('groups multiple manual entries in the same category together', async () => {
       expenseRepo.seed(
-        makeExpense({ id: 'EXP-1', category: 'Miscellaneous', amount: '1000.00' }),
+        makeExpense({
+          id: 'EXP-1',
+          category: 'Miscellaneous',
+          amount: '1000.00',
+        }),
       );
       expenseRepo.seed(
-        makeExpense({ id: 'EXP-2', category: 'Miscellaneous', amount: '2000.00' }),
+        makeExpense({
+          id: 'EXP-2',
+          category: 'Miscellaneous',
+          amount: '2000.00',
+        }),
       );
 
       const report = await service.expenseReport('2026-07');

@@ -33,7 +33,7 @@ import {
   type StockSnapshot,
 } from './fertilizer-position.service';
 import { FertilizerSettingsService } from './fertilizer-settings.service';
-import { round2 } from './fertilizer-stock-ledger.service';
+import { isLive, round2 } from './fertilizer-stock-ledger.service';
 
 const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
 
@@ -283,6 +283,14 @@ export class FertilizerViewService {
         : undefined,
       ratePerKg: r.ratePerKg !== null ? Number(r.ratePerKg) : null,
       committedKg: round2(rel.active.reduce((s, a) => s + Number(a.qtyKg), 0)),
+      staleCommittedKg: round2(
+        rel.active
+          .filter((a) => {
+            const batch = ctx.stock.batches.find((b) => b.id === a.batchId);
+            return !batch || !isLive(batch, ctx.stock.today);
+          })
+          .reduce((s, a) => s + Number(a.qtyKg), 0),
+      ),
       payment: {
         method: r.paymentMethod,
         amountOwedRs: balance.chargedRs,

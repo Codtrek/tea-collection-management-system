@@ -74,10 +74,10 @@ describe('FertilizerService', () => {
       });
     });
 
-    it('excludes discarded batches from on-hand', async () => {
+    it('excludes (legacy) discarded batches from on-hand', async () => {
       const h = buildFertilizerHarness();
       const b = h.batch({ qty: 500, expiry: '2027-01-01' });
-      await h.stock.discardBatch(formatBatchId(b.id), asActor(officer));
+      b.discarded = true;
       expect(await h.position()).toMatchObject({ onHand: 0 });
     });
   });
@@ -224,12 +224,17 @@ describe('FertilizerService', () => {
     });
   });
 
-  describe('discardBatch', () => {
-    it('rejects Manager', async () => {
+  describe('writeOffBatch', () => {
+    it('rejects Manager (needs fertilizer: edit)', async () => {
       const h = buildFertilizerHarness();
-      const b = h.batch({ qty: 100, expiry: '2027-01-01' });
+      const b = h.batch({ qty: 100, expiry: '2026-10-01' });
       await expect(
-        h.stock.discardBatch(formatBatchId(b.id), managerActor),
+        h.stock.writeOffBatch(
+          formatBatchId(b.id),
+          { reason: 'expired' },
+          managerActor,
+          NOW,
+        ),
       ).rejects.toThrow(ForbiddenException);
     });
   });

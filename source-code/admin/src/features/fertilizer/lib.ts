@@ -84,13 +84,40 @@ export function positionLabel(p: ItemPosition): string {
   return p.status === 'Short' ? `Short ${formatWeight(p.shortKg)}` : p.status
 }
 
+/** A request holding stock right now (active allocations, any status) — FERT-01 card 3 and `?scope=holding`. */
+export function holdsStock(r: FertilizerRequest): boolean {
+  return r.committedKg > 0
+}
+
+/**
+ * Open demand: still to decide, or holding stock — the requests a usable batch could serve
+ * (Expiry Alerts' "View requests that can use this batch", `?scope=open`). Mirrors the backend's
+ * `openDemand`, which the "can fully cover" figure is walked over.
+ */
+export function isOpenDemand(r: FertilizerRequest): boolean {
+  return r.status === 'Requested' || r.status === 'Awaiting manager approval' || holdsStock(r)
+}
+
+/** Part of the request's commitment sits on a batch that has since expired — "move to live stock". */
+export function hasStaleCommitment(r: FertilizerRequest): boolean {
+  return r.staleCommittedKg > 0
+}
+
 /** Committed kg / value (from positions) and how many requests hold it, for the FERT-01 card. */
 export function committedSummary(positions: ItemPosition[], requests: FertilizerRequest[]): { kg: number; valueRs: number; count: number } {
   return {
     kg: positions.reduce((sum, p) => sum + p.committed, 0),
     valueRs: positions.reduce((sum, p) => sum + p.committedValueRs, 0),
-    count: requests.filter((r) => r.committedKg > 0).length,
+    count: requests.filter(holdsStock).length,
   }
+}
+
+/** Expiry Alerts' cover line: "can fully cover 2 requests (130 kg of 730 kg requested)". */
+export function coverLabel(cover: { count: number; coveredKg: number; requestedKg: number } | null): string | null {
+  if (!cover) return null
+  if (cover.requestedKg === 0) return 'no open requests for this item'
+  if (cover.count === 0) return `can't fully cover any open request (${formatWeight(cover.requestedKg)} requested)`
+  return `can fully cover ${cover.count} request${cover.count === 1 ? '' : 's'} (${formatWeight(cover.coveredKg)} of ${formatWeight(cover.requestedKg)} requested)`
 }
 
 /** Items whose pending requests can't all be met — the server status says so (FERT-01 card 1). */
@@ -141,21 +168,34 @@ export const QUEUE_TAB_STATUSES: Record<string, RequestStatus[]> = {
   all: ALL_STATUSES,
 }
 
+/** Deep-link sets the summary cards and Expiry Alerts open — the same predicates they count with. */
+export const QUEUE_SCOPES: Record<string, { label: string; test: (r: FertilizerRequest) => boolean }> = {
+  holding: { label: 'Holding stock', test: holdsStock },
+  open: { label: 'Open (to decide or holding stock)', test: isOpenDemand },
+}
+
 export interface QueueFilters {
   tab: string
   search: string
   status: string
   origin: string
+  /** exact item name, e.g. from Expiry Alerts */
+  item?: string
+  /** a `QUEUE_SCOPES` key */
+  scope?: string
 }
 
-/** The queue's filters live in the URL (`?tab=&q=&status=&origin=`), so going back keeps them. */
+/** The queue's filters live in the URL (`?tab=&q=&status=&origin=&item=&scope=`), so going back keeps them. */
 export function readQueueFilters(params: URLSearchParams): QueueFilters {
   const tab = params.get('tab') ?? ''
+  const scope = params.get('scope') ?? ''
   return {
     tab: tab in QUEUE_TAB_STATUSES ? tab : 'decide',
     search: params.get('q') ?? '',
     status: params.get('status') ?? '',
     origin: params.get('origin') ?? '',
+    item: params.get('item') ?? '',
+    scope: scope in QUEUE_SCOPES ? scope : '',
   }
 }
 
@@ -165,7 +205,15 @@ export function queueParams(f: QueueFilters): URLSearchParams {
   if (f.search) p.set('q', f.search)
   if (f.status) p.set('status', f.status)
   if (f.origin) p.set('origin', f.origin)
+  if (f.item) p.set('item', f.item)
+  if (f.scope) p.set('scope', f.scope)
   return p
+}
+
+/** A queue link for the given filters (missing ones take their defaults). */
+export function queueHref(f: Partial<QueueFilters>): string {
+  const qs = queueParams({ tab: 'decide', search: '', status: '', origin: '', ...f }).toString()
+  return `/fertilizer/requests${qs ? `?${qs}` : ''}`
 }
 
 /** The queue's rows in display order — oldest first while deciding (waiting longest), newest first elsewhere. */
@@ -178,6 +226,8 @@ export function queueRows(requests: FertilizerRequest[], f: QueueFilters): Ferti
         allowed.includes(r.status) &&
         (!f.status || r.status === f.status) &&
         (!f.origin || r.origin === f.origin) &&
+        (!f.item || r.item === f.item) &&
+        (!f.scope || (QUEUE_SCOPES[f.scope]?.test(r) ?? true)) &&
         (r.estateName.toLowerCase().includes(q) ||
           r.item.toLowerCase().includes(q) ||
           r.id.toLowerCase().includes(q) ||

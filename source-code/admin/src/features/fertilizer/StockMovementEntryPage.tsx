@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/Select'
 import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as fertilizerService from '@/services/fertilizer'
+import { factoryToday } from '@/features/dispatch/status'
 import { batchStatus } from './lib'
 import type { FertilizerBatch } from './types'
 import { formatWeight } from '@/lib/format'
@@ -129,7 +130,7 @@ function MovementForm({ batches }: { batches: FertilizerBatch[] }) {
       type: 'Incoming',
       batchId: params.get('batch') ?? '',
       unit: 'kg',
-      date: new Date().toISOString().slice(0, 10),
+      date: factoryToday(),
     },
   })
   const values = useWatch({ control })
@@ -179,7 +180,8 @@ function MovementForm({ batches }: { batches: FertilizerBatch[] }) {
     }
   }
 
-  const activeBatches = batches.filter((b) => !b.discarded)
+  // expired stock is never dispatched — it is written off from Expiry Alerts (the server refuses it too)
+  const activeBatches = batches.filter((b) => !b.discarded && (type !== 'Outgoing' || batchStatus(b) !== 'Expired'))
 
   return (
     <div>
@@ -232,14 +234,19 @@ function MovementForm({ batches }: { batches: FertilizerBatch[] }) {
               ...(type === 'Incoming' ? [{ value: 'new', label: '＋ New batch' }] : []),
               ...activeBatches.map((b) => ({
                 value: b.id,
-                label: `${b.id} — ${b.item} (${formatWeight(b.quantityKg)} available)`,
+                label:
+                  type === 'Outgoing'
+                    ? `${b.id} — ${b.item} (${formatWeight(b.freeKg)} free)`
+                    : `${b.id} — ${b.item} (${formatWeight(b.quantityKg)} in stock)`,
               })),
             ]}
             {...register('batchId')}
           />
           {type === 'Outgoing' && selectedBatch && batchStatus(selectedBatch) !== 'Fresh' && (
             <p className="-mt-3 text-[13px] text-warning-fg">
-              This batch is {batchStatus(selectedBatch).toLowerCase()} — check quality before dispatch.
+              {batchStatus(selectedBatch) === 'Expired'
+                ? 'This batch has expired and cannot be dispatched. Write it off from Expiry Alerts.'
+                : `This batch is ${batchStatus(selectedBatch).toLowerCase()} — check quality before dispatch.`}
             </p>
           )}
 
