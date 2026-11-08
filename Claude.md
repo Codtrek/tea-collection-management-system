@@ -1142,6 +1142,22 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Playwright** (`admin/e2e/`, Chromium only) checks 7 pages × 6 widths plus zoom against a running backend: `E2E_API_URL`, `E2E_USER`, `E2E_PASS`.
   - Screenshots are git-ignored, except the Dispatch before/after pair in `docs/screenshots/`.
 
+## Collection Report RPT-01 (2026-11-08, `feat/collection-report`)
+
+- **One service** (`docs/specs/Reports-Collection-Addendum.md`): `backend/src/reports/collection-report-rules.ts` (pure) + `CollectionReportService`, behind `GET /reports/collection`. It computes every figure: cards, charts, the table and totals, and the CSV.
+  - Graded deliveries (collected or confirmed, with grade lines) count by factory weight (Σ lines = the latest approved revision).
+  - Ungraded deliveries and provisional entries are counted apart; not-delivered rows are excluded.
+  - Dates are Colombo calendar days.
+- **Default period:** the last complete month. The month in progress is labelled "… so far (1–8 Nov)" and compared like for like. Year on year is null, shown as "No data last year", when last year had nothing.
+- **October 2026 page vs SQL:** identical. The opt-in check is `REPORT_SQL_CHECK_URL=… npx jest collection-report.sql`.
+- **Page:**
+  - The whole view is in the URL (`collection-report-view.ts`).
+  - Five cards using the shared `components/data/SummaryCard`; `TrendChartCard` (straight lines, partial period hollow); horizontal bars for routes and the top 10 estates.
+  - A grouped table with a `DataTable` `footer` totals row.
+  - Agent rows only link to Performance.
+- **`ReportActionsBar`** is honest everywhere: a handler means a working button; otherwise it is disabled with "Coming soon"; Preview is removed. RPT-01 has CSV export and print. The `print:hidden` chrome and `@media print` are shared.
+- **`AppShell`** scrolls to the top on a new page. The cached report opened at the old scroll position, with its title under the top bar.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

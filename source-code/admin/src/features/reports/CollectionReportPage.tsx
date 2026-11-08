@@ -1,4 +1,5 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Building2, Layers, Loader2, Scale, Truck, X } from 'lucide-react'
@@ -26,9 +27,13 @@ import * as reportsService from '@/services/reports'
 import { currentMonth, monthOptionsFor, shiftMonth } from '@/lib/month'
 import { formatDate, formatKg, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/cn'
+import { downloadCsv } from '@/lib/csv'
 import {
+  collectionCsv,
+  collectionCsvName,
   collectionViewParams,
   estateTimelineHref,
+  filterSummary,
   performanceHref,
   readCollectionView,
   reportQuery,
@@ -61,6 +66,8 @@ export function CollectionReportPage() {
   const setPeriod = (p: Pick<CollectionView, 'month' | 'from' | 'to' | 'thisMonth'>) =>
     setView({ month: undefined, from: undefined, to: undefined, thisMonth: undefined, ...p })
   const tableRef = useRef<HTMLDivElement>(null)
+  // while printing, the table shows every row (the print layout has no pager)
+  const [printing, setPrinting] = useState(false)
 
   const query = reportQuery(view)
   const {
@@ -100,6 +107,11 @@ export function CollectionReportPage() {
   )
   const periodMode = view.thisMonth ? 'thisMonth' : view.from ? 'custom' : 'month'
   const filtered = view.routeId !== undefined || view.agentId !== undefined || view.estateId !== undefined || !!view.grade
+  const print = () => {
+    flushSync(() => setPrinting(true))
+    window.print()
+    setPrinting(false)
+  }
   const showAll = () => {
     setView({ groupBy: 'estate' })
     tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -118,9 +130,19 @@ export function CollectionReportPage() {
         }
       />
 
+      {/* the filters are hidden on paper, so the printout says what it shows */}
+      <p className="mb-4 hidden text-sm text-text print:block">
+        <strong>{report.period.label}</strong>
+        {report.period.partial && ' (in progress)'} · {filterSummary(report, view)} · printed {formatDate(report.today)}
+      </p>
+
       <ReportViewer
         filtersClassName="flex flex-1 flex-col gap-3 print:hidden"
         summaryClassName="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
+        actions={{
+          onExportExcel: () => downloadCsv(collectionCsvName(report), collectionCsv(report, view)),
+          onPrint: print,
+        }}
         filters={
           <>
             <div className="flex flex-wrap items-end gap-3">
@@ -223,7 +245,7 @@ export function CollectionReportPage() {
                 )}
               </div>
             </div>
-            <p className="text-sm text-text-muted">
+            <p className="text-sm text-text-muted print:block">
               Showing <strong className="text-text">{report.period.label}</strong>
               {report.period.partial && ' — a period in progress, compared only with the same days before'}
               {report.gradeFiltered && ` · ${view.grade === 'super' ? 'Super' : 'Normal'} grade only`}
@@ -320,7 +342,7 @@ export function CollectionReportPage() {
                 columns={tableColumns(report)}
                 rows={report.table.rows}
                 rowKey={(r) => r.key}
-                pageSize={15}
+                pageSize={printing ? Math.max(1, report.table.rows.length) : 15}
                 stickyFirstColumn
                 defaultSort={report.table.groupBy === 'day' ? undefined : { key: 'factoryKg', direction: 'desc' }}
                 footer={{ ...report.table.totals, key: 'total', name: 'Total', routeName: null, id: null }}

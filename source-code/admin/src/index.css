@@ -233,3 +233,25 @@ body {
     background: #eef2ef;
   }
 }
+
+/* Print layout (Reports-Collection-Addendum §8): the app chrome is `print:hidden`; the page prints
+   on A4 with flat cards, and nothing is cut across pages that can be kept whole. */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body {
+    background: var(--color-surface);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  [class*='shadow-'] {
+    box-shadow: none !important;
+  }
+  .recharts-wrapper,
+  tr,
+  section {
+    break-inside: avoid;
+  }
+}

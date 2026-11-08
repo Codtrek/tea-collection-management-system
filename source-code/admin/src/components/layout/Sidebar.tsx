@@ -25,7 +25,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   return (
     <aside
       data-collapsed={collapsed}
-      className="sticky top-0 flex h-screen shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-[var(--duration-base)]"
+      className="sticky top-0 flex h-screen shrink-0 flex-col border-r print:hidden border-border bg-surface transition-[width] duration-[var(--duration-base)]"
       style={{ width: collapsed ? 'var(--sidebar-w-collapsed)' : 'var(--sidebar-w)' }}
     >
       <div className={cn('flex h-16 items-center border-b border-border', collapsed ? 'justify-center px-2' : 'px-4')}>

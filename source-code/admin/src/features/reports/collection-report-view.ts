@@ -1,4 +1,5 @@
-import type { CollectionGroupBy, CollectionReportQuery, ReportGrade } from './types'
+import { toCsv } from '@/lib/csv'
+import type { CollectionGroupBy, CollectionGroupRow, CollectionReport, CollectionReportQuery, ReportGrade } from './types'
 
 /*
   RPT-01's view state lives in the URL, so a link reproduces exactly what was on screen:
@@ -86,4 +87,62 @@ export function signedPct(v: number | null, unit = '%'): string {
   if (v === null) return '—'
   if (v === 0) return `0${unit}`
   return `${v > 0 ? '+' : '−'}${oneDecimal.format(Math.abs(v))}${unit}`
+}
+
+/* ── Export (CSV, opens in Excel) ── */
+
+const GROUP_NAME: Record<CollectionGroupBy, string> = { estate: 'Estate', route: 'Route', agent: 'Agent', day: 'Day' }
+const kg1 = (v: number | null) => (v === null ? '' : v.toFixed(1))
+const pct1 = (v: number | null) => (v === null ? '' : v.toFixed(1))
+
+/** "Route: Route 3 · Grade: Super · demo data excluded" — what the export was filtered by. */
+export function filterSummary(report: CollectionReport, v: CollectionView): string {
+  const parts: string[] = []
+  const route = report.options.routes.find((r) => r.id === v.routeId)
+  const agent = report.options.agents.find((a) => a.id === v.agentId)
+  const estate = report.options.estates.find((e) => e.id === v.estateId)
+  if (route) parts.push(`Route: ${route.name}`)
+  if (agent) parts.push(`Agent: ${agent.name}`)
+  if (estate) parts.push(`Estate: ${estate.name}`)
+  if (v.grade) parts.push(`Grade: ${v.grade === 'super' ? 'Super' : 'Normal'}`)
+  if (!v.includeDemo) parts.push('demo data excluded')
+  return parts.length ? parts.join(' · ') : 'No filters'
+}
+
+/**
+ * The table exactly as the server computed it — every row of the current grouping (not just the
+ * page) and the totals row — with a short preamble naming the report, period and filters.
+ * Numbers are plain (one decimal, no units or separators) so Excel can sum them.
+ */
+export function collectionCsv(report: CollectionReport, v: CollectionView): string {
+  const by = report.table.groupBy
+  const columns = [
+    { header: GROUP_NAME[by], value: (r: CollectionGroupRow) => r.name },
+    ...(by === 'estate' ? [{ header: 'Route', value: (r: CollectionGroupRow) => r.routeName ?? '' }] : []),
+    { header: 'Deliveries', value: (r: CollectionGroupRow) => r.deliveries },
+    { header: 'Estate kg', value: (r: CollectionGroupRow) => kg1(r.estateKg) },
+    { header: 'Factory kg', value: (r: CollectionGroupRow) => kg1(r.factoryKg) },
+    { header: 'Difference %', value: (r: CollectionGroupRow) => pct1(r.diffPct) },
+    { header: 'Super kg', value: (r: CollectionGroupRow) => kg1(r.superKg) },
+    { header: 'Normal kg', value: (r: CollectionGroupRow) => kg1(r.normalKg) },
+    { header: 'Super share %', value: (r: CollectionGroupRow) => pct1(r.superShare) },
+    { header: 'Ungraded deliveries', value: (r: CollectionGroupRow) => r.ungradedDeliveries },
+    { header: 'Ungraded estate kg', value: (r: CollectionGroupRow) => kg1(r.ungradedEstateKg) },
+    ...(by === 'day' ? [] : [{ header: 'Change vs previous %', value: (r: CollectionGroupRow) => pct1(r.changePct) }]),
+  ]
+  const totals: CollectionGroupRow = { ...report.table.totals, key: 'total', name: 'Total', routeName: '', id: null }
+  const preamble = [
+    'Collection Report',
+    `Period: ${report.period.label}${report.period.partial ? ' (in progress)' : ''}`,
+    `Filters: ${filterSummary(report, v)}`,
+    `Weights: factory kg = sum of grade lines of graded deliveries; tolerance ${report.tolerancePct}%`,
+    '',
+  ].map((line) => (/[",]/.test(line) ? `"${line.replace(/"/g, '""')}"` : line))
+  return [...preamble, toCsv(columns, [...report.table.rows, totals])].join('\r\n')
+}
+
+/** "collection-report-2026-10-estate.csv" */
+export function collectionCsvName(report: CollectionReport): string {
+  const period = report.period.month ?? `${report.period.from}_${report.period.to}`
+  return `collection-report-${period}-${report.table.groupBy}.csv`
 }

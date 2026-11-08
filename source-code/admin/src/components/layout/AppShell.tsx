@@ -43,7 +43,7 @@ export function AppShell() {
       <Sidebar collapsed={collapsed} onToggle={toggle} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header />
-        <main className="mx-auto w-full min-w-0 max-w-[var(--content-max)] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="mx-auto w-full min-w-0 max-w-[var(--content-max)] flex-1 px-4 py-6 sm:px-6 lg:px-8 print:max-w-none print:p-0">
           <Outlet />
         </main>
       </div>

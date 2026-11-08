@@ -125,6 +125,41 @@ have one decimal and a sign.
 **Header:** `AppShell` scrolls to the top on every new page. Without this, a report opened from the
 query cache kept the previous page's scroll position, and its title sat under the sticky top bar.
 
+## 8. Export, print and the action bar
+
+`ReportActionsBar` only offers what works. Every report and EST-03's Timeline use it.
+
+| Action | RPT-01 | Revenue, Expense, Timeline |
+|---|---|---|
+| **Export Excel** | Works (see below) | Disabled · "Coming soon" |
+| **Print** | Works (see below) | Disabled · "Coming soon" |
+| Export PDF | Disabled · "Coming soon" (no PDF library) | same |
+| Schedule Report | Disabled · "Coming soon" (no scheduling or email) | same |
+| Share Report | Disabled · "Coming soon" (no sharing; it must keep §13 field masking when built) | same |
+| ~~Preview~~ | Removed: Print shows the same page | removed |
+
+- **Export Excel** downloads a CSV (UTF-8 BOM, opens in Excel). It is named
+  `collection-report-<period>-<grouping>.csv`.
+  - It contains the server's table for the current grouping and filters: **every row**, not just the
+    page, then the totals row.
+  - A short preamble gives the period, the filters and the weight rule.
+  - Numbers are plain, with one decimal and no units, so Excel can sum them.
+  - Built by `collectionCsv()`. Nothing is recalculated.
+- **Print** uses `window.print()`:
+  - The sidebar, top bar, filters, toggles and action bar are `print:hidden`.
+  - A print-only line names the period, filters and print date.
+  - The table prints every row with its totals.
+  - The layout is A4, with flat cards and charts and rows kept whole (`@media print` in `index.css`).
+
+Tests:
+- Vitest: `collection-report-view.test.ts` covers the CSV rows and totals, and the URL round trip.
+- Playwright: `e2e/collection-report.spec.ts` checks that:
+  - the header sits under the bar after navigation
+  - the URL reproduces the view
+  - print hides the chrome
+  - the CSV equals the table and card
+  - disabled actions say "Coming soon"
+
 ## 6. Checking against the database
 
 `REPORT_SQL_CHECK_URL=postgresql://tea@localhost:5433/tea_dev npx jest collection-report.sql` (backend)

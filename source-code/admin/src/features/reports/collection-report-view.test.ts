@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { collectionViewParams, estateTimelineHref, readCollectionView, reportQuery, signedPct } from './collection-report-view'
+import {
+  collectionCsv,
+  collectionCsvName,
+  collectionViewParams,
+  estateTimelineHref,
+  readCollectionView,
+  reportQuery,
+  signedPct,
+} from './collection-report-view'
+import type { CollectionGroupRow, CollectionReport, CollectionTotals } from './types'
 
 describe('RPT-01 view state lives in the URL', () => {
   it('round-trips every filter, so a link reproduces the view', () => {
@@ -46,5 +55,67 @@ describe('links and labels', () => {
     expect(signedPct(null)).toBe('—')
     expect(signedPct(2, ' pts')).toBe('+2.0 pts')
     expect(signedPct(4896.8)).toBe('+4,896.8%')
+  })
+})
+
+describe('export', () => {
+  const totals = (o: Partial<CollectionTotals>): CollectionTotals => ({
+    deliveries: 0,
+    estateKg: 0,
+    factoryKg: 0,
+    diffPct: null,
+    overTolerance: 0,
+    superKg: 0,
+    normalKg: 0,
+    superShare: null,
+    ungradedDeliveries: 0,
+    ungradedEstateKg: 0,
+    provisional: 0,
+    prevFactoryKg: 0,
+    changePct: null,
+    ...o,
+  })
+  const row = (name: string, o: Partial<CollectionTotals>): CollectionGroupRow => ({
+    ...totals(o),
+    key: name,
+    name,
+    routeName: 'Route 3',
+    id: 1,
+  })
+  const report = {
+    period: { label: 'October 2026', partial: false, month: '2026-10', from: '2026-10-01', to: '2026-10-31' },
+    tolerancePct: 5,
+    options: { routes: [{ id: 3, name: 'Route 3' }], agents: [], estates: [] },
+    table: {
+      groupBy: 'estate',
+      rows: [
+        row('Uda Radella Estate (demo)', { deliveries: 4, estateKg: 306, factoryKg: 295.1, diffPct: 3.6, superKg: 150.3, normalKg: 144.8, superShare: 50.9, changePct: 6.8 }),
+        row('Hilltop Estate, North', { deliveries: 0, estateKg: 0, factoryKg: 0, ungradedDeliveries: 3, ungradedEstateKg: 190 }),
+      ],
+      totals: totals({ deliveries: 4, estateKg: 306, factoryKg: 295.1, diffPct: 3.6, superKg: 150.3, normalKg: 144.8, superShare: 50.9, ungradedDeliveries: 3, ungradedEstateKg: 190, changePct: 1.2 }),
+    },
+  } as unknown as CollectionReport
+  const view = readCollectionView(new URLSearchParams('route=3&demo=0'), true)
+
+  it('is the table as the server computed it: every row, then the totals row', () => {
+    const lines = collectionCsv(report, view).split('\r\n')
+    expect(lines.slice(0, 4)).toEqual([
+      'Collection Report',
+      'Period: October 2026',
+      'Filters: Route: Route 3 · demo data excluded',
+      'Weights: factory kg = sum of grade lines of graded deliveries; tolerance 5%',
+    ])
+    const table = lines.slice(5)
+    expect(table[0]).toBe(
+      'Estate,Route,Deliveries,Estate kg,Factory kg,Difference %,Super kg,Normal kg,Super share %,Ungraded deliveries,Ungraded estate kg,Change vs previous %',
+    )
+    expect(table[1]).toBe('Uda Radella Estate (demo),Route 3,4,306.0,295.1,3.6,150.3,144.8,50.9,0,0.0,6.8')
+    expect(table[2]).toBe('"Hilltop Estate, North",Route 3,0,0.0,0.0,,0.0,0.0,,3,190.0,')
+    expect(table[3]).toBe('Total,,4,306.0,295.1,3.6,150.3,144.8,50.9,3,190.0,1.2')
+    expect(table).toHaveLength(report.table.rows.length + 2)
+  })
+
+  it('names the file after the period and grouping', () => {
+    expect(collectionCsvName(report)).toBe('collection-report-2026-10-estate.csv')
   })
 })
