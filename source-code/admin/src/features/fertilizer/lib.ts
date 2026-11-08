@@ -125,6 +125,46 @@ export function itemsBelowDemand(positions: ItemPosition[]): ItemPosition[] {
   return positions.filter((p) => p.status === 'Out of stock' || p.status === 'Short')
 }
 
+/* ── FERT-01 stock table: filters live in the URL so a summary card can open them ── */
+
+/** The combined coverage filter card 1 opens: Out of stock + Short (same rule as `itemsBelowDemand`). */
+export const CANT_MEET = 'cant-meet'
+
+export interface StockFilters {
+  search: string
+  category: string
+  /** a CoverageStatus, `CANT_MEET`, or '' for all */
+  coverage: string
+}
+
+export function readStockFilters(params: URLSearchParams): StockFilters {
+  return { search: params.get('q') ?? '', category: params.get('category') ?? '', coverage: params.get('coverage') ?? '' }
+}
+
+export function stockParams(f: StockFilters): URLSearchParams {
+  const p = new URLSearchParams()
+  if (f.search) p.set('q', f.search)
+  if (f.category) p.set('category', f.category)
+  if (f.coverage) p.set('coverage', f.coverage)
+  return p
+}
+
+export function stockRows(positions: ItemPosition[], f: StockFilters): ItemPosition[] {
+  const q = f.search.trim().toLowerCase()
+  const below = new Set(itemsBelowDemand(positions).map((p) => p.item))
+  return positions.filter(
+    (p) =>
+      p.item.toLowerCase().includes(q) &&
+      (!f.category || p.category === f.category) &&
+      (!f.coverage || (f.coverage === CANT_MEET ? below.has(p.item) : p.status === f.coverage)),
+  )
+}
+
+/** FERT-01 card 2 — exactly the "To decide" tab it opens (Requested + Awaiting manager approval), oldest first. */
+export function requestsToDecide(requests: FertilizerRequest[]): FertilizerRequest[] {
+  return queueRows(requests, { tab: 'decide', search: '', status: '', origin: '' })
+}
+
 /** Per-item shortfall to fulfil already-approved commitments = negative available (FERT-01 card 4 + ShortfallPanel). */
 export function shortfalls(positions: ItemPosition[]): { item: string; shortfallKg: number }[] {
   return positions.filter((p) => p.available < 0).map((p) => ({ item: p.item, shortfallKg: -p.available }))

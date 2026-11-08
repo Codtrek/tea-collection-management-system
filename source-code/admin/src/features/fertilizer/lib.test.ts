@@ -14,6 +14,11 @@ import {
   queueParams,
   queueRows,
   readQueueFilters,
+  readStockFilters,
+  requestsToDecide,
+  CANT_MEET,
+  stockParams,
+  stockRows,
 } from './lib'
 import type { FertilizerRequest, ItemPosition } from './types'
 
@@ -148,5 +153,48 @@ describe('coverLabel — Expiry Alerts', () => {
     expect(coverLabel({ count: 0, coveredKg: 0, requestedKg: 400 })).toMatch(/can't fully cover any/)
     expect(coverLabel({ count: 0, coveredKg: 0, requestedKg: 0 })).toBe('no open requests for this item')
     expect(coverLabel(null)).toBeNull()
+  })
+})
+
+describe('FERT-01 cards — each count equals the list it opens', () => {
+  const pos = (item: string, status: ItemPosition['status'], extra: Partial<ItemPosition> = {}) =>
+    ({ item, status, category: 'Fertilizer', committed: 0, committedValueRs: 0, available: 0, ...extra }) as ItemPosition
+  const positions = [
+    pos('Urea', 'Healthy', { committed: 700 }),
+    pos('Muriate of Potash', 'Out of stock', { committed: 500 }),
+    pos('TSP', 'Short', { committed: 200 }),
+    pos('Dolomite', 'Expiring soon', { committed: 100 }),
+    pos('Rice', 'Fully committed', { committed: 350 }),
+  ]
+  const requests = [
+    req('FR-1', 'Ready for dispatch', '2026-10-01', { committedKg: 400 }),
+    req('FR-3', 'Needs review', '2026-10-03', { committedKg: 200 }),
+    req('FR-6', 'Approved', '2026-10-06', { committedKg: 300 }),
+    req('FR-12', 'Approved', '2026-10-12', { committedKg: 100, staleCommittedKg: 100 }),
+    req('FR-13', 'Requested', '2026-10-13', { committedKg: 0, quantityKg: 77 }),
+    req('FR-14', 'Awaiting manager approval', '2026-10-14', { committedKg: 600 }),
+    req('FR-15', 'Requested', '2026-10-15', { committedKg: 0, quantityKg: 100 }),
+    req('FR-16', 'Delivered', '2026-10-16', { committedKg: 0 }),
+  ]
+  /** the rows the queue shows for a card's link */
+  const opened = (href: string) => queueRows(requests, readQueueFilters(new URLSearchParams(href.split('?')[1] ?? '')))
+
+  it("card 1: items that can't meet pending = the filtered stock table", () => {
+    const table = stockRows(positions, readStockFilters(stockParams({ search: '', category: '', coverage: CANT_MEET })))
+    expect(table.map((p) => p.item)).toEqual(['Muriate of Potash', 'TSP'])
+    expect(table).toHaveLength(itemsBelowDemand(positions).length)
+  })
+
+  it('card 2: requests pending approval = the To decide tab', () => {
+    const card = requestsToDecide(requests)
+    expect(card.map((r) => r.id)).toEqual(['FR-13', 'FR-14', 'FR-15'])
+    expect(opened(queueHref({ tab: 'decide' }))).toEqual(card)
+  })
+
+  it('card 3: committed requests = the holding-stock list, whatever their status', () => {
+    const count = committedSummary(positions, requests).count
+    expect(count).toBe(5)
+    expect(opened(queueHref({ tab: 'all', scope: 'holding' }))).toHaveLength(count)
+    expect(committedSummary(positions, requests).kg).toBe(1850)
   })
 })

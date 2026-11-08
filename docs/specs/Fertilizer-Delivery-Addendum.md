@@ -180,6 +180,22 @@ Requested … Rescheduled / Needs review ─▶ Cancelled   (anything not with a
 
   FERT-06 shows that plan, and a partial approval previews its first N kg.
 
+**FERT-01 summary cards (clickable, 2026-11-08).** Each card opens exactly the records it counts.
+The number and the list come from the same `features/fertilizer/lib.ts` function, and a test
+parses each card's link to prove it. Every card has an (i) with its rule; cards 2 and 3 preview on
+hover, focus, or tap of the chevron (up to 5 rows, then "View all").
+
+| Card | Counts | Click opens |
+|---|---|---|
+| Items that can't meet pending requests | items with status Out of stock or Short | the stock table filtered to `coverage=cant-meet`, scrolled into view |
+| Requests pending approval | Requested + Awaiting manager approval (Σ requested kg) | FERT-05 "To decide" |
+| Committed, awaiting dispatch | Σ position Committed; requests holding active allocations, **any status** | FERT-05 `?tab=all&scope=holding`; preview = kg per item (adds up to the total) and any kg on an expired batch |
+| Shortfall to fulfil approved | items with Available < 0 | when short: a preview of missing kg per item and the requests whose commitment sits on expired stock. When covered: not clickable; the (i) reads "All approved requests can be met from live stock." |
+
+The position service's Pending (Requested only) is unchanged. It drives Short / Out of stock;
+card 2 counts the "To decide" queue instead. The stock table's search, category and coverage
+filters now live in the URL (`?q=&category=&coverage=`).
+
 ### 5.2 Expiry Alerts and Write off (decided 2026-11-08)
 
 `GET /fertilizer/alerts` (the stock-position service; the page computes nothing). "Today" is
