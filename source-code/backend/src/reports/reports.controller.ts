@@ -4,8 +4,12 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt-payload.interface';
 import { UsersService } from '../users/users.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
+import type { CollectionReport } from './collection-report-rules';
+import {
+  CollectionReportService,
+  type CollectionReportQuery,
+} from './collection-report.service';
 import type {
-  CollectionReport,
   ExpenseReport,
   PublicExpenseEntry,
   RevenueReport,
@@ -19,13 +23,32 @@ type AuthedRequest = Request & { user: JwtPayload };
 export class ReportsController {
   constructor(
     private readonly reportsService: ReportsService,
+    private readonly collectionReports: CollectionReportService,
     private readonly usersService: UsersService,
   ) {}
 
-  /** RPT-01. `period` is a 'YYYY-MM' key; omit for the latest month with data. */
+  /**
+   * RPT-01 (Reports-Collection-Addendum). Period: `month=YYYY-MM`, `from`+`to` (YYYY-MM-DD) or
+   * `thisMonth=1`; omitted → the last complete month. Filters: routeId, agentId, estateId, grade
+   * (super|normal), demo=0 to hide demo rows; groupBy estate|route|agent|day.
+   */
   @Get('collection')
-  collectionReport(@Query('period') period?: string): Promise<CollectionReport> {
-    return this.reportsService.collectionReport(period);
+  collectionReport(
+    @Query() q: Record<string, string | undefined>,
+  ): Promise<CollectionReport> {
+    const int = (v?: string) => (v && /^\d+$/.test(v) ? Number(v) : undefined);
+    return this.collectionReports.report({
+      month: q.month,
+      from: q.from,
+      to: q.to,
+      thisMonth: q.thisMonth === '1',
+      routeId: int(q.routeId),
+      agentId: int(q.agentId),
+      estateId: int(q.estateId),
+      grade: q.grade === 'super' || q.grade === 'normal' ? q.grade : undefined,
+      includeDemo: q.demo !== '0',
+      groupBy: q.groupBy as CollectionReportQuery['groupBy'],
+    });
   }
 
   /** RPT-02 — from processed settlements only. */

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2, Scale, Trophy, Warehouse } from 'lucide-react'
+import { Layers, Loader2, Scale, Truck } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ReportViewer } from './ReportViewer'
 import { AreaChartCard, BarChartCard, DonutChartCard } from '@/components/charts/ChartCard'
@@ -9,22 +9,17 @@ import { StatCard } from '@/components/data/StatCard'
 import { DataTable, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorState } from '@/components/data/ErrorState'
-import { Select } from '@/components/ui/Select'
-import { Combobox } from '@/components/ui/Combobox'
+import { MonthPicker } from '@/components/patterns/MonthPicker'
 import * as reportsService from '@/services/reports'
-import { REPORT_PERIODS, type CollectionReport } from './types'
+import { currentMonth, isMonth, monthOptionsFor } from '@/lib/month'
+import type { CollectionGroupRow } from './types'
 import { formatNumber, formatWeight } from '@/lib/format'
 
-function periodLabel(period: string): string {
-  return REPORT_PERIODS.find((p) => p.value === period)?.label ?? period
-}
-
-/* RPT-01 — aggregated collection volumes; confirmed records only. Computed
-   server-side (`GET /reports/collection`) — this page never recomputes the
-   arithmetic, same rule Fertilizer's stock position follows. */
+/* RPT-01 — how much leaf came in, from where, of what quality (Reports-Collection-Addendum).
+   Every figure comes from `GET /reports/collection`; this page never recomputes one. */
 export function CollectionReportPage() {
-  const [period, setPeriod] = useState<string | undefined>(undefined)
-  const [estate, setEstate] = useState('')
+  const [params, setParams] = useSearchParams()
+  const month = isMonth(params.get('month')) ? params.get('month')! : undefined
 
   const {
     data: report,
@@ -32,8 +27,8 @@ export function CollectionReportPage() {
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['reports', 'collection', period ?? 'auto'],
-    queryFn: () => reportsService.getCollectionReport(period),
+    queryKey: ['reports', 'collection', month ?? 'default'],
+    queryFn: () => reportsService.getCollectionReport({ month }),
   })
 
   if (isPending) {
@@ -54,90 +49,95 @@ export function CollectionReportPage() {
     )
   }
 
-  type Row = CollectionReport['rows'][number]
-  const columns: Column<Row>[] = [
-    { key: 'estate', header: 'Estate' },
-    { key: 'deliveries', header: 'Deliveries', align: 'right', render: (r) => formatNumber(r.deliveries) },
-    { key: 'kg', header: 'Collected', align: 'right', render: (r) => formatWeight(r.kg) },
-    { key: 'superPct', header: 'Super share', align: 'right', render: (r) => `${r.superPct}%` },
-  ]
+  const thisMonth = currentMonth(report.today)
+  const options = monthOptionsFor(thisMonth, report.monthsWithData).map((o) =>
+    o.value === thisMonth ? { ...o, label: `${o.label} so far` } : o,
+  )
+  const { cards } = report
 
-  const rows = report.rows.filter((r) => !estate || r.estate === estate)
+  const columns: Column<CollectionGroupRow>[] = [
+    {
+      key: 'name',
+      header: 'Estate',
+      render: (r) => (
+        <div>
+          <p className="font-medium text-text">{r.name}</p>
+          {r.routeName && <p className="text-xs text-text-muted">{r.routeName}</p>}
+        </div>
+      ),
+    },
+    { key: 'deliveries', header: 'Graded deliveries', align: 'right', render: (r) => formatNumber(r.deliveries) },
+    { key: 'estateKg', header: 'Estate kg', align: 'right', render: (r) => (r.estateKg === null ? '—' : formatWeight(r.estateKg)) },
+    { key: 'factoryKg', header: 'Factory kg', align: 'right', render: (r) => formatWeight(r.factoryKg) },
+    {
+      key: 'ungraded',
+      header: 'Ungraded',
+      align: 'right',
+      render: (r) => (r.ungradedDeliveries ? `${r.ungradedDeliveries} · ${formatWeight(r.ungradedEstateKg)}` : '—'),
+    },
+    { key: 'superShare', header: 'Super share', align: 'right', render: (r) => (r.superShare === null ? '—' : `${r.superShare}%`) },
+  ]
 
   return (
     <div>
       <PageHeader
         title="Collection Reports"
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Reports' }, { label: 'Collection' }]}
-        description="Confirmed collection records only — provisional entries are excluded."
+        description="Delivered leaf (collected or confirmed). Weights are factory weights — the sum of the grade lines — for graded deliveries; ungraded deliveries and provisional entries are counted separately."
       />
 
       <ReportViewer
         filters={
-          <>
-            <Select
-              label="Period"
-              placeholder="Latest with data"
-              value={period ?? ''}
-              onChange={(e) => setPeriod(e.target.value || undefined)}
-              options={REPORT_PERIODS}
-            />
-            <Combobox
-              label="Estate"
-              placeholder="All estates — type to search"
-              noun="estates"
-              items={[...new Set(report.rows.map((r) => r.estate))].sort()}
-              value={estate}
-              onChange={setEstate}
-              getKey={(name) => name}
-              getLabel={(name) => name}
-            />
-            <div aria-hidden />
-          </>
+          <MonthPicker
+            month={report.period.month ?? thisMonth}
+            options={options}
+            ariaLabel="Report month"
+            onChange={(m) => setParams(m ? { month: m } : {}, { replace: true })}
+          />
         }
         summary={
           <>
             <StatCard
-              label={`Total collected (${periodLabel(report.period)})`}
-              value={report.totalKg}
+              label={`Factory weight — ${report.period.label}`}
+              value={cards.factoryKg.value}
               format={formatWeight}
               icon={<Scale className="size-4" />}
             />
-            <StatCard label="Average per estate" value={report.avgPerEstate} format={formatWeight} icon={<Warehouse className="size-4" />} />
-            <div className="rounded-[var(--radius-lg)] bg-surface p-5 shadow-[var(--shadow-1)]">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-[13px] font-medium text-text-muted">Top-performing estate (YTD)</span>
-                <span className="flex size-8 items-center justify-center rounded-[var(--radius-sm)] bg-brand-soft text-primary">
-                  <Trophy className="size-4" />
-                </span>
-              </div>
-              <p className="text-xl font-semibold text-text-heading">{report.topEstate?.estate ?? '—'}</p>
-              <p className="tabular mt-1 text-sm text-text-muted">
-                {report.topEstate ? `${formatWeight(report.topEstate.kg)} YTD` : 'No confirmed deliveries yet'}
-              </p>
-            </div>
+            <StatCard
+              label="Graded deliveries"
+              value={cards.deliveries.value}
+              format={formatNumber}
+              icon={<Truck className="size-4" />}
+              note={`${cards.deliveries.ungraded} ungraded (${formatWeight(cards.deliveries.ungradedEstateKg)} estate) · ${cards.deliveries.provisional} provisional`}
+            />
+            <StatCard
+              label="Super share"
+              value={cards.superShare.value ?? 0}
+              format={(v) => (cards.superShare.value === null ? '—' : `${v.toFixed(1)}%`)}
+              icon={<Layers className="size-4" />}
+            />
           </>
         }
         charts={
           <div className="grid gap-4 lg:grid-cols-3">
-            <AreaChartCard title="Collection trend" data={report.trend} xKey="month" yKey="value" valueFmt={formatWeight} className="lg:col-span-1" />
-            <BarChartCard title="By estate (YTD)" data={report.byEstate} xKey="estate" yKey="kg" valueFmt={formatWeight} />
+            <AreaChartCard title="Collection trend" data={report.trend.points.map((p) => ({ label: p.label, kg: p.kg }))} xKey="label" yKey="kg" valueFmt={formatWeight} />
+            <BarChartCard title="Top estates" data={report.topEstates.map((e) => ({ name: e.name, kg: e.kg }))} xKey="name" yKey="kg" valueFmt={formatWeight} />
             <DonutChartCard
-              title={`Grade split (${periodLabel(report.period)})`}
-              centerLabel={`Super ${report.gradeSplit.superPct}%`}
-              valueFmt={(v) => `${v}%`}
+              title={`Grade split — ${report.period.label}`}
+              centerLabel={cards.superShare.value === null ? '—' : `Super ${cards.superShare.value}%`}
+              valueFmt={formatWeight}
               data={[
-                { name: `Super ${report.gradeSplit.superPct}%`, value: report.gradeSplit.superPct, color: GRADE_SUPER },
-                { name: `Normal ${report.gradeSplit.normalPct}%`, value: report.gradeSplit.normalPct, color: GRADE_NORMAL },
+                { name: 'Super', value: report.gradeSplit.superKg, color: GRADE_SUPER },
+                { name: 'Normal', value: report.gradeSplit.normalKg, color: GRADE_NORMAL },
               ]}
             />
           </div>
         }
         table={
-          rows.length === 0 ? (
-            <EmptyState title="No confirmed deliveries" description="No estate matched this period and filter combination." />
+          report.table.rows.length === 0 ? (
+            <EmptyState title="No deliveries" description="No leaf was delivered in this period." />
           ) : (
-            <DataTable columns={columns} rows={rows} rowKey={(r) => r.estate} />
+            <DataTable columns={columns} rows={report.table.rows} rowKey={(r) => r.key} />
           )
         }
       />

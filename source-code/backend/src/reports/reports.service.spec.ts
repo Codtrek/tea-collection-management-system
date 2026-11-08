@@ -1,7 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
-import type { CollectionRecordEntity } from '../collections/collection-record.entity';
-import type { DeliveryGradeLineEntity } from '../collections/delivery-grade-line.entity';
 import type { PayrollRunEntity } from '../employees/payroll-run.entity';
 import type { SettlementEntity } from '../estates/settlement.entity';
 import type { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
@@ -38,47 +36,6 @@ class FakeRepository<T extends { id: string | number }> {
     this.store.set(withCreatedAt.id, withCreatedAt);
     return Promise.resolve(withCreatedAt);
   }
-}
-
-/**
- * Test shorthand: `grade` ('super' | 'normal' | 'pending') becomes a single factory grade
- * line carrying the record's weight; 'pending' (the default for non-confirmed rows) leaves
- * the delivery Ungraded. Real code reads `gradeLines`, never a `grade` column.
- */
-type CollectionOverrides = Partial<CollectionRecordEntity> & {
-  grade?: 'super' | 'normal' | 'pending';
-};
-
-function makeCollection(
-  overrides: CollectionOverrides = {},
-): CollectionRecordEntity {
-  const { grade = 'super', ...rest } = overrides;
-  const weightKg = rest.weightKg ?? '210.00';
-  return {
-    id: 'GV-2026-0714',
-    estateId: 1,
-    estateRef: 'EST-0001',
-    estateName: 'Green Valley Estate',
-    routeId: 1,
-    routeName: 'Route 3',
-    weightKg: '210.00',
-    gradeLines:
-      grade === 'pending'
-        ? []
-        : [{ grade, weightKg } as DeliveryGradeLineEntity],
-    status: 'confirmed',
-    collectionDate: '2026-07-14',
-    agentId: 1,
-    agentName: 'R. Senanayake',
-    photos: [],
-    timeline: [],
-    provisional: null,
-    mismatch: null,
-    lastUpdatedBy: null,
-    lastUpdatedOn: null,
-    createdAt: new Date('2026-07-14T00:00:00.000Z'),
-    ...rest,
-  } as CollectionRecordEntity;
 }
 
 function makeSettlement(
@@ -150,7 +107,6 @@ function makeExpense(
 }
 
 describe('ReportsService', () => {
-  let collectionRepo: FakeRepository<CollectionRecordEntity>;
   let settlementRepo: FakeRepository<SettlementEntity>;
   let payrollRepo: FakeRepository<PayrollRunEntity>;
   let expenseRepo: FakeRepository<ExpenseEntryEntity>;
@@ -162,7 +118,6 @@ describe('ReportsService', () => {
   const manager: Actor = { name: 'R. Jayasuriya', role: 'Manager' };
 
   beforeEach(() => {
-    collectionRepo = new FakeRepository();
     settlementRepo = new FakeRepository();
     payrollRepo = new FakeRepository();
     expenseRepo = new FakeRepository();
@@ -172,7 +127,6 @@ describe('ReportsService', () => {
     const audit = { record: jest.fn().mockResolvedValue(undefined) };
     service = new ReportsService(
       expenseRepo as unknown as Repository<ExpenseEntryEntity>,
-      collectionRepo as unknown as Repository<CollectionRecordEntity>,
       settlementRepo as unknown as Repository<SettlementEntity>,
       payrollRepo as unknown as Repository<PayrollRunEntity>,
       movementRepo as unknown as Repository<StockMovementEntity>,
@@ -181,70 +135,7 @@ describe('ReportsService', () => {
     );
   });
 
-  describe('collectionReport — RPT-01', () => {
-    it('excludes non-Confirmed records from the totals', async () => {
-      collectionRepo.seed(
-        makeCollection({ id: 'A', status: 'confirmed', weightKg: '100.00' }),
-      );
-      collectionRepo.seed(
-        makeCollection({
-          id: 'B',
-          status: 'pending_agent_confirmation',
-          weightKg: '9999.00',
-        }),
-      );
-
-      const report = await service.collectionReport('2026-07');
-      expect(report.totalKg).toBe(100);
-    });
-
-    it('computes the grade split as a percentage of graded weight', async () => {
-      collectionRepo.seed(
-        makeCollection({ id: 'A', grade: 'super', weightKg: '300.00' }),
-      );
-      collectionRepo.seed(
-        makeCollection({ id: 'B', grade: 'normal', weightKg: '100.00' }),
-      );
-
-      const report = await service.collectionReport('2026-07');
-      expect(report.gradeSplit).toEqual({ superPct: 75, normalPct: 25 });
-    });
-
-    it('buckets the trend by month across the full confirmed history', async () => {
-      collectionRepo.seed(
-        makeCollection({
-          id: 'A',
-          collectionDate: '2026-06-10',
-          weightKg: '50.00',
-        }),
-      );
-      collectionRepo.seed(
-        makeCollection({
-          id: 'B',
-          collectionDate: '2026-07-14',
-          weightKg: '210.00',
-        }),
-      );
-
-      const report = await service.collectionReport('2026-07');
-      expect(report.trend).toEqual([
-        { month: 'Jun', value: 50 },
-        { month: 'Jul', value: 210 },
-      ]);
-    });
-
-    it('defaults to the latest month with confirmed data when no period is given', async () => {
-      collectionRepo.seed(
-        makeCollection({ id: 'A', collectionDate: '2026-05-01' }),
-      );
-      collectionRepo.seed(
-        makeCollection({ id: 'B', collectionDate: '2026-07-01' }),
-      );
-
-      const report = await service.collectionReport();
-      expect(report.period).toBe('2026-07');
-    });
-  });
+  // RPT-01 — Collection: see collection-report-rules.spec.ts
 
   describe('revenueReport — RPT-02', () => {
     it('excludes pending settlements — only processed revenue is realized', async () => {

@@ -74,17 +74,6 @@ export interface TrendPoint {
   value: number;
 }
 
-export interface CollectionReport {
-  period: string; // 'YYYY-MM'
-  totalKg: number;
-  avgPerEstate: number;
-  topEstate: { estate: string; kg: number } | null;
-  gradeSplit: { superPct: number; normalPct: number };
-  trend: TrendPoint[];
-  byEstate: { estate: string; kg: number }[]; // YTD
-  rows: { estate: string; deliveries: number; kg: number; superPct: number }[];
-}
-
 export interface RevenueReport {
   period: string;
   totalRevenue: number;

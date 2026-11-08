@@ -13,15 +13,105 @@ export interface TrendPoint {
   [key: string]: string | number
 }
 
+/* ── RPT-01 Collection (backend `collection-report-rules.ts`, Reports-Collection-Addendum) ── */
+
+export type CollectionGroupBy = 'estate' | 'route' | 'agent' | 'day'
+export type ReportGrade = 'super' | 'normal'
+
+export interface DateRange {
+  from: string
+  to: string
+}
+
+/** The figures of a group of deliveries — a table row, or the totals row. */
+export interface CollectionTotals {
+  /** graded deliveries */
+  deliveries: number
+  /** estate weight of the graded deliveries; null under a grade filter */
+  estateKg: number | null
+  /** Σ grade lines — the figure the report is about */
+  factoryKg: number
+  /** (estate − factory) ÷ estate, %; null under a grade filter */
+  diffPct: number | null
+  overTolerance: number
+  superKg: number
+  normalKg: number
+  superShare: number | null
+  ungradedDeliveries: number
+  ungradedEstateKg: number
+  provisional: number
+  prevFactoryKg: number
+  changePct: number | null
+}
+
+export interface CollectionGroupRow extends CollectionTotals {
+  key: string
+  name: string
+  routeName: string | null
+  id: number | null
+}
+
+export interface CollectionTrendPoint {
+  key: string
+  label: string
+  kg: number
+  deliveries: number
+  partial: boolean
+}
+
 export interface CollectionReport {
-  period: string
-  totalKg: number
-  avgPerEstate: number
-  topEstate: { estate: string; kg: number } | null
-  gradeSplit: { superPct: number; normalPct: number }
-  trend: TrendPoint[]
-  byEstate: { estate: string; kg: number }[]
-  rows: { estate: string; deliveries: number; kg: number; superPct: number }[]
+  period: {
+    from: string
+    to: string
+    kind: 'month' | 'custom' | 'thisMonth'
+    month: string | null
+    label: string
+    partial: boolean
+    previous: DateRange
+    lastYear: DateRange
+  }
+  today: string
+  tolerancePct: number
+  gradeFiltered: boolean
+  cards: {
+    factoryKg: { value: number; previous: number; changePct: number | null; lastYear: number | null; yoyPct: number | null }
+    deliveries: { value: number; avgKg: number | null; ungraded: number; ungradedEstateKg: number; provisional: number }
+    supplyingEstates: { value: number; of: number; notSupplying: { id: number; name: string; routeName: string | null }[] }
+    superShare: { value: number | null; previous: number | null; changePts: number | null }
+    weightDiff: {
+      value: number | null
+      estateKg: number | null
+      factoryKg: number
+      overTolerance: { id: string; date: string; estateId: number | null; estateName: string; estateKg: number; factoryKg: number; diffPct: number }[]
+    }
+  }
+  trend: {
+    granularity: 'day' | 'month'
+    points: CollectionTrendPoint[]
+    lastYear: { key: string; kg: number; deliveries: number }[]
+  }
+  byRoute: { id: number | null; name: string; kg: number; deliveries: number }[]
+  topEstates: { id: number | null; name: string; routeName: string | null; kg: number }[]
+  gradeSplit: { superKg: number; normalKg: number; superShare: number | null }
+  gradeByMonth: { key: string; label: string; superKg: number; normalKg: number }[] | null
+  table: { groupBy: CollectionGroupBy; rows: CollectionGroupRow[]; totals: CollectionTotals }
+  /** months with delivered leaf, newest first */
+  monthsWithData: string[]
+}
+
+/** What the page asks for — mirrors `GET /reports/collection`'s query (all of it lives in the page URL too). */
+export interface CollectionReportQuery {
+  month?: string
+  from?: string
+  to?: string
+  thisMonth?: boolean
+  routeId?: number
+  agentId?: number
+  estateId?: number
+  grade?: ReportGrade
+  /** false hides the demo seed's rows */
+  includeDemo?: boolean
+  groupBy?: CollectionGroupBy
 }
 
 export interface RevenueReport {

@@ -3,8 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
-import { gradeKg, weightSummary } from '../collections/collection-map';
-import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
 import { SettlementEntity } from '../estates/settlement.entity';
 import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
@@ -18,7 +16,6 @@ import {
   monthKeyOfDate,
   prevMonthKey,
   shortMonth,
-  type CollectionReport,
   type ExpenseReport,
   type ExpenseRow,
   type PublicExpenseEntry,
@@ -61,8 +58,6 @@ export class ReportsService {
   constructor(
     @InjectRepository(ExpenseEntryEntity)
     private readonly expenseRepo: Repository<ExpenseEntryEntity>,
-    @InjectRepository(CollectionRecordEntity)
-    private readonly collectionRepo: Repository<CollectionRecordEntity>,
     @InjectRepository(SettlementEntity)
     private readonly settlementRepo: Repository<SettlementEntity>,
     @InjectRepository(PayrollRunEntity)
@@ -74,88 +69,7 @@ export class ReportsService {
     private readonly audit: AuditService,
   ) {}
 
-  // ── RPT-01 — Collection ─────────────────────────────────────────
-  // Confirmed records only (§ reports doc) — provisional entries never
-  // inflate the numbers.
-
-  async collectionReport(period?: string): Promise<CollectionReport> {
-    const confirmed = await this.collectionRepo.find({
-      where: { status: 'confirmed' },
-    });
-    const byMonth = groupBy(confirmed, (r) => monthKeyOfDate(r.collectionDate));
-    const resolvedPeriod =
-      period ?? latestKey(Object.keys(byMonth)) ?? monthKeyOfDate(new Date());
-    const periodRecords = byMonth[resolvedPeriod] ?? [];
-
-    const totalKg = sumBy(periodRecords, (r) => weightSummary(r).weightKg);
-    const estatesInPeriod = new Set(periodRecords.map((r) => r.estateName));
-    const avgPerEstate = estatesInPeriod.size
-      ? totalKg / estatesInPeriod.size
-      : 0;
-
-    // YTD, across every confirmed record — not scoped to `period`.
-    const byEstateMap = new Map<string, number>();
-    for (const r of confirmed) {
-      byEstateMap.set(
-        r.estateName,
-        (byEstateMap.get(r.estateName) ?? 0) + weightSummary(r).weightKg,
-      );
-    }
-    const byEstate = [...byEstateMap.entries()]
-      .map(([estate, kg]) => ({ estate, kg }))
-      .sort((a, b) => b.kg - a.kg);
-    const topEstate = byEstate[0] ?? null;
-
-    const superKg = sumBy(periodRecords, (r) => gradeKg(r, 'super'));
-    const normalKg = sumBy(periodRecords, (r) => gradeKg(r, 'normal'));
-    const gradedTotal = superKg + normalKg;
-    const gradeSplit = {
-      superPct: gradedTotal ? Math.round((superKg / gradedTotal) * 100) : 0,
-      normalPct: gradedTotal ? Math.round((normalKg / gradedTotal) * 100) : 0,
-    };
-
-    const trend: TrendPoint[] = Object.keys(byMonth)
-      .sort()
-      .map((key) => ({
-        month: shortMonth(key),
-        value: sumBy(byMonth[key], (r) => weightSummary(r).weightKg),
-      }));
-
-    const rowAcc = new Map<
-      string,
-      { deliveries: number; kg: number; superKg: number }
-    >();
-    for (const r of periodRecords) {
-      const cur = rowAcc.get(r.estateName) ?? {
-        deliveries: 0,
-        kg: 0,
-        superKg: 0,
-      };
-      cur.deliveries += 1;
-      cur.kg += weightSummary(r).weightKg;
-      cur.superKg += gradeKg(r, 'super');
-      rowAcc.set(r.estateName, cur);
-    }
-    const rows = [...rowAcc.entries()]
-      .map(([estate, v]) => ({
-        estate,
-        deliveries: v.deliveries,
-        kg: v.kg,
-        superPct: v.kg ? Math.round((v.superKg / v.kg) * 100) : 0,
-      }))
-      .sort((a, b) => b.kg - a.kg);
-
-    return {
-      period: resolvedPeriod,
-      totalKg,
-      avgPerEstate,
-      topEstate,
-      gradeSplit,
-      trend,
-      byEstate,
-      rows,
-    };
-  }
+  // RPT-01 — Collection lives in CollectionReportService (collection-report-rules.ts).
 
   // ── RPT-02 — Revenue ─────────────────────────────────────────────
   // Processed settlements only — a pending settlement isn't realized revenue
