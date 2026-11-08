@@ -1,10 +1,13 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import {
   Area,
   AreaChart,
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -49,6 +52,11 @@ function TooltipBox({ active, payload, label, valueFmt }: {
   )
 }
 
+/** Y-axis width that fits the widest tick label (12px tabular digits ≈ 7.5px each), so labels never clip. */
+function axisWidth(max: number, fmt: (v: number) => string): number {
+  return Math.max(32, Math.ceil(fmt(max).length * 7.5) + 12)
+}
+
 export function AreaChartCard({
   title,
   data,
@@ -56,6 +64,7 @@ export function AreaChartCard({
   yKey,
   height = 240,
   valueFmt,
+  yTickFormat,
   className,
 }: {
   title?: string
@@ -64,27 +73,38 @@ export function AreaChartCard({
   yKey: string
   height?: number
   valueFmt?: (v: number) => string
+  /** opt-in: tick labels (e.g. thousands separators); the axis widens to fit them */
+  yTickFormat?: (v: number) => string
   className?: string
 }) {
+  // one gradient per chart: a shared id let a second chart on the page paint with the first one's
+  const gradient = `area-${useId().replace(/:/g, '')}`
+  const max = Math.max(0, ...data.map((d) => Number(d[yKey]) || 0))
   return (
     <ChartShell title={title} className={className}>
       <ResponsiveContainer width="100%" height={height}>
-        <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: yTickFormat ? 0 : -12 }}>
           <defs>
-            <linearGradient id={`area-${yKey}`} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={CHART_SERIES[0]} stopOpacity={0.24} />
               <stop offset="100%" stopColor={CHART_SERIES[0]} stopOpacity={0} />
             </linearGradient>
           </defs>
           <XAxis dataKey={xKey} tickLine={false} axisLine={false} tick={{ fill: CHART_AXIS, fontSize: 12 }} />
-          <YAxis tickLine={false} axisLine={false} tick={{ fill: CHART_AXIS, fontSize: 12 }} width={48} />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: CHART_AXIS, fontSize: 12 }}
+            width={yTickFormat ? axisWidth(max, yTickFormat) : 48}
+            tickFormatter={yTickFormat}
+          />
           <Tooltip content={<TooltipBox valueFmt={valueFmt} />} cursor={{ stroke: CHART_GRID }} />
           <Area
             type="monotone"
             dataKey={yKey}
             stroke={CHART_SERIES[0]}
             strokeWidth={2}
-            fill={`url(#area-${yKey})`}
+            fill={`url(#${gradient})`}
           />
         </AreaChart>
       </ResponsiveContainer>
@@ -171,6 +191,189 @@ export function DonutChartCard({
           </span>
         ))}
       </div>
+    </ChartShell>
+  )
+}
+
+/* ── Trend (reports): straight lines, exact tooltip, a partial last period drawn as such ── */
+
+export interface TrendDatum {
+  label: string
+  value: number
+  /** shown in the tooltip, e.g. deliveries */
+  count?: number
+  /** a period still in progress — hollow point on a dashed segment, never read as complete */
+  partial?: boolean
+  /** the same period a year earlier (the optional second line) */
+  compare?: number | null
+  compareCount?: number | null
+}
+
+interface TrendRow extends TrendDatum {
+  /** complete periods only — the solid line */
+  solid: number | null
+  /** the last complete period and the partial one — the dashed segment */
+  dashed: number | null
+}
+
+function TrendTooltip({
+  active,
+  payload,
+  valueFmt,
+  countLabel,
+  compareLabel,
+}: {
+  active?: boolean
+  payload?: Array<{ payload: TrendRow }>
+  valueFmt: (v: number) => string
+  countLabel: string
+  compareLabel: string
+}) {
+  const row = active ? payload?.[0]?.payload : undefined
+  if (!row) return null
+  return (
+    <div className="rounded-[var(--radius-md)] bg-surface p-3 text-sm shadow-[var(--shadow-3)]">
+      <p className="mb-1 text-xs font-medium text-text-muted">
+        {row.label}
+        {row.partial && ' · in progress'}
+      </p>
+      <p className="tabular flex items-center gap-2 text-text">
+        <span className="size-2 rounded-full" style={{ background: CHART_SERIES[0] }} />
+        {valueFmt(row.value)}
+        {row.count !== undefined && <span className="text-text-muted">· {row.count} {countLabel}</span>}
+      </p>
+      {row.compare !== undefined && row.compare !== null && (
+        <p className="tabular mt-0.5 flex items-center gap-2 text-text-muted">
+          <span className="size-2 rounded-full" style={{ background: CHART_AXIS }} />
+          {compareLabel}: {valueFmt(row.compare)}
+          {row.compareCount !== undefined && row.compareCount !== null && ` · ${row.compareCount} ${countLabel}`}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Report trend line. Straight segments (a smoothed curve overshoots between points and invents
+ * values), y-axis labels with thousands separators in an axis wide enough for them, and a tooltip
+ * with the exact figures. A partial last period is a hollow point joined by a dashed segment, with
+ * a "Month in progress" note — it is never drawn as if complete.
+ */
+export function TrendChartCard({
+  title,
+  data,
+  height = 260,
+  valueFmt,
+  yTickFormat,
+  countLabel = 'deliveries',
+  compareLabel = 'Same period last year',
+  showCompare = false,
+  partialNote = 'Month in progress',
+  className,
+}: {
+  title?: string
+  data: TrendDatum[]
+  height?: number
+  valueFmt: (v: number) => string
+  yTickFormat: (v: number) => string
+  countLabel?: string
+  compareLabel?: string
+  showCompare?: boolean
+  partialNote?: string
+  className?: string
+}) {
+  const firstPartial = data.findIndex((d) => d.partial)
+  const rows: TrendRow[] = data.map((d, i) => ({
+    ...d,
+    solid: firstPartial === -1 || i < firstPartial ? d.value : null,
+    dashed: firstPartial !== -1 && i >= firstPartial - 1 ? d.value : null,
+  }))
+  const max = Math.max(0, ...data.map((d) => Math.max(d.value, showCompare ? (d.compare ?? 0) : 0)))
+  return (
+    <ChartShell title={title} className={className}>
+      <ResponsiveContainer width="100%" height={height}>
+        <LineChart data={rows} margin={{ top: 8, right: 20, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke={CHART_GRID} vertical={false} />
+          {/* labels thin out instead of overlapping on a long daily range; first and last always show */}
+          <XAxis
+            dataKey="label"
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: CHART_AXIS, fontSize: 12 }}
+            interval="preserveStartEnd"
+            minTickGap={16}
+          />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: CHART_AXIS, fontSize: 12 }}
+            width={axisWidth(max, yTickFormat)}
+            tickFormatter={yTickFormat}
+          />
+          <Tooltip
+            content={<TrendTooltip valueFmt={valueFmt} countLabel={countLabel} compareLabel={compareLabel} />}
+            cursor={{ stroke: CHART_GRID }}
+          />
+          {showCompare && (
+            <Line
+              type="linear"
+              dataKey="compare"
+              stroke={CHART_AXIS}
+              strokeWidth={1.5}
+              strokeDasharray="2 3"
+              dot={false}
+              isAnimationActive={false}
+            />
+          )}
+          <Line
+            type="linear"
+            dataKey="solid"
+            stroke={CHART_SERIES[0]}
+            strokeWidth={2}
+            dot={data.length <= 16 ? { r: 3, fill: CHART_SERIES[0], strokeWidth: 0 } : false}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+          {firstPartial !== -1 && (
+            <Line
+              type="linear"
+              dataKey="dashed"
+              stroke={CHART_SERIES[0]}
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              dot={(p: { cx?: number; cy?: number; index?: number }) => (
+                <circle
+                  key={`partial-${p.index}`}
+                  cx={p.cx}
+                  cy={p.cy}
+                  r={p.index !== undefined && p.index >= firstPartial ? 4 : 0}
+                  fill="var(--color-surface)"
+                  stroke={CHART_SERIES[0]}
+                  strokeWidth={2}
+                />
+              )}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+          )}
+        </LineChart>
+      </ResponsiveContainer>
+      {(firstPartial !== -1 || showCompare) && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
+          {firstPartial !== -1 && (
+            <span className="flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full border-2" style={{ borderColor: CHART_SERIES[0] }} />
+              {partialNote}
+            </span>
+          )}
+          {showCompare && (
+            <span className="flex items-center gap-1.5">
+              <span className="h-0.5 w-4 border-t-2 border-dotted" style={{ borderColor: CHART_AXIS }} />
+              {compareLabel}
+            </span>
+          )}
+        </div>
+      )}
     </ChartShell>
   )
 }

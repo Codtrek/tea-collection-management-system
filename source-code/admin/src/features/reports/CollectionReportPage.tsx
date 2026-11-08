@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Layers, Loader2, Scale, Truck } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ReportViewer } from './ReportViewer'
-import { AreaChartCard, BarChartCard, DonutChartCard } from '@/components/charts/ChartCard'
+import { BarChartCard, DonutChartCard, TrendChartCard } from '@/components/charts/ChartCard'
 import { GRADE_NORMAL, GRADE_SUPER } from '@/components/charts/palette'
 import { StatCard } from '@/components/data/StatCard'
 import { DataTable, type Column } from '@/components/data/DataTable'
@@ -13,7 +13,7 @@ import { MonthPicker } from '@/components/patterns/MonthPicker'
 import * as reportsService from '@/services/reports'
 import { currentMonth, isMonth, monthOptionsFor } from '@/lib/month'
 import type { CollectionGroupRow } from './types'
-import { formatNumber, formatWeight } from '@/lib/format'
+import { formatKg, formatNumber, formatWeight } from '@/lib/format'
 
 /* RPT-01 — how much leaf came in, from where, of what quality (Reports-Collection-Addendum).
    Every figure comes from `GET /reports/collection`; this page never recomputes one. */
@@ -120,7 +120,20 @@ export function CollectionReportPage() {
         }
         charts={
           <div className="grid gap-4 lg:grid-cols-3">
-            <AreaChartCard title="Collection trend" data={report.trend.points.map((p) => ({ label: p.label, kg: p.kg }))} xKey="label" yKey="kg" valueFmt={formatWeight} />
+            <TrendChartCard
+              title={`Factory weight by ${report.trend.granularity}`}
+              data={report.trend.points.map((p, i) => ({
+                label: p.label,
+                value: p.kg,
+                count: p.deliveries,
+                partial: p.partial,
+                compare: report.trend.lastYear[i]?.kg ?? null,
+                compareCount: report.trend.lastYear[i]?.deliveries ?? null,
+              }))}
+              valueFmt={formatKg}
+              yTickFormat={formatNumber}
+              partialNote={report.trend.granularity === 'month' ? 'Month in progress' : 'Day in progress'}
+            />
             <BarChartCard title="Top estates" data={report.topEstates.map((e) => ({ name: e.name, kg: e.kg }))} xKey="name" yKey="kg" valueFmt={formatWeight} />
             <DonutChartCard
               title={`Grade split — ${report.period.label}`}

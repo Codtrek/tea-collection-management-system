@@ -28,6 +28,11 @@ export function formatWeight(kg: number): string {
 }
 
 /** Plain grouped number, e.g. `27` or `1,245`. */
+/** `5,736.7 kg` — always one decimal: the reports' kg figure (Reports-Collection-Addendum). */
+export function formatKg(kg: number): string {
+  return `${new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(kg)} kg`
+}
+
 export function formatNumber(n: number): string {
   return grouped.format(n)
 }
