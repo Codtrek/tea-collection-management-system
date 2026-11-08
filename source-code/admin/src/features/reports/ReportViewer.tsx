@@ -37,15 +37,18 @@ export interface ReportViewerProps {
   summary: ReactNode
   charts: ReactNode
   table: ReactNode
+  /** override the filter / summary grids (defaults: three columns) */
+  filtersClassName?: string
+  summaryClassName?: string
 }
 
-export function ReportViewer({ filters, summary, charts, table }: ReportViewerProps) {
+export function ReportViewer({ filters, summary, charts, table, filtersClassName, summaryClassName }: ReportViewerProps) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="grid flex-1 gap-3 sm:grid-cols-3">{filters}</div>
+        <div className={filtersClassName ?? 'grid flex-1 gap-3 sm:grid-cols-3'}>{filters}</div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">{summary}</div>
+      <div className={summaryClassName ?? 'grid gap-4 sm:grid-cols-3'}>{summary}</div>
       {charts}
       {table}
       <div className="border-t border-border pt-4">

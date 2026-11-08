@@ -97,6 +97,12 @@ export interface CollectionReport {
   table: { groupBy: CollectionGroupBy; rows: CollectionGroupRow[]; totals: CollectionTotals }
   /** months with delivered leaf, newest first */
   monthsWithData: string[]
+  /** the filter pickers' choices (independent of the filters) */
+  options: {
+    routes: { id: number; name: string }[]
+    agents: { id: number; name: string }[]
+    estates: { id: number; name: string; routeName: string | null; demo: boolean }[]
+  }
 }
 
 /** What the page asks for — mirrors `GET /reports/collection`'s query (all of it lives in the page URL too). */

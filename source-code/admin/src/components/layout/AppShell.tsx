@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { useAuth } from '@/context/AuthContext'
@@ -11,6 +11,10 @@ import { NARROW_QUERY, readSidebarPref, sidebarCollapsed, sidebarKey, writeSideb
    Redirects to /login when unauthenticated (auth guard). */
 export function AppShell() {
   const { user, loading } = useAuth()
+  // A new page starts at the top. Without this, a page rendered from the query cache opened at the
+  // previous page's scroll position, with its title hidden under the sticky top bar.
+  const { pathname } = useLocation()
+  useEffect(() => window.scrollTo(0, 0), [pathname])
   // collapsed to icons by default below 1280px; the user's choice is remembered per user and mode
   const mode = useMediaQuery(NARROW_QUERY) ? 'narrow' : 'wide'
   const key = sidebarKey(user?.id ?? 'anonymous', mode)

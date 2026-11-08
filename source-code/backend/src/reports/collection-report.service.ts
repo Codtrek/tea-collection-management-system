@@ -49,16 +49,25 @@ export class CollectionReportService {
   ): Promise<CollectionReport> {
     const today = localDate(now);
     const period = resolvePeriod(q, today);
-    const [demo, current, previous, lastYear, estates, cfg, monthsWithData] =
-      await Promise.all([
-        this.demoIds(),
-        this.load(period),
-        this.load(period.previous),
-        this.load(period.lastYear),
-        this.estates.find({ where: { status: 'active' } }),
-        this.settings.get(),
-        this.monthsWithData(),
-      ]);
+    const [
+      demo,
+      current,
+      previous,
+      lastYear,
+      estates,
+      cfg,
+      monthsWithData,
+      picks,
+    ] = await Promise.all([
+      this.demoIds(),
+      this.load(period),
+      this.load(period.previous),
+      this.load(period.lastYear),
+      this.estates.find({ where: { status: 'active' } }),
+      this.settings.get(),
+      this.monthsWithData(),
+      this.pickers(),
+    ]);
     const facts = (rows: CollectionRecordEntity[]) =>
       rows.map((r) => toFact(r, demo.records.has(r.id)));
     return buildCollectionReport({
@@ -84,6 +93,17 @@ export class CollectionReportService {
         demo: demo.estates.has(e.id),
       })),
       monthsWithData: monthsWithData.filter((m) => m <= monthOf(today)),
+      options: {
+        ...picks,
+        estates: (await this.estates.find({ order: { name: 'ASC' } })).map(
+          (e) => ({
+            id: e.id,
+            name: e.name,
+            routeName: e.routeName,
+            demo: demo.estates.has(e.id),
+          }),
+        ),
+      },
     });
   }
 
@@ -91,6 +111,24 @@ export class CollectionReportService {
     return this.records.find({
       where: { collectionDate: Between(r.from, r.to) },
     });
+  }
+
+  /** Routes and agents that have delivered leaf — the filter pickers (latest name wins). */
+  private async pickers(): Promise<{
+    routes: { id: number; name: string }[];
+    agents: { id: number; name: string }[];
+  }> {
+    const pick = (col: 'route' | 'agent') =>
+      this.records.manager.query<{ id: number; name: string }[]>(
+        `SELECT id, name FROM (
+           SELECT DISTINCT ON (${col}_id) ${col}_id AS id, ${col}_name AS name
+             FROM tea_collection_records
+            WHERE ${col}_id IS NOT NULL AND status IN ('collected', 'confirmed')
+            ORDER BY ${col}_id, collection_date DESC
+         ) x ORDER BY name`,
+      );
+    const [routes, agents] = await Promise.all([pick('route'), pick('agent')]);
+    return { routes, agents };
   }
 
   /** Months that have any delivered leaf, newest first — the month picker's options. */

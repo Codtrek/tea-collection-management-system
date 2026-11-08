@@ -70,6 +70,61 @@ stays on the Performance page, and the report links there instead.
   - "Above tolerance" uses grading's rule: |factory − estate| ÷ estate > `collection.mismatchTolerancePct` (currently 5%).
 - **Table totals:** computed by the same function as the cards, so they always agree.
 
+## 7. The page
+
+**URL** (`features/reports/collection-report-view.ts`): the whole view lives in the URL, so a link
+reproduces the view. Defaults are left out of the URL.
+
+```
+?month=2026-09 | ?from=2026-05-01&to=2026-11-08 | ?thisMonth=1
+&route=2 &agent=7 &estate=12 &grade=super|normal &demo=0|1 &group=route|agent|day &lastYear=1
+```
+
+"Include demo data" defaults on only in a development build (`import.meta.env.DEV`).
+
+**Cards** (`components/data/SummaryCard`; each has an (i) with its exact rule):
+
+| Card | Value | Below |
+|---|---|---|
+| Factory weight | Σ factory kg | change vs the previous period (with its kg); vs the same period last year, or "No data last year" |
+| Deliveries | graded deliveries | average kg per delivery; ungraded (estate kg) and provisional counts |
+| Supplying estates | "X of Y" active estates | opening it lists the estates that did **not** supply, linked to EST-10 |
+| Super share | Super kg ÷ factory kg | change in percentage points |
+| Weight difference | overall % | deliveries above tolerance; opening it lists them |
+
+For a partial period, each "vs previous" line says "(same days)".
+
+**Charts:**
+- **Trend:** daily for a month, monthly over 2 months. A partial point is hollow on a dashed segment.
+  "Same period last year" adds a dotted line.
+- **By route:** horizontal bars, sorted. Clicking a bar filters to that route.
+- **Top 10 estates:** horizontal bars with readable names. "View all" groups the table by estate
+  and scrolls to it. This replaces the old 40-bar chart; the "Top-performing estate (YTD)" card is
+  removed.
+- **Grade split:** the donut. Over 2 months, **Super and Normal by month** (stacked bars) is added;
+  the month in progress is labelled "(so far)".
+
+**Table:**
+- **Grouping:** "Group by" Estate (default), Route, Agent or Day.
+- **Columns:**
+  - name (estates also show their route)
+  - deliveries, estate kg, factory kg
+  - difference (bold red above the tolerance)
+  - Super kg, Normal kg, Super share
+  - ungraded
+  - change vs the previous period ("New" when it had nothing)
+- **Interaction:** sortable, 15 rows per page, and a totals row (the same figures as the cards).
+- **Clicks:**
+  - An estate opens its EST-10 timeline.
+  - A route or agent applies that filter.
+  - Agent rows link to the Performance page. The report never judges agents, and never calls an estate or agent "top-performing".
+
+**Formatting:** kg always uses one decimal with thousands separators (`formatKg`). Percentages
+have one decimal and a sign.
+
+**Header:** `AppShell` scrolls to the top on every new page. Without this, a report opened from the
+query cache kept the previous page's scroll position, and its title sat under the sticky top bar.
+
 ## 6. Checking against the database
 
 `REPORT_SQL_CHECK_URL=postgresql://tea@localhost:5433/tea_dev npx jest collection-report.sql` (backend)

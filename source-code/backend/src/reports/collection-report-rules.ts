@@ -609,6 +609,19 @@ export interface CollectionReportInput {
   lastYear: DeliveryFact[];
   activeEstates: ActiveEstate[];
   monthsWithData: string[];
+  /** the filter pickers' choices — independent of the filters themselves */
+  options?: FilterOptions;
+}
+
+export interface FilterOptions {
+  routes: { id: number; name: string }[];
+  agents: { id: number; name: string }[];
+  estates: {
+    id: number;
+    name: string;
+    routeName: string | null;
+    demo: boolean;
+  }[];
 }
 
 const TOP_ESTATES = 10;
@@ -751,6 +764,7 @@ export function buildCollectionReport(i: CollectionReportInput) {
       },
     },
     monthsWithData: i.monthsWithData,
+    options: i.options ?? { routes: [], agents: [], estates: [] },
   };
 }
 

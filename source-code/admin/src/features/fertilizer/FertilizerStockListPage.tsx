@@ -11,7 +11,7 @@ import { Select } from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
 import * as fertilizerService from '@/services/fertilizer'
 import { StockPositionTable } from './StockPositionTable'
-import { SummaryCard } from './SummaryCard'
+import { SummaryCard } from '@/components/data/SummaryCard'
 import {
   CANT_MEET,
   committedSummary,
