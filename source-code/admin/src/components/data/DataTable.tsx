@@ -230,7 +230,9 @@ export function DataTable<T>({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* `relative`: absolutely positioned cell content (e.g. `sr-only` text) is clipped by this scroll
+          box instead of escaping it and widening the whole page (Page-Layout-Addendum) */}
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[720px] border-collapse">
           <thead className="sticky top-0 z-10 bg-surface-sunken">
             <tr className="border-b border-border">

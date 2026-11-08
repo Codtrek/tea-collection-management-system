@@ -22,9 +22,11 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
+import { cn } from '@/lib/cn'
 import * as collectionsService from '@/services/collections'
 import * as dispatchService from '@/services/dispatch'
 import { agentHistoryHref } from '@/features/employees/links'
+import { type AgentAction, AgentCardList } from './AgentCardList'
 import { agentColumns } from './board-columns'
 import { CoverModal } from './CoverModal'
 import { ReassignRouteModal } from './ReassignRouteModal'
@@ -68,6 +70,8 @@ export function DispatchBoardPage() {
 
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
+  // below 1440px the map sits under the table and can be hidden to save space
+  const [showMap, setShowMap] = useState(true)
   const today = factoryToday()
   const [date, setDate] = useState(today)
   const isToday = date === today
@@ -153,6 +157,50 @@ export function DispatchBoardPage() {
   }, [data, canEdit, isToday])
 
   const selectedAgent = data?.agents.find((a) => a.agentId === selectedId) ?? null
+
+  /** One list of row actions for both the table (icon buttons) and the small-screen cards (a menu). */
+  const actionsFor = (a: BoardAgent): AgentAction[] => {
+    const list: AgentAction[] = [
+      {
+        key: 'stops',
+        icon: <ListChecks className="size-4" />,
+        label: isToday ? 'View today’s stops' : 'View stops',
+        onClick: () => setDialog({ kind: 'stops', agent: a }),
+      },
+    ]
+    if (canSeeHistory)
+      list.push({ key: 'history', icon: <History className="size-4" />, label: 'View history', onClick: () => navigate(agentHistoryHref(a.employeeId)) })
+    if (canEdit && isToday) {
+      list.push({
+        key: 'reassign',
+        icon: <ArrowLeftRight className="size-4" />,
+        label: 'Reassign route',
+        onClick: () => setDialog({ kind: 'reassign', agent: a, routeId: a.routeId }),
+      })
+      if (a.absent) {
+        list.push(
+          { key: 'cover', icon: <UserX className="size-4" />, label: 'Find cover', onClick: () => setDialog({ kind: 'cover', agent: a }) },
+          { key: 'available', icon: <UserCheck className="size-4" />, label: 'Mark available', onClick: () => availableMutation.mutate(a.agentId) },
+        )
+      } else {
+        list.push({
+          key: 'absent',
+          icon: <UserX className="size-4" />,
+          label: 'Mark absent / find cover',
+          tone: 'danger',
+          onClick: () => setDialog({ kind: 'cover', agent: a }),
+        })
+      }
+    }
+    return list
+  }
+  const noAgents = (
+    <EmptyState
+      icon={<Users className="size-6" strokeWidth={1.5} />}
+      title="No collection agents yet"
+      description="Agents appear here once they are registered with the factory."
+    />
+  )
   const routeNamesFor = (agent: BoardAgent) => (data?.routes ?? []).filter((r) => r.agentId === agent.agentId).map((r) => r.name)
 
   return (
@@ -225,75 +273,70 @@ export function DispatchBoardPage() {
             </p>
           )}
 
-          {/* map beside the table only on wide screens — below that the table would have to scroll */}
-          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <DataTable
-              columns={columns}
-              rows={data.agents}
-              rowKey={(a) => String(a.agentId)}
-              pageSize={8}
-              onRowClick={(a) => setSelectedId(a.agentId)}
-              highlightRowKey={selectedId !== null ? String(selectedId) : undefined}
-              valign="top"
-              stickyFirstColumn
-              emptyState={
-                <EmptyState
-                  icon={<Users className="size-6" strokeWidth={1.5} />}
-                  title="No collection agents yet"
-                  description="Agents appear here once they are registered with the factory."
+          {/* Page-Layout-Addendum: table + map side by side from 1440px (`wide:`); below that the map
+              stacks under the table at full width and can be hidden; below 768px agents are cards. */}
+          <div className="grid gap-4 wide:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+            <div className="min-w-0">
+              <div data-testid="dispatch-table" className="hidden md:block">
+                <DataTable
+                  columns={columns}
+                  rows={data.agents}
+                  rowKey={(a) => String(a.agentId)}
+                  pageSize={8}
+                  onRowClick={(a) => setSelectedId(a.agentId)}
+                  highlightRowKey={selectedId !== null ? String(selectedId) : undefined}
+                  valign="top"
+                  stickyFirstColumn
+                  emptyState={noAgents}
+                  actions={(a) => (
+                    <>
+                      {actionsFor(a).map((act) => (
+                        <RowAction key={act.key} icon={act.icon} label={act.label} tone={act.tone} onClick={act.onClick} />
+                      ))}
+                    </>
+                  )}
                 />
-              }
-              actions={(a) => (
-                <>
-                  <RowAction icon={<ListChecks className="size-4" />} label={isToday ? 'View today’s stops' : 'View stops'} onClick={() => setDialog({ kind: 'stops', agent: a })} />
-                  {canSeeHistory && (
-                    <RowAction icon={<History className="size-4" />} label="View history" onClick={() => navigate(agentHistoryHref(a.employeeId))} />
-                  )}
-                  {canEdit && isToday && (
-                    <RowAction
-                      icon={<ArrowLeftRight className="size-4" />}
-                      label="Reassign route"
-                      onClick={() => setDialog({ kind: 'reassign', agent: a, routeId: a.routeId })}
-                    />
-                  )}
-                  {canEdit &&
-                    isToday &&
-                    (a.absent ? (
-                      <>
-                        <RowAction icon={<UserX className="size-4" />} label="Find cover" onClick={() => setDialog({ kind: 'cover', agent: a })} />
-                        <RowAction
-                          icon={<UserCheck className="size-4" />}
-                          label="Mark available"
-                          onClick={() => availableMutation.mutate(a.agentId)}
-                        />
-                      </>
-                    ) : (
-                      <RowAction icon={<UserX className="size-4" />} label="Mark absent / find cover" tone="danger" onClick={() => setDialog({ kind: 'cover', agent: a })} />
-                    ))}
-                </>
-              )}
-            />
+              </div>
+              <AgentCardList
+                agents={data.agents}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                actionsFor={actionsFor}
+                empty={<div className="md:hidden">{noAgents}</div>}
+              />
+            </div>
 
-            <section
-              aria-label="Agent locations map"
-              className="relative h-[420px] overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface 2xl:sticky 2xl:top-4 2xl:h-[560px]"
-            >
-              <Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center text-text-muted">
-                    <Loader2 className="size-6 animate-spin" aria-hidden />
-                  </div>
-                }
+            <div className="flex min-w-0 flex-col gap-2">
+              <div className="flex justify-end wide:hidden">
+                <Button size="sm" variant="ghost" onClick={() => setShowMap((v) => !v)} aria-expanded={showMap}>
+                  <MapPin className="size-4" /> {showMap ? 'Hide map' : 'Show map'}
+                </Button>
+              </div>
+              <section
+                data-testid="dispatch-map"
+                aria-label="Agent locations map"
+                className={cn(
+                  'relative h-[360px] overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface xl:h-[420px] wide:sticky wide:top-4 wide:block wide:h-[560px]',
+                  !showMap && 'hidden',
+                )}
               >
-                <DispatchMap board={data} selectedAgentId={selectedId} onSelectAgent={setSelectedId} />
-              </Suspense>
-              {!data.agents.some((a) => a.position) && (
-                <p className="pointer-events-none absolute inset-x-4 top-4 z-[500] flex items-center gap-2 rounded-[var(--radius-md)] border border-border bg-surface/95 px-3 py-2 text-sm text-text-muted shadow-[var(--shadow-1)]">
-                  <MapPin className="size-4 shrink-0" aria-hidden />
-                  No agent has shared a location yet — pins appear once agents start their shift.
-                </p>
-              )}
-            </section>
+                <Suspense
+                  fallback={
+                    <div className="flex h-full items-center justify-center text-text-muted">
+                      <Loader2 className="size-6 animate-spin" aria-hidden />
+                    </div>
+                  }
+                >
+                  <DispatchMap board={data} selectedAgentId={selectedId} onSelectAgent={setSelectedId} />
+                </Suspense>
+                {!data.agents.some((a) => a.position) && (
+                  <p className="pointer-events-none absolute inset-x-4 top-4 z-[500] flex items-center gap-2 rounded-[var(--radius-md)] border border-border bg-surface/95 px-3 py-2 text-sm text-text-muted shadow-[var(--shadow-1)]">
+                    <MapPin className="size-4 shrink-0" aria-hidden />
+                    No agent has shared a location yet — pins appear once agents start their shift.
+                  </p>
+                )}
+              </section>
+            </div>
           </div>
 
           {dialog?.kind === 'reassign' && (

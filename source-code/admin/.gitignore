@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright (layout checks): results, screenshots and the login state stay local
+e2e/.results/
+e2e/.auth/
+e2e/screenshots/
