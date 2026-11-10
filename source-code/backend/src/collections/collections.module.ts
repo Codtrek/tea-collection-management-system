@@ -19,6 +19,8 @@ import { GradingNotificationEntity } from './grading-notification.entity';
 import { GradingNotificationService } from './grading-notification.service';
 import { GradingNotificationTasks } from './grading-notification.tasks';
 import { GradingService } from './grading.service';
+import { CollectionRequestEntity } from './collection-requests/col-request.entity';
+import { CollectionRequestAssignmentEntity } from './collection-requests/col-request-assignment.entity';
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { GradingService } from './grading.service';
       SettlementEntity,
       EstateOwnerEntity,
       SystemSettingEntity,
+      CollectionRequestEntity,
+      CollectionRequestAssignmentEntity,
     ]),
     DispatchModule,
     UsersModule,

@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 env:
-  NEON_BRANCH: ${{ github.event.pull_request.head.ref }}
+  NEON_BRANCH: pr-${{ github.event.number }}
 
 jobs:
   create-and-migrate:
@@ -27,7 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        # Adjust to wherever the NestJS package.json lives
         working-directory: source-code/backend
     steps:
       - uses: actions/checkout@v4
@@ -43,11 +42,23 @@ jobs:
           database: ${{ vars.NEON_DATABASE }}
           role: ${{ vars.NEON_ROLE }}
           api_key: ${{ secrets.NEON_API_KEY }}
+      
+      - name: Refresh PR database from latest Neon Dev
+        id: refresh
+        uses: neondatabase/reset-branch-action@v1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ${{ steps.neon.outputs.branch_id }}
+          parent: true
+          api_key: ${{ secrets.NEON_API_KEY }}
+          cs_database: ${{ vars.NEON_DATABASE }}
+          cs_role_name: ${{ vars.NEON_ROLE }}
+
 
       - name: Mask connection strings
         run: |
-          echo "::add-mask::${{ steps.neon.outputs.db_url }}"
-          echo "::add-mask::${{ steps.neon.outputs.db_url_with_pooler }}"
+          echo "::add-mask::${{ steps.refresh.outputs.db_url }}"
+          echo "::add-mask::${{ steps.refresh.outputs.db_url_with_pooler }}"
 
       - uses: actions/setup-node@v4
         with:
@@ -60,13 +71,13 @@ jobs:
       # Direct (non-pooled) URL: PgBouncer can break migrations
       - name: Run migrations on the PR branch
         env:
-          DATABASE_URL_DIRECT: ${{ steps.neon.outputs.db_url }}
+          DATABASE_URL_DIRECT: ${{ steps.refresh.outputs.db_url }}
         run: npm run migration:run
 
       # Fails if entities changed but no migration was committed
       - name: Check for missing migrations
         env:
-          DATABASE_URL_DIRECT: ${{ steps.neon.outputs.db_url }}
+          DATABASE_URL_DIRECT: ${{ steps.refresh.outputs.db_url }}
         # --check exits 1 on drift; --dryrun prints the SQL instead of writing a file
         run: |
           if npm run migration:generate -- src/migrations/CiDriftCheck --check --dryrun; then
@@ -86,7 +97,7 @@ jobs:
       # is shown. Teammates decrypt it with the shared passphrase.
       - name: Publish encrypted connection string
         env:
-          DB_URL: ${{ steps.neon.outputs.db_url }}
+          DB_URL: ${{ steps.refresh.outputs.db_url }}
           PASS: ${{ secrets.TEAM_PASSPHRASE }}
         run: |
           ENC=$(printf '%s' "$DB_URL" | openssl enc -aes-256-cbc -pbkdf2 -salt -a -A -pass env:PASS)
