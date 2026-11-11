@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -6,6 +8,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
+import { localDate } from '../dispatch/dispatch-map';
+import { rateVersionFor } from '../estates/settlement-calc';
 import type { AppRole } from '../auth/role-map';
 import { toAppRole } from '../auth/role-map';
 import { FactoryEmployee } from '../users/factory-employee.entity';
@@ -37,7 +41,11 @@ export interface Actor {
 }
 
 /** DB roles that own a factory-portal login, in display order. */
-const FACTORY_DB_ROLES = ['factory_admin', 'factory_officer', 'factory_manager'];
+const FACTORY_DB_ROLES = [
+  'factory_admin',
+  'factory_officer',
+  'factory_manager',
+];
 
 @Injectable()
 export class AdminService {
@@ -57,12 +65,16 @@ export class AdminService {
 
   // ── ADM-01 — grade rates ────────────────────────────────────────
 
-  async listGradeRates(): Promise<PublicGradeRate[]> {
+  /**
+   * Versions newest first. "Current" is the version in force TODAY (the newest effective date on or
+   * before today, Colombo calendar) — a version dated later is "scheduled", not current yet.
+   */
+  async listGradeRates(now: Date = new Date()): Promise<PublicGradeRate[]> {
     const rows = await this.gradeRateRepo.find({
       order: { effectiveDate: 'DESC' },
     });
-    // Newest effective date is "current"; rows are already DESC-ordered.
-    const currentId = rows[0]?.id;
+    const today = localDate(now);
+    const currentId = rateVersionFor(rows, today)?.id;
     return rows.map((r) => ({
       id: r.id,
       superRate: Number(r.superRate),
@@ -70,14 +82,36 @@ export class AdminService {
       effectiveDate: r.effectiveDate,
       setBy: r.setBy,
       current: r.id === currentId,
+      scheduled: r.effectiveDate > today,
     }));
   }
 
+  /**
+   * Publishes a new rate version. Rates are effective-dated and never edited, and a new version
+   * can't start in the past or share a date with another: either would silently change the value
+   * of leaf already delivered (Grade-Rates-Addendum). Today or later only.
+   */
   async createGradeRate(
     dto: CreateGradeRateDto,
     actor: Actor,
+    now: Date = new Date(),
   ): Promise<PublicGradeRate> {
     this.assertIsAdmin(actor);
+    const today = localDate(now);
+    if (dto.effectiveDate < today) {
+      throw new BadRequestException(
+        "A new grade rate can't take effect in the past — it would change the value of leaf already delivered. Pick today or a later date.",
+      );
+    }
+    if (
+      await this.gradeRateRepo.findOne({
+        where: { effectiveDate: dto.effectiveDate },
+      })
+    ) {
+      throw new ConflictException(
+        `A grade-rate version already starts on ${dto.effectiveDate}. Versions are never edited — pick another date.`,
+      );
+    }
     const year = new Date(dto.effectiveDate).getFullYear();
     const seq = (await this.gradeRateRepo.count()) + 1;
     const entity = this.gradeRateRepo.create({
@@ -99,8 +133,7 @@ export class AdminService {
       },
     );
 
-    // The just-added version is current iff it has the latest effective date.
-    const list = await this.listGradeRates();
+    const list = await this.listGradeRates(now);
     return list.find((r) => r.id === entity.id)!;
   }
 
@@ -202,9 +235,7 @@ export class AdminService {
 
   async listUsers(): Promise<PublicSystemUser[]> {
     const users = await this.userRepo.find();
-    const factoryUsers = users.filter((u) =>
-      FACTORY_DB_ROLES.includes(u.role),
-    );
+    const factoryUsers = users.filter((u) => FACTORY_DB_ROLES.includes(u.role));
     const profiles = await this.factoryEmployeeRepo.find();
     const nameByUserId = new Map(profiles.map((p) => [p.user_id, p.name]));
 
@@ -222,7 +253,10 @@ export class AdminService {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  async suspendUser(formattedId: string, actor: Actor): Promise<PublicSystemUser> {
+  async suspendUser(
+    formattedId: string,
+    actor: Actor,
+  ): Promise<PublicSystemUser> {
     this.assertIsAdmin(actor);
     const id = parseUserId(formattedId);
     if (id === actor.sub) {

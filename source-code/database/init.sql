@@ -788,7 +788,9 @@ CREATE TABLE grade_rates (
     normal_rate    DECIMAL(8,2) NOT NULL,
     effective_date DATE NOT NULL,
     set_by         VARCHAR(100) NOT NULL,
-    created_at     TIMESTAMP DEFAULT NOW()
+    created_at     TIMESTAMP DEFAULT NOW(),
+    -- one version per date; versions are never edited (Grade-Rates-Addendum, 2026-11-15)
+    CONSTRAINT grade_rates_effective_date_key UNIQUE (effective_date)
 );
 
 -- ADM-02 — the data-driven permission matrix. One row per (role, module).

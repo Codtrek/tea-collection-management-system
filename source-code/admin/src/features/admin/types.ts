@@ -11,7 +11,10 @@ export interface GradeRate {
   normalRate: number
   effectiveDate: string // 'YYYY-MM-DD'
   setBy: string
+  /** in force today */
   current: boolean
+  /** starts after today */
+  scheduled: boolean
 }
 
 export interface SystemUser {

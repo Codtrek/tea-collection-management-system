@@ -16,6 +16,7 @@ import { ApiError } from '@/lib/api'
 import * as adminService from '@/services/admin'
 import type { GradeRate } from './types'
 import { formatCurrency, formatDate } from '@/lib/format'
+import { factoryToday } from '@/features/dispatch/status'
 
 /*
   ADM-01 — factory details + the business-rule values other modules calculate
@@ -49,7 +50,10 @@ export function FactorySetupPage() {
   // New-rate-version form (Grade Rates tab)
   const [newSuper, setNewSuper] = useState('185')
   const [newNormal, setNewNormal] = useState('95')
-  const [newEffective, setNewEffective] = useState('2026-08-01')
+  // a new version starts today or later — never in the past (it would reprice delivered leaf)
+  const today = factoryToday()
+  const [newEffective, setNewEffective] = useState(today)
+  const backDated = newEffective < today
   const [confirmVersion, setConfirmVersion] = useState(false)
 
   const {
@@ -86,6 +90,7 @@ export function FactorySetupPage() {
         <span className="flex items-center gap-2">
           {formatDate(r.effectiveDate)}
           {r.current && <StatusBadge tone="success">Current</StatusBadge>}
+          {r.scheduled && <StatusBadge tone="warning">Scheduled</StatusBadge>}
         </span>
       ),
     },
@@ -110,7 +115,9 @@ export function FactorySetupPage() {
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Administration' }, { label: 'Factory Setup' }]}
         actions={
           tab === 'grades' ? (
-            <Button onClick={() => setConfirmVersion(true)}>Publish New Version</Button>
+            <Button onClick={() => setConfirmVersion(true)} disabled={backDated}>
+              Publish New Version
+            </Button>
           ) : (
             <Button onClick={() => setConfirming(true)}>Save Changes</Button>
           )
@@ -146,12 +153,19 @@ export function FactorySetupPage() {
           <Card>
             <div className="mb-1 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-text-heading">New rate version</h3>
-              <span className="text-xs text-text-muted">Applies from its effective date — past settlements keep their rate</span>
+              <span className="text-xs text-text-muted">Applies from its effective date (today or later) — leaf already delivered keeps its rate</span>
             </div>
             <div className="mt-3 grid gap-4 sm:grid-cols-3">
               <Input label="Super grade (Rs./kg)" type="number" min="0" value={newSuper} onChange={(e) => setNewSuper(e.target.value)} />
               <Input label="Normal grade (Rs./kg)" type="number" min="0" value={newNormal} onChange={(e) => setNewNormal(e.target.value)} />
-              <Input label="Effective date" type="date" value={newEffective} onChange={(e) => setNewEffective(e.target.value)} />
+              <Input
+                label="Effective date"
+                type="date"
+                min={today}
+                value={newEffective}
+                onChange={(e) => setNewEffective(e.target.value)}
+                error={backDated ? 'Pick today or a later date — a past date would change the value of leaf already delivered.' : undefined}
+              />
             </div>
           </Card>
 
@@ -213,8 +227,8 @@ export function FactorySetupPage() {
         message={
           <>
             New rates of <strong>Super Rs. {newSuper}/kg</strong> · <strong>Normal Rs. {newNormal}/kg</strong> take
-            effect from <strong>{formatDate(newEffective)}</strong>. Settlements before that date keep the rates in
-            force at collection time. This is recorded in the audit log.
+            effect from <strong>{formatDate(newEffective)}</strong>. Leaf delivered before that date keeps the rates in
+            force on its delivery date. Versions are never edited. This is recorded in the audit log.
           </>
         }
       />

@@ -1,4 +1,8 @@
-import { ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import type { AuditService } from '../audit/audit.service';
 import type { FactoryEmployee } from '../users/factory-employee.entity';
@@ -98,55 +102,82 @@ function build() {
 }
 
 describe('AdminService — grade rates (ADM-01)', () => {
+  // Colombo 2026-03-15 09:30 — every version below is "today or later" when published
+  const MARCH = new Date('2026-03-15T04:00:00Z');
+  const rate = (
+    superRate: number,
+    normalRate: number,
+    effectiveDate: string,
+  ) => ({ superRate, normalRate, effectiveDate });
+
   it('rejects a non-Administrator', async () => {
     const { service } = build();
     await expect(
-      service.createGradeRate(
-        { superRate: 190, normalRate: 98, effectiveDate: '2026-08-01' },
-        officer,
-      ),
+      service.createGradeRate(rate(190, 98, '2026-08-01'), officer, MARCH),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('creates a version and marks only the newest effective date current', async () => {
-    const { service, audit } = build();
-    await service.createGradeRate(
-      { superRate: 180, normalRate: 92, effectiveDate: '2026-04-01' },
-      admin,
-    );
-    const newer = await service.createGradeRate(
-      { superRate: 185, normalRate: 95, effectiveDate: '2026-07-01' },
-      admin,
-    );
-
-    expect(newer.id).toBe('GR-2026-0002');
-    expect(newer.current).toBe(true);
-
-    const list = await service.listGradeRates();
-    expect(list.filter((r) => r.current)).toHaveLength(1);
-    expect(list.find((r) => r.current)?.effectiveDate).toBe('2026-07-01');
-    expect(audit.record).toHaveBeenCalledTimes(2);
+  it('refuses a version that would start in the past — it would reprice leaf already delivered', async () => {
+    const { service, gradeRepo } = build();
+    await expect(
+      service.createGradeRate(rate(190, 98, '2026-03-14'), admin, MARCH),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(await gradeRepo.count()).toBe(0);
+    // today itself is allowed
+    await expect(
+      service.createGradeRate(rate(190, 98, '2026-03-15'), admin, MARCH),
+    ).resolves.toMatchObject({ current: true });
   });
 
-  it('an older-dated version does NOT become current', async () => {
+  it('refuses a second version on the same date (versions are never edited)', async () => {
     const { service } = build();
-    await service.createGradeRate(
-      { superRate: 185, normalRate: 95, effectiveDate: '2026-07-01' },
+    await service.createGradeRate(rate(180, 92, '2026-04-01'), admin, MARCH);
+    await expect(
+      service.createGradeRate(rate(181, 93, '2026-04-01'), admin, MARCH),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('"current" is the version in force today; a later one is scheduled, not current', async () => {
+    const { service, audit } = build();
+    await service.createGradeRate(rate(172, 88, '2026-03-15'), admin, MARCH);
+    const later = await service.createGradeRate(
+      rate(180, 92, '2026-04-01'),
       admin,
+      MARCH,
     );
-    const older = await service.createGradeRate(
-      { superRate: 172, normalRate: 88, effectiveDate: '2026-01-01' },
-      admin,
+    expect(later).toMatchObject({
+      id: 'GR-2026-0002',
+      current: false,
+      scheduled: true,
+    });
+
+    const inMarch = await service.listGradeRates(MARCH);
+    expect(
+      inMarch.filter((r) => r.current).map((r) => r.effectiveDate),
+    ).toEqual(['2026-03-15']);
+
+    const inApril = await service.listGradeRates(
+      new Date('2026-04-02T04:00:00Z'),
     );
-    expect(older.current).toBe(false);
+    expect(inApril.find((r) => r.current)?.effectiveDate).toBe('2026-04-01');
+    expect(inApril.some((r) => r.scheduled)).toBe(false);
+    expect(audit.record).toHaveBeenCalledTimes(2);
   });
 });
 
 describe('AdminService — permission matrix (ADM-02)', () => {
   it('round-trips rows into the nested matrix', async () => {
     const { service, permRepo } = build();
-    permRepo.seed({ role: 'Officer', module: 'reports', level: 'edit' } as RolePermissionEntity);
-    permRepo.seed({ role: 'Manager', module: 'reports', level: 'view' } as RolePermissionEntity);
+    permRepo.seed({
+      role: 'Officer',
+      module: 'reports',
+      level: 'edit',
+    } as RolePermissionEntity);
+    permRepo.seed({
+      role: 'Manager',
+      module: 'reports',
+      level: 'view',
+    } as RolePermissionEntity);
 
     const matrix = await service.getPermissionMatrix();
     expect(matrix.Officer.reports).toBe('edit');
@@ -167,7 +198,11 @@ describe('AdminService — permission matrix (ADM-02)', () => {
     const { service } = build();
     await expect(
       service.updatePermissions(
-        { entries: [{ role: 'Administrator', module: 'reports', level: 'view' }] },
+        {
+          entries: [
+            { role: 'Administrator', module: 'reports', level: 'view' },
+          ],
+        },
         admin,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
@@ -218,7 +253,9 @@ describe('AdminService — system users (ADM-02)', () => {
   it('lists only factory-role users with mapped status', async () => {
     const { service, userRepo, feRepo } = build();
     userRepo.seed(makeUser({ id: 1, role: 'factory_admin', status: 'active' }));
-    userRepo.seed(makeUser({ id: 2, role: 'factory_officer', status: 'suspended' }));
+    userRepo.seed(
+      makeUser({ id: 2, role: 'factory_officer', status: 'suspended' }),
+    );
     userRepo.seed(makeUser({ id: 9, role: 'estate_owner' })); // must be excluded
     feRepo.seed({ user_id: 1, name: 'A. Bandara' } as FactoryEmployee);
     feRepo.seed({ user_id: 2, name: 'S. Fernando' } as FactoryEmployee);
@@ -252,7 +289,12 @@ describe('AdminService — system settings (ADM-03)', () => {
   it('upserts settings and reads them back as a map', async () => {
     const { service, audit } = build();
     const saved = await service.updateSettings(
-      { settings: { sessionTimeout: '30', notifications: { 'route-assigned': true } } },
+      {
+        settings: {
+          sessionTimeout: '30',
+          notifications: { 'route-assigned': true },
+        },
+      },
       admin,
     );
     expect(saved.sessionTimeout).toBe('30');

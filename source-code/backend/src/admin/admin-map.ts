@@ -125,7 +125,10 @@ export interface PublicGradeRate {
   normalRate: number;
   effectiveDate: string; // 'YYYY-MM-DD'
   setBy: string;
+  /** in force today */
   current: boolean;
+  /** starts after today */
+  scheduled: boolean;
 }
 
 /** 'GR-2026-0001' — embeds the effective year and a running sequence. */
