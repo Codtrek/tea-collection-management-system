@@ -266,6 +266,44 @@ Results on the local DB, 2026-11-15 (the page and the SQL agree exactly):
 
 The old page showed June as Rs 149,504: two seeded settlements, valued at their own snapshot rates.
 
+### 9.1 The page
+
+**URL** (`features/reports/leaf-purchase-view.ts`):
+- `?month= | ?from=&to= | ?thisMonth=1`, plus `&route= &estate= &grade= &demo= &group=estate|route|month`.
+- Defaults are left out of the URL, as on RPT-01. There is no agent filter: agents don't set what leaf costs.
+
+**Cards** (each has an (i) with its rule):
+
+| Card | Value | Below |
+|---|---|---|
+| Leaf value (accrued) | Σ value | change vs the previous period (with its base); vs the same period last year, or "No data last year" |
+| Average price per kg | Rs/kg overall | Super and Normal Rs/kg; change vs the previous period |
+| Settled vs not yet settled | not yet settled | settled; a link to Estate Owner Payments for the period's last month |
+| Paid in settlements | net paid | gross − transport − fertilizer − advances (+ adjustments); "Not linked to these deliveries" when that applies |
+
+The old duplicate "Month-over-month change" card is gone. A warning line shows when deliveries have
+no grade rate.
+
+**Charts:**
+- **Leaf value and average price by month:** `ComboChartCard`, with bars for value (left axis) and a
+  straight line for Rs/kg (right axis).
+  - A single month shows the 12 months ending with it.
+  - The month in progress is a lighter bar with a dashed, hollow line point.
+  - Axes are sized to their rounded-up top tick (`axisWidth`), so labels never clip.
+- **By route:** horizontal bars. Clicking a bar filters to that route.
+- **Top 10 estates by leaf value:** horizontal bars, plus "View all", which groups the table by estate.
+- **By grade:** a donut. Over 2 months, **Leaf value by grade and month** (stacked bars) is added;
+  the month in progress is labelled "(so far)".
+
+**Table:**
+- **Grouping:** Group by Estate / Route / Month.
+- **Columns:** factory kg, Super kg, Normal kg, leaf value, Rs/kg, settled, not yet settled, and change vs previous ("New" when the previous period had nothing).
+- **Interaction:** sortable, with a totals row equal to the cards.
+- **Clicks:**
+  - An estate opens EST-10.
+  - A route filters.
+  - A month opens that month.
+
 ## 10. Expenses (RPT-03) and leaf payments: one number, one name
 
 - **Added: "Green leaf purchases."** It is the Leaf Purchase Report's accrued value for the month,

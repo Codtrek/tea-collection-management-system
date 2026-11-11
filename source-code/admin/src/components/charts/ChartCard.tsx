@@ -6,6 +6,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Line,
   LineChart,
   Pie,
@@ -53,9 +54,16 @@ function TooltipBox({ active, payload, label, valueFmt }: {
   )
 }
 
-/** Y-axis width that fits the widest tick label (12px tabular digits ≈ 7.5px each), so labels never clip. */
+/**
+ * Y-axis width that fits the widest tick label (12px tabular digits ≈ 7.5px each), so labels never
+ * clip. The top tick is the axis' rounded-up ceiling, not the data maximum (897,000 → 1,000,000),
+ * so both are measured.
+ */
 function axisWidth(max: number, fmt: (v: number) => string): number {
-  return Math.max(32, Math.ceil(fmt(max).length * 7.5) + 12)
+  const step = max > 0 ? 10 ** Math.floor(Math.log10(max)) : 1
+  const ceiling = Math.ceil(max / step) * step
+  const widest = Math.max(fmt(max).length, fmt(ceiling).length)
+  return Math.max(32, Math.ceil(widest * 7.5) + 12)
 }
 
 export function AreaChartCard({
@@ -511,6 +519,188 @@ export function StackedBarChartCard({
             {s.name}
           </span>
         ))}
+      </div>
+    </ChartShell>
+  )
+}
+
+/* ── Bars + line on two axes (reports): e.g. leaf value per month and the average Rs/kg ── */
+
+export interface ComboDatum {
+  label: string
+  /** the bar (left axis) */
+  bar: number
+  /** the line (right axis); null where there is nothing to average */
+  line: number | null
+  /** extra tooltip line, e.g. "5,736.7 kg" */
+  note?: string
+  /** a period still in progress — lighter bar, dashed line segment */
+  partial?: boolean
+}
+
+interface ComboRow extends ComboDatum {
+  solid: number | null
+  dashed: number | null
+}
+
+function ComboTooltip({
+  active,
+  payload,
+  barLabel,
+  lineLabel,
+  barFmt,
+  lineFmt,
+}: {
+  active?: boolean
+  payload?: Array<{ payload: ComboRow }>
+  barLabel: string
+  lineLabel: string
+  barFmt: (v: number) => string
+  lineFmt: (v: number) => string
+}) {
+  const row = active ? payload?.[0]?.payload : undefined
+  if (!row) return null
+  return (
+    <div className="rounded-[var(--radius-md)] bg-surface p-3 text-sm shadow-[var(--shadow-3)]">
+      <p className="mb-1 text-xs font-medium text-text-muted">
+        {row.label}
+        {row.partial && ' · in progress'}
+      </p>
+      <p className="tabular flex items-center gap-2 text-text">
+        <span className="size-2 rounded-sm" style={{ background: CHART_SERIES[0] }} />
+        {barLabel}: {barFmt(row.bar)}
+      </p>
+      {row.line !== null && (
+        <p className="tabular flex items-center gap-2 text-text">
+          <span className="size-2 rounded-full" style={{ background: CHART_SERIES[3] }} />
+          {lineLabel}: {lineFmt(row.line)}
+        </p>
+      )}
+      {row.note && <p className="tabular mt-0.5 text-xs text-text-muted">{row.note}</p>}
+    </div>
+  )
+}
+
+/**
+ * Bars on the left axis and a straight line on the right axis, each axis sized to its labels. A
+ * period in progress draws a lighter bar and a dashed line segment, with a note — never as if
+ * complete.
+ */
+export function ComboChartCard({
+  title,
+  data,
+  barLabel,
+  lineLabel,
+  barFmt,
+  barTick,
+  lineFmt,
+  lineTick,
+  height = 280,
+  partialNote = 'Month in progress',
+  className,
+}: {
+  title?: string
+  data: ComboDatum[]
+  barLabel: string
+  lineLabel: string
+  barFmt: (v: number) => string
+  barTick: (v: number) => string
+  lineFmt: (v: number) => string
+  lineTick: (v: number) => string
+  height?: number
+  partialNote?: string
+  className?: string
+}) {
+  const firstPartial = data.findIndex((d) => d.partial)
+  const rows: ComboRow[] = data.map((d, i) => ({
+    ...d,
+    solid: firstPartial === -1 || i < firstPartial ? d.line : null,
+    dashed: firstPartial !== -1 && i >= firstPartial - 1 ? d.line : null,
+  }))
+  const maxBar = Math.max(0, ...data.map((d) => d.bar))
+  const maxLine = Math.max(0, ...data.map((d) => d.line ?? 0))
+  return (
+    <ChartShell title={title} className={className}>
+      <ResponsiveContainer width="100%" height={height}>
+        <ComposedChart data={rows} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke={CHART_GRID} vertical={false} />
+          <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: CHART_AXIS, fontSize: 12 }} interval="preserveStartEnd" minTickGap={12} />
+          <YAxis
+            yAxisId="bar"
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: CHART_AXIS, fontSize: 12 }}
+            width={axisWidth(maxBar, barTick)}
+            tickFormatter={barTick}
+          />
+          <YAxis
+            yAxisId="line"
+            orientation="right"
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: CHART_AXIS, fontSize: 12 }}
+            width={axisWidth(maxLine, lineTick)}
+            tickFormatter={lineTick}
+          />
+          <Tooltip
+            content={<ComboTooltip barLabel={barLabel} lineLabel={lineLabel} barFmt={barFmt} lineFmt={lineFmt} />}
+            cursor={{ fill: CHART_GRID, opacity: 0.4 }}
+          />
+          <Bar yAxisId="bar" dataKey="bar" maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+            {rows.map((r) => (
+              <Cell key={r.label} fill={CHART_SERIES[0]} fillOpacity={r.partial ? 0.35 : 1} />
+            ))}
+          </Bar>
+          <Line
+            yAxisId="line"
+            type="linear"
+            dataKey="solid"
+            stroke={CHART_SERIES[3]}
+            strokeWidth={2}
+            dot={{ r: 3, fill: CHART_SERIES[3], strokeWidth: 0 }}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+          {firstPartial !== -1 && (
+            <Line
+              yAxisId="line"
+              type="linear"
+              dataKey="dashed"
+              stroke={CHART_SERIES[3]}
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              dot={(p: { cx?: number; cy?: number; index?: number }) => (
+                <circle
+                  key={`partial-${p.index}`}
+                  cx={p.cx}
+                  cy={p.cy}
+                  r={p.index !== undefined && p.index >= firstPartial ? 4 : 0}
+                  fill="var(--color-surface)"
+                  stroke={CHART_SERIES[3]}
+                  strokeWidth={2}
+                />
+              )}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
+        <span className="flex items-center gap-1.5">
+          <span className="size-2.5 rounded-sm" style={{ background: CHART_SERIES[0] }} />
+          {barLabel}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-0.5 w-4" style={{ background: CHART_SERIES[3] }} />
+          {lineLabel} (right axis)
+        </span>
+        {firstPartial !== -1 && (
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full border-2" style={{ borderColor: CHART_SERIES[3] }} />
+            {partialNote}
+          </span>
+        )}
       </div>
     </ChartShell>
   )
