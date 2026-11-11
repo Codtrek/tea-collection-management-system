@@ -28,7 +28,17 @@ import { currentMonth, monthOptionsFor, shiftMonth } from '@/lib/month'
 import { formatCompact, formatCurrency, formatDate, formatKg, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { estateTimelineHref, signedPct } from './collection-report-view'
-import { leafFilterSummary, leafQuery, leafViewParams, readLeafView, settlementsHref, type LeafView } from './leaf-purchase-view'
+import { downloadCsv } from '@/lib/csv'
+import {
+  leafFilterSummary,
+  leafPurchaseCsv,
+  leafPurchaseCsvName,
+  leafQuery,
+  leafViewParams,
+  readLeafView,
+  settlementsHref,
+  type LeafView,
+} from './leaf-purchase-view'
 import type { LeafGroupBy, LeafGroupRow, LeafPurchaseReport } from './types'
 
 const DEMO_DEFAULT = import.meta.env.DEV
@@ -123,7 +133,10 @@ export function LeafPurchaseReportPage() {
       <ReportViewer
         filtersClassName="flex flex-1 flex-col gap-3 print:hidden"
         summaryClassName="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-        actions={{ onPrint: print }}
+        actions={{
+          onExportExcel: () => downloadCsv(leafPurchaseCsvName(report), leafPurchaseCsv(report, view)),
+          onPrint: print,
+        }}
         filters={
           <>
             <div className="flex flex-wrap items-end gap-3">

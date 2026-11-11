@@ -304,6 +304,27 @@ no grade rate.
   - A route filters.
   - A month opens that month.
 
+### 9.2 Export and print
+
+These follow the same action-bar policy as §8.
+- **Export Excel** works. It downloads a CSV named `leaf-purchases-<period>-<grouping>.csv`
+  (`leafPurchaseCsv()`).
+  - It contains every row of the current grouping plus the totals row.
+  - A preamble gives the period, filters and valuation rule.
+  - Rs have 2 decimals and kg 1 decimal, with no units, so Excel can sum them.
+- **Print** works, using the shared print layout. A print-only line names the period and filters,
+  and the table prints unpaged.
+- **Export PDF, Schedule Report and Share Report** are disabled with "Coming soon".
+
+**Tests:**
+- Vitest: `leaf-purchase-view.test.ts` checks that the CSV equals the table and totals, and covers the URL round trip.
+- Playwright: `e2e/leaf-purchase-report.spec.ts` checks that:
+  - `/reports/revenue?…` redirects with its query
+  - the partial month is labelled
+  - print hides the chrome
+  - the CSV equals the table and the card
+  - the disabled actions say "Coming soon"
+
 ## 10. Expenses (RPT-03) and leaf payments: one number, one name
 
 - **Added: "Green leaf purchases."** It is the Leaf Purchase Report's accrued value for the month,

@@ -1158,6 +1158,27 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **`ReportActionsBar`** is honest everywhere: a handler means a working button; otherwise it is disabled with "Coming soon"; Preview is removed. RPT-01 has CSV export and print. The `print:hidden` chrome and `@media print` are shared.
 - **`AppShell`** scrolls to the top on a new page. The cached report opened at the old scroll position, with its title under the top bar.
 
+## Leaf Purchase Report RPT-02 + grade-rate versioning (2026-11-15, `feat/collection-report`)
+
+- **"Revenue Reports" became the Leaf Purchase Report** (`/reports/leaf-purchases`). `/reports/revenue` redirects with its query string. The page shows a **cost**, and "Revenue" is kept for a future made-tea sales module (`docs/specs/Reports-Collection-Addendum.md` §9–§11).
+- **Leaf value:** each graded delivery is valued at the grade-rate version **in force on its date** (`rateVersionFor`, `estates/settlement-calc.ts`, the one lookup).
+  - It runs through the Collection report's delivery rules and loaders (`leaf-purchase-rules.ts` + `LeafPurchaseService`).
+  - **October 2026:** page = SQL = Rs 798,201.50. The check is opt-in: `REPORT_SQL_CHECK_URL=… npx jest leaf-purchase.sql`.
+  - Deliveries before the first rate version show as "No rate"; they are never given a guessed value.
+- **Settled vs not yet settled:**
+  - Settled = deliveries linked (`settlement_id`) to a processed settlement, so Settled + Not yet settled = Accrued.
+  - **No settlement generator exists**, so today everything is "not yet settled".
+  - The seeded processed settlements show only on the "Paid in settlements" card, flagged as not linked.
+- **Expenses:**
+  - Added "Green leaf purchases": the same number as the report, linked to it.
+  - Removed the settlement fertilizer and transport lines. Those are recoveries from owners, shown as deductions on the Leaf Purchase Report.
+  - Expenses no longer reads settlements.
+- **ADM-01** (`docs/specs/Grade-Rates-Addendum.md`):
+  - "Current" means in force today; a later version is "Scheduled".
+  - No back-dated versions (400) and no duplicate dates (409, plus `UNIQUE (effective_date)` in migration `2026-11-15-grade-rates-unique.sql`).
+  - Factory Setup's date defaults to today, with `min` set to today.
+- **Charts:** a new `ComboChartCard` (bars + Rs/kg line on two axes). `axisWidth` now sizes to the rounded-up top tick, so no report axis clips.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React
