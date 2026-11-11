@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Wallet,
   Banknote,
+  ShoppingBasket,
   HandCoins,
   Coins,
   Users,
@@ -77,7 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Reports',
     items: [
       { label: 'Collection Reports', to: '/reports/collection', icon: BarChart3, module: 'reports' },
-      { label: 'Revenue Reports', to: '/reports/revenue', icon: TrendingUp, module: 'reports' },
+      { label: 'Leaf Purchase Report', to: '/reports/leaf-purchases', icon: ShoppingBasket, module: 'reports' },
       { label: 'Expense Reports', to: '/reports/expenses', icon: FileText, module: 'reports' },
     ],
   },

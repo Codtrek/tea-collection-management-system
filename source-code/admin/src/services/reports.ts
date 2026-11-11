@@ -5,7 +5,8 @@ import type {
   ExpenseCategory,
   ExpenseEntry,
   ExpenseReport,
-  RevenueReport,
+  LeafPurchaseQuery,
+  LeafPurchaseReport,
 } from '@/features/reports/types'
 
 export interface CreateExpenseInput {
@@ -40,9 +41,24 @@ export function getCollectionReport(q: CollectionReportQuery = {}): Promise<Coll
   return apiFetch<CollectionReport>(`/reports/collection${qs ? `?${qs}` : ''}`)
 }
 
-/** RPT-02. Processed settlements only — a pending settlement isn't realized revenue yet. */
-export function getRevenueReport(period?: string): Promise<RevenueReport> {
-  return apiFetch<RevenueReport>(withPeriod('/reports/revenue', period))
+/**
+ * RPT-02 Leaf Purchase — what the factory owes and pays estate owners for green leaf, valued at the
+ * grade rates in force on each delivery date. Same period and filter params as RPT-01.
+ */
+export function getLeafPurchaseReport(q: LeafPurchaseQuery = {}): Promise<LeafPurchaseReport> {
+  const p = new URLSearchParams()
+  if (q.thisMonth) p.set('thisMonth', '1')
+  else if (q.from && q.to) {
+    p.set('from', q.from)
+    p.set('to', q.to)
+  } else if (q.month) p.set('month', q.month)
+  if (q.routeId !== undefined) p.set('routeId', String(q.routeId))
+  if (q.estateId !== undefined) p.set('estateId', String(q.estateId))
+  if (q.grade) p.set('grade', q.grade)
+  if (q.includeDemo === false) p.set('demo', '0')
+  if (q.groupBy) p.set('groupBy', q.groupBy)
+  const qs = p.toString()
+  return apiFetch<LeafPurchaseReport>(`/reports/leaf-purchases${qs ? `?${qs}` : ''}`)
 }
 
 /** RPT-03. Payroll + settlement transport/fertilizer + manual entries. */

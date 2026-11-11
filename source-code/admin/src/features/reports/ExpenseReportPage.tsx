@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2, Plus, Receipt, TrendingDown } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -73,7 +73,22 @@ export function ExpenseReportPage() {
     { key: 'category', header: 'Category', render: (e) => <StatusBadge tone="neutral">{e.category}</StatusBadge> },
     { key: 'amount', header: 'Amount', align: 'right', render: (e) => formatCurrency(e.amount) },
     { key: 'date', header: 'Date', render: (e) => formatDate(e.date) },
-    { key: 'source', header: 'Source', render: (e) => <span className="text-xs text-text-muted">{e.source}</span> },
+    {
+      key: 'source',
+      header: 'Source',
+      render: (e) =>
+        e.source === 'Leaf Purchase Report' ? (
+          // the same number, under the same name, on the report it comes from
+          <Link
+            to={`/reports/leaf-purchases?month=${e.date.slice(0, 7)}`}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Leaf Purchase Report →
+          </Link>
+        ) : (
+          <span className="text-xs text-text-muted">{e.source}</span>
+        ),
+    },
   ]
 
   const rows = report.rows.filter((e) => !category || e.category === category)
@@ -83,7 +98,7 @@ export function ExpenseReportPage() {
       <PageHeader
         title="Expense Reports"
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Reports' }, { label: 'Expenses' }]}
-        description="Transport and fertilizer from settlements, payroll from EMP-12, plus daily expense entries."
+        description="Green leaf purchases from the Leaf Purchase Report, payroll from EMP-12, plus daily expense entries. Fertilizer and transport recovered from estate owners are deductions on the Leaf Purchase Report, not expenses."
         actions={
           canLog ? (
             <Button onClick={() => navigate('/reports/expenses/new')}>

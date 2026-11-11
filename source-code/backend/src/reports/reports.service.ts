@@ -4,10 +4,11 @@ import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
-import { SettlementEntity } from '../estates/settlement.entity';
 import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
 import { StockMovementEntity } from '../fertilizer/stock-movement.entity';
+import { localDate } from '../dispatch/dispatch-map';
 import { CreateExpenseDto } from './dto/create-expense.dto';
+import { LeafPurchaseService } from './leaf-purchase.service';
 import { ExpenseEntryEntity } from './expense-entry.entity';
 import {
   formatExpenseId,
@@ -19,7 +20,6 @@ import {
   type ExpenseReport,
   type ExpenseRow,
   type PublicExpenseEntry,
-  type RevenueReport,
   type TrendPoint,
 } from './reports-map';
 
@@ -58,8 +58,6 @@ export class ReportsService {
   constructor(
     @InjectRepository(ExpenseEntryEntity)
     private readonly expenseRepo: Repository<ExpenseEntryEntity>,
-    @InjectRepository(SettlementEntity)
-    private readonly settlementRepo: Repository<SettlementEntity>,
     @InjectRepository(PayrollRunEntity)
     private readonly payrollRepo: Repository<PayrollRunEntity>,
     @InjectRepository(StockMovementEntity)
@@ -67,93 +65,33 @@ export class ReportsService {
     @InjectRepository(FertilizerBatchEntity)
     private readonly batchRepo: Repository<FertilizerBatchEntity>,
     private readonly audit: AuditService,
+    private readonly leaf: LeafPurchaseService,
   ) {}
 
   // RPT-01 — Collection lives in CollectionReportService (collection-report-rules.ts).
 
-  // ── RPT-02 — Revenue ─────────────────────────────────────────────
-  // Processed settlements only — a pending settlement isn't realized revenue
-  // yet.
-
-  async revenueReport(period?: string): Promise<RevenueReport> {
-    const processed = await this.settlementRepo.find({
-      where: { status: 'processed' },
-    });
-    const byPeriod = groupBy(processed, (s) => labelToKey(s.period));
-    const resolvedPeriod =
-      period ?? latestKey(Object.keys(byPeriod)) ?? monthKeyOfDate(new Date());
-    const periodRows = byPeriod[resolvedPeriod] ?? [];
-
-    const grossOf = (s: SettlementEntity) =>
-      Number(s.superKg) * Number(s.superRate) +
-      Number(s.normalKg) * Number(s.normalRate);
-
-    const totalRevenue = sumBy(periodRows, grossOf);
-    const estates = new Set(periodRows.map((s) => s.estateName));
-    const avgPerEstate = estates.size ? totalRevenue / estates.size : 0;
-
-    const prevKey = prevMonthKey(resolvedPeriod);
-    const prevRevenue = byPeriod[prevKey]
-      ? sumBy(byPeriod[prevKey], grossOf)
-      : null;
-    const deltaPercent =
-      prevRevenue !== null && prevRevenue > 0
-        ? round1(((totalRevenue - prevRevenue) / prevRevenue) * 100)
-        : null;
-
-    const trend: TrendPoint[] = Object.keys(byPeriod)
-      .sort()
-      .map((key) => ({
-        month: shortMonth(key),
-        value: sumBy(byPeriod[key], grossOf),
-      }));
-
-    const byEstate = periodRows
-      .map((s) => ({ estate: s.estateName, revenue: grossOf(s) }))
-      .sort((a, b) => b.revenue - a.revenue);
-
-    const rows = periodRows
-      .map((s) => ({
-        estate: s.estateName,
-        superRs: Number(s.superKg) * Number(s.superRate),
-        normalRs: Number(s.normalKg) * Number(s.normalRate),
-        gross: grossOf(s),
-      }))
-      .sort((a, b) => b.gross - a.gross);
-
-    return {
-      period: resolvedPeriod,
-      totalRevenue,
-      avgPerEstate,
-      prevRevenue,
-      deltaPercent,
-      trend,
-      byEstate,
-      rows,
-    };
-  }
+  // RPT-02 — the Leaf Purchase Report lives in LeafPurchaseService (leaf-purchase-rules.ts).
 
   // ── RPT-03/04 — Expenses ─────────────────────────────────────────
-  // Payroll + Fertilizer + Transport are DERIVED from payroll_runs/
-  // settlements; only manual (Utilities/Maintenance/Miscellaneous/Other)
-  // entries live in expense_entries.
+  // Payroll is DERIVED from payroll_runs and green leaf purchases from the Leaf Purchase report
+  // (accrued value at the grade rates in force); only manual (Utilities/Maintenance/Miscellaneous/
+  // Other) entries live in expense_entries. Settlement fertilizer and transport deductions are NOT
+  // expenses — they are recovered from owners' leaf payments and shown as deductions on the Leaf
+  // Purchase report, so one number never appears under two names.
 
   async expenseReport(period?: string): Promise<ExpenseReport> {
-    const [payrollRuns, settlements, manual] = await Promise.all([
+    const [payrollRuns, manual, leafByMonth] = await Promise.all([
       this.payrollRepo.find(),
-      this.settlementRepo.find(),
       this.expenseRepo.find(),
+      this.leaf.valueByMonth({ from: '2000-01-01', to: localDate(new Date()) }),
     ]);
 
     const payrollByPeriod = groupBy(payrollRuns, (p) => labelToKey(p.period));
-    const settlementByPeriod = groupBy(settlements, (s) =>
-      labelToKey(s.period),
-    );
     const manualByPeriod = groupBy(manual, (e) => monthKeyOfDate(e.entryDate));
 
     const allKeys = new Set([
       ...Object.keys(payrollByPeriod),
-      ...Object.keys(settlementByPeriod),
+      ...leafByMonth.keys(),
       ...Object.keys(manualByPeriod),
     ]);
     const resolvedPeriod =
@@ -162,12 +100,7 @@ export class ReportsService {
     const payrollSum = sumBy(payrollByPeriod[resolvedPeriod] ?? [], (p) =>
       Number(p.gross),
     );
-    const transportSum = sumBy(settlementByPeriod[resolvedPeriod] ?? [], (s) =>
-      Number(s.transportCost),
-    );
-    const fertilizerSum = sumBy(settlementByPeriod[resolvedPeriod] ?? [], (s) =>
-      Number(s.fertilizerDeduction),
-    );
+    const leafSum = leafByMonth.get(resolvedPeriod) ?? 0;
     const manualRows = manualByPeriod[resolvedPeriod] ?? [];
     const manualByCategory = new Map<string, number>();
     for (const e of manualRows) {
@@ -178,9 +111,8 @@ export class ReportsService {
     }
 
     const split = [
+      { category: 'Green leaf purchases', amount: leafSum },
       { category: 'Payroll', amount: payrollSum },
-      { category: 'Fertilizer', amount: fertilizerSum },
-      { category: 'Transport', amount: transportSum },
       ...[...manualByCategory.entries()].map(([category, amount]) => ({
         category,
         amount,
@@ -195,10 +127,7 @@ export class ReportsService {
 
     const trendTotalFor = (key: string) =>
       sumBy(payrollByPeriod[key] ?? [], (p) => Number(p.gross)) +
-      sumBy(
-        settlementByPeriod[key] ?? [],
-        (s) => Number(s.transportCost) + Number(s.fertilizerDeduction),
-      ) +
+      (leafByMonth.get(key) ?? 0) +
       sumBy(manualByPeriod[key] ?? [], (e) => Number(e.amount));
 
     const trend: TrendPoint[] = [...allKeys]
@@ -213,6 +142,17 @@ export class ReportsService {
         : null;
 
     const rows: ExpenseRow[] = [];
+    if (leafSum > 0) {
+      rows.push({
+        id: `LEAF-${resolvedPeriod}`,
+        category: 'Green leaf purchases',
+        description: `Green leaf purchases — ${keyToLabel(resolvedPeriod)} (accrued at the grade rates in force)`,
+        amount: leafSum,
+        date: `${resolvedPeriod}-01`,
+        enteredBy: 'System',
+        source: 'Leaf Purchase Report',
+      });
+    }
     if (payrollSum > 0) {
       rows.push({
         id: `PR-${resolvedPeriod}`,
@@ -222,28 +162,6 @@ export class ReportsService {
         date: `${resolvedPeriod}-15`,
         enteredBy: 'System',
         source: 'Payroll run',
-      });
-    }
-    if (fertilizerSum > 0) {
-      rows.push({
-        id: `SET-FERT-${resolvedPeriod}`,
-        category: 'Fertilizer',
-        description: `Fertilizer deductions offset — ${keyToLabel(resolvedPeriod)} settlements`,
-        amount: fertilizerSum,
-        date: `${resolvedPeriod}-14`,
-        enteredBy: 'System',
-        source: 'Settlement run',
-      });
-    }
-    if (transportSum > 0) {
-      rows.push({
-        id: `SET-TRANS-${resolvedPeriod}`,
-        category: 'Transport',
-        description: `Route transport costs — ${keyToLabel(resolvedPeriod)} settlements`,
-        amount: transportSum,
-        date: `${resolvedPeriod}-14`,
-        enteredBy: 'System',
-        source: 'Settlement run',
       });
     }
     for (const e of manualRows) {

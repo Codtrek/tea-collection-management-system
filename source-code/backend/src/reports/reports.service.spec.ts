@@ -1,10 +1,10 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import type { PayrollRunEntity } from '../employees/payroll-run.entity';
-import type { SettlementEntity } from '../estates/settlement.entity';
 import type { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
 import type { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import type { ExpenseEntryEntity } from './expense-entry.entity';
+import type { LeafPurchaseService } from './leaf-purchase.service';
 import { type Actor, ReportsService } from './reports.service';
 
 /** Minimal in-memory stand-in for the TypeORM Repository surface the service uses. */
@@ -36,31 +36,6 @@ class FakeRepository<T extends { id: string | number }> {
     this.store.set(withCreatedAt.id, withCreatedAt);
     return Promise.resolve(withCreatedAt);
   }
-}
-
-function makeSettlement(
-  overrides: Partial<SettlementEntity> = {},
-): SettlementEntity {
-  return {
-    id: 'SET-2026-07-001',
-    estateId: 1,
-    estateName: 'Green Valley Estate',
-    period: 'July 2026',
-    superKg: '400.00',
-    normalKg: '100.00',
-    superRate: '185.00',
-    normalRate: '95.00',
-    transportCost: '8000.00',
-    fertilizerDeduction: '20000.00',
-    advanceDeduction: '0.00',
-    status: 'processed',
-    selfDelivery: false,
-    missingBank: false,
-    processedBy: 'A. Bandara',
-    processedOn: new Date('2026-07-15T00:00:00.000Z'),
-    createdAt: new Date('2026-07-01T00:00:00.000Z'),
-    ...overrides,
-  } as SettlementEntity;
 }
 
 function makePayroll(
@@ -107,18 +82,19 @@ function makeExpense(
 }
 
 describe('ReportsService', () => {
-  let settlementRepo: FakeRepository<SettlementEntity>;
   let payrollRepo: FakeRepository<PayrollRunEntity>;
   let expenseRepo: FakeRepository<ExpenseEntryEntity>;
   let movementRepo: FakeRepository<StockMovementEntity>;
   let batchRepo: FakeRepository<FertilizerBatchEntity>;
   let service: ReportsService;
+  /** what the Leaf Purchase report would say per month */
+  let leafByMonth: Map<string, number>;
 
   const officer: Actor = { name: 'S. Fernando', role: 'Officer' };
   const manager: Actor = { name: 'R. Jayasuriya', role: 'Manager' };
 
   beforeEach(() => {
-    settlementRepo = new FakeRepository();
+    leafByMonth = new Map();
     payrollRepo = new FakeRepository();
     expenseRepo = new FakeRepository();
     movementRepo = new FakeRepository();
@@ -127,89 +103,45 @@ describe('ReportsService', () => {
     const audit = { record: jest.fn().mockResolvedValue(undefined) };
     service = new ReportsService(
       expenseRepo as unknown as Repository<ExpenseEntryEntity>,
-      settlementRepo as unknown as Repository<SettlementEntity>,
       payrollRepo as unknown as Repository<PayrollRunEntity>,
       movementRepo as unknown as Repository<StockMovementEntity>,
       batchRepo as unknown as Repository<FertilizerBatchEntity>,
       audit as unknown as import('../audit/audit.service').AuditService,
+      {
+        valueByMonth: () => Promise.resolve(leafByMonth),
+      } as unknown as LeafPurchaseService,
     );
   });
 
   // RPT-01 — Collection: see collection-report-rules.spec.ts
 
-  describe('revenueReport — RPT-02', () => {
-    it('excludes pending settlements — only processed revenue is realized', async () => {
-      settlementRepo.seed(
-        makeSettlement({
-          id: 'A',
-          status: 'processed',
-          superKg: '100.00',
-          normalKg: '0.00',
-          superRate: '185.00',
-          normalRate: '95.00',
-        }),
-      );
-      settlementRepo.seed(
-        makeSettlement({ id: 'B', status: 'pending', superKg: '1000.00' }),
-      );
-
-      const report = await service.revenueReport('2026-07');
-      expect(report.totalRevenue).toBe(18500); // 100 * 185
-    });
-
-    it('computes month-over-month delta against the previous period', async () => {
-      settlementRepo.seed(
-        makeSettlement({
-          id: 'A',
-          period: 'June 2026',
-          superKg: '100.00',
-          normalKg: '0.00',
-          superRate: '100.00',
-        }),
-      );
-      settlementRepo.seed(
-        makeSettlement({
-          id: 'B',
-          period: 'July 2026',
-          superKg: '150.00',
-          normalKg: '0.00',
-          superRate: '100.00',
-        }),
-      );
-
-      const report = await service.revenueReport('2026-07');
-      expect(report.prevRevenue).toBe(10000);
-      expect(report.totalRevenue).toBe(15000);
-      expect(report.deltaPercent).toBe(50);
-    });
-  });
+  // RPT-02 — Leaf Purchase: see leaf-purchase-rules.spec.ts
 
   describe('expenseReport — RPT-03/04', () => {
-    it('unions payroll, settlement, and manual entries for the period', async () => {
+    it('unions green leaf purchases, payroll and manual entries; settlement deductions are not expenses', async () => {
       payrollRepo.seed(makePayroll({ id: 'PR-1', gross: '80000.00' }));
-      settlementRepo.seed(
-        makeSettlement({
-          id: 'SET-1',
-          transportCost: '8000.00',
-          fertilizerDeduction: '20000.00',
-        }),
-      );
+      leafByMonth.set('2026-07', 754821);
       expenseRepo.seed(
         makeExpense({ id: 'EXP-1', category: 'Utilities', amount: '5000.00' }),
       );
 
       const report = await service.expenseReport('2026-07');
-      expect(report.total).toBe(80000 + 8000 + 20000 + 5000);
+      expect(report.total).toBe(754821 + 80000 + 5000);
       expect(report.manualTotal).toBe(5000);
-      expect(report.rows).toHaveLength(4);
-      expect(report.split).toEqual(
-        expect.arrayContaining([
-          { category: 'Payroll', amount: 80000 },
-          { category: 'Transport', amount: 8000 },
-          { category: 'Fertilizer', amount: 20000 },
-          { category: 'Utilities', amount: 5000 },
-        ]),
-      );
+      expect(report.split).toEqual([
+        { category: 'Green leaf purchases', amount: 754821 },
+        { category: 'Payroll', amount: 80000 },
+        { category: 'Utilities', amount: 5000 },
+      ]);
+      // fertilizer / transport recoveries belong to the Leaf Purchase report, never here
+      expect(report.split.map((x) => x.category)).not.toContain('Fertilizer');
+      expect(report.split.map((x) => x.category)).not.toContain('Transport');
+      expect(
+        report.rows.find((r) => r.category === 'Green leaf purchases'),
+      ).toMatchObject({
+        amount: 754821,
+        source: 'Leaf Purchase Report',
+      });
     });
 
     it('shows write-offs as "Stock lost" without counting them as an expense', async () => {

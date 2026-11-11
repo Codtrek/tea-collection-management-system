@@ -5,6 +5,11 @@ import type { JwtPayload } from '../auth/jwt-payload.interface';
 import { UsersService } from '../users/users.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import type { CollectionReport } from './collection-report-rules';
+import type { LeafPurchaseReport } from './leaf-purchase-rules';
+import {
+  LeafPurchaseService,
+  type LeafPurchaseQuery,
+} from './leaf-purchase.service';
 import {
   CollectionReportService,
   type CollectionReportQuery,
@@ -12,7 +17,6 @@ import {
 import type {
   ExpenseReport,
   PublicExpenseEntry,
-  RevenueReport,
 } from './reports-map';
 import { type Actor, ReportsService } from './reports.service';
 
@@ -24,6 +28,7 @@ export class ReportsController {
   constructor(
     private readonly reportsService: ReportsService,
     private readonly collectionReports: CollectionReportService,
+    private readonly leafPurchases: LeafPurchaseService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -52,9 +57,27 @@ export class ReportsController {
   }
 
   /** RPT-02 — from processed settlements only. */
-  @Get('revenue')
-  revenueReport(@Query('period') period?: string): Promise<RevenueReport> {
-    return this.reportsService.revenueReport(period);
+  /**
+   * RPT-02 Leaf Purchase Report (Reports addendum §9) — what the factory owes and pays estate owners
+   * for green leaf, valued at the grade rates in force on each delivery date. Same period and
+   * filter params as RPT-01; groupBy estate|route|month.
+   */
+  @Get('leaf-purchases')
+  leafPurchaseReport(
+    @Query() q: Record<string, string | undefined>,
+  ): Promise<LeafPurchaseReport> {
+    const int = (v?: string) => (v && /^\d+$/.test(v) ? Number(v) : undefined);
+    return this.leafPurchases.report({
+      month: q.month,
+      from: q.from,
+      to: q.to,
+      thisMonth: q.thisMonth === '1',
+      routeId: int(q.routeId),
+      estateId: int(q.estateId),
+      grade: q.grade === 'super' || q.grade === 'normal' ? q.grade : undefined,
+      includeDemo: q.demo !== '0',
+      groupBy: q.groupBy as LeafPurchaseQuery['groupBy'],
+    });
   }
 
   /** RPT-03 — payroll + settlement transport/fertilizer + manual entries. */

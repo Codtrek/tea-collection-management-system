@@ -1,4 +1,4 @@
-# Reports: Collection Report RPT-01 (Addendum)
+# Reports: Collection (RPT-01), Leaf Purchase (RPT-02) and Expenses (Addendum)
 
 Status: implemented on `feat/collection-report` · 2026-11-08
 
@@ -201,3 +201,84 @@ Results on the local DB, 2026-11-08:
 - "YTD" was all-time.
 - The trend mixed months from different years without a year label.
 - The default was the latest month with data (a partial November).
+
+## 9. Leaf Purchase Report (RPT-02, 2026-11-15)
+
+**Renamed from "Revenue Reports".** The page shows what the factory owes and pays estate owners for
+green leaf, which is a **cost**, not revenue.
+
+- **Route:** `/reports/leaf-purchases`. `/reports/revenue` redirects there and keeps its query
+  string (`RedirectWithQuery`).
+- **Sidebar:** "Leaf Purchase Report".
+- **Subtitle:** "What the factory owes and pays estate owners for green leaf."
+
+**Service:** `GET /reports/leaf-purchases` → `LeafPurchaseService`, with every rule in
+`leaf-purchase-rules.ts`.
+- Deliveries are loaded through the Collection report's loaders and follow its rules (§2):
+  - graded only
+  - the current grade lines = the latest approved revision
+  - provisional and not-delivered entries excluded
+  - Colombo calendar days
+- Period, filters and comparisons work as in §3–§4. Grouping is `estate | route | month`.
+
+| Figure | Rule |
+|---|---|
+| **Leaf value (accrued)** | Σ over graded deliveries of Super kg × Super rate + Normal kg × Normal rate, using the version **in force on the delivery date** (`rateVersionFor`; Grade-Rates-Addendum). Each grade amount is rounded to 2 decimals. |
+| No rate | A graded delivery dated before the first rate version gets no value. It is counted ("No rate") and never guessed. |
+| Average price per kg | Leaf value ÷ factory kg of the valued deliveries; per grade, grade value ÷ grade kg. |
+| **Settled** | The value of deliveries linked (`settlement_id`) to a **processed** settlement. |
+| **Not yet settled** | Leaf value − settled, so Settled + Not yet settled = Accrued, always. |
+| Payments (settled) | Processed settlements whose period falls in the range: gross (the settlement's own snapshot rates, i.e. what was paid), transport, fertilizer, advances, adjustment, net = gross − deductions + adjustment. `linked` is false while those settlements took none of the range's deliveries. |
+| Trend | Monthly. A single-month period shows the 12 months ending with it. A month in progress is partial. |
+
+**There is no settlement generator yet.** No delivery has `settlement_id` set, so today everything
+reads "not yet settled". The 21 processed settlements are seeded snapshots whose kg and rates don't
+match the deliveries. Card 4 shows them as what was paid, marked "not linked to deliveries".
+
+**Checking against the database:** `REPORT_SQL_CHECK_URL=… npx jest leaf-purchase.sql`
+(`REPORT_SQL_CHECK_MONTH` for another month).
+
+```sql
+WITH lines AS (
+  SELECT delivery_id,
+         coalesce(sum(weight_kg) FILTER (WHERE grade = 'super'), 0)  AS super_kg,
+         coalesce(sum(weight_kg) FILTER (WHERE grade = 'normal'), 0) AS normal_kg
+    FROM delivery_grade_lines GROUP BY delivery_id
+), graded AS (
+  SELECT r.id, l.super_kg, l.normal_kg,
+         (SELECT g.id FROM grade_rates g WHERE g.effective_date <= r.collection_date
+           ORDER BY g.effective_date DESC LIMIT 1) AS rate_id
+    FROM tea_collection_records r JOIN lines l ON l.delivery_id = r.id
+   WHERE r.status IN ('collected', 'confirmed') AND r.provisional IS NULL
+     AND to_char(r.collection_date, 'YYYY-MM') = '2026-10'
+)
+SELECT sum(round(d.super_kg * g.super_rate, 2) + round(d.normal_kg * g.normal_rate, 2))
+  FROM graded d JOIN grade_rates g ON g.id = d.rate_id;
+```
+
+Results on the local DB, 2026-11-15 (the page and the SQL agree exactly):
+
+| Month | Graded | Factory kg | Leaf value |
+|---|---|---|---|
+| October 2026 | 104 | 5,736.7 | **Rs 798,201.50** (185/95 in force) |
+| June 2026 | 118 | 6,668.4 | Rs 896,333.60 (180/92 in force) |
+| November 2026 so far | 15 | 876.6 | Rs 121,320.00 |
+
+The old page showed June as Rs 149,504: two seeded settlements, valued at their own snapshot rates.
+
+## 10. Expenses (RPT-03) and leaf payments: one number, one name
+
+- **Added: "Green leaf purchases."** It is the Leaf Purchase Report's accrued value for the month,
+  exactly the same number (`LeafPurchaseService.valueByMonth`). Its row links to the report, and it
+  counts in the Expense total and trend.
+- **Removed: settlement "Fertilizer" and "Transport" lines.** They are amounts recovered from estate
+  owners' leaf payments, not money the factory spends. They appear only as **deductions** on the
+  Leaf Purchase Report.
+- Expenses no longer reads settlements at all. It used to include pending ones, while RPT-02 counted
+  processed only.
+
+## 11. Future: Revenue (made-tea sales)
+
+"Revenue" is kept free for a future module that records the factory's actual income: made-tea
+sales (auction, private sales). None of that data is in the system yet. When it exists, a Revenue
+report can set income against the Leaf Purchase Report's cost.

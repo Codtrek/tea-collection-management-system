@@ -120,25 +120,95 @@ export interface CollectionReportQuery {
   groupBy?: CollectionGroupBy
 }
 
-export interface RevenueReport {
-  period: string
-  totalRevenue: number
-  avgPerEstate: number
-  prevRevenue: number | null
-  deltaPercent: number | null
-  trend: TrendPoint[]
-  byEstate: { estate: string; revenue: number }[]
-  rows: { estate: string; superRs: number; normalRs: number; gross: number }[]
+/* ── RPT-02 Leaf Purchase (backend `leaf-purchase-rules.ts`, Reports addendum §9) ── */
+
+export type LeafGroupBy = 'estate' | 'route' | 'month'
+
+export interface LeafTotals {
+  /** priced graded deliveries */
+  deliveries: number
+  /** factory kg of the priced deliveries — the divisor of every Rs/kg */
+  factoryKg: number
+  superKg: number
+  normalKg: number
+  valueRs: number
+  superRs: number
+  normalRs: number
+  rsPerKg: number | null
+  superRsPerKg: number | null
+  normalRsPerKg: number | null
+  settledRs: number
+  unsettledRs: number
+  noRateDeliveries: number
+  noRateKg: number
+  prevValueRs: number
+  changePct: number | null
+}
+
+export interface LeafGroupRow extends LeafTotals {
+  key: string
+  name: string
+  routeName: string | null
+  id: number | null
+}
+
+export interface LeafTrendPoint {
+  key: string
+  label: string
+  valueRs: number
+  factoryKg: number
+  rsPerKg: number | null
+  partial: boolean
+}
+
+export interface LeafPurchaseReport {
+  period: CollectionReport['period']
+  today: string
+  gradeFiltered: boolean
+  cards: {
+    leafValue: { value: number; previous: number; changePct: number | null; lastYear: number | null; yoyPct: number | null }
+    pricePerKg: { value: number | null; superRsPerKg: number | null; normalRsPerKg: number | null; previous: number | null; changePct: number | null }
+    settlement: { settledRs: number; unsettledRs: number; valueRs: number }
+    /** processed settlements of the period: what was actually paid (snapshot rates) */
+    payments: {
+      count: number
+      grossRs: number
+      transportRs: number
+      fertilizerRs: number
+      advancesRs: number
+      adjustmentRs: number
+      netRs: number
+      /** false while settlements aren't linked to deliveries (no generator yet) */
+      linked: boolean
+    }
+    noRate: { deliveries: number; kg: number }
+  }
+  /** always monthly; a single month shows the 12 months ending with it */
+  trend: LeafTrendPoint[]
+  byGrade: { superRs: number; normalRs: number; superKg: number; normalKg: number }
+  gradeByMonth: { key: string; label: string; superRs: number; normalRs: number }[] | null
+  byRoute: { id: number | null; name: string; valueRs: number; factoryKg: number }[]
+  topEstates: { id: number | null; name: string; routeName: string | null; valueRs: number }[]
+  table: { groupBy: LeafGroupBy; rows: LeafGroupRow[]; totals: LeafTotals }
+  monthsWithData: string[]
+  options: {
+    routes: { id: number; name: string }[]
+    estates: { id: number; name: string; routeName: string | null; demo: boolean }[]
+  }
+}
+
+export interface LeafPurchaseQuery extends Omit<CollectionReportQuery, 'groupBy' | 'agentId'> {
+  groupBy?: LeafGroupBy
 }
 
 export interface ExpenseRow {
   id: string
-  category: ExpenseCategory | 'Payroll' | 'Fertilizer' | 'Transport'
+  category: ExpenseCategory | 'Payroll' | 'Green leaf purchases'
   description: string
   amount: number
   date: string
   enteredBy: string
-  source: 'Manual' | 'Payroll run' | 'Settlement run'
+  source: 'Manual' | 'Payroll run' | 'Leaf Purchase Report'
 }
 
 export interface ExpenseReport {

@@ -12,7 +12,7 @@ export type ExpenseCategory =
   | 'Miscellaneous'
   | 'Other';
 
-export type ExpenseSource = 'Manual' | 'Payroll run' | 'Settlement run';
+export type ExpenseSource = 'Manual' | 'Payroll run' | 'Leaf Purchase Report';
 
 const MONTHS = [
   'January',
@@ -74,20 +74,9 @@ export interface TrendPoint {
   value: number;
 }
 
-export interface RevenueReport {
-  period: string;
-  totalRevenue: number;
-  avgPerEstate: number;
-  prevRevenue: number | null;
-  deltaPercent: number | null;
-  trend: TrendPoint[];
-  byEstate: { estate: string; revenue: number }[];
-  rows: { estate: string; superRs: number; normalRs: number; gross: number }[];
-}
-
 export interface ExpenseRow {
   id: string;
-  category: ExpenseCategory | 'Payroll' | 'Fertilizer' | 'Transport';
+  category: ExpenseCategory | 'Payroll' | 'Green leaf purchases';
   description: string;
   amount: number;
   date: string;

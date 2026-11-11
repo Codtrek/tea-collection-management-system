@@ -42,6 +42,8 @@ export interface DeliveryInput {
    */
   gradeLines?: { grade: string; weightKg: string | number }[] | null;
   provisional?: unknown;
+  /** set once a settlement takes the delivery (Leaf Purchase Report: settled vs not yet) */
+  settlementId?: string | null;
 }
 
 export interface DeliveryFact {
@@ -60,6 +62,7 @@ export interface DeliveryFact {
   superKg: number;
   normalKg: number;
   demo: boolean;
+  settlementId: string | null;
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -97,6 +100,7 @@ export function toFact(d: DeliveryInput, demo = false): DeliveryFact {
     superKg,
     normalKg,
     demo,
+    settlementId: d.settlementId ?? null,
   };
 }
 
@@ -226,7 +230,7 @@ export function daysBetween(from: string, to: string): number {
 }
 
 /** Same calendar day `n` months away; the 31st becomes the month's last day. */
-function shiftMonths(date: string, n: number): string {
+export function shiftMonths(date: string, n: number): string {
   const [y, m, d] = parts(date);
   const t = new Date(Date.UTC(y, m - 1 + n, 1));
   const ty = t.getUTCFullYear();
@@ -234,7 +238,7 @@ function shiftMonths(date: string, n: number): string {
   return ymd(ty, tm, Math.min(d, daysIn(ty, tm)));
 }
 
-function monthRange(month: string): DateRange {
+export function monthRange(month: string): DateRange {
   const [y, m] = month.split('-').map(Number);
   return { from: `${month}-01`, to: ymd(y, m, daysIn(y, m)) };
 }

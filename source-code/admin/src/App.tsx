@@ -46,7 +46,8 @@ import { SettlementDetailPage } from './features/estates/SettlementDetailPage'
 import { UnsettledOwnersPage } from './features/estates/UnsettledOwnersPage'
 import { EstateAnalyticsPage } from './features/estates/EstateAnalyticsPage'
 import { CollectionReportPage } from './features/reports/CollectionReportPage'
-import { RevenueReportPage } from './features/reports/RevenueReportPage'
+import { LeafPurchaseReportPage } from './features/reports/LeafPurchaseReportPage'
+import { RedirectWithQuery } from './components/layout/RedirectWithQuery'
 import { ExpenseReportPage } from './features/reports/ExpenseReportPage'
 import { ExpenseEntryPage } from './features/reports/ExpenseEntryPage'
 import { FactorySetupPage } from './features/admin/FactorySetupPage'
@@ -116,7 +117,9 @@ export const router = createBrowserRouter([
 
       // Reports (RPT-01..04)
       { path: 'reports/collection', element: <CollectionReportPage /> },
-      { path: 'reports/revenue', element: <RevenueReportPage /> },
+      { path: 'reports/leaf-purchases', element: <LeafPurchaseReportPage /> },
+      // renamed 2026-11-15: what it shows is a cost (leaf bought from estate owners), not revenue
+      { path: 'reports/revenue', element: <RedirectWithQuery to="/reports/leaf-purchases" /> },
       { path: 'reports/expenses', element: <ExpenseReportPage /> },
       { path: 'reports/expenses/new', element: <ExpenseEntryPage /> },
       { path: 'reports', element: <Navigate to="/reports/collection" replace /> },

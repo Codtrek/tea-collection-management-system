@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditModule } from '../audit/audit.module';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
+import { GradeRateEntity } from '../admin/grade-rate.entity';
 import { CollectionsModule } from '../collections/collections.module';
 import { EstateEntity } from '../estates/estate.entity';
 import { SettlementEntity } from '../estates/settlement.entity';
@@ -12,6 +13,7 @@ import { UsersModule } from '../users/users.module';
 import { ExpenseEntryEntity } from './expense-entry.entity';
 import { ReportsController } from './reports.controller';
 import { CollectionReportService } from './collection-report.service';
+import { LeafPurchaseService } from './leaf-purchase.service';
 import { ReportsService } from './reports.service';
 
 @Module({
@@ -26,6 +28,8 @@ import { ReportsService } from './reports.service';
       EstateEntity,
       SettlementEntity,
       PayrollRunEntity,
+      // Leaf Purchase Report — rate versions (written by ADM-01)
+      GradeRateEntity,
       // Write-offs — shown as "Stock lost", for information only.
       StockMovementEntity,
       FertilizerBatchEntity,
@@ -36,6 +40,6 @@ import { ReportsService } from './reports.service';
     CollectionsModule,
   ],
   controllers: [ReportsController],
-  providers: [ReportsService, CollectionReportService],
+  providers: [ReportsService, CollectionReportService, LeafPurchaseService],
 })
 export class ReportsModule {}

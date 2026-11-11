@@ -107,14 +107,15 @@ export class CollectionReportService {
     });
   }
 
-  private load(r: DateRange): Promise<CollectionRecordEntity[]> {
+  /** Deliveries dated in the range (with grade lines). Shared with the Leaf Purchase report. */
+  load(r: DateRange): Promise<CollectionRecordEntity[]> {
     return this.records.find({
       where: { collectionDate: Between(r.from, r.to) },
     });
   }
 
   /** Routes and agents that have delivered leaf — the filter pickers (latest name wins). */
-  private async pickers(): Promise<{
+  async pickers(): Promise<{
     routes: { id: number; name: string }[];
     agents: { id: number; name: string }[];
   }> {
@@ -132,7 +133,7 @@ export class CollectionReportService {
   }
 
   /** Months that have any delivered leaf, newest first — the month picker's options. */
-  private async monthsWithData(): Promise<string[]> {
+  async monthsWithData(): Promise<string[]> {
     const rows = await this.records.manager.query<{ month: string }[]>(
       `SELECT DISTINCT to_char(collection_date, 'YYYY-MM') AS month
          FROM tea_collection_records
@@ -146,7 +147,7 @@ export class CollectionReportService {
    * Rows the local demo seed created (its `demo_seed_rows` registry). The table only exists where
    * the demo seed has run, so elsewhere nothing is demo.
    */
-  private async demoIds(): Promise<{
+  async demoIds(): Promise<{
     records: Set<string>;
     estates: Set<number>;
   }> {
