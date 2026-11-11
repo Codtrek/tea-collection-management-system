@@ -2,16 +2,22 @@
 import React from "react";
 import {
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
+import GeneralHeader from "@/components/ui/GeneralHeader";
+
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 
@@ -21,21 +27,13 @@ export default function EmployeeProfile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Replace these sample values with the employee's real data.
-  const employee = {
-    name: "Rohan Perera",
-    role: "Senior Estate Manager",
-    employeeId: "EMP-2024-001",
-    phone: "+94 77 123 4567",
-    email: "rohan.perera@example.com",
-    nic: "1998XXXXXXXX",
-    emergencyContact: "Estate HQ (+94 22 222 3400)",
-    experience: "8+ Yrs",
-    managedDivisions: "4 Divs",
-    workforce: "142",
-    estate: "Nuwara Eliya Highlands",
-    division: "Central Division • Blocks A–D",
-    status: "Active On Duty",
+  // Replace these sample values with the logged-in user's data.
+  const user = {
+    name: "Kalana Ekanayake",
+    growth: "+12.5%",
+    estates: "3",
+    managers: "3",
+    avatar: "",
   };
 
   const confirmLogout = () => {
@@ -50,87 +48,72 @@ export default function EmployeeProfile() {
         {
           text: "Log Out",
           style: "destructive",
-          onPress: () => {
-            // Replace the current route with the sign-in page.
-            router.replace("/auth/login");
-          },
+          onPress: () => router.replace("/auth/login"),
         },
       ],
       { cancelable: true }
     );
   };
 
-  const ProfileRow = ({
-    icon,
-    label,
-    value,
-    actionIcon,
-  }: {
-    icon: IconName;
-    label: string;
-    value: string;
-    actionIcon?: IconName;
-  }) => (
-    <View style={styles.infoRow}>
-      <View style={styles.infoIcon}>
-        <Ionicons name={icon} size={17} color={colors.primary} />
-      </View>
+  const handleMenuPress = (title: string) => {
+    switch (title) {
+      case "Change Password":
+        router.push("/auth/change-password");
+        break;
 
-      <View style={styles.infoContent}>
-        <AppText variant="caption" style={styles.mutedText}>
-          {label}
-        </AppText>
-        <AppText variant="bodySmall" style={styles.infoValue}>
-          {value}
-        </AppText>
-      </View>
+      case "Personal Information":
+        Alert.alert(
+          "Personal Information",
+          "Your personal information will be available here soon."
+        );
+        break;
 
-      {actionIcon ? (
-        <Ionicons
-          name={actionIcon}
-          size={17}
-          color={colors.text.secondary}
-        />
-      ) : null}
-    </View>
-  );
+      case "Help & Support":
+        Alert.alert(
+          "Help & Support",
+          "Contact your system administrator for assistance."
+        );
+        break;
 
-  const MenuRow = ({
+      case "About":
+        Alert.alert(
+          "About Harboost",
+          "Harboost Tea Collection Management System."
+        );
+        break;
+
+      default:
+        break;
+    }
+  };
+
+  const MenuItem = ({
     icon,
     title,
-    subtitle,
     onPress,
-    showDot = false,
   }: {
     icon: IconName;
     title: string;
-    subtitle: string;
-    onPress?: () => void;
-    showDot?: boolean;
+    onPress: () => void;
   }) => (
     <Pressable
       style={({ pressed }) => [
-        styles.menuRow,
-        pressed && styles.pressed,
+        styles.menuItem,
+        pressed && styles.menuItemPressed,
       ]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={title}
     >
-      <View style={styles.menuIcon}>
-        <Ionicons name={icon} size={19} color={colors.primary} />
-      </View>
+      <Ionicons
+        name={icon}
+        size={19}
+        color={colors.text.primary}
+      />
 
-      <View style={styles.menuContent}>
-        <AppText variant="body" style={styles.menuTitle}>
-          {title}
-        </AppText>
-        <AppText variant="caption" style={styles.mutedText}>
-          {subtitle}
-        </AppText>
-      </View>
-
-      {showDot ? <View style={styles.statusDot} /> : null}
+      <AppText variant="bodySmall" style={styles.menuText}>
+        {title}
+      </AppText>
 
       <Ionicons
         name="chevron-forward"
@@ -140,245 +123,138 @@ export default function EmployeeProfile() {
     </Pressable>
   );
 
-  const showComingSoon = (feature: string) => {
-    Alert.alert(feature, "This feature will be connected soon.");
-  };
-
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={["top", "left", "right"]}
+    >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: spacing.xl + insets.bottom },
+          {
+            paddingBottom: spacing.xl + insets.bottom,
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.headerButton}
-            accessibilityLabel="Go back"
-          >
-            <Ionicons
-              name="arrow-back"
-              size={21}
-              color={colors.text.primary}
-            />
-          </Pressable>
+        {/* GENERAL HEADER */}
+        <GeneralHeader
+          title="Tea Estates"
+          description="Estate Manager"
+          onNotificationPress={() =>
+            router.push("/estatemanager/Notification")
+          }
+        />
 
-          <AppText variant="subHeading" style={styles.headerTitle}>
-            Manager Profile
+        {/* PROFILE BANNER */}
+        <View style={styles.profileBanner}>
+          <AppText variant="body" style={styles.bannerTitle}>
+            Profile
           </AppText>
-
-          <Pressable
-            onPress={() => showComingSoon("Edit Profile")}
-            style={styles.headerButton}
-            accessibilityLabel="Edit profile"
-          >
-            <Ionicons
-              name="create-outline"
-              size={20}
-              color={colors.text.primary}
-            />
-          </Pressable>
         </View>
 
-        {/* Employee details */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={43} color={colors.primary} />
-          </View>
-
-          <AppText variant="heading" style={styles.employeeName}>
-            {employee.name}
-          </AppText>
-
-          <AppText variant="bodySmall" style={styles.role}>
-            {employee.role}
-          </AppText>
-
-          <AppText variant="caption" style={styles.employeeId}>
-            ID: {employee.employeeId}
-          </AppText>
-
-          <View style={styles.activeBadge}>
-            <View style={styles.statusDot} />
-            <AppText variant="caption" style={styles.activeText}>
-              {employee.status}
-            </AppText>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Ionicons name="briefcase-outline" size={18} color={colors.primary} />
-              <AppText variant="subHeading" style={styles.statValue}>
-                {employee.experience}
-              </AppText>
-              <AppText variant="caption" style={styles.mutedText}>
-                Experience
-              </AppText>
-            </View>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.statItem}>
-              <Ionicons name="leaf-outline" size={18} color={colors.primary} />
-              <AppText variant="subHeading" style={styles.statValue}>
-                {employee.managedDivisions}
-              </AppText>
-              <AppText variant="caption" style={styles.mutedText}>
-                Divisions
-              </AppText>
-            </View>
-
-            <View style={styles.statDivider} />
-
-            <View style={styles.statItem}>
-              <Ionicons name="people-outline" size={18} color={colors.primary} />
-              <AppText variant="subHeading" style={styles.statValue}>
-                {employee.workforce}
-              </AppText>
-              <AppText variant="caption" style={styles.mutedText}>
-                Workforce
-              </AppText>
-            </View>
-          </View>
-        </View>
-
-        {/* Contact and credentials */}
-        <SectionTitle title="CONTACT & CREDENTIALS" />
-
-        <View style={styles.card}>
-          <ProfileRow
-            icon="call-outline"
-            label="Phone Number"
-            value={employee.phone}
-            actionIcon="call-outline"
-          />
-          <View style={styles.rowDivider} />
-
-          <ProfileRow
-            icon="mail-outline"
-            label="Work Email"
-            value={employee.email}
-          />
-          <View style={styles.rowDivider} />
-
-          <ProfileRow
-            icon="card-outline"
-            label="National Identity Card"
-            value={employee.nic}
-          />
-          <View style={styles.rowDivider} />
-
-          <ProfileRow
-            icon="medical-outline"
-            label="Emergency Contact"
-            value={employee.emergencyContact}
-          />
-        </View>
-
-        {/* Estate assignment */}
-        <SectionTitle title="ESTATE ASSIGNMENT & SCOPE" />
-
-        <View style={styles.card}>
-          <AppText variant="caption" style={styles.mutedText}>
-            Assigned Production Estate
-          </AppText>
-
-          <View style={styles.estateHeading}>
-            <Ionicons name="leaf" size={21} color={colors.primary} />
-            <View style={styles.estateDetails}>
-              <AppText variant="subHeading" style={styles.estateName}>
-                {employee.estate}
-              </AppText>
-              <AppText variant="caption" style={styles.mutedText}>
-                {employee.division}
-              </AppText>
-            </View>
-          </View>
-
-          <View style={styles.estateBanner}>
-            <Ionicons name="image-outline" size={28} color="#FFFFFF" />
-            <View style={styles.bannerText}>
-              <AppText variant="body" style={styles.bannerTitle}>
-                Production Estate
-              </AppText>
-              <AppText variant="caption" style={styles.bannerSubtitle}>
-                Estate overview
-              </AppText>
-            </View>
-          </View>
-
-          
-          <AppText variant="body" style={styles.subsectionTitle}>
-            Official Licensing
-          </AppText>
-
-          <View style={styles.licenseRow}>
-            <View style={styles.licenseIcon}>
-              <Ionicons
-                name="ribbon-outline"
-                size={20}
-                color={colors.primary}
+        {/* PROFILE INFORMATION */}
+        <View style={styles.profileContent}>
+          {/* PROFILE IMAGE */}
+          <View style={styles.avatarWrapper}>
+            {user.avatar ? (
+              <Image
+                source={{ uri: user.avatar }}
+                style={styles.avatar}
               />
-            </View>
-            <View style={styles.licenseContent}>
-              <AppText variant="body" style={styles.menuTitle}>
-               .........
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons
+                  name="person"
+                  size={36}
+                  color={colors.primary}
+                />
+              </View>
+            )}
+          </View>
+
+          <AppText variant="body" style={styles.userName}>
+            {user.name}
+          </AppText>
+
+          {/* STATISTICS */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <AppText variant="caption" style={styles.statLabel}>
+                Growth
               </AppText>
-              <AppText variant="caption" style={styles.mutedText}>
-                Professional certification record
+
+              <AppText variant="bodySmall" style={styles.growthValue}>
+                {user.growth}
               </AppText>
             </View>
-            <Ionicons
-              name="checkmark-circle"
-              size={18}
-              color={colors.primary}
+
+            <View style={styles.statItem}>
+              <AppText variant="caption" style={styles.statLabel}>
+                Estates
+              </AppText>
+
+              <AppText variant="bodySmall" style={styles.statValue}>
+                {user.estates}
+              </AppText>
+            </View>
+
+            <View style={styles.statItem}>
+              <AppText variant="caption" style={styles.statLabel}>
+                Managers
+              </AppText>
+
+              <AppText variant="bodySmall" style={styles.statValue}>
+                {user.managers}
+              </AppText>
+            </View>
+          </View>
+        </View>
+
+        {/* ACCOUNT SECTION */}
+        <View style={styles.section}>
+          <AppText variant="bodySmall" style={styles.sectionTitle}>
+            Account
+          </AppText>
+
+          <View style={styles.menuContainer}>
+            <MenuItem
+              icon="person-outline"
+              title="Personal Information"
+              onPress={() => handleMenuPress("Personal Information")}
+            />
+
+            <MenuItem
+              icon="create-outline"
+              title="Change Password"
+              onPress={() => handleMenuPress("Change Password")}
             />
           </View>
         </View>
 
-        {/* Management tools */}
-        <SectionTitle title="MANAGEMENT TOOLS & ACCESS" />
+        {/* SUPPORT SECTION */}
+        <View style={styles.section}>
+          <AppText variant="bodySmall" style={styles.sectionTitle}>
+            Support
+          </AppText>
 
-        <View style={styles.card}>
-          <MenuRow
-            icon="document-text-outline"
-            title="Shift & Schedule History"
-            subtitle="View past shifts and working timelines"
-            onPress={() => showComingSoon("Shift & Schedule History")}
-          />
-          <View style={styles.rowDivider} />
+          <View style={styles.menuContainer}>
+            <MenuItem
+              icon="help-circle-outline"
+              title="Help & Support"
+              onPress={() => handleMenuPress("Help & Support")}
+            />
 
-          <MenuRow
-            icon="people-outline"
-            title="Assigned Machinery & Assets"
-            subtitle="View machinery, tools and estate assets"
-            onPress={() => showComingSoon("Assigned Machinery & Assets")}
-          />
-          <View style={styles.rowDivider} />
-
-          <MenuRow
-            icon="notifications-outline"
-            title="Alert Notifications"
-            subtitle="View alerts, updates and reminders"
-            onPress={() => router.push("/estatemanager/Notification")}
-            showDot
-          />
-          <View style={styles.rowDivider} />
-
-          <MenuRow
-            icon="shield-checkmark-outline"
-            title="Security & PIN Authorization"
-            subtitle="Manage security and login preferences"
-            onPress={() => showComingSoon("Security & PIN Authorization")}
-          />
+            <MenuItem
+              icon="information-circle-outline"
+              title="About"
+              onPress={() => handleMenuPress("About")}
+            />
+          </View>
         </View>
 
-        {/* Logout */}
+        {/* LOGOUT */}
         <Pressable
           style={({ pressed }) => [
             styles.logoutButton,
@@ -386,304 +262,181 @@ export default function EmployeeProfile() {
           ]}
           onPress={confirmLogout}
           accessibilityRole="button"
-          accessibilityLabel="Log out from device"
         >
-          <Ionicons name="log-out-outline" size={18} color="#DC2626" />
-          <AppText variant="body" style={styles.logoutText}>
-            Log Out from Device
+          <Ionicons
+            name="log-out-outline"
+            size={18}
+            color="#DC2626"
+          />
+
+          <AppText variant="bodySmall" style={styles.logoutText}>
+            Log Out
           </AppText>
         </Pressable>
-
-        <AppText variant="caption" style={styles.footer}>
-          Harboost Tea Collection Management System
-        </AppText>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <AppText variant="caption" style={styles.sectionTitle}>
-        {title}
-      </AppText>
-    </View>
-  );
-}
-
+// STYLES
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
   },
+
   scrollView: {
     flex: 1,
+    backgroundColor: colors.surface,
   },
+
   scrollContent: {
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xl,
   },
-  header: {
-    minHeight: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+
+  // PROFILE BANNER
+  profileBanner: {
+    height: 92,
+    backgroundColor: colors.primary,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
   },
-  headerButton: {
-    width: 38,
-    height: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-  },
-  headerTitle: {
-    color: colors.text.primary,
-  },
-  profileCard: {
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  avatar: {
-    width: 76,
-    height: 76,
-    borderRadius: 15,
-    backgroundColor: "#E7F7EC",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: "#CDEED7",
-  },
-  employeeName: {
-    color: colors.text.primary,
-    textAlign: "center",
-  },
-  role: {
-    color: colors.text.secondary,
-    marginTop: 3,
-  },
-  employeeId: {
-    color: colors.text.tertiary,
-    marginTop: 4,
-  },
-  activeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: spacing.sm,
-    backgroundColor: "#EAF8EE",
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  activeText: {
-    color: "#15803D",
+
+  bannerTitle: {
+    color: "#102018",
     fontWeight: "600",
   },
-  statsRow: {
-    flexDirection: "row",
+
+  // PROFILE CONTENT
+  profileContent: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.xs,
+    paddingBottom: spacing.md,
+  },
+
+  avatarWrapper: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    marginTop: -37,
+    marginLeft: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    overflow: "hidden",
+    backgroundColor: "#E5F5EA",
+  },
+
+  avatar: {
     width: "100%",
-    justifyContent: "space-around",
+    height: "100%",
+    borderRadius: 34,
+  },
+
+  avatarPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  userName: {
+    color: colors.text.primary,
+    marginTop: spacing.xs,
+    marginLeft: spacing.xs,
+    fontWeight: "600",
+  },
+
+  // STATISTICS
+  statsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
     marginTop: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    paddingHorizontal: spacing.xs,
+    paddingBottom: spacing.md,
   },
+
   statItem: {
     flex: 1,
     alignItems: "center",
-    gap: 4,
+    gap: 5,
   },
+
+  statLabel: {
+    color: colors.text.secondary,
+  },
+
   statValue: {
     color: colors.text.primary,
+    fontWeight: "600",
   },
-  statDivider: {
-    height: 45,
-    width: 1,
-    backgroundColor: "#E5E7EB",
+
+  growthValue: {
+    color: colors.primary,
+    fontWeight: "600",
   },
-  sectionHeader: {
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+
+  // SECTIONS
+  section: {
+    marginTop: spacing.md,
   },
+
   sectionTitle: {
-    color: colors.text.secondary,
-    fontWeight: "700",
-    letterSpacing: 0.6,
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 11,
-    gap: 10,
-  },
-  infoIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: "#EDF8F0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoContent: {
-    flex: 1,
-  },
-  mutedText: {
-    color: colors.text.secondary,
-  },
-  infoValue: {
     color: colors.text.primary,
-    marginTop: 2,
-  },
-  rowDivider: {
-    height: 1,
-    backgroundColor: "#F0F1F3",
-  },
-  estateHeading: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  estateDetails: {
-    flex: 1,
-  },
-  estateName: {
-    color: colors.text.primary,
-  },
-  estateBanner: {
-    minHeight: 100,
-    borderRadius: 10,
-    backgroundColor: "#527B46",
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    gap: 12,
-    marginBottom: spacing.md,
-  },
-  bannerText: {
-    flex: 1,
-  },
-  bannerTitle: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  bannerSubtitle: {
-    color: "#E8F5E9",
-    marginTop: 3,
-  },
-  subsectionTitle: {
-    color: colors.text.primary,
-    fontWeight: "600",
     marginBottom: spacing.sm,
-  },
-  chipContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 7,
-    marginBottom: spacing.md,
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#F0F9F2",
-    borderWidth: 1,
-    borderColor: "#D5EEDB",
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  chipText: {
-    color: colors.text.primary,
-  },
-  licenseRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: spacing.sm,
-  },
-  licenseIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-    backgroundColor: "#EDF8F0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  licenseContent: {
-    flex: 1,
-  },
-  menuRow: {
-    minHeight: 68,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: spacing.sm,
-  },
-  menuIcon: {
-    width: 35,
-    height: 35,
-    borderRadius: 10,
-    backgroundColor: "#EDF8F0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  menuContent: {
-    flex: 1,
-  },
-  menuTitle: {
-    color: colors.text.primary,
+    marginLeft: spacing.xs,
     fontWeight: "600",
   },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
+
+  menuContainer: {
+    gap: spacing.xs,
   },
-  pressed: {
-    opacity: 0.7,
-  },
-  logoutButton: {
+
+  // MENU ITEMS
+  menuItem: {
     minHeight: 48,
-    marginTop: spacing.lg,
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderRadius: 13,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+
+  menuItemPressed: {
+    opacity: 0.65,
+  },
+
+  menuText: {
+    flex: 1,
+    color: colors.text.primary,
+  },
+
+  // LOGOUT
+  logoutButton: {
+    minHeight: 46,
+    marginTop: spacing.xl,
     borderWidth: 1,
     borderColor: "#FECACA",
+    borderRadius: 12,
     backgroundColor: "#FFF7F7",
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "center",
-    gap: 9,
+    alignItems: "center",
+    gap: spacing.sm,
   },
+
   logoutPressed: {
     opacity: 0.65,
-    backgroundColor: "#FEE2E2",
   },
+
   logoutText: {
     color: "#DC2626",
     fontWeight: "600",
-  },
-  footer: {
-    color: colors.text.tertiary,
-    textAlign: "center",
-    marginTop: spacing.md,
   },
 });
