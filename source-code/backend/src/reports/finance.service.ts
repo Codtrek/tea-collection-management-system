@@ -19,6 +19,7 @@ import {
   type PeriodInput,
 } from './collection-report-rules';
 import { CollectionReportService } from './collection-report.service';
+import { ExpenseCategoryEntity } from './expense-category.entity';
 import { ExpenseEntryEntity } from './expense-entry.entity';
 import {
   buildExpenseReport,
@@ -72,6 +73,8 @@ export class FinanceService {
     private readonly batches: Repository<FertilizerBatchEntity>,
     @InjectRepository(ExpenseEntryEntity)
     private readonly expenses: Repository<ExpenseEntryEntity>,
+    @InjectRepository(ExpenseCategoryEntity)
+    private readonly expenseCategories: Repository<ExpenseCategoryEntity>,
     @InjectRepository(EstateAdvanceEntity)
     private readonly estateAdvances: Repository<EstateAdvanceEntity>,
     @InjectRepository(EstateAdvanceRecoveryEntity)
@@ -152,9 +155,10 @@ export class FinanceService {
       ),
       to: hi(period.to, trendRange.to),
     };
-    const [inputs, stockLost] = await Promise.all([
+    const [inputs, stockLost, categories] = await Promise.all([
       this.inputs(span),
       this.stockLost(period),
+      this.expenseCategories.find({ order: { sortOrder: 'ASC', name: 'ASC' } }),
     ]);
     return buildExpenseReport({
       today,
@@ -167,7 +171,8 @@ export class FinanceService {
       category: q.category,
       inputs,
       stockLost,
-      categories: [...new Set(inputs.manual.map((m) => m.category))].sort(),
+      // the filter offers the categories in use, and any that appear on old entries
+      categories: categories.filter((c) => c.active).map((c) => c.name),
     });
   }
 
@@ -185,6 +190,7 @@ export class FinanceService {
       recoveries,
       estateAdvances,
       salaryAdvances,
+      expenseCategories,
     ] = await Promise.all([
       this.leafValues(span),
       this.payroll.find(),
@@ -197,7 +203,9 @@ export class FinanceService {
       this.estateRecoveries.find(),
       this.estateAdvances.find(),
       this.salaryAdvances.find({ where: { status: 'Approved' } }),
+      this.expenseCategories.find(),
     ]);
+    const categoryName = new Map(expenseCategories.map((c) => [c.id, c.name]));
     const item = new Map(batches.map((b) => [b.id, b.item]));
     const withIncoming = new Set(movements.map((m) => m.batchId));
     const stockIns: StockInInput[] = [
@@ -251,10 +259,10 @@ export class FinanceService {
       manual: manual.map((e) => ({
         id: e.id,
         date: e.entryDate,
-        category: e.category,
+        category: categoryName.get(e.categoryId) ?? 'Uncategorised',
         description: e.description,
         amount: Number(e.amount),
-        paidVia: null,
+        paidVia: e.paidVia,
         enteredBy: e.enteredBy,
       })),
       settlements,

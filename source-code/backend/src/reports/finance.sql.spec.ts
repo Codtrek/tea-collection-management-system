@@ -14,6 +14,7 @@ import { SettlementEntity } from '../estates/settlement.entity';
 import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
 import { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import { CollectionReportService } from './collection-report.service';
+import { ExpenseCategoryEntity } from './expense-category.entity';
 import { ExpenseEntryEntity } from './expense-entry.entity';
 import { FinanceService } from './finance.service';
 import { LeafPurchaseService } from './leaf-purchase.service';
@@ -80,6 +81,7 @@ export const FINANCE_ENTITIES = [
   StockMovementEntity,
   FertilizerBatchEntity,
   ExpenseEntryEntity,
+  ExpenseCategoryEntity,
 ];
 
 (URL ? describe : describe.skip)(`RPT-03 vs direct SQL (${MONTH})`, () => {
@@ -114,6 +116,7 @@ export const FINANCE_ENTITIES = [
       r(StockMovementEntity),
       r(FertilizerBatchEntity),
       r(ExpenseEntryEntity),
+      r(ExpenseCategoryEntity),
       r(EstateAdvanceEntity),
       r(EstateAdvanceRecoveryEntity),
       r(SalaryAdvanceEntity),

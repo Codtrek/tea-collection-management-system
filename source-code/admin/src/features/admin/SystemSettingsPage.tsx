@@ -6,6 +6,7 @@ import { AdminGuard } from './AdminGuard'
 import { FertilizerPricesCard } from './FertilizerPricesCard'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Toggle } from '@/components/ui/Toggle'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -44,6 +45,8 @@ export function SystemSettingsPage() {
   const [channel, setChannel] = useState('in-app')
   const [sessionTimeout, setSessionTimeout] = useState('30')
   const [passwordPolicy, setPasswordPolicy] = useState('standard')
+  // Finance-Reports-Addendum §7: how long the person who logged a daily expense may change it
+  const [expenseWindow, setExpenseWindow] = useState('7')
   const [seededFrom, setSeededFrom] = useState<unknown>(null)
 
   // Seed the form from server state when it arrives (and on refetch). React's
@@ -56,7 +59,11 @@ export function SystemSettingsPage() {
     if (typeof settings.defaultChannel === 'string') setChannel(settings.defaultChannel)
     if (typeof settings.sessionTimeout === 'string') setSessionTimeout(settings.sessionTimeout)
     if (typeof settings.passwordPolicy === 'string') setPasswordPolicy(settings.passwordPolicy)
+    const exp = settings.expenses as { editWindowDays?: unknown } | undefined
+    if (typeof exp?.editWindowDays === 'number') setExpenseWindow(String(exp.editWindowDays))
   }
+
+  const windowValid = /^\d+$/.test(expenseWindow) && Number(expenseWindow) <= 31
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -65,6 +72,7 @@ export function SystemSettingsPage() {
         defaultChannel: channel,
         sessionTimeout,
         passwordPolicy,
+        expenses: { editWindowDays: Number(expenseWindow) },
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
@@ -80,7 +88,7 @@ export function SystemSettingsPage() {
         title="System Settings"
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Administration' }, { label: 'System Settings' }]}
         actions={
-          <Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={isPending || isError}>
+          <Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={isPending || isError || !windowValid}>
             Save Settings
           </Button>
         }
@@ -179,6 +187,22 @@ export function SystemSettingsPage() {
                 </li>
               </ul>
               <p className="mt-3 text-xs text-text-muted">Status display only — integrations are configured outside the UI.</p>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Daily expense entries</CardTitle>
+              </CardHeader>
+              <Input
+                label="Edit window (days)"
+                type="number"
+                min="0"
+                max="31"
+                value={expenseWindow}
+                onChange={(e) => setExpenseWindow(e.target.value)}
+                error={windowValid ? undefined : 'Enter a whole number of days, 0 to 31'}
+                hint="How long the person who logged an expense may change it. After that only the Factory Manager can, with a reason. Every change is audited."
+              />
             </Card>
 
             <FertilizerPricesCard />

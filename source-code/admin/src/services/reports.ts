@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/api'
+import { apiBlob, apiFetch } from '@/lib/api'
 import type {
   CollectionReport,
   CollectionReportQuery,
@@ -8,13 +8,20 @@ import type {
   ExpenseReportQuery,
   LeafPurchaseQuery,
   LeafPurchaseReport,
+  PaidVia,
 } from '@/features/reports/types'
 
 export interface CreateExpenseInput {
-  category: ExpenseCategory
+  categoryId: number
   amount: number
   date: string
   description: string
+  paidVia: PaidVia
+}
+
+export interface UpdateExpenseInput extends Partial<CreateExpenseInput> {
+  /** required outside the creator's edit window */
+  reason?: string
 }
 
 /**
@@ -76,10 +83,59 @@ export function getExpenseReport(q: ExpenseReportQuery = {}): Promise<ExpenseRep
   return apiFetch<ExpenseReport>(`/reports/expenses${qs ? `?${qs}` : ''}`)
 }
 
-/** RPT-04 — log a manual daily expense. Officer+ (Manager read-only). */
+/* ── RPT-04 daily expense entries (Finance-Reports-Addendum §6–7) ── */
+
+/** The category list, inactive ones included (they stay on old entries). */
+export function listExpenseCategories(): Promise<ExpenseCategory[]> {
+  return apiFetch<ExpenseCategory[]>('/reports/expense-categories')
+}
+
+/** ADM-01 — Administrator. Returns the updated list. */
+export function createExpenseCategory(name: string): Promise<ExpenseCategory[]> {
+  return apiFetch<ExpenseCategory[]>('/reports/expense-categories', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  })
+}
+
+export function updateExpenseCategory(
+  id: number,
+  patch: Partial<Pick<ExpenseCategory, 'name' | 'active' | 'sortOrder'>>,
+): Promise<ExpenseCategory[]> {
+  return apiFetch<ExpenseCategory[]>(`/reports/expense-categories/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
+export function getExpense(id: string): Promise<ExpenseEntry> {
+  return apiFetch<ExpenseEntry>(`/reports/expenses/${encodeURIComponent(id)}`)
+}
+
+/** Log a daily expense — `expenses: edit`. */
 export function createExpense(input: CreateExpenseInput): Promise<ExpenseEntry> {
   return apiFetch<ExpenseEntry>('/reports/expenses', {
     method: 'POST',
     body: JSON.stringify(input),
   })
+}
+
+/** Change an entry: the creator within the window, else the Manager with a reason. */
+export function updateExpense(id: string, input: UpdateExpenseInput): Promise<ExpenseEntry> {
+  return apiFetch<ExpenseEntry>(`/reports/expenses/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })
+}
+
+/** Attach or replace the receipt (photo or PDF, at most 2 MB). */
+export function uploadExpenseReceipt(id: string, file: File, reason?: string): Promise<ExpenseEntry> {
+  const body = new FormData()
+  body.set('file', file)
+  if (reason) body.set('reason', reason)
+  return apiFetch<ExpenseEntry>(`/reports/expenses/${encodeURIComponent(id)}/receipt`, { method: 'POST', body })
+}
+
+export function getExpenseReceipt(id: string): Promise<Blob> {
+  return apiBlob(`/reports/expenses/${encodeURIComponent(id)}/receipt`)
 }

@@ -37,7 +37,8 @@ export function setUnauthorizedHandler(handler: () => void): void {
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken()
   const headers = new Headers(init.headers)
-  headers.set('Content-Type', 'application/json')
+  // a FormData body (a file upload) sets its own multipart boundary
+  if (!(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
   let res: Response
@@ -67,4 +68,17 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   // text first and only parse when a body is actually present.
   const text = await res.text()
   return (text ? JSON.parse(text) : undefined) as T
+}
+
+/** A file the API serves (e.g. an expense receipt) — fetched with the session's token. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const token = getToken()
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  }).catch(() => {
+    throw new ApiError(0, `Unable to reach the server at ${API_URL}.`)
+  })
+  if (res.status === 401) onUnauthorized?.()
+  if (!res.ok) throw new ApiError(res.status, res.statusText)
+  return res.blob()
 }

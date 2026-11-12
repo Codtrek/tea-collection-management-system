@@ -17,6 +17,7 @@ export type ModuleKey =
   | 'attendance'
   | 'performance'
   | 'reports'
+  | 'expenses'
   | 'dispatch'
   | 'grading'
   | 'gradingApproval'

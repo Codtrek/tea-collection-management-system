@@ -24,6 +24,7 @@ export type ModuleKey =
   | 'attendance'
   | 'performance'
   | 'reports'
+  | 'expenses'
   | 'dispatch'
   | 'grading'
   | 'gradingApproval'
@@ -51,6 +52,7 @@ export const MODULE_KEYS: ModuleKey[] = [
   'attendance',
   'performance',
   'reports',
+  'expenses',
   'dispatch',
   'grading',
   'gradingApproval',
@@ -71,6 +73,9 @@ export const ADMIN_EDITABLE_MODULES: ModuleKey[] = [
   // above the limit, the Administrator audits (Fertilizer-Delivery-Addendum §4).
   'fertilizerApproval',
   'fertilizerManagerApproval',
+  // Daily expenses (Finance-Reports-Addendum §7): Officers log, the Manager corrects, the
+  // Administrator audits (view) and manages the category list.
+  'expenses',
 ];
 
 export type PermissionMatrix = Record<

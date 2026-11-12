@@ -4,8 +4,6 @@
   recipe: delete the fixture, keep the types.
 */
 
-export type ExpenseCategory = 'Utilities' | 'Maintenance' | 'Miscellaneous' | 'Other'
-
 export interface TrendPoint {
   month: string
   value: number
@@ -276,13 +274,35 @@ export interface ExpenseReportQuery {
   category?: string
 }
 
+/* ── RPT-04 daily expense entries (Finance-Reports-Addendum §6–7) ── */
+
+export type PaidVia = 'cash' | 'bank'
+
+export interface ExpenseCategory {
+  id: number
+  name: string
+  active: boolean
+  sortOrder: number
+}
+
 export interface ExpenseEntry {
   id: string
-  category: ExpenseCategory
+  categoryId: number
+  category: string
   description: string
   amount: number
   date: string
+  /** null on entries made before paid-via was recorded */
+  paidVia: PaidVia | null
   enteredBy: string
-  source: 'Manual'
+  /** factory day it was logged — the edit window counts from here */
+  loggedOn: string
+  updatedBy: string | null
+  updatedAt: string | null
+  editReason: string | null
+  receipt: { fileName: string; mimeType: string; sizeBytes: number } | null
+  /** what the viewer may do with it (server-decided) */
+  access: { canEdit: boolean; needsReason: boolean; note: string | null }
+  editWindowDays: number
 }
 

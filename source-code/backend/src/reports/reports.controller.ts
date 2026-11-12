@@ -2,16 +2,28 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  ParseIntPipe,
+  Patch,
   Post,
   Query,
   Req,
+  StreamableFile,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt-payload.interface';
 import { UsersService } from '../users/users.service';
-import { CreateExpenseDto } from './dto/create-expense.dto';
+import {
+  CreateExpenseDto,
+  ExpenseCategoryDto,
+  UpdateExpenseDto,
+} from './dto/create-expense.dto';
+import { MAX_RECEIPT_BYTES } from './expense-entry-rules';
 import type { CollectionReport } from './collection-report-rules';
 import type { LeafPurchaseReport } from './leaf-purchase-rules';
 import {
@@ -24,8 +36,12 @@ import {
 } from './collection-report.service';
 import type { ExpenseReport } from './finance-rules';
 import { FinanceService, type ExpenseReportQuery } from './finance.service';
-import type { PublicExpenseEntry } from './reports-map';
-import { type Actor, ReportsService } from './reports.service';
+import type { PublicExpenseCategory, PublicExpenseEntry } from './reports-map';
+import {
+  type Actor,
+  ReportsService,
+  type UploadedReceipt,
+} from './reports.service';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -105,7 +121,41 @@ export class ReportsController {
     });
   }
 
-  /** RPT-04 — log a manual daily expense. Officer+ (Manager read-only). */
+  /* ── RPT-04 daily expense entries (Finance-Reports-Addendum §6–7) ── */
+
+  /** The category list (inactive ones included, for old entries and ADM-01). */
+  @Get('expense-categories')
+  listCategories(): Promise<PublicExpenseCategory[]> {
+    return this.reportsService.listCategories();
+  }
+
+  /** ADM-01 — add a category. `administration: edit`. */
+  @Post('expense-categories')
+  async createCategory(
+    @Body() dto: ExpenseCategoryDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicExpenseCategory[]> {
+    return this.reportsService.createCategory(
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
+  /** ADM-01 — rename / reorder / deactivate a category. `administration: edit`. */
+  @Patch('expense-categories/:id')
+  async updateCategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ExpenseCategoryDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicExpenseCategory[]> {
+    return this.reportsService.updateCategory(
+      id,
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
+  /** Log a daily expense. `expenses: edit`. */
   @Post('expenses')
   async createExpense(
     @Body() dto: CreateExpenseDto,
@@ -114,9 +164,72 @@ export class ReportsController {
     return this.reportsService.createExpense(dto, await this.resolveActor(req));
   }
 
+  /** One entry, with what the viewer may do with it. `expenses: view`. */
+  @Get('expenses/:id')
+  async getExpense(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicExpenseEntry> {
+    return this.reportsService.getExpense(id, await this.resolveActor(req));
+  }
+
+  /** Change an entry: the creator within the window, else `expenses: approve` with a reason. */
+  @Patch('expenses/:id')
+  async updateExpense(
+    @Param('id') id: string,
+    @Body() dto: UpdateExpenseDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicExpenseEntry> {
+    return this.reportsService.updateExpense(
+      id,
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
+  /** Attach or replace the receipt (multipart `file`, photo or PDF, ≤ 2 MB; `reason` when needed). */
+  @Post('expenses/:id/receipt')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_RECEIPT_BYTES + 1 } }),
+  )
+  async saveReceipt(
+    @Param('id') id: string,
+    @UploadedFile() file: UploadedReceipt | undefined,
+    @Body('reason') reason: string | undefined,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicExpenseEntry> {
+    return this.reportsService.saveReceipt(
+      id,
+      file,
+      reason,
+      await this.resolveActor(req),
+    );
+  }
+
+  @Get('expenses/:id/receipt')
+  async getReceipt(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+  ): Promise<StreamableFile> {
+    const r = await this.reportsService.getReceipt(
+      id,
+      await this.resolveActor(req),
+    );
+    return new StreamableFile(r.data, {
+      type: r.mimeType,
+      length: r.sizeBytes,
+      disposition: `inline; filename="${r.fileName.replace(/[^\w.\- ]/g, '_')}"`,
+    });
+  }
+
   /** Resolves the JWT's `sub` to the acting user's display name + role for stamping. */
   private async resolveActor(req: AuthedRequest): Promise<Actor> {
-    const profile = await this.usersService.getProfile(Number(req.user.sub));
-    return { name: profile?.name ?? 'Unknown', role: req.user.role };
+    const sub = Number(req.user.sub);
+    const profile = await this.usersService.getProfile(sub);
+    return {
+      name: profile?.name ?? 'Unknown',
+      role: req.user.role,
+      sub: Number.isFinite(sub) ? sub : null,
+    };
   }
 }

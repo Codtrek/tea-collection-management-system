@@ -122,6 +122,7 @@ export const router = createBrowserRouter([
       { path: 'reports/revenue', element: <RedirectWithQuery to="/reports/leaf-purchases" /> },
       { path: 'reports/expenses', element: <ExpenseReportPage /> },
       { path: 'reports/expenses/new', element: <ExpenseEntryPage /> },
+      { path: 'reports/expenses/:id', element: <ExpenseEntryPage /> },
       { path: 'reports', element: <Navigate to="/reports/collection" replace /> },
 
       // Administration (ADM-01..04) — Administrator-only via AdminGuard

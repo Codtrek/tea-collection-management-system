@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Upload, Loader2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { ExpenseCategoriesCard } from './ExpenseCategoriesCard'
 import { AdminGuard } from './AdminGuard'
 import { Tabs } from '@/components/ui/Tabs'
 import { Card } from '@/components/ui/Card'
@@ -38,6 +39,7 @@ const TABS = [
   { id: 'grades', label: 'Grade Rates' },
   { id: 'transport', label: 'Transport Rates' },
   { id: 'items', label: 'Beneficiary Item Types' },
+  { id: 'expenses', label: 'Expense Categories' },
 ]
 
 export function FactorySetupPage() {
@@ -118,7 +120,7 @@ export function FactorySetupPage() {
             <Button onClick={() => setConfirmVersion(true)} disabled={backDated}>
               Publish New Version
             </Button>
-          ) : (
+          ) : tab === 'expenses' ? undefined : (
             <Button onClick={() => setConfirming(true)}>Save Changes</Button>
           )
         }
@@ -216,7 +218,13 @@ export function FactorySetupPage() {
         </Card>
       )}
 
-      {/* Publish a new grade-rate version — the one real write on this page. */}
+      {tab === 'expenses' && (
+        <div className="max-w-2xl">
+          <ExpenseCategoriesCard />
+        </div>
+      )}
+
+      {/* Publish a new grade-rate version. */}
       <LightConfirmModal
         open={confirmVersion}
         onClose={() => setConfirmVersion(false)}

@@ -2031,7 +2031,8 @@ const MOVEMENT_SEEDS: SeedMovement[] = [
 
 interface SeedExpenseEntry {
   id: string;
-  category: 'Utilities' | 'Maintenance' | 'Miscellaneous' | 'Other';
+  /** an `expense_categories` name (Finance-Reports-Addendum §6) */
+  category: string;
   description: string;
   amount: number;
   date: string;
@@ -2040,10 +2041,9 @@ interface SeedExpenseEntry {
 
 // ── Reports (RPT-01..04) ──
 // Manual daily-expense entries — mirrors the portal's former
-// `features/reports/data.ts` EXPENSE_ROWS fixture's manual rows 1:1. The
-// Payroll/Fertilizer/Transport lines the fixture also showed are DERIVED
-// from `payroll_runs`/`settlements` at query time (`ReportsService`), never
-// stored here.
+// `features/reports/data.ts` EXPENSE_ROWS fixture's manual rows 1:1. Leaf
+// purchases, wages and fertilizer stock are DERIVED at query time
+// (FinanceService, Finance-Reports-Addendum), never stored here.
 const EXPENSE_ENTRY_SEEDS: SeedExpenseEntry[] = [
   {
     id: 'EXP-2026-0136',
@@ -2055,7 +2055,7 @@ const EXPENSE_ENTRY_SEEDS: SeedExpenseEntry[] = [
   },
   {
     id: 'EXP-2026-0133',
-    category: 'Maintenance',
+    category: 'Machinery maintenance',
     description: 'Withering trough fan replacement',
     amount: 86500,
     date: '2026-07-07',
@@ -2080,7 +2080,7 @@ const EXPENSE_ENTRY_SEEDS: SeedExpenseEntry[] = [
   },
   {
     id: 'EXP-2026-0052',
-    category: 'Maintenance',
+    category: 'Machinery maintenance',
     description: 'Dryer belt servicing',
     amount: 64200,
     date: '2026-05-14',
@@ -2105,6 +2105,7 @@ const PERMISSION_MATRIX: Record<
     holidayCalendar: 'approve', holidayStatutory: 'approve',
     employees: 'approve', attendance: 'approve', performance: 'approve',
     reports: 'approve', administration: 'approve', dispatch: 'approve',
+    expenses: 'view',
     grading: 'view', gradingApproval: 'view',
     fertilizerApproval: 'view', fertilizerManagerApproval: 'view',
   },
@@ -2115,6 +2116,7 @@ const PERMISSION_MATRIX: Record<
     holidayCalendar: 'view', holidayStatutory: 'view',
     employees: 'view', attendance: 'edit', performance: 'none',
     reports: 'edit', administration: 'none', dispatch: 'edit',
+    expenses: 'edit',
     grading: 'edit', gradingApproval: 'view',
     fertilizerApproval: 'approve', fertilizerManagerApproval: 'view',
   },
@@ -2125,6 +2127,7 @@ const PERMISSION_MATRIX: Record<
     holidayCalendar: 'edit', holidayStatutory: 'view',
     employees: 'view', attendance: 'approve', performance: 'edit',
     reports: 'view', administration: 'none', dispatch: 'approve',
+    expenses: 'approve',
     grading: 'view', gradingApproval: 'approve',
     fertilizerApproval: 'view', fertilizerManagerApproval: 'approve',
   },
@@ -3186,15 +3189,19 @@ async function seed() {
 
     for (const e of EXPENSE_ENTRY_SEEDS) {
       await client.query(
-        `INSERT INTO expense_entries (id, category, description, amount, entry_date, entered_by)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO expense_entries (id, category_id, description, amount, entry_date, entered_by)
+         VALUES ($1, (SELECT id FROM expense_categories WHERE name = $2), $3, $4, $5, $6)
          ON CONFLICT (id) DO UPDATE SET
-           category = EXCLUDED.category, description = EXCLUDED.description,
+           category_id = EXCLUDED.category_id, description = EXCLUDED.description,
            amount = EXCLUDED.amount, entry_date = EXCLUDED.entry_date,
            entered_by = EXCLUDED.entered_by`,
         [e.id, e.category, e.description, e.amount, e.date, e.enteredBy],
       );
     }
+    // new entries take ids after the seeded ones
+    await client.query(
+      `SELECT setval('expense_entry_seq', GREATEST((SELECT max(split_part(id, '-', 3)::int) FROM expense_entries), 1))`,
+    );
     console.log(`Seeded ${EXPENSE_ENTRY_SEEDS.length} expense entries`);
 
     // ── Administration (ADM-01..04) ──

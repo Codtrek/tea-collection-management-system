@@ -34,6 +34,7 @@ const MODULE_LABELS: Record<ModuleKey, string> = {
   attendance: 'Attendance',
   performance: 'Performance',
   reports: 'Reports',
+  expenses: 'Daily Expenses',
   dispatch: 'Agent Dispatch',
   grading: 'Grading',
   gradingApproval: 'Grading Corrections',

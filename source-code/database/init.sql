@@ -763,15 +763,56 @@ CREATE TABLE advance_reschedules (
 -- other workflow generates — the §8.1.6 gap the reports doc flagged. The
 -- Payroll/Fertilizer/Transport expense lines RPT-03 also shows are DERIVED
 -- at query time from `payroll_runs`/`settlements`, never duplicated here.
+-- Finance-Reports-Addendum §6 (2026-11-15): the category list is data, editable by the
+-- Administrator; an inactive category stays on the entries that used it.
+CREATE TABLE expense_categories (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(60) NOT NULL UNIQUE,
+    active      BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    updated_by  VARCHAR(100),
+    updated_at  TIMESTAMP,
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO expense_categories (name, sort_order, active) VALUES
+    ('Firewood / dryer fuel', 1, TRUE),
+    ('Electricity',           2, TRUE),
+    ('Water',                 3, TRUE),
+    ('Vehicle fuel',          4, TRUE),
+    ('Vehicle repairs',       5, TRUE),
+    ('Machinery maintenance', 6, TRUE),
+    ('Packaging',             7, TRUE),
+    ('Office & admin',        8, TRUE),
+    ('Miscellaneous',         9, TRUE),
+    ('Utilities',            99, FALSE);
+
 CREATE TABLE expense_entries (
-    id           VARCHAR(20) PRIMARY KEY, -- business key, e.g. 'EXP-2026-0001'
-    category     VARCHAR(20) NOT NULL
-        CHECK (category IN ('Utilities', 'Maintenance', 'Miscellaneous', 'Other')),
-    description  VARCHAR(200) NOT NULL,
-    amount       DECIMAL(12,2) NOT NULL,
-    entry_date   DATE NOT NULL,
-    entered_by   VARCHAR(100) NOT NULL,
-    created_at   TIMESTAMP DEFAULT NOW()
+    id                 VARCHAR(20) PRIMARY KEY, -- business key, e.g. 'EXP-2026-0001' (expense_entry_seq)
+    category_id        INTEGER NOT NULL REFERENCES expense_categories(id),
+    description        VARCHAR(200) NOT NULL,
+    amount             DECIMAL(12,2) NOT NULL,
+    entry_date         DATE NOT NULL,
+    paid_via           VARCHAR(4) CHECK (paid_via IN ('cash', 'bank')), -- NULL on entries made before 2026-11-15
+    entered_by         VARCHAR(100) NOT NULL,
+    created_by_user_id INTEGER REFERENCES users(id),
+    updated_by         VARCHAR(100),
+    updated_at         TIMESTAMP,
+    edit_reason        TEXT, -- the reason given for the latest change made after the edit window
+    created_at         TIMESTAMP DEFAULT NOW()
+);
+
+CREATE SEQUENCE expense_entry_seq;
+
+-- one receipt per entry, stored in the database until file storage (Cloudinary) lands
+CREATE TABLE expense_receipts (
+    entry_id     VARCHAR(20) PRIMARY KEY REFERENCES expense_entries(id) ON DELETE CASCADE,
+    file_name    VARCHAR(200) NOT NULL,
+    mime_type    VARCHAR(100) NOT NULL,
+    size_bytes   INTEGER NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 2097152),
+    data         BYTEA NOT NULL,
+    uploaded_by  VARCHAR(100) NOT NULL,
+    uploaded_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- ─── ADMINISTRATION ───────────────────────────────────────────────
@@ -876,6 +917,7 @@ CREATE INDEX idx_advance_reschedules_advance ON advance_reschedules(advance_id);
 CREATE INDEX idx_payroll_runs_employee ON payroll_runs(employee_id);
 CREATE INDEX idx_payroll_runs_status ON payroll_runs(status);
 CREATE INDEX idx_expense_entries_date ON expense_entries(entry_date);
+CREATE INDEX idx_expense_entries_category ON expense_entries(category_id);
 CREATE INDEX idx_fertilizer_requests_status ON fertilizer_requests(status);
 CREATE INDEX idx_fertilizer_batches_item ON fertilizer_batches(item);
 CREATE INDEX idx_stock_movements_batch ON stock_movements(batch_id);
@@ -1353,3 +1395,16 @@ INSERT INTO role_permissions (role, module, level) VALUES
     ('Manager',          'estateAdvances',            'view'),
     ('ReceivingOfficer', 'estateAdvances',            'none')
 ON CONFLICT (role, module) DO NOTHING;
+
+-- Finance-Reports-Addendum §7 (2026-11-15): daily expense entries. edit = log and change your own
+-- within the window; approve = change any (after the window, with a reason); Administrator views.
+INSERT INTO role_permissions (role, module, level) VALUES
+    ('Administrator',    'expenses', 'view'),
+    ('Officer',          'expenses', 'edit'),
+    ('Manager',          'expenses', 'approve'),
+    ('ReceivingOfficer', 'expenses', 'none')
+ON CONFLICT (role, module) DO NOTHING;
+
+INSERT INTO system_settings (key, value, updated_by)
+VALUES ('expenses', '{"editWindowDays": 7}'::jsonb, 'migration')
+ON CONFLICT (key) DO NOTHING;
