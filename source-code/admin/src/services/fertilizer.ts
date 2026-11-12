@@ -54,6 +54,8 @@ export interface RecordMovementInput {
   category?: FertilizerBatch['category']
   unit?: FertilizerBatch['unit']
   supplier?: string
+  /** Incoming: Rs per unit of quantity paid — required */
+  unitCost?: number
   lotNumber?: string
   expiryDate?: string
   // Outgoing (ad-hoc only — a request's fertilizer leaves through its handover)

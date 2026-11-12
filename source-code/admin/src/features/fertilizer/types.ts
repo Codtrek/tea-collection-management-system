@@ -45,6 +45,8 @@ export interface StockMovement {
   linkedRequest?: string
   /** Incoming */
   supplier?: string
+  /** Incoming: Rs per unit paid (absent on stock received before costs were recorded) */
+  unitCost?: number
   /** Write-off only */
   writeOffReason?: WriteOffReason
   notes?: string

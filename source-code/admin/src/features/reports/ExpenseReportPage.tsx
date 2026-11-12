@@ -14,12 +14,8 @@ import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import * as reportsService from '@/services/reports'
-import { REPORT_PERIODS, type ExpenseRow } from './types'
+import type { ExpenseTableRow } from './types'
 import { formatCurrency, formatDate, formatWeight } from '@/lib/format'
-
-function periodLabel(period: string): string {
-  return REPORT_PERIODS.find((p) => p.value === period)?.label ?? period
-}
 
 /* RPT-03 — expense breakdown: settlements + payroll + RPT-04 manual entries.
    Payroll/Fertilizer/Transport are DERIVED server-side from payroll_runs/
@@ -28,7 +24,7 @@ export function ExpenseReportPage() {
   const navigate = useNavigate()
   const { can } = useAuth()
   const canLog = can('reports', 'edit') // Officer enters daily expenses (§8.1.6); Manager read-only
-  const [period, setPeriod] = useState<string | undefined>(undefined)
+  const [month, setMonth] = useState<string | undefined>(undefined)
   const [category, setCategory] = useState('')
 
   const {
@@ -37,8 +33,8 @@ export function ExpenseReportPage() {
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['reports', 'expenses', period ?? 'auto'],
-    queryFn: () => reportsService.getExpenseReport(period),
+    queryKey: ['reports', 'expenses', month ?? 'auto'],
+    queryFn: () => reportsService.getExpenseReport({ month, groupBy: 'entry' }),
   })
 
   if (isPending) {
@@ -59,31 +55,27 @@ export function ExpenseReportPage() {
     )
   }
 
-  const columns: Column<ExpenseRow>[] = [
+  const columns: Column<ExpenseTableRow>[] = [
     {
       key: 'description',
       header: 'Expense',
       render: (e) => (
         <div>
           <p className="font-medium text-text">{e.description}</p>
-          <p className="id text-xs text-text-muted">{e.id}</p>
+          <p className="id text-xs text-text-muted">{e.key}</p>
         </div>
       ),
     },
     { key: 'category', header: 'Category', render: (e) => <StatusBadge tone="neutral">{e.category}</StatusBadge> },
     { key: 'amount', header: 'Amount', align: 'right', render: (e) => formatCurrency(e.amount) },
-    { key: 'date', header: 'Date', render: (e) => formatDate(e.date) },
+    { key: 'date', header: 'Date', render: (e) => (e.date ? formatDate(e.date) : '') },
     {
       key: 'source',
       header: 'Source',
       render: (e) =>
-        e.source === 'Leaf Purchase Report' ? (
-          // the same number, under the same name, on the report it comes from
-          <Link
-            to={`/reports/leaf-purchases?month=${e.date.slice(0, 7)}`}
-            className="text-xs font-medium text-primary hover:underline"
-          >
-            Leaf Purchase Report →
+        e.href ? (
+          <Link to={e.href} className="text-xs font-medium text-primary hover:underline">
+            {e.source} →
           </Link>
         ) : (
           <span className="text-xs text-text-muted">{e.source}</span>
@@ -91,14 +83,14 @@ export function ExpenseReportPage() {
     },
   ]
 
-  const rows = report.rows.filter((e) => !category || e.category === category)
+  const rows = report.table.rows.filter((e) => !category || e.category === category)
 
   return (
     <div>
       <PageHeader
         title="Expense Reports"
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Reports' }, { label: 'Expenses' }]}
-        description="Green leaf purchases from the Leaf Purchase Report, payroll from EMP-12, plus daily expense entries. Fertilizer and transport recovered from estate owners are deductions on the Leaf Purchase Report, not expenses."
+        description="Green leaf purchases, processed wages, fertilizer stock bought and daily expense entries. Charges recovered from estate owners and advances are not expenses."
         actions={
           canLog ? (
             <Button onClick={() => navigate('/reports/expenses/new')}>
@@ -112,18 +104,18 @@ export function ExpenseReportPage() {
         filters={
           <>
             <Select
-              label="Period"
-              placeholder="Latest with data"
-              value={period ?? ''}
-              onChange={(e) => setPeriod(e.target.value || undefined)}
-              options={REPORT_PERIODS}
+              label="Month"
+              placeholder="Last complete month"
+              value={month ?? ''}
+              onChange={(e) => setMonth(e.target.value || undefined)}
+              options={report.trend.map((t) => ({ value: t.key, label: t.label }))}
             />
             <Select
               label="Category"
               placeholder="All categories"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              options={[...new Set(report.rows.map((e) => e.category))].map((c) => ({ value: c, label: c }))}
+              options={report.options.categories.map((c) => ({ value: c, label: c }))}
             />
             <div aria-hidden />
           </>
@@ -131,20 +123,20 @@ export function ExpenseReportPage() {
         summary={
           <>
             <StatCard
-              label={`Total expenses (${periodLabel(report.period)})`}
-              value={report.total}
+              label={`Total expenses (${report.period.label})`}
+              value={report.cards.total.value}
               format={formatCurrency}
               icon={<Receipt className="size-4" />}
-              deltaPercent={report.deltaPercent ?? undefined}
-              note={report.deltaPercent !== null ? 'vs prior period' : undefined}
+              deltaPercent={report.cards.total.changePct ?? undefined}
+              note={report.cards.total.changePct !== null ? 'vs prior period' : undefined}
             />
             <div className="rounded-[var(--radius-lg)] bg-surface p-5 shadow-[var(--shadow-1)]">
               <p className="text-[13px] font-medium text-text-muted">Largest category</p>
-              {report.largest ? (
+              {report.cards.largest ? (
                 <>
-                  <p className="mt-3 text-xl font-semibold text-text-heading">{report.largest.category}</p>
+                  <p className="mt-3 text-xl font-semibold text-text-heading">{report.cards.largest.category}</p>
                   <p className="tabular mt-1 text-sm text-text-muted">
-                    {formatCurrency(report.largest.amount)} · {report.total ? Math.round((report.largest.amount / report.total) * 100) : 0}% of total
+                    {formatCurrency(report.cards.largest.amount)} · {Math.round(report.cards.largest.pct)}% of total
                   </p>
                 </>
               ) : (
@@ -152,36 +144,36 @@ export function ExpenseReportPage() {
               )}
             </div>
             <StatCard
-              label={`Manual entries (${periodLabel(report.period)})`}
-              value={report.manualTotal}
+              label={`Recovered from estate owners (${report.period.label})`}
+              value={report.cards.recovered.totalRs}
               format={formatCurrency}
               icon={<TrendingDown className="size-4" />}
-              note="Utilities · Maintenance · Misc"
+              note="Not an expense"
             />
           </>
         }
         charts={
           <div className="grid gap-4 lg:grid-cols-[1fr_1.6fr]">
             <DonutChartCard
-              title={`Expense by category (${periodLabel(report.period)})`}
-              centerLabel={formatCurrency(report.total)}
+              title={`Expense by category (${report.period.label})`}
+              centerLabel={formatCurrency(report.cards.total.value)}
               valueFmt={formatCurrency}
-              data={report.split.map((s) => ({
-                name: `${s.category} ${report.total ? Math.round((s.amount / report.total) * 100) : 0}%`,
+              data={report.byCategory.map((s) => ({
+                name: `${s.category} ${Math.round(s.pct ?? 0)}%`,
                 value: s.amount,
               }))}
             />
-            <AreaChartCard title="Expense trend" data={report.trend} xKey="month" yKey="value" valueFmt={formatCurrency} />
+            <AreaChartCard title="Expense trend" data={report.trend.map((t) => ({ label: t.label, total: t.total }))} xKey="label" yKey="total" valueFmt={formatCurrency} />
           </div>
         }
         table={
           <>
             {rows.length === 0 ? (
-              <EmptyState title="No expenses" description="No expenses matched this period and filter combination." />
+              <EmptyState title="No expenses" description={report.empty.reason ?? 'No expenses matched this filter.'} />
             ) : (
-              <DataTable columns={columns} rows={rows} rowKey={(e) => e.id} />
+              <DataTable columns={columns} rows={rows} rowKey={(e) => e.key} />
             )}
-            {report.stockLost.length > 0 && <StockLostPanel period={periodLabel(report.period)} lines={report.stockLost} />}
+            {report.stockLost.length > 0 && <StockLostPanel period={report.period.label} lines={report.stockLost} />}
           </>
         }
       />

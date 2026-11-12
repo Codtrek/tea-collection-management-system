@@ -175,6 +175,8 @@ export interface PublicMovement {
   destination?: string;
   linkedRequest?: string;
   supplier?: string;
+  /** Incoming: Rs per kg paid; absent on stock received before costs were recorded */
+  unitCost?: number;
   /** set only on a Write-off */
   writeOffReason?: WriteOffReason;
   notes?: string;

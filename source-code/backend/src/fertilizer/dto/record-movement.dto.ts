@@ -57,6 +57,12 @@ export class RecordMovementDto {
   @IsString()
   supplier?: string;
 
+  /** Incoming: Rs per kg paid — required for every new stock-in (Finance-Reports-Addendum §5). */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  unitCost?: number;
+
   @IsOptional()
   @IsString()
   lotNumber?: string;

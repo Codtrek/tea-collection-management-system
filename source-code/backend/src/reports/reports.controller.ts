@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt-payload.interface';
@@ -14,10 +22,9 @@ import {
   CollectionReportService,
   type CollectionReportQuery,
 } from './collection-report.service';
-import type {
-  ExpenseReport,
-  PublicExpenseEntry,
-} from './reports-map';
+import type { ExpenseReport } from './finance-rules';
+import { FinanceService, type ExpenseReportQuery } from './finance.service';
+import type { PublicExpenseEntry } from './reports-map';
 import { type Actor, ReportsService } from './reports.service';
 
 type AuthedRequest = Request & { user: JwtPayload };
@@ -29,6 +36,7 @@ export class ReportsController {
     private readonly reportsService: ReportsService,
     private readonly collectionReports: CollectionReportService,
     private readonly leafPurchases: LeafPurchaseService,
+    private readonly finance: FinanceService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -56,7 +64,6 @@ export class ReportsController {
     });
   }
 
-  /** RPT-02 — from processed settlements only. */
   /**
    * RPT-02 Leaf Purchase Report (Reports addendum §9) — what the factory owes and pays estate owners
    * for green leaf, valued at the grade rates in force on each delivery date. Same period and
@@ -80,10 +87,22 @@ export class ReportsController {
     });
   }
 
-  /** RPT-03 — payroll + settlement transport/fertilizer + manual entries. */
+  /**
+   * RPT-03 Expense report (Finance-Reports-Addendum). Same period params as RPT-01 (omitted → the
+   * last complete month); groupBy category|month|entry; category= filters to one category.
+   */
   @Get('expenses')
-  expenseReport(@Query('period') period?: string): Promise<ExpenseReport> {
-    return this.reportsService.expenseReport(period);
+  expenseReport(
+    @Query() q: Record<string, string | undefined>,
+  ): Promise<ExpenseReport> {
+    return this.finance.expenseReport({
+      month: q.month,
+      from: q.from,
+      to: q.to,
+      thisMonth: q.thisMonth === '1',
+      groupBy: q.groupBy as ExpenseReportQuery['groupBy'],
+      category: q.category,
+    });
   }
 
   /** RPT-04 — log a manual daily expense. Officer+ (Manager read-only). */
@@ -92,10 +111,7 @@ export class ReportsController {
     @Body() dto: CreateExpenseDto,
     @Req() req: AuthedRequest,
   ): Promise<PublicExpenseEntry> {
-    return this.reportsService.createExpense(
-      dto,
-      await this.resolveActor(req),
-    );
+    return this.reportsService.createExpense(dto, await this.resolveActor(req));
   }
 
   /** Resolves the JWT's `sub` to the acting user's display name + role for stamping. */

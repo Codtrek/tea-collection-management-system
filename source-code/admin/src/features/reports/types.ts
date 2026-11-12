@@ -201,27 +201,79 @@ export interface LeafPurchaseQuery extends Omit<CollectionReportQuery, 'groupBy'
   groupBy?: LeafGroupBy
 }
 
-export interface ExpenseRow {
-  id: string
-  category: ExpenseCategory | 'Payroll' | 'Green leaf purchases'
-  description: string
+/* ── RPT-03 Expense report (Finance-Reports-Addendum) — mirrors backend finance-rules.ts ── */
+
+export type ExpenseKind = 'leaf' | 'wages' | 'stock' | 'operating'
+export type ExpenseSource = 'Leaf' | 'Payroll' | 'Stock' | 'Manual'
+export type ExpenseGroupBy = 'category' | 'month' | 'entry'
+
+export interface ExpenseTableRow {
+  key: string
+  name: string
+  date: string | null
+  category: string | null
+  kind: ExpenseKind | null
+  description: string | null
+  source: ExpenseSource | null
+  href: string | null
+  enteredBy: string | null
+  paidVia: 'cash' | 'bank' | null
+  records: number
   amount: number
-  date: string
-  enteredBy: string
-  source: 'Manual' | 'Payroll run' | 'Leaf Purchase Report'
+  pct: number | null
+}
+
+export interface ExpenseTrendPoint {
+  key: string
+  label: string
+  leaf: number
+  wages: number
+  stock: number
+  operating: number
+  total: number
+  partial: boolean
+}
+
+export interface ExpenseRecoveries {
+  settlements: number
+  transportRs: number
+  fertilizerRs: number
+  advancesRs: number
+  totalRs: number
 }
 
 export interface ExpenseReport {
-  period: string
-  total: number
-  manualTotal: number
-  largest: { category: string; amount: number } | null
-  deltaPercent: number | null
-  split: { category: string; amount: number }[]
-  trend: TrendPoint[]
-  rows: ExpenseRow[]
-  /** fertilizer written off in the period (kg) — information only, never part of total / split / trend */
+  period: Omit<CollectionReport['period'], 'previous' | 'lastYear'>
+  filters: { category: string | null }
+  cards: {
+    total: { value: number; previous: number | null; changePct: number | null; lastYear: number | null; yoyPct: number | null }
+    largest: { category: string; amount: number; pct: number } | null
+    leafShare: { amount: number; pct: number | null }
+    recovered: ExpenseRecoveries
+  }
+  byCategory: { category: string; kind: ExpenseKind; amount: number; pct: number | null }[]
+  trend: ExpenseTrendPoint[]
+  table: { groupBy: ExpenseGroupBy; rows: ExpenseTableRow[]; totals: { records: number; amount: number } }
+  /** leaf purchases − transport charges recovered */
+  netLeafCostRs: number
+  /** attendance × pay rates for months whose payroll isn't processed — never in the total */
+  wagesEstimate: { amountRs: number; months: { month: string; amountRs: number; employees: number; days: number }[] }
+  /** advances issued — cash out, not an expense */
+  loans: { totalRs: number; estateRs: number; salaryRs: number; count: number }
+  stock: { uncosted: number; uncostedKg: number }
+  /** fertilizer written off in the period (kg) — information only, never an expense */
   stockLost: { item: string; reason: string; kg: number }[]
+  empty: { reason: string | null; hints: string[] }
+  options: { categories: string[] }
+}
+
+export interface ExpenseReportQuery {
+  month?: string
+  from?: string
+  to?: string
+  thisMonth?: boolean
+  groupBy?: ExpenseGroupBy
+  category?: string
 }
 
 export interface ExpenseEntry {
@@ -234,12 +286,3 @@ export interface ExpenseEntry {
   source: 'Manual'
 }
 
-/** The five seeded months (Mar–Jul 2026) — a fixed, known period list, same
-    static-options precedent the old fixture used for its period Select. */
-export const REPORT_PERIODS: { value: string; label: string }[] = [
-  { value: '2026-07', label: 'July 2026' },
-  { value: '2026-06', label: 'June 2026' },
-  { value: '2026-05', label: 'May 2026' },
-  { value: '2026-04', label: 'April 2026' },
-  { value: '2026-03', label: 'March 2026' },
-]

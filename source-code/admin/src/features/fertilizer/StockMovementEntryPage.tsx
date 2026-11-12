@@ -33,6 +33,8 @@ function buildMovementSchema(batches: FertilizerBatch[]) {
       // Incoming
       item: z.string().optional(),
       supplier: z.string().optional(),
+      // what the factory paid — the Expense report's fertilizer stock purchases (Finance-Reports-Addendum §5)
+      unitCost: z.union([z.number(), z.nan()]).optional(),
       lotNumber: z.string().optional(),
       expiryDate: z.string().optional(),
       // Outgoing
@@ -42,6 +44,8 @@ function buildMovementSchema(batches: FertilizerBatch[]) {
     })
     .superRefine((v, ctx) => {
       if (v.type === 'Incoming') {
+        if (!(typeof v.unitCost === 'number' && v.unitCost > 0))
+          ctx.addIssue({ code: 'custom', path: ['unitCost'], message: 'Enter the unit cost paid' })
         if (v.batchId === 'new') {
           if (!v.item) ctx.addIssue({ code: 'custom', path: ['item'], message: 'Item is required' })
           if (!v.supplier) ctx.addIssue({ code: 'custom', path: ['supplier'], message: 'Supplier is required' })
@@ -155,6 +159,7 @@ function MovementForm({ batches }: { batches: FertilizerBatch[] }) {
         date: data.date,
         notes: data.notes || undefined,
         supplier: data.supplier || undefined,
+        unitCost: data.unitCost,
         ...(data.batchId === 'new'
           ? {
               // Category has no field in this quick-entry form — new batches
@@ -268,6 +273,16 @@ function MovementForm({ batches }: { batches: FertilizerBatch[] }) {
                 <Input label="Item" error={errors.item?.message} {...register('item')} />
               )}
               <Input label="Supplier" error={errors.supplier?.message} {...register('supplier')} />
+              <Input
+                label={`Unit cost (Rs. per ${values.unit === 'bags' ? 'bag' : 'kg'})`}
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                hint="What the factory paid. Counted as a fertilizer stock purchase on the Expense report."
+                error={errors.unitCost?.message}
+                {...register('unitCost', { valueAsNumber: true })}
+              />
               <Input label="Batch / lot number" hint="Must be unique." error={errors.lotNumber?.message} {...register('lotNumber')} />
               <Input label="Expiry date" type="date" error={errors.expiryDate?.message} {...register('expiryDate')} />
             </fieldset>

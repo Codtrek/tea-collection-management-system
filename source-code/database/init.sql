@@ -421,6 +421,8 @@ CREATE TABLE stock_movements (
     estate_id          INTEGER REFERENCES estates(id),
     linked_request_id  INTEGER REFERENCES fertilizer_requests(id),
     supplier           VARCHAR(100), -- Incoming
+    -- Incoming: Rs per kg paid (Finance-Reports-Addendum §5, 2026-11-15); NULL before costs were recorded
+    unit_cost          DECIMAL(10,2) CHECK (unit_cost IS NULL OR unit_cost > 0),
     -- Write-off only (Fertilizer-Delivery-Addendum §5.2, 2026-11-08)
     write_off_reason   VARCHAR(10)
         CHECK (write_off_reason IN ('expired', 'damaged', 'other')),

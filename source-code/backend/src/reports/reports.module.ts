@@ -2,7 +2,12 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditModule } from '../audit/audit.module';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
+import { EmployeeAttendanceEntity } from '../employees/employee-attendance.entity';
+import { EmployeeEntity } from '../employees/employee.entity';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
+import { SalaryAdvanceEntity } from '../employees/salary-advance.entity';
+import { EstateAdvanceRecoveryEntity } from '../estates/estate-advance-recovery.entity';
+import { EstateAdvanceEntity } from '../estates/estate-advance.entity';
 import { GradeRateEntity } from '../admin/grade-rate.entity';
 import { CollectionsModule } from '../collections/collections.module';
 import { EstateEntity } from '../estates/estate.entity';
@@ -13,6 +18,7 @@ import { UsersModule } from '../users/users.module';
 import { ExpenseEntryEntity } from './expense-entry.entity';
 import { ReportsController } from './reports.controller';
 import { CollectionReportService } from './collection-report.service';
+import { FinanceService } from './finance.service';
 import { LeafPurchaseService } from './leaf-purchase.service';
 import { ReportsService } from './reports.service';
 
@@ -30,9 +36,14 @@ import { ReportsService } from './reports.service';
       PayrollRunEntity,
       // Leaf Purchase Report — rate versions (written by ADM-01)
       GradeRateEntity,
-      // Write-offs — shown as "Stock lost", for information only.
+      // Expense report (FinanceService): stock purchases + write-offs, wages, advances
       StockMovementEntity,
       FertilizerBatchEntity,
+      EmployeeEntity,
+      EmployeeAttendanceEntity,
+      SalaryAdvanceEntity,
+      EstateAdvanceEntity,
+      EstateAdvanceRecoveryEntity,
     ]),
     UsersModule,
     AuditModule,
@@ -40,6 +51,11 @@ import { ReportsService } from './reports.service';
     CollectionsModule,
   ],
   controllers: [ReportsController],
-  providers: [ReportsService, CollectionReportService, LeafPurchaseService],
+  providers: [
+    ReportsService,
+    CollectionReportService,
+    FinanceService,
+    LeafPurchaseService,
+  ],
 })
 export class ReportsModule {}

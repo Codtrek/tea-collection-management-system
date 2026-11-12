@@ -5,6 +5,7 @@ import type {
   ExpenseCategory,
   ExpenseEntry,
   ExpenseReport,
+  ExpenseReportQuery,
   LeafPurchaseQuery,
   LeafPurchaseReport,
 } from '@/features/reports/types'
@@ -14,10 +15,6 @@ export interface CreateExpenseInput {
   amount: number
   date: string
   description: string
-}
-
-function withPeriod(path: string, period?: string): string {
-  return period ? `${path}?period=${period}` : path
 }
 
 /**
@@ -61,9 +58,22 @@ export function getLeafPurchaseReport(q: LeafPurchaseQuery = {}): Promise<LeafPu
   return apiFetch<LeafPurchaseReport>(`/reports/leaf-purchases${qs ? `?${qs}` : ''}`)
 }
 
-/** RPT-03. Payroll + settlement transport/fertilizer + manual entries. */
-export function getExpenseReport(period?: string): Promise<ExpenseReport> {
-  return apiFetch<ExpenseReport>(withPeriod('/reports/expenses', period))
+/**
+ * RPT-03 Expense report (Finance-Reports-Addendum) — leaf purchases, processed wages, fertilizer
+ * stock and daily entries; recoveries, loans and estimated wages beside the total, never in it.
+ * Same period params as RPT-01 (omitted → the last complete month).
+ */
+export function getExpenseReport(q: ExpenseReportQuery = {}): Promise<ExpenseReport> {
+  const p = new URLSearchParams()
+  if (q.thisMonth) p.set('thisMonth', '1')
+  else if (q.from && q.to) {
+    p.set('from', q.from)
+    p.set('to', q.to)
+  } else if (q.month) p.set('month', q.month)
+  if (q.groupBy) p.set('groupBy', q.groupBy)
+  if (q.category) p.set('category', q.category)
+  const qs = p.toString()
+  return apiFetch<ExpenseReport>(`/reports/expenses${qs ? `?${qs}` : ''}`)
 }
 
 /** RPT-04 — log a manual daily expense. Officer+ (Manager read-only). */

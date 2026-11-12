@@ -47,6 +47,7 @@ import {
   projectSchedule,
   selfApprovalCheck,
 } from './advance-schedule';
+import { grossFromHours, sumHours } from './payroll-gross';
 import { PayrollRunEntity } from './payroll-run.entity';
 import { SalaryAdvanceEntity } from './salary-advance.entity';
 
@@ -275,7 +276,6 @@ export class EmployeesService {
       ),
     );
   }
-
 
   async listAdvances(): Promise<PublicAdvance[]> {
     const advances = await this.advanceRepo.find({
@@ -520,25 +520,18 @@ export class EmployeesService {
         (a) =>
           a.employeeId === employee.id && this.inPeriod(a.date, dto.period),
       );
-      const totals = periodAttendance.reduce(
-        (sum, a) => ({
-          dayHours: sum.dayHours + Number(a.dayHours),
-          dayOtHours: sum.dayOtHours + Number(a.dayOtHours),
-          nightHours: sum.nightHours + Number(a.nightHours),
-          nightOtHours: sum.nightOtHours + Number(a.nightOtHours),
-        }),
-        { dayHours: 0, dayOtHours: 0, nightHours: 0, nightOtHours: 0 },
-      );
+      const totals = sumHours(periodAttendance);
 
       const dayRate = Number(employee.dayRate);
       const dayOtRate = Number(employee.dayOtRate);
       const nightRate = Number(employee.nightRate);
       const nightOtRate = Number(employee.nightOtRate);
-      const gross =
-        totals.dayHours * dayRate +
-        totals.dayOtHours * dayOtRate +
-        totals.nightHours * nightRate +
-        totals.nightOtHours * nightOtRate;
+      const gross = grossFromHours(totals, {
+        dayRate,
+        dayOtRate,
+        nightRate,
+        nightOtRate,
+      });
 
       // Salary-Advances-Addendum §9: deduct only what the gross allows (the cap % of gross, after
       // other deductions) — the rest is carried forward, so net is never below Rs. 0. The row

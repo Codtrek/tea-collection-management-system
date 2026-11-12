@@ -47,6 +47,20 @@ export class StockMovementEntity {
   @Column({ type: 'varchar', nullable: true })
   supplier: string | null;
 
+  /**
+   * Incoming only: Rs per kg the factory paid (Finance-Reports-Addendum §5). Quantity × unit cost
+   * is the Expense report's "Fertilizer stock purchases". Null on stock received before costs were
+   * recorded, and on Outgoing / Write-off.
+   */
+  @Column({
+    name: 'unit_cost',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  unitCost: string | null;
+
   /** Write-off only (expired / damaged / other); null on Incoming and Outgoing. */
   @Column({ name: 'write_off_reason', type: 'varchar', nullable: true })
   writeOffReason: WriteOffReason | null;

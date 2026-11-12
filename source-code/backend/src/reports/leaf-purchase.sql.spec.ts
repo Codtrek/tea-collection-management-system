@@ -6,6 +6,7 @@ import { DeliveryGradeLineEntity } from '../collections/delivery-grade-line.enti
 import { EstateEntity } from '../estates/estate.entity';
 import { SettlementEntity } from '../estates/settlement.entity';
 import { CollectionReportService } from './collection-report.service';
+import type { FinanceService } from './finance.service';
 import { LeafPurchaseService } from './leaf-purchase.service';
 
 /*
@@ -66,10 +67,23 @@ SELECT count(*) FILTER (WHERE d.rate_id IS NOT NULL)                            
         get: () => Promise.resolve({ mismatchTolerancePct: 5 }),
       } as unknown as CollectionSettingsService,
     );
+    const finance = {
+      rateVersions: () =>
+        ds
+          .getRepository(GradeRateEntity)
+          .find()
+          .then((rs) =>
+            rs.map((r) => ({
+              effectiveDate: r.effectiveDate,
+              superRate: Number(r.superRate),
+              normalRate: Number(r.normalRate),
+            })),
+          ),
+      settlementRows: () => Promise.resolve([]),
+    } as unknown as FinanceService;
     const service = new LeafPurchaseService(
       collection,
-      ds.getRepository(GradeRateEntity),
-      ds.getRepository(SettlementEntity),
+      finance,
       ds.getRepository(EstateEntity),
     );
     const [sql] = await ds.query<Record<string, string>[]>(SQL, [MONTH]);

@@ -93,6 +93,7 @@ describe('FertilizerService', () => {
             batchId: formatBatchId(b.id),
             quantityKg: 10,
             date: TODAY,
+            unitCost: 160,
           },
           managerActor,
         ),
@@ -108,6 +109,7 @@ describe('FertilizerService', () => {
           batchId: formatBatchId(b.id),
           quantityKg: 50,
           date: TODAY,
+          unitCost: 160,
         },
         asActor(officer),
       );
@@ -121,6 +123,7 @@ describe('FertilizerService', () => {
           type: 'Incoming',
           quantityKg: 250,
           date: TODAY,
+          unitCost: 42.5,
           item: 'Dolomite',
           expiryDate: '2027-06-01',
           lotNumber: 'LOT-D-1',
@@ -128,6 +131,7 @@ describe('FertilizerService', () => {
         asActor(officer),
       );
       expect(m.type).toBe('Incoming');
+      expect(m.unitCost).toBe(42.5);
       expect(h.batches.rows).toEqual([
         expect.objectContaining({ item: 'Dolomite', quantityKg: '250' }),
       ]);
@@ -144,10 +148,28 @@ describe('FertilizerService', () => {
             batchId: formatBatchId(b.id),
             quantityKg: 10,
             date: TODAY,
+            unitCost: 160,
           },
           asActor(officer),
         ),
       ).rejects.toThrow(/discarded/);
+    });
+
+    it('requires the unit cost paid (Finance-Reports-Addendum §5)', async () => {
+      const h = buildFertilizerHarness();
+      const b = h.batch({ qty: 100, expiry: '2027-01-01' });
+      await expect(
+        h.stock.recordMovement(
+          {
+            type: 'Incoming',
+            batchId: formatBatchId(b.id),
+            quantityKg: 10,
+            date: TODAY,
+          },
+          asActor(officer),
+        ),
+      ).rejects.toThrow(/unit cost/);
+      expect(b.quantityKg).toBe('100');
     });
   });
 
