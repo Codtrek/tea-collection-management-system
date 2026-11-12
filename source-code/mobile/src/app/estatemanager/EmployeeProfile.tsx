@@ -32,7 +32,6 @@ export default function EmployeeProfile() {
     name: "Kalana Ekanayake",
     growth: "+12.5%",
     estates: "3",
-    managers: "3",
     avatar: "",
   };
 
@@ -147,13 +146,6 @@ export default function EmployeeProfile() {
           }
         />
 
-        {/* PROFILE BANNER */}
-        <View style={styles.profileBanner}>
-          <AppText variant="body" style={styles.bannerTitle}>
-            Profile
-          </AppText>
-        </View>
-
         {/* PROFILE INFORMATION */}
         <View style={styles.profileContent}>
           {/* PROFILE IMAGE */}
@@ -197,16 +189,6 @@ export default function EmployeeProfile() {
 
               <AppText variant="bodySmall" style={styles.statValue}>
                 {user.estates}
-              </AppText>
-            </View>
-
-            <View style={styles.statItem}>
-              <AppText variant="caption" style={styles.statLabel}>
-                Managers
-              </AppText>
-
-              <AppText variant="bodySmall" style={styles.statValue}>
-                {user.managers}
               </AppText>
             </View>
           </View>
@@ -294,23 +276,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
 
-  // PROFILE BANNER
-  profileBanner: {
-    height: 92,
-    backgroundColor: colors.primary,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-  },
-
-  bannerTitle: {
-    color: "#102018",
-    fontWeight: "600",
-  },
-
   // PROFILE CONTENT
   profileContent: {
     backgroundColor: colors.surface,
@@ -319,12 +284,12 @@ const styles = StyleSheet.create({
   },
 
   avatarWrapper: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    marginTop: -37,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    marginTop: -38,
     marginLeft: spacing.sm,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: colors.surface,
     overflow: "hidden",
     backgroundColor: "#E5F5EA",
@@ -333,7 +298,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: "100%",
     height: "100%",
-    borderRadius: 34,
+    borderRadius: 38,
   },
 
   avatarPlaceholder: {
@@ -344,7 +309,7 @@ const styles = StyleSheet.create({
 
   userName: {
     color: colors.text.primary,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
     marginLeft: spacing.xs,
     fontWeight: "600",
   },
@@ -352,7 +317,7 @@ const styles = StyleSheet.create({
   // STATISTICS
   statsContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "space-around",
     alignItems: "center",
     marginTop: spacing.lg,
     paddingHorizontal: spacing.xs,

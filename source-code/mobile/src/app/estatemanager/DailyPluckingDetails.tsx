@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import React from "react";
 import {
   View,
   StyleSheet,
@@ -13,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
-import EstateManagerBottomTab from "@/components/ui/EstateManagerBottomTab";
+import AppCard from "@/components/ui/AppCard";
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -46,16 +47,12 @@ export default function DailyPlucking() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [activeTab, setActiveTab] = useState("dashboard");
-
   return (
     <SafeAreaView
       style={styles.container}
       edges={["top", "left", "right"]}
     >
       <View style={styles.screen}>
-        {/* ================= MAIN CONTENT ================= */}
-
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
@@ -65,11 +62,8 @@ export default function DailyPlucking() {
             },
           ]}
         >
-          {/* ================= HEADER ================= */}
-
+          {/* HEADER - UNCHANGED */}
           <View style={styles.header}>
-            {/* Back button */}
-
             <Pressable
               style={styles.backButton}
               onPress={() => router.back()}
@@ -89,8 +83,6 @@ export default function DailyPlucking() {
               Daily Tea Plucking
             </AppText>
 
-            {/* Header notification */}
-
             <Pressable
               style={styles.headerNotification}
               onPress={() =>
@@ -106,8 +98,7 @@ export default function DailyPlucking() {
             </Pressable>
           </View>
 
-          {/* ================= MONTH ================= */}
-
+          {/* MONTH */}
           <AppText
             variant="caption"
             style={styles.fieldLabel}
@@ -130,8 +121,7 @@ export default function DailyPlucking() {
             />
           </Pressable>
 
-          {/* ================= RECORDS TITLE ================= */}
-
+          {/* RECORDS TITLE */}
           <AppText
             variant="caption"
             style={styles.recordsTitle}
@@ -139,98 +129,73 @@ export default function DailyPlucking() {
             AUGUST RECORDS
           </AppText>
 
-          {/* ================= RECORD LIST ================= */}
-
-          <View style={styles.recordsContainer}>
-            {pluckingRecords.map((record, index) => (
-              <Pressable
-                key={record.date}
-                style={[
-                  styles.recordRow,
-                  index === pluckingRecords.length - 1 &&
-                    styles.lastRecordRow,
-                ]}
-              >
-                {/* Calendar icon */}
-
-                <View style={styles.calendarContainer}>
-                  <Ionicons
-                    name="calendar-outline"
-                    size={18}
-                    color={colors.success}
-                  />
-                </View>
-
-                {/* Date */}
-
-                <AppText
-                  variant="bodySmall"
-                  style={styles.recordDate}
+          {/* RECORD LIST */}
+          <AppCard>
+            <View style={styles.recordsContainer}>
+              {pluckingRecords.map((record, index) => (
+                <Pressable
+                  key={record.date}
+                  style={[
+                    styles.recordRow,
+                    index === pluckingRecords.length - 1 &&
+                      styles.lastRecordRow,
+                  ]}
                 >
-                  {record.date}
-                </AppText>
+                  <View style={styles.calendarContainer}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={18}
+                      color={colors.success}
+                    />
+                  </View>
 
-                {/* Weight */}
+                  <AppText
+                    variant="bodySmall"
+                    style={styles.recordDate}
+                  >
+                    {record.date}
+                  </AppText>
 
-                <AppText
-                  variant="bodySmall"
-                  style={styles.recordWeight}
-                >
-                  {record.weight}
-                </AppText>
-              </Pressable>
-            ))}
-          </View>
+                  <AppText
+                    variant="bodySmall"
+                    style={styles.recordWeight}
+                  >
+                    {record.weight}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+          </AppCard>
 
-          {/* ================= ADD BUTTON ================= */}
-
-          <Pressable
-            style={[
-              styles.addButton,
-              {
-                bottom: 65 + insets.bottom,
-              },
-            ]}
-            onPress={() => {
-              // Add daily plucking record later
-            }}
-          >
-            <Ionicons
-              name="add"
-              size={28}
-              color={colors.white}
-            />
-          </Pressable>
-
-          {/* Space for bottom tab */}
-
+          {/* SPACE FOR BOTTOM TAB */}
           <View style={styles.bottomSpace} />
         </ScrollView>
 
-        {/* ================= BOTTOM TAB ================= */}
-
-        <View
+        {/* ADD BUTTON */}
+        <Pressable
           style={[
-            styles.bottomTab,
+            styles.addButton,
             {
-              paddingBottom: insets.bottom,
+              bottom: 65 + insets.bottom,
             },
           ]}
+          onPress={() => {
+            // Add daily plucking record functionality later.
+          }}
         >
-         
-        </View>
+          <Ionicons
+            name="add"
+            size={28}
+            color={colors.white}
+          />
+        </Pressable>
       </View>
     </SafeAreaView>
   );
 }
 
-/* ========================================================= */
 /* STYLES */
-/* ========================================================= */
-
 const styles = StyleSheet.create({
-  /* ================= SCREEN ================= */
-
   container: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -246,7 +211,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
 
-  /* ================= HEADER ================= */
+  /* HEADER */
 
   header: {
     height: 42,
@@ -275,7 +240,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  /* ================= MONTH ================= */
+  /* MONTH */
 
   fieldLabel: {
     color: colors.text.secondary,
@@ -299,7 +264,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
 
-  /* ================= RECORDS ================= */
+  /* RECORDS */
 
   recordsTitle: {
     color: colors.text.secondary,
@@ -307,18 +272,14 @@ const styles = StyleSheet.create({
   },
 
   recordsContainer: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 6,
-    overflow: "hidden",
+    width: "100%",
   },
 
   recordRow: {
-    height: 48,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
   },
@@ -346,7 +307,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
 
-  /* ================= ADD BUTTON ================= */
+  /* ADD BUTTON */
 
   addButton: {
     position: "absolute",
@@ -367,16 +328,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
 
-  /* ================= BOTTOM ================= */
-
   bottomSpace: {
     height: spacing.xl * 2,
-  },
-
-  bottomTab: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
 });

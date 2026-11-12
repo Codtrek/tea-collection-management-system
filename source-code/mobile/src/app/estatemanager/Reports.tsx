@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import {
   View,
@@ -13,6 +14,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
+import AppCard from "@/components/ui/AppCard";
+import FormCheckbox from "@/components/forms/FormCheckbox";
+import GeneralHeader from "@/components/ui/GeneralHeader";
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -36,11 +40,6 @@ interface RecentReport {
 
 const initialDatasets: Dataset[] = [
   {
-    id: "plucking",
-    label: "Plucking Yield",
-    checked: true,
-  },
-  {
     id: "fertilizer",
     label: "Fertilizer Stock",
     checked: true,
@@ -48,11 +47,6 @@ const initialDatasets: Dataset[] = [
   {
     id: "attendance",
     label: "Staff Attendance",
-    checked: false,
-  },
-  {
-    id: "expense",
-    label: "Expense & Advances",
     checked: false,
   },
 ];
@@ -80,57 +74,24 @@ export default function Reports() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [activeTab, setActiveTab] = useState("reports");
   const [selectedPeriod, setSelectedPeriod] =
     useState<ReportPeriod>("Weekly");
 
   const [datasets, setDatasets] =
     useState<Dataset[]>(initialDatasets);
 
-  const toggleDataset = (id: string) => {
+  const toggleDataset = (id: string, checked: boolean) => {
     setDatasets((current) =>
       current.map((dataset) =>
         dataset.id === id
-          ? {
-              ...dataset,
-              checked: !dataset.checked,
-            }
+          ? { ...dataset, checked }
           : dataset
       )
     );
   };
 
-  const handleTabPress = (tab: {
-    key: string;
-    label: string;
-    icon: keyof typeof Ionicons.glyphMap;
-  }) => {
-    setActiveTab(tab.key);
-
-    switch (tab.key) {
-      case "dashboard":
-        router.push("/estatemanager");
-        break;
-
-      case "employees":
-        router.push("/estatemanager/Employees");
-        break;
-
-      case "photoEvidence":
-        router.push("/estatemanager/PhotoEvidence");
-        break;
-
-      case "reports":
-        router.push("/estatemanager/Reports");
-        break;
-
-      default:
-        break;
-    }
-  };
-
   const handleGenerateReport = () => {
-    // Report generation logic can be connected later.
+    // Connect report generation functionality here later.
   };
 
   return (
@@ -148,46 +109,35 @@ export default function Reports() {
             },
           ]}
         >
-          {/* ================= HEADER ================= */}
+          {/* GENERAL HEADER */}
+          <GeneralHeader
+            title="Your Estate Name"
+            description="Estate Manager"
+            onNotificationPress={() =>
+              router.push("/estatemanager/Notification")
+            }
+          />
 
-          <View style={styles.header}>
-            <View style={styles.headerText}>
-              <AppText
-                variant="subHeading"
-                style={styles.headerTitle}
-              >
-                Generate Reports
-              </AppText>
+          {/* PAGE HEADER */}
+          <View style={styles.pageHeader}>
+            <AppText
+              variant="subHeading"
+              style={styles.pageTitle}
+            >
+              Generate Reports
+            </AppText>
 
-              <AppText
-                variant="caption"
-                style={styles.headerDescription}
-              >
-                Generate, preview and download operational
-                summaries.
-              </AppText>
-            </View>
-
-            <Pressable
-                          style={styles.notificationButton}
-                          onPress={() =>
-                            router.push("/estatemanager/Notification")
-                          }
-                          hitSlop={8}
-                        >
-                          <Ionicons
-                            name="notifications-outline"
-                            size={19}
-                            color={colors.text.primaryGreen}
-                          />
-                        </Pressable>
+            <AppText
+              variant="caption"
+              style={styles.pageDescription}
+            >
+              Generate, preview and download operational summaries.
+            </AppText>
           </View>
 
-          {/* ================= GENERATE REPORT CARD ================= */}
-
-          <View style={styles.generateCard}>
+          {/* GENERATE REPORT CARD */}
+          <AppCard>
             {/* CARD HEADER */}
-
             <View style={styles.generateHeader}>
               <View style={styles.reportIconContainer}>
                 <Ionicons
@@ -221,42 +171,36 @@ export default function Reports() {
             </View>
 
             {/* PERIOD SELECTOR */}
-
             <View style={styles.periodSelector}>
-              {(["Weekly", "Monthly", "Yearly"] as ReportPeriod[]).map(
-                (period) => {
-                  const selected =
-                    selectedPeriod === period;
+              {(
+                ["Weekly", "Monthly", "Yearly"] as ReportPeriod[]
+              ).map((period) => {
+                const selected = selectedPeriod === period;
 
-                  return (
-                    <Pressable
-                      key={period}
+                return (
+                  <Pressable
+                    key={period}
+                    style={[
+                      styles.periodButton,
+                      selected && styles.periodButtonActive,
+                    ]}
+                    onPress={() => setSelectedPeriod(period)}
+                  >
+                    <AppText
+                      variant="caption"
                       style={[
-                        styles.periodButton,
-                        selected && styles.periodButtonActive,
+                        styles.periodText,
+                        selected && styles.periodTextActive,
                       ]}
-                      onPress={() =>
-                        setSelectedPeriod(period)
-                      }
                     >
-                      <AppText
-                        variant="caption"
-                        style={[
-                          styles.periodText,
-                          selected &&
-                            styles.periodTextActive,
-                        ]}
-                      >
-                        {period}
-                      </AppText>
-                    </Pressable>
-                  );
-                }
-              )}
+                      {period}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
             </View>
 
             {/* TARGET ESTATE */}
-
             <AppText
               variant="caption"
               style={styles.fieldLabel}
@@ -287,8 +231,7 @@ export default function Reports() {
               />
             </Pressable>
 
-            {/* DATASETS */}
-
+            {/* OPERATIONAL DATASETS */}
             <AppText
               variant="caption"
               style={styles.datasetLabel}
@@ -298,42 +241,24 @@ export default function Reports() {
 
             <View style={styles.datasetGrid}>
               {datasets.map((dataset) => (
-                <Pressable
+                <View
                   key={dataset.id}
                   style={styles.datasetItem}
-                  onPress={() =>
-                    toggleDataset(dataset.id)
-                  }
                 >
-                  <View
-                    style={[
-                      styles.checkbox,
-                      dataset.checked &&
-                        styles.checkboxChecked,
-                    ]}
-                  >
-                    {dataset.checked && (
-                      <Ionicons
-                        name="checkmark"
-                        size={11}
-                        color={colors.white}
-                      />
-                    )}
-                  </View>
-
-                  <AppText
-                    variant="caption"
-                    style={styles.datasetText}
-                    numberOfLines={1}
-                  >
-                    {dataset.label}
-                  </AppText>
-                </Pressable>
+                  <FormCheckbox
+                    label={dataset.label}
+                    checked={dataset.checked}
+                    onValueChange={(checked) =>
+                      toggleDataset(dataset.id, checked)
+                    }
+                    containerStyle={styles.checkboxContainer}
+                    labelStyle={styles.datasetText}
+                  />
+                </View>
               ))}
             </View>
 
             {/* EFFECTIVE RANGE */}
-
             <View style={styles.rangeField}>
               <View style={styles.rangeLeft}>
                 <Ionicons
@@ -359,7 +284,6 @@ export default function Reports() {
             </View>
 
             {/* GENERATE BUTTON */}
-
             <Pressable
               style={styles.generateButton}
               onPress={handleGenerateReport}
@@ -377,10 +301,9 @@ export default function Reports() {
                 Generate Report
               </AppText>
             </Pressable>
-          </View>
+          </AppCard>
 
-          {/* ================= RECENTLY CREATED ================= */}
-
+          {/* RECENTLY CREATED */}
           <View style={styles.recentHeader}>
             <View style={styles.recentTitleRow}>
               <AppText
@@ -410,14 +333,10 @@ export default function Reports() {
             </Pressable>
           </View>
 
-          {/* ================= REPORT LIST ================= */}
-
+          {/* RECENT REPORT LIST */}
           <View style={styles.reportsList}>
             {recentReports.map((report) => (
-              <View
-                key={report.id}
-                style={styles.reportCard}
-              >
+              <AppCard key={report.id}>
                 <View style={styles.reportCardTop}>
                   <View style={styles.fileIconContainer}>
                     <AppText
@@ -493,37 +412,22 @@ export default function Reports() {
                     </Pressable>
                   </View>
                 </View>
-              </View>
+              </AppCard>
             ))}
           </View>
 
           <View style={styles.bottomSpace} />
         </ScrollView>
-
-        {/* ================= BOTTOM NAVIGATION ================= */}
-
-        <View
-          style={[
-            styles.bottomTabContainer,
-            {
-              paddingBottom: insets.bottom,
-            },
-          ]}
-        >
-        </View>
       </View>
     </SafeAreaView>
   );
 }
 
-/* ============================================================
-   STYLES
-   ============================================================ */
-
+/* STYLES */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.black,
+    backgroundColor: colors.surface,
   },
 
   screen: {
@@ -536,48 +440,23 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
 
-  /* ================= HEADER ================= */
-
-  header: {
-  minHeight: 60,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginBottom: spacing.md,
-},
-
-headerText: {
-  flex: 1,
-},
-
-headerTitle: {
-  color: colors.text.primaryGreen,
-},
-
-headerDescription: {
-  color: colors.text.secondary,
-  marginTop: 2,
-  maxWidth: 250,
-},
-
-notificationButton: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 20,
-},
-  /* ================= GENERATE CARD ================= */
-
-  generateCard: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 8,
-    padding: spacing.sm,
-    marginBottom: spacing.lg,
+  // PAGE HEADER
+  pageHeader: {
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
   },
 
+  pageTitle: {
+    color: colors.text.primaryGreen,
+  },
+
+  pageDescription: {
+    color: colors.text.secondary,
+    marginTop: 2,
+    maxWidth: 280,
+  },
+
+  // GENERATE CARD
   generateHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -607,8 +486,7 @@ notificationButton: {
     marginTop: 1,
   },
 
-  /* ================= PERIOD SELECTOR ================= */
-
+  // PERIOD SELECTOR
   periodSelector: {
     height: 30,
     flexDirection: "row",
@@ -637,15 +515,14 @@ notificationButton: {
     color: colors.text.primary,
   },
 
-  /* ================= FORM ================= */
-
+  // TARGET ESTATE
   fieldLabel: {
     color: colors.text.secondary,
     marginBottom: 3,
   },
 
   selectField: {
-    height: 34,
+    minHeight: 34,
     borderWidth: 1,
     borderColor: colors.border.default,
     borderRadius: 5,
@@ -669,52 +546,34 @@ notificationButton: {
     marginLeft: 4,
   },
 
+  // DATASETS
   datasetLabel: {
     color: colors.text.secondary,
-    marginBottom: 3,
+    marginBottom: spacing.sm,
   },
 
   datasetGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 4,
-    marginBottom: spacing.sm,
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
 
   datasetItem: {
-    width: "48%",
-    minHeight: 27,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F0F3FB",
-    borderRadius: 5,
-    paddingHorizontal: 5,
+    width: "47%",
   },
 
-  checkbox: {
-    width: 13,
-    height: 13,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    borderRadius: 2,
+  checkboxContainer: {
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.white,
-  },
-
-  checkboxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
   },
 
   datasetText: {
     flex: 1,
-    color: colors.text.primary,
-    marginLeft: 4,
+    marginLeft: 6,
+    fontSize: 12,
   },
 
-  /* ================= RANGE ================= */
-
+  // EFFECTIVE RANGE
   rangeField: {
     minHeight: 34,
     backgroundColor: "#EEF8F3",
@@ -740,8 +599,7 @@ notificationButton: {
     color: colors.text.primary,
   },
 
-  /* ================= GENERATE BUTTON ================= */
-
+  // GENERATE BUTTON
   generateButton: {
     height: 36,
     borderRadius: 6,
@@ -756,12 +614,12 @@ notificationButton: {
     marginLeft: spacing.xs,
   },
 
-  /* ================= RECENT REPORTS ================= */
-
+  // RECENT REPORTS HEADER
   recentHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
 
@@ -790,16 +648,9 @@ notificationButton: {
     color: colors.text.primaryGreen,
   },
 
+  // REPORT LIST
   reportsList: {
     gap: spacing.sm,
-  },
-
-  reportCard: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 7,
-    padding: spacing.sm,
   },
 
   reportCardTop: {
@@ -875,17 +726,7 @@ notificationButton: {
     backgroundColor: colors.successBackground,
   },
 
-  /* ================= BOTTOM NAVIGATION ================= */
-
   bottomSpace: {
     height: spacing.xl * 2,
-  },
-
-  bottomTabContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.white,
   },
 });

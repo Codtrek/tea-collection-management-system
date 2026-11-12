@@ -1,22 +1,25 @@
+
 import React, { useMemo, useState } from "react";
 import {
   View,
   StyleSheet,
   ScrollView,
   Pressable,
-  TextInput,
 } from "react-native";
+
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
+import AppCard from "@/components/ui/AppCard";
 import Avatar from "@/components/ui/Avatar";
 import GeneralHeader from "@/components/ui/GeneralHeader";
-
+import SearchBar from "@/components/ui/SearchBar";
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -71,7 +74,6 @@ export default function Employees() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [activeTab, setActiveTab] = useState("employees");
   const [searchText, setSearchText] = useState("");
 
   // Search employees and sort alphabetically.
@@ -80,49 +82,24 @@ export default function Employees() {
 
     return EMPLOYEES
       .filter((employee) => {
-        if (!search) return true;
-
         return (
           employee.name.toLowerCase().includes(search) ||
           employee.id.toLowerCase().includes(search)
         );
       })
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
   }, [searchText]);
+
+  // Open employee registration.
+  const openEmployeeRegistration = () => {
+    router.push("/estatemanager/EmployeeRegistration");
+  };
 
   // Open notifications.
   const openNotifications = () => {
     router.push("/estatemanager/Notification");
-  };
-
-  // Bottom tab navigation.
-  const handleTabPress = (tab: {
-    key: string;
-    label: string;
-    icon: keyof typeof Ionicons.glyphMap;
-  }) => {
-    setActiveTab(tab.key);
-
-    switch (tab.key) {
-      case "dashboard":
-        router.push("/estatemanager");
-        break;
-
-      case "employees":
-        router.push("/estatemanager/Employees");
-        break;
-
-      case "photoEvidence":
-        router.push("/estatemanager/PhotoEvidence");
-        break;
-
-      case "reports":
-        router.push("/estatemanager/Reports");
-        break;
-
-      default:
-        break;
-    }
   };
 
   return (
@@ -131,6 +108,7 @@ export default function Employees() {
       edges={["top", "left", "right"]}
     >
       <View style={styles.screen}>
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -141,12 +119,13 @@ export default function Employees() {
             },
           ]}
         >
-          {/* HEADER */}
+
+          {/* GENERAL HEADER */}
 
           <GeneralHeader
             title="Your Estate Name"
             description="Estate Manager"
-            onNotificationPress={() => router.push("/estatemanager/Notification")}
+            onNotificationPress={openNotifications}
           />
 
           {/* PAGE TITLE */}
@@ -158,41 +137,22 @@ export default function Employees() {
             >
               Employee Directory
             </AppText>
+
+            <AppText
+              variant="caption"
+              style={styles.pageSubtitle}
+            >
+              View and manage your estate employees.
+            </AppText>
           </View>
 
-          {/* SEARCH BAR */}
+          {/* REUSABLE SEARCH BAR */}
 
-          <View style={styles.searchContainer}>
-            <Ionicons
-              name="search-outline"
-              size={16}
-              color={colors.text.secondary}
-            />
-
-            <TextInput
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search employees..."
-              placeholderTextColor={colors.text.secondary}
-              style={styles.searchInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-            />
-
-            {searchText.length > 0 && (
-              <Pressable
-                onPress={() => setSearchText("")}
-                hitSlop={8}
-              >
-                <Ionicons
-                  name="close-circle"
-                  size={16}
-                  color={colors.text.secondary}
-                />
-              </Pressable>
-            )}
-          </View>
+          <SearchBar
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Search employees by name or ID..."
+          />
 
           {/* SORT ROW */}
 
@@ -200,8 +160,8 @@ export default function Employees() {
             <View style={styles.sortLeft}>
               <Ionicons
                 name="swap-vertical-outline"
-                size={13}
-                color={colors.text.primary}
+                size={15}
+                color={colors.text.secondary}
               />
 
               <AppText
@@ -212,93 +172,149 @@ export default function Employees() {
               </AppText>
             </View>
 
-            <View style={styles.sortIndicator} />
+            <AppText
+              variant="caption"
+              style={styles.employeeCount}
+            >
+              {filteredEmployees.length} Employees
+            </AppText>
           </View>
 
-          {/* EMPLOYEE LIST */}
+          {/* EMPLOYEE DIRECTORY */}
 
           <View style={styles.employeeList}>
+
             {filteredEmployees.map((employee) => (
               <Pressable
                 key={employee.id}
                 style={({ pressed }) => [
-                  styles.employeeCard,
-                  employee.active
-                    ? styles.employeeCardActive
-                    : styles.employeeCardInactive,
+                  styles.employeePressable,
                   pressed && styles.employeeCardPressed,
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${employee.name} details`}
               >
-                <Avatar
-                  name={employee.name}
-                  size={40}
-                />
 
-                <View style={styles.employeeInfo}>
-                  <AppText
-                    variant="bodySmall"
-                    style={styles.employeeName}
-                  >
-                    {employee.name}
-                  </AppText>
+                {/* REUSABLE APP CARD */}
 
-                  <AppText
-                    variant="caption"
-                    style={styles.joinedText}
-                  >
-                    Joined {employee.joinedDate}
-                  </AppText>
-                </View>
+                <AppCard>
 
-                <View
-                  style={[
-                    styles.statusContainer,
-                    employee.active
-                      ? styles.statusActive
-                      : styles.statusInactive,
-                  ]}
-                >
-                  <Ionicons
-                    name="leaf"
-                    size={16}
-                    color={
-                      employee.active
-                        ? colors.primary
-                        : colors.error
-                    }
-                  />
-                </View>
+                  <View style={styles.employeeCardContent}>
+
+                    {/* EMPLOYEE AVATAR */}
+
+                    <Avatar
+                      name={employee.name}
+                      size={44}
+                    />
+
+                    {/* EMPLOYEE INFORMATION */}
+
+                    <View style={styles.employeeInfo}>
+
+                      <AppText
+                        variant="bodySmall"
+                        style={styles.employeeName}
+                      >
+                        {employee.name}
+                      </AppText>
+
+                      <AppText
+                        variant="caption"
+                        style={styles.employeeId}
+                      >
+                        {employee.id}
+                      </AppText>
+
+                      <AppText
+                        variant="caption"
+                        style={styles.joinedText}
+                      >
+                        Joined {employee.joinedDate}
+                      </AppText>
+
+                    </View>
+
+                    {/* EMPLOYEE STATUS */}
+
+                    <View
+                      style={[
+                        styles.statusContainer,
+                        employee.active
+                          ? styles.statusActive
+                          : styles.statusInactive,
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          employee.active
+                            ? "checkmark-circle"
+                            : "close-circle"
+                        }
+                        size={17}
+                        color={
+                          employee.active
+                            ? colors.primary
+                            : colors.error
+                        }
+                      />
+
+                      <AppText
+                        variant="caption"
+                        style={[
+                          styles.statusText,
+                          employee.active
+                            ? styles.activeText
+                            : styles.inactiveText,
+                        ]}
+                      >
+                        {employee.active ? "Active" : "Inactive"}
+                      </AppText>
+                    </View>
+
+                  </View>
+
+                </AppCard>
+
               </Pressable>
             ))}
 
             {/* EMPTY SEARCH RESULT */}
 
             {filteredEmployees.length === 0 && (
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIcon}>
-                  <Ionicons
-                    name="people-outline"
-                    size={28}
-                    color={colors.text.secondary}
-                  />
+              <AppCard>
+
+                <View style={styles.emptyState}>
+
+                  <View style={styles.emptyIcon}>
+                    <Ionicons
+                      name="people-outline"
+                      size={30}
+                      color={colors.text.secondary}
+                    />
+                  </View>
+
+                  <AppText
+                    variant="bodySmall"
+                    style={styles.emptyTitle}
+                  >
+                    No employees found
+                  </AppText>
+
+                  <AppText
+                    variant="caption"
+                    style={styles.emptyDescription}
+                  >
+                    Try searching with another name or employee ID.
+                  </AppText>
+
                 </View>
 
-                <AppText
-                  variant="bodySmall"
-                  style={styles.emptyTitle}
-                >
-                  No employees found
-                </AppText>
-
-                <AppText
-                  variant="caption"
-                  style={styles.emptyDescription}
-                >
-                  Try searching with another name.
-                </AppText>
-              </View>
+              </AppCard>
             )}
+
           </View>
+
         </ScrollView>
 
         {/* FLOATING ADD EMPLOYEE BUTTON */}
@@ -310,9 +326,7 @@ export default function Employees() {
               bottom: 100 + insets.bottom,
             },
           ]}
-          onPress={() =>
-            router.push("/estatemanager/EmployeeRegistration")
-          }
+          onPress={openEmployeeRegistration}
           accessibilityRole="button"
           accessibilityLabel="Add employee"
         >
@@ -323,27 +337,20 @@ export default function Employees() {
           />
         </Pressable>
 
-        {/* BOTTOM NAVIGATION */}
+        {/* BOTTOM NAVIGATION IS HANDLED BY SHARED LAYOUT */}
 
-        <View
-          style={[
-            styles.bottomTabContainer,
-            {
-              paddingBottom: insets.bottom,
-            },
-          ]}
-        >
-          
-        </View>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+
+  // MAIN SCREEN
+
   container: {
     flex: 1,
-    backgroundColor: colors.black,
+    backgroundColor: colors.surface,
   },
 
   screen: {
@@ -356,78 +363,25 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
 
-  // HEADER
+  // PAGE TITLE
 
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    minHeight: 60,
+  titleRow: {
     marginBottom: spacing.md,
   },
 
-  profileSection: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  profileText: {
-    marginLeft: spacing.sm,
-  },
-
-  managerName: {
+  pageTitle: {
     color: colors.text.primaryGreen,
   },
 
-  estateName: {
+  pageSubtitle: {
     color: colors.text.secondary,
+    marginTop: spacing.xs,
   },
 
-  notificationButton: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 20,
-  },
-
-  // TITLE
-
-  titleRow: {
-    marginBottom: spacing.sm,
-  },
-
-  pageTitle: {
-    color: colors.text.primary,
-  },
-
-  // SEARCH
-
-  searchContainer: {
-    width: "100%",
-    height: 40,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-    borderRadius: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-
-  searchInput: {
-    flex: 1,
-    marginLeft: 6,
-    paddingVertical: 0,
-    fontSize: 10,
-    color: colors.text.primary,
-  },
-
-  // SORT
+  // SORT ROW
 
   sortRow: {
-    height: 25,
+    minHeight: 30,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -441,69 +395,62 @@ const styles = StyleSheet.create({
 
   sortText: {
     color: colors.text.secondary,
-    marginLeft: 3,
+    marginLeft: spacing.xs,
   },
 
-  sortIndicator: {
-    width: 10,
-    height: 4,
-    borderRadius: 3,
-    backgroundColor: colors.border.light,
+  employeeCount: {
+    color: colors.primary,
   },
 
-  // EMPLOYEE CARDS
+  // EMPLOYEE LIST
 
   employeeList: {
     width: "100%",
   },
 
-  employeeCard: {
+  employeePressable: {
     width: "100%",
-    minHeight: 57,
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-  },
-
-  employeeCardActive: {
-    borderColor: colors.primary,
-  },
-
-  employeeCardInactive: {
-    borderColor: colors.border.light,
   },
 
   employeeCardPressed: {
-    opacity: 0.8,
+    opacity: 0.75,
+  },
+
+  employeeCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
 
   employeeInfo: {
     flex: 1,
-    marginLeft: spacing.sm,
+    minWidth: 0,
   },
 
   employeeName: {
     color: colors.text.primary,
+    fontWeight: "600",
+  },
+
+  employeeId: {
+    color: colors.primary,
+    marginTop: 2,
   },
 
   joinedText: {
     color: colors.text.secondary,
-    marginTop: 1,
+    marginTop: 2,
   },
 
-  // STATUS ICON
+  // EMPLOYEE STATUS
 
   statusContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
+    borderRadius: 8,
+    minWidth: 65,
   },
 
   statusActive: {
@@ -514,16 +461,25 @@ const styles = StyleSheet.create({
     backgroundColor: "#FCEDEF",
   },
 
+  statusText: {
+    marginTop: 2,
+    fontWeight: "600",
+  },
+
+  activeText: {
+    color: colors.primary,
+  },
+
+  inactiveText: {
+    color: colors.error,
+  },
+
   // EMPTY STATE
 
   emptyState: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.lg,
   },
 
   emptyIcon: {
@@ -543,6 +499,7 @@ const styles = StyleSheet.create({
   emptyDescription: {
     color: colors.text.secondary,
     marginTop: spacing.xs,
+    textAlign: "center",
   },
 
   // FLOATING ADD BUTTON
@@ -566,13 +523,4 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
 
-  // BOTTOM NAVIGATION
-
-  bottomTabContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.surface,
-  },
 });

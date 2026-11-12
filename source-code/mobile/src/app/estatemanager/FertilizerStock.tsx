@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import React from "react";
 import {
   View,
   StyleSheet,
@@ -13,8 +14,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
-import Avatar from "@/components/ui/Avatar";
-import EstateManagerBottomTab from "@/components/ui/EstateManagerBottomTab";
+import AppCard from "@/components/ui/AppCard";
+import GeneralHeader from "@/components/ui/GeneralHeader";
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -63,28 +64,23 @@ export default function FertilizerStock() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [activeTab, setActiveTab] = useState("dashboard");
-
   return (
     <SafeAreaView
       style={styles.container}
       edges={["top", "left", "right"]}
     >
       <View style={styles.screen}>
-        {/* ================= MAIN CONTENT ================= */}
-
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingBottom: 90 + insets.bottom,
+              paddingBottom: 100 + insets.bottom,
             },
           ]}
         >
-          {/* ================= HEADER ================= */}
-
-          <View style={styles.header}>
+          {/* HEADER WITH BACK BUTTON */}
+          <View style={styles.headerContainer}>
             <Pressable
               style={styles.backButton}
               onPress={() => router.back()}
@@ -92,126 +88,102 @@ export default function FertilizerStock() {
             >
               <Ionicons
                 name="arrow-back"
-                size={20}
+                size={21}
                 color={colors.text.primaryGreen}
               />
             </Pressable>
 
-            <View style={styles.profileSection}>
-              <Avatar
-                name="Rohan"
-                size={34}
+            <View style={styles.generalHeaderWrapper}>
+              <GeneralHeader
+                title="Your Estate Name"
+                description="Estate Manager"
+                onNotificationPress={() =>
+                  router.push("/estatemanager/Notification")
+                }
               />
+            </View>
+          </View>
 
-              <View style={styles.profileText}>
+          {/* PAGE TITLE */}
+          <View style={styles.pageHeader}>
+            <AppText
+              variant="subHeading"
+              style={styles.pageTitle}
+            >
+              Fertilizer Stock
+            </AppText>
+
+            <AppText
+              variant="caption"
+              style={styles.description}
+            >
+              Real-time inventory for Highlands Estate
+            </AppText>
+
+            <AppText
+              variant="caption"
+              style={styles.description}
+            >
+              plantation blocks.
+            </AppText>
+          </View>
+
+          {/* SUMMARY CARDS */}
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryCardWrapper}>
+              <AppCard>
+                <View style={styles.summaryIconGreen}>
+                  <Ionicons
+                    name="archive-outline"
+                    size={17}
+                    color={colors.success}
+                  />
+                </View>
+
                 <AppText
                   variant="caption"
-                  style={styles.estateName}
+                  style={styles.summaryLabel}
                 >
-                  HIGHLANDS ESTATE
+                  Total Stock
                 </AppText>
 
                 <AppText
                   variant="bodySmall"
-                  style={styles.managerName}
+                  style={styles.totalStock}
                 >
-                  Tea Manager
+                  4,820 kg
                 </AppText>
-              </View>
+              </AppCard>
             </View>
 
-            <Pressable
-              style={styles.notificationButton}
-              onPress={() =>
-                router.push("/estatemanager/Notification")
-              }
-              hitSlop={8}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={19}
-                color={colors.text.primaryGreen}
-              />
-            </Pressable>
-          </View>
+            <View style={styles.summaryCardWrapper}>
+              <AppCard>
+                <View style={styles.summaryIconRed}>
+                  <Ionicons
+                    name="warning-outline"
+                    size={17}
+                    color={colors.error}
+                  />
+                </View>
 
-          {/* ================= TITLE ================= */}
+                <AppText
+                  variant="caption"
+                  style={styles.summaryLabel}
+                >
+                  Low Alerts
+                </AppText>
 
-          <AppText
-            variant="body"
-            style={styles.pageTitle}
-          >
-            Fertilizer Stock
-          </AppText>
-
-          <AppText
-            variant="caption"
-            style={styles.description}
-          >
-            Real-time inventory for Highlands Estate
-          </AppText>
-
-          <AppText
-            variant="caption"
-            style={styles.description}
-          >
-            plantation blocks.
-          </AppText>
-
-          {/* ================= SUMMARY CARDS ================= */}
-
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryIconGreen}>
-                <Ionicons
-                  name="archive-outline"
-                  size={17}
-                  color={colors.success}
-                />
-              </View>
-
-              <AppText
-                variant="caption"
-                style={styles.summaryLabel}
-              >
-                Total Stock
-              </AppText>
-
-              <AppText
-                variant="bodySmall"
-                style={styles.totalStock}
-              >
-                4,820 kg
-              </AppText>
-            </View>
-
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryIconRed}>
-                <Ionicons
-                  name="warning-outline"
-                  size={17}
-                  color={colors.error}
-                />
-              </View>
-
-              <AppText
-                variant="caption"
-                style={styles.summaryLabel}
-              >
-                Low Alerts
-              </AppText>
-
-              <AppText
-                variant="bodySmall"
-                style={styles.lowAlerts}
-              >
-                2 Items
-              </AppText>
+                <AppText
+                  variant="bodySmall"
+                  style={styles.lowAlerts}
+                >
+                  2 Items
+                </AppText>
+              </AppCard>
             </View>
           </View>
 
-          {/* ================= RECENTLY BOUGHT ================= */}
-
+          {/* RECENTLY BOUGHT */}
           <AppText
             variant="label"
             style={styles.sectionTitle}
@@ -219,72 +191,73 @@ export default function FertilizerStock() {
             Recently Bought
           </AppText>
 
-          <View style={styles.recentRow}>
-            <View style={styles.recentCard}>
-              <View style={styles.recentDateRow}>
-                <Ionicons
-                  name="time-outline"
-                  size={11}
-                  color={colors.success}
-                />
+          <AppCard>
+            <View style={styles.recentRow}>
+              <View style={styles.recentItem}>
+                <View style={styles.recentDateRow}>
+                  <Ionicons
+                    name="time-outline"
+                    size={11}
+                    color={colors.success}
+                  />
+
+                  <AppText
+                    variant="caption"
+                    style={styles.recentDate}
+                  >
+                    MAY 12
+                  </AppText>
+                </View>
+
+                <AppText
+                  variant="bodySmall"
+                  style={styles.recentName}
+                >
+                  Urea
+                </AppText>
 
                 <AppText
                   variant="caption"
-                  style={styles.recentDate}
+                  style={styles.recentQuantity}
                 >
-                  MAY 12
+                  500 kg added
                 </AppText>
               </View>
 
-              <AppText
-                variant="bodySmall"
-                style={styles.recentName}
-              >
-                Urea
-              </AppText>
+              <View style={styles.recentItem}>
+                <View style={styles.recentDateRow}>
+                  <Ionicons
+                    name="time-outline"
+                    size={11}
+                    color={colors.success}
+                  />
 
-              <AppText
-                variant="caption"
-                style={styles.recentQuantity}
-              >
-                500 kg added
-              </AppText>
-            </View>
+                  <AppText
+                    variant="caption"
+                    style={styles.recentDate}
+                  >
+                    MAY 08
+                  </AppText>
+                </View>
 
-            <View style={styles.recentCard}>
-              <View style={styles.recentDateRow}>
-                <Ionicons
-                  name="time-outline"
-                  size={11}
-                  color={colors.success}
-                />
+                <AppText
+                  variant="bodySmall"
+                  style={styles.recentName}
+                >
+                  Dolomite
+                </AppText>
 
                 <AppText
                   variant="caption"
-                  style={styles.recentDate}
+                  style={styles.recentQuantity}
                 >
-                  MAY 08
+                  250 kg added
                 </AppText>
               </View>
-
-              <AppText
-                variant="bodySmall"
-                style={styles.recentName}
-              >
-                Dolomite
-              </AppText>
-
-              <AppText
-                variant="caption"
-                style={styles.recentQuantity}
-              >
-                250 kg added
-              </AppText>
             </View>
-          </View>
+          </AppCard>
 
-          {/* ================= FERTILIZERS ================= */}
-
+          {/* FERTILIZERS */}
           <AppText
             variant="label"
             style={styles.sectionTitle}
@@ -292,95 +265,94 @@ export default function FertilizerStock() {
             Fertilizers
           </AppText>
 
-          <View style={styles.fertilizerList}>
-            {fertilizers.map((fertilizer) => {
-              const isHighStock =
-                fertilizer.status === "HIGH STOCK";
+          <AppCard>
+            <View style={styles.fertilizerList}>
+              {fertilizers.map((fertilizer, index) => {
+                const isHighStock =
+                  fertilizer.status === "HIGH STOCK";
 
-              const isLowStock =
-                fertilizer.status === "LOW STOCK";
+                const isLowStock =
+                  fertilizer.status === "LOW STOCK";
 
-              const iconColor = isHighStock
-                ? colors.success
-                : isLowStock
-                  ? colors.warning
-                  : colors.error;
+                const iconColor = isHighStock
+                  ? colors.success
+                  : isLowStock
+                    ? colors.warning
+                    : colors.error;
 
-              const iconBackground = isHighStock
-                ? colors.successBackground
-                : isLowStock
-                  ? colors.warningBackground
-                  : colors.errorBackground;
+                const iconBackground = isHighStock
+                  ? colors.successBackground
+                  : isLowStock
+                    ? colors.warningBackground
+                    : colors.errorBackground;
 
-              return (
-                <Pressable
-                  key={fertilizer.name}
-                  style={styles.fertilizerCard}
-                >
+                return (
                   <View
+                    key={fertilizer.name}
                     style={[
-                      styles.fertilizerIcon,
-                      {
-                        backgroundColor: iconBackground,
-                      },
+                      styles.fertilizerCard,
+                      index === fertilizers.length - 1 &&
+                        styles.lastFertilizerCard,
                     ]}
                   >
-                    <Ionicons
-                      name={fertilizer.icon}
-                      size={17}
-                      color={iconColor}
-                    />
-                  </View>
-
-                  <View style={styles.fertilizerInfo}>
-                    <AppText
-                      variant="caption"
-                      style={styles.fertilizerName}
-                    >
-                      {fertilizer.name}
-                    </AppText>
-
-                    <AppText
-                      variant="caption"
-                      style={styles.fertilizerQuantity}
-                    >
-                      {fertilizer.quantity}
-                    </AppText>
-                  </View>
-
-                  <View style={styles.statusContainer}>
                     <View
                       style={[
-                        styles.statusDot,
-                        {
-                          backgroundColor: iconColor,
-                        },
-                      ]}
-                    />
-
-                    <AppText
-                      variant="caption"
-                      style={[
-                        styles.statusText,
-                        {
-                          color: iconColor,
-                        },
+                        styles.fertilizerIcon,
+                        { backgroundColor: iconBackground },
                       ]}
                     >
-                      {fertilizer.status}
-                    </AppText>
+                      <Ionicons
+                        name={fertilizer.icon}
+                        size={17}
+                        color={iconColor}
+                      />
+                    </View>
+
+                    <View style={styles.fertilizerInfo}>
+                      <AppText
+                        variant="caption"
+                        style={styles.fertilizerName}
+                      >
+                        {fertilizer.name}
+                      </AppText>
+
+                      <AppText
+                        variant="caption"
+                        style={styles.fertilizerQuantity}
+                      >
+                        {fertilizer.quantity}
+                      </AppText>
+                    </View>
+
+                    <View style={styles.statusContainer}>
+                      <View
+                        style={[
+                          styles.statusDot,
+                          { backgroundColor: iconColor },
+                        ]}
+                      />
+
+                      <AppText
+                        variant="caption"
+                        style={[
+                          styles.statusText,
+                          { color: iconColor },
+                        ]}
+                      >
+                        {fertilizer.status}
+                      </AppText>
+                    </View>
                   </View>
-                </Pressable>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
+          </AppCard>
 
-          {/* ================= PURCHASE REQUEST ================= */}
-
+          {/* REQUEST FERTILIZER BUTTON */}
           <Pressable
             style={styles.purchaseButton}
-            onPress={() => router.push("/estatemanager/FertilizerRequest")
-              // Connect to purchase request page later
+            onPress={() =>
+              router.push("/estatemanager/FertilizerRequest")
             }
           >
             <Ionicons
@@ -397,28 +369,12 @@ export default function FertilizerStock() {
             </AppText>
           </Pressable>
         </ScrollView>
-
-        {/* ================= BOTTOM NAVIGATION ================= */}
-
-        <View
-          style={[
-            styles.bottomTab,
-            {
-              paddingBottom: insets.bottom,
-            },
-          ]}
-        >
-          
-        </View>
       </View>
     </SafeAreaView>
   );
 }
 
-/* ============================================================
-   STYLES
-   ============================================================ */
-
+/* STYLES */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -435,53 +391,35 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
 
-  /* ================= HEADER ================= */
+  /* HEADER */
 
-  header: {
-    height: 42,
+  headerContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
 
   backButton: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: spacing.xs,
   },
 
-  profileSection: {
+  generalHeaderWrapper: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    marginLeft: spacing.xs,
   },
 
-  profileText: {
-    marginLeft: spacing.sm,
-  },
+  /* PAGE HEADER */
 
-  estateName: {
-    color: colors.text.secondary,
+  pageHeader: {
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
   },
-
-  managerName: {
-    color: colors.text.primary,
-  },
-
-  notificationButton: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  /* ================= TITLE ================= */
 
   pageTitle: {
     color: colors.text.primaryGreen,
-    marginTop: spacing.xs,
     marginBottom: spacing.xs,
   },
 
@@ -489,23 +427,16 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
 
-  /* ================= SUMMARY ================= */
+  /* SUMMARY */
 
   summaryRow: {
     flexDirection: "row",
     gap: spacing.sm,
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
+    marginTop: spacing.sm,
   },
 
-  summaryCard: {
+  summaryCardWrapper: {
     flex: 1,
-    minHeight: 90,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 6,
-    padding: spacing.sm,
   },
 
   summaryIconGreen: {
@@ -542,29 +473,23 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  /* ================= SECTIONS ================= */
+  /* SECTION TITLES */
 
   sectionTitle: {
     color: colors.text.secondary,
-    marginBottom: spacing.sm,
-    marginTop: spacing.xs,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
   },
 
-  /* ================= RECENT ================= */
+  /* RECENTLY BOUGHT */
 
   recentRow: {
     flexDirection: "row",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: spacing.md,
   },
 
-  recentCard: {
+  recentItem: {
     flex: 1,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 6,
-    padding: spacing.sm,
   },
 
   recentDateRow: {
@@ -587,23 +512,23 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  /* ================= FERTILIZER LIST ================= */
+  /* FERTILIZER LIST */
 
   fertilizerList: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 6,
-    overflow: "hidden",
+    width: "100%",
   },
 
   fertilizerCard: {
     minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
+  },
+
+  lastFertilizerCard: {
+    borderBottomWidth: 0,
   },
 
   fertilizerIcon: {
@@ -624,7 +549,7 @@ const styles = StyleSheet.create({
   },
 
   fertilizerQuantity: {
-    color: colors.text.primary,
+    color: colors.text.secondary,
   },
 
   statusContainer: {
@@ -639,34 +564,22 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
 
-  statusText: {
-    // Typography comes from the AppText variant.
-    // The status color is applied inline above.
-  },
+  statusText: {},
 
-  /* ================= PURCHASE ================= */
+  /* REQUEST BUTTON */
 
   purchaseButton: {
-    height: 32,
+    height: 38,
     backgroundColor: colors.primary,
-    borderRadius: 5,
+    borderRadius: 6,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
 
   purchaseButtonText: {
     color: colors.white,
     marginLeft: spacing.xs,
-  },
-
-  /* ================= BOTTOM ================= */
-
-  bottomTab: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
 });

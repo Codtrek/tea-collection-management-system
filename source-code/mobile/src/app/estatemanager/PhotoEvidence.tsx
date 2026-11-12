@@ -1,6 +1,7 @@
 
 import React, { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
+
 import {
   View,
   StyleSheet,
@@ -9,14 +10,17 @@ import {
   Pressable,
   Image,
 } from "react-native";
+
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import AppText from "@/components/ui/AppText";
+import AppCard from "@/components/ui/AppCard";
 import GeneralHeader from "@/components/ui/GeneralHeader";
 
 import { colors } from "@/theme/colors";
@@ -66,9 +70,13 @@ export default function PhotoEvidence() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [capturedEvidence, setCapturedEvidence] = useState<EvidenceItem[]>([]);
+  const [capturedEvidence, setCapturedEvidence] =
+    useState<EvidenceItem[]>([]);
 
-  const allEvidenceItems = [...capturedEvidence, ...evidenceItems];
+  const allEvidenceItems = [
+    ...capturedEvidence,
+    ...evidenceItems,
+  ];
 
   // Capture photo evidence
   const captureEvidence = async () => {
@@ -122,6 +130,7 @@ export default function PhotoEvidence() {
         newEvidence,
         ...current,
       ]);
+
     } catch (error) {
       console.error("Unable to open camera:", error);
 
@@ -138,6 +147,7 @@ export default function PhotoEvidence() {
       edges={["top", "left", "right"]}
     >
       <View style={styles.screen}>
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
@@ -147,7 +157,9 @@ export default function PhotoEvidence() {
             },
           ]}
         >
+
           {/* GENERAL HEADER */}
+
           <GeneralHeader
             title="Your Estate Name"
             description="Estate Manager"
@@ -157,6 +169,7 @@ export default function PhotoEvidence() {
           />
 
           {/* PAGE TITLE */}
+
           <View style={styles.pageTitleRow}>
             <Ionicons
               name="images-outline"
@@ -173,6 +186,7 @@ export default function PhotoEvidence() {
           </View>
 
           {/* CAPTURE EVIDENCE CARD */}
+
           <View style={styles.captureCard}>
             <Pressable
               style={({ pressed }) => [
@@ -180,6 +194,8 @@ export default function PhotoEvidence() {
                 pressed && styles.cameraButtonPressed,
               ]}
               onPress={captureEvidence}
+              accessibilityRole="button"
+              accessibilityLabel="Capture photo evidence"
             >
               <Ionicons
                 name="camera"
@@ -203,7 +219,8 @@ export default function PhotoEvidence() {
             </AppText>
           </View>
 
-          {/* RECENT UPLOADS */}
+          {/* RECENT UPLOADS HEADER */}
+
           <View style={styles.uploadHeader}>
             <AppText
               variant="caption"
@@ -220,83 +237,96 @@ export default function PhotoEvidence() {
             </AppText>
           </View>
 
-          {/* EVIDENCE CARDS */}
-          <View style={styles.evidenceList}>
-            {allEvidenceItems.map((item, index) => (
-              <Pressable
-                key={item.id}
-                style={({ pressed }) => [
-                  styles.evidenceCard,
-                  pressed && styles.evidenceCardPressed,
-                ]}
-              >
-                {/* IMAGE */}
-                <View style={styles.imageContainer}>
-                  <Image
-                    source={{
-                      uri:
-                        item.uri ??
-                        (index === 0
-                          ? "https://images.unsplash.com/photo-1594631252845-29fc4cc8cde9"
-                          : index === 1
-                            ? "https://images.unsplash.com/photo-1500382017468-9049fed747ef"
-                            : index === 2
-                              ? "https://images.unsplash.com/photo-1565793298595-6a879b1d9492"
-                              : "https://images.unsplash.com/photo-1516214104703-d870798883c5"),
-                    }}
-                    style={styles.evidenceImage}
-                  />
-                </View>
+          {/* RECENT UPLOADS USING APPCARD */}
 
-                {/* DETAILS */}
-                <View style={styles.evidenceDetails}>
-                  <View style={styles.categoryContainer}>
-                    <AppText
-                      variant="caption"
-                      style={styles.categoryText}
-                    >
-                      {item.category}
-                    </AppText>
+          <View style={styles.evidenceList}>
+
+            {allEvidenceItems.map((item, index) => (
+
+              <AppCard key={item.id}>
+
+                <View style={styles.evidenceContent}>
+
+                  {/* IMAGE */}
+
+                  <View style={styles.imageContainer}>
+                    <Image
+                      source={{
+                        uri:
+                          item.uri ??
+                          (index === 0
+                            ? "https://images.unsplash.com/photo-1594631252845-29fc4cc8cde9"
+                            : index === 1
+                              ? "https://images.unsplash.com/photo-1500382017468-9049fed747ef"
+                              : index === 2
+                                ? "https://images.unsplash.com/photo-1565793298595-6a879b1d9492"
+                                : "https://images.unsplash.com/photo-1516214104703-d870798883c5"),
+                      }}
+                      style={styles.evidenceImage}
+                    />
                   </View>
 
-                  <AppText
-                    variant="bodySmall"
-                    style={styles.evidenceTitle}
-                    numberOfLines={1}
-                  >
-                    {item.title}
-                  </AppText>
+                  {/* EVIDENCE DETAILS */}
 
-                  <View style={styles.dateRow}>
+                  <View style={styles.evidenceDetails}>
+
+                    <View style={styles.categoryContainer}>
+                      <AppText
+                        variant="caption"
+                        style={styles.categoryText}
+                      >
+                        {item.category}
+                      </AppText>
+                    </View>
+
+                    <AppText
+                      variant="bodySmall"
+                      style={styles.evidenceTitle}
+                      numberOfLines={1}
+                    >
+                      {item.title}
+                    </AppText>
+
+                    <View style={styles.dateRow}>
+                      <Ionicons
+                        name="time-outline"
+                        size={12}
+                        color={colors.text.secondary}
+                      />
+
+                      <AppText
+                        variant="caption"
+                        style={styles.dateText}
+                      >
+                        {item.date} · {item.time}
+                      </AppText>
+                    </View>
+
+                  </View>
+
+                  {/* MORE BUTTON */}
+
+                  <Pressable
+                    style={styles.moreButton}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`More options for ${item.title}`}
+                  >
                     <Ionicons
-                      name="time-outline"
-                      size={10}
+                      name="ellipsis-vertical"
+                      size={16}
                       color={colors.text.secondary}
                     />
+                  </Pressable>
 
-                    <AppText
-                      variant="caption"
-                      style={styles.dateText}
-                    >
-                      {item.date} · {item.time}
-                    </AppText>
-                  </View>
                 </View>
 
-                {/* MORE BUTTON */}
-                <Pressable
-                  style={styles.moreButton}
-                  hitSlop={8}
-                >
-                  <Ionicons
-                    name="ellipsis-vertical"
-                    size={14}
-                    color={colors.text.secondary}
-                  />
-                </Pressable>
-              </Pressable>
+              </AppCard>
+
             ))}
+
           </View>
+
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -304,7 +334,9 @@ export default function PhotoEvidence() {
 }
 
 // STYLES
+
 const styles = StyleSheet.create({
+
   container: {
     flex: 1,
     backgroundColor: colors.black,
@@ -321,6 +353,7 @@ const styles = StyleSheet.create({
   },
 
   // PAGE TITLE
+
   pageTitleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -332,7 +365,8 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xs,
   },
 
-  // CAPTURE CARD
+  // CAPTURE EVIDENCE
+
   captureCard: {
     backgroundColor: colors.background,
     borderWidth: 1,
@@ -367,7 +401,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
 
-  // UPLOAD HEADER
+  // RECENT UPLOADS HEADER
+
   uploadHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -384,41 +419,35 @@ const styles = StyleSheet.create({
   },
 
   // EVIDENCE LIST
+
   evidenceList: {
     width: "100%",
   },
 
-  evidenceCard: {
+  evidenceContent: {
     width: "100%",
-    height: 67,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 8,
     flexDirection: "row",
     alignItems: "center",
-    overflow: "hidden",
-    marginBottom: spacing.sm,
-  },
-
-  evidenceCardPressed: {
-    opacity: 0.8,
+    gap: spacing.sm,
   },
 
   imageContainer: {
     width: 72,
-    height: "100%",
+    height: 76,
+    borderRadius: 8,
+    overflow: "hidden",
     backgroundColor: colors.surface,
   },
 
   evidenceImage: {
     width: "100%",
     height: "100%",
+    resizeMode: "cover",
   },
 
   evidenceDetails: {
     flex: 1,
-    paddingHorizontal: spacing.sm,
+    minWidth: 0,
     justifyContent: "center",
   },
 
@@ -428,7 +457,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     paddingHorizontal: 5,
     paddingVertical: 2,
-    marginBottom: 2,
+    marginBottom: 3,
   },
 
   categoryText: {
@@ -442,7 +471,7 @@ const styles = StyleSheet.create({
   dateRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
+    marginTop: 3,
   },
 
   dateText: {
@@ -451,9 +480,10 @@ const styles = StyleSheet.create({
   },
 
   moreButton: {
-    width: 28,
-    height: 45,
+    width: 26,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
   },
+
 });

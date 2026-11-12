@@ -18,6 +18,7 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 
 import AppText from "@/components/ui/AppText";
+import AppCard from "@/components/ui/AppCard";
 
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -110,13 +111,14 @@ export default function NewEmployeeRegistration() {
             },
           ]}
         >
-          {/* ================= HEADER ================= */}
-
+          {/* Header */}
           <View style={styles.header}>
             <Pressable
               style={styles.closeButton}
               onPress={handleClose}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Close registration form"
             >
               <Ionicons
                 name="close"
@@ -133,93 +135,94 @@ export default function NewEmployeeRegistration() {
             </AppText>
           </View>
 
-          {/* ================= AUTOMATED ENROLLMENT ================= */}
-
-          <View style={styles.enrollmentCard}>
-            <View style={styles.enrollmentIcon}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={17}
-                color={colors.primary}
-              />
-            </View>
-
+          {/* Automated Estate Enrollment */}
+          <AppCard>
             <View style={styles.enrollmentContent}>
-              <AppText
-                variant="caption"
-                style={styles.enrollmentTitle}
-              >
-                AUTOMATED ESTATE ENROLLMENT
-              </AppText>
-
-              <AppText
-                variant="caption"
-                style={styles.enrollmentDescription}
-              >
-                New employees are automatically enrolled
-                for biometric daily harvesting and
-                RFID scale badges.
-              </AppText>
-            </View>
-          </View>
-
-          {/* ================= PHOTO ================= */}
-
-          <View style={styles.photoCard}>
-            <Pressable
-              style={styles.photoButton}
-              onPress={handleTakePhoto}
-              accessibilityRole="button"
-              accessibilityLabel={
-                employeePhoto
-                  ? "Retake employee photo"
-                  : "Take employee photo"
-              }
-            >
-              <View style={styles.cameraContainer}>
-                {employeePhoto ? (
-                  <Image
-                    source={{ uri: employeePhoto }}
-                    style={styles.employeePhotoPreview}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Ionicons
-                    name="camera-outline"
-                    size={24}
-                    color={colors.text.secondary}
-                  />
-                )}
-
-                <View style={styles.addBadge}>
-                  <Ionicons
-                    name="add"
-                    size={15}
-                    color={colors.white}
-                  />
-                </View>
+              <View style={styles.enrollmentIcon}>
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={17}
+                  color={colors.primary}
+                />
               </View>
 
+              <View style={styles.enrollmentText}>
+                <AppText
+                  variant="caption"
+                  style={styles.enrollmentTitle}
+                >
+                  AUTOMATED ESTATE ENROLLMENT
+                </AppText>
+
+                <AppText
+                  variant="caption"
+                  style={styles.enrollmentDescription}
+                >
+                  New employees are automatically enrolled
+                  for biometric daily harvesting and
+                  RFID scale badges.
+                </AppText>
+              </View>
+            </View>
+          </AppCard>
+
+          {/* Employee Photo */}
+          <AppCard>
+            <View style={styles.photoContent}>
+              <Pressable
+                style={styles.photoButton}
+                onPress={handleTakePhoto}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  employeePhoto
+                    ? "Retake employee photo"
+                    : "Take employee photo"
+                }
+              >
+                <View style={styles.cameraContainer}>
+                  {employeePhoto ? (
+                    <Image
+                      source={{ uri: employeePhoto }}
+                      style={styles.employeePhotoPreview}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Ionicons
+                      name="camera-outline"
+                      size={24}
+                      color={colors.text.secondary}
+                    />
+                  )}
+
+                  <View style={styles.addBadge}>
+                    <Ionicons
+                      name="add"
+                      size={15}
+                      color={colors.white}
+                    />
+                  </View>
+                </View>
+
+                <AppText
+                  variant="caption"
+                  style={styles.photoText}
+                >
+                  {employeePhoto ? "Retake photo" : "Tap photo"}
+                </AppText>
+              </Pressable>
+
               <AppText
                 variant="caption"
-                style={styles.photoText}
+                style={styles.photoDescription}
               >
-                {employeePhoto ? "Retake photo" : "Tap photo"}
+                Enter worker details for Nuwara Eliya tea estate
+                enrollment and attendance tracking.
               </AppText>
-            </Pressable>
+            </View>
+          </AppCard>
 
-            <AppText
-              variant="caption"
-              style={styles.photoDescription}
-            >
-              Enter worker details for Nuwara Eliya tea estate
-              enrollment and attendance tracking.
-            </AppText>
-          </View>
-
-          {/* ================= PERSONAL INFORMATION ================= */}
-
-          <View style={styles.sectionCard}>
+          {/* Personal Information */}
+          <AppCard>
             <View style={styles.sectionHeader}>
               <Ionicons
                 name="briefcase-outline"
@@ -235,8 +238,7 @@ export default function NewEmployeeRegistration() {
               </AppText>
             </View>
 
-            {/* EMPLOYEE NAME */}
-
+            {/* Employee Name */}
             <View style={styles.fieldContainer}>
               <View style={styles.labelRow}>
                 <AppText
@@ -272,8 +274,7 @@ export default function NewEmployeeRegistration() {
               </View>
             </View>
 
-            {/* ID NUMBER */}
-
+            {/* Identity Card */}
             <View style={styles.fieldContainer}>
               <View style={styles.labelRow}>
                 <AppText
@@ -309,8 +310,7 @@ export default function NewEmployeeRegistration() {
               </View>
             </View>
 
-            {/* AGE */}
-
+            {/* Age */}
             <View style={styles.fieldContainer}>
               <View style={styles.labelRow}>
                 <AppText
@@ -371,11 +371,11 @@ export default function NewEmployeeRegistration() {
                 </Pressable>
               </View>
             </View>
-          </View>
+          </AppCard>
+
         </ScrollView>
 
-        {/* ================= BOTTOM ACTIONS ================= */}
-
+        {/* Bottom Actions */}
         <View
           style={[
             styles.bottomActions,
@@ -390,6 +390,7 @@ export default function NewEmployeeRegistration() {
           <Pressable
             style={styles.cancelButton}
             onPress={handleCancel}
+            accessibilityRole="button"
           >
             <AppText
               variant="bodySmall"
@@ -402,6 +403,7 @@ export default function NewEmployeeRegistration() {
           <Pressable
             style={styles.registerButton}
             onPress={handleRegister}
+            accessibilityRole="button"
           >
             <Ionicons
               name="briefcase-outline"
@@ -422,10 +424,6 @@ export default function NewEmployeeRegistration() {
   );
 }
 
-/* ============================================================
-   STYLES
-   ============================================================ */
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -442,8 +440,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
 
-  /* ================= HEADER ================= */
-
+  // Header
   header: {
     minHeight: 42,
     flexDirection: "row",
@@ -464,14 +461,10 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xs,
   },
 
-  /* ================= ENROLLMENT ================= */
-
-  enrollmentCard: {
+  // Enrollment Card
+  enrollmentContent: {
     flexDirection: "row",
-    backgroundColor: "#EEF2FF",
-    borderRadius: 6,
-    padding: spacing.sm,
-    marginBottom: spacing.md,
+    alignItems: "flex-start",
   },
 
   enrollmentIcon: {
@@ -483,7 +476,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  enrollmentContent: {
+  enrollmentText: {
     flex: 1,
     marginLeft: spacing.sm,
   },
@@ -497,14 +490,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  /* ================= PHOTO ================= */
-
-  photoCard: {
-    backgroundColor: colors.background,
-    borderRadius: 7,
-    padding: spacing.sm,
+  // Photo Card
+  photoContent: {
     alignItems: "center",
-    marginBottom: spacing.md,
   },
 
   photoButton: {
@@ -554,15 +542,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
 
-  /* ================= PERSONAL INFORMATION ================= */
-
-  sectionCard: {
-    backgroundColor: colors.background,
-    borderRadius: 7,
-    padding: spacing.sm,
-    marginBottom: spacing.md,
-  },
-
+  // Personal Information
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -609,8 +589,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
 
-  /* ================= AGE ================= */
-
+  // Age
   ageRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -641,8 +620,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  /* ================= BOTTOM ACTIONS ================= */
-
+  // Bottom Actions
   bottomActions: {
     position: "absolute",
     left: 0,
