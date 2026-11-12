@@ -62,7 +62,9 @@ function TooltipBox({ active, payload, label, valueFmt }: {
 function axisWidth(max: number, fmt: (v: number) => string): number {
   const step = max > 0 ? 10 ** Math.floor(Math.log10(max)) : 1
   const ceiling = Math.ceil(max / step) * step
-  const widest = Math.max(fmt(max).length, fmt(ceiling).length)
+  // a lower tick can be wider than the top one ("800.0K" vs "1.2M"), so measure the in-between ticks too
+  const ticks = [max, ceiling, ...[0.25, 0.5, 0.75].map((f) => ceiling * f)]
+  const widest = Math.max(...ticks.map((t) => fmt(t).length))
   return Math.max(32, Math.ceil(widest * 7.5) + 12)
 }
 
@@ -394,6 +396,8 @@ export interface HBarDatum {
   value: number
   /** a second line in the tooltip, e.g. the estate's route */
   meta?: string
+  /** this bar's colour (opt-in; default the primary series colour) */
+  color?: string
 }
 
 function HBarTooltip({ active, payload, valueFmt }: { active?: boolean; payload?: Array<{ payload: HBarDatum }>; valueFmt: (v: number) => string }) {
@@ -460,7 +464,9 @@ export function HorizontalBarChartCard({
               isAnimationActive={false}
               cursor={onBarClick ? 'pointer' : undefined}
               onClick={onBarClick ? (d: { payload?: HBarDatum }) => d.payload && onBarClick(d.payload) : undefined}
-            />
+            >
+              {data.some((d) => d.color) && data.map((d) => <Cell key={d.name} fill={d.color ?? CHART_SERIES[0]} />)}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       )}
@@ -479,6 +485,7 @@ export function StackedBarChartCard({
   tickFormat,
   height = 240,
   className,
+  partial,
 }: {
   title?: string
   data: Tick[]
@@ -488,8 +495,11 @@ export function StackedBarChartCard({
   tickFormat: (v: number) => string
   height?: number
   className?: string
+  /** per datum: a period still in progress — drawn lighter with a dashed outline (opt-in) */
+  partial?: boolean[]
 }) {
   const max = Math.max(0, ...data.map((d) => series.reduce((s, x) => s + (Number(d[x.key]) || 0), 0)))
+  const anyPartial = !!partial?.some(Boolean)
   return (
     <ChartShell title={title} className={className}>
       <ResponsiveContainer width="100%" height={height}>
@@ -508,7 +518,17 @@ export function StackedBarChartCard({
               maxBarSize={40}
               radius={i === series.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]}
               isAnimationActive={false}
-            />
+            >
+              {anyPartial &&
+                data.map((_, j) => (
+                  <Cell
+                    key={j}
+                    fillOpacity={partial![j] ? 0.4 : 1}
+                    stroke={partial![j] ? s.color : undefined}
+                    strokeDasharray={partial![j] ? '4 3' : undefined}
+                  />
+                ))}
+            </Bar>
           ))}
         </BarChart>
       </ResponsiveContainer>
@@ -519,6 +539,12 @@ export function StackedBarChartCard({
             {s.name}
           </span>
         ))}
+        {anyPartial && (
+          <span className="flex items-center gap-1.5 text-xs text-text-muted">
+            <span className="size-2.5 rounded-[2px] border border-dashed border-text-muted" />
+            Month in progress
+          </span>
+        )}
       </div>
     </ChartShell>
   )

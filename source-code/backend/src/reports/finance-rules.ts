@@ -428,6 +428,7 @@ export interface ExpenseTrendPoint {
 }
 
 export interface ExpenseReport {
+  today: string;
   period: Omit<ResolvedPeriod, 'previous' | 'lastYear'>;
   filters: { category: string | null };
   cards: {
@@ -463,6 +464,8 @@ export interface ExpenseReport {
   /** why the period shows nothing (null when it has expenses), plus what IS there */
   empty: { reason: string | null; hints: string[] };
   options: { categories: string[] };
+  /** months with any expense source on record, newest first — the month picker */
+  monthsWithData: string[];
 }
 
 function groupRows(
@@ -552,6 +555,7 @@ export interface BuildExpenseInput {
   stockLost: StockLostLine[];
   /** the active expense categories, for the filter */
   categories: string[];
+  monthsWithData?: string[];
 }
 
 export function buildExpenseReport(b: BuildExpenseInput): ExpenseReport {
@@ -604,18 +608,21 @@ export function buildExpenseReport(b: BuildExpenseInput): ExpenseReport {
     (s) => s.unitCost === null && inRange(s.date, p),
   );
   const hints: string[] = [];
-  if (wagesEstimate.amountRs > 0) {
+  // a hint only where it bears on what's shown (no category filter, or that category)
+  const about = (c: string) => !category || category === c;
+  if (wagesEstimate.amountRs > 0 && about(KIND_CATEGORY.wages)) {
     hints.push(
       `Attendance × pay rates comes to about Rs ${wagesEstimate.amountRs.toLocaleString('en-LK', { maximumFractionDigits: 0 })} in wages whose payroll isn't processed yet (${wagesEstimate.months.map((m) => monthLabel(m.month)).join(', ')}). Not counted until payroll is processed.`,
     );
   }
-  if (uncosted.length) {
+  if (uncosted.length && about(KIND_CATEGORY.stock)) {
     hints.push(
       `${uncosted.length} fertilizer stock-in${uncosted.length === 1 ? ' has' : 's have'} no cost recorded, so ${uncosted.length === 1 ? 'it adds' : 'they add'} nothing.`,
     );
   }
 
   return {
+    today: b.today,
     period: {
       kind: p.kind,
       month: p.month,
@@ -668,5 +675,8 @@ export function buildExpenseReport(b: BuildExpenseInput): ExpenseReport {
         ]),
       ],
     },
+    monthsWithData: (b.monthsWithData ?? []).filter(
+      (m) => m <= monthOf(b.today),
+    ),
   };
 }

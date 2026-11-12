@@ -472,6 +472,18 @@ describe('empty state', () => {
     expect(r.empty.hints[0]).toMatch(
       /^Attendance × pay rates comes to about Rs 4,000/,
     );
+    // under another category's filter the wage hint doesn't apply
+    const water = report(
+      inputs({ leaf: [], attendance: [day(2, '2025-12-03')] }),
+      {
+        month: '2025-12',
+        category: 'Water',
+      },
+    );
+    expect(water.empty).toEqual({
+      reason: 'No Water expenses in December 2025.',
+      hints: [],
+    });
   });
 
   it('expenseLines never returns a line worth nothing', () => {

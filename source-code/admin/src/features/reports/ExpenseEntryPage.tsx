@@ -63,10 +63,16 @@ export function ExpenseEntryPage() {
 
   if (!id && !can('expenses', 'edit')) {
     return (
-      <EmptyState
-        title="Your role can’t log daily expenses"
-        description="Officers log daily expenses; the Factory Manager corrects them."
-      />
+      <div>
+        <PageHeader
+          title="Log Daily Expense"
+          breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Reports' }, { label: 'Expenses', to: '/reports/expenses' }]}
+        />
+        <EmptyState
+          title="Your role can’t log daily expenses"
+          description="Officers log daily expenses; the Factory Manager corrects them."
+        />
+      </div>
     )
   }
   if ((id && entryQuery.isPending) || categoriesQuery.isPending) {

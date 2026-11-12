@@ -241,6 +241,7 @@ export interface ExpenseRecoveries {
 }
 
 export interface ExpenseReport {
+  today: string
   period: Omit<CollectionReport['period'], 'previous' | 'lastYear'>
   filters: { category: string | null }
   cards: {
@@ -263,6 +264,8 @@ export interface ExpenseReport {
   stockLost: { item: string; reason: string; kg: number }[]
   empty: { reason: string | null; hints: string[] }
   options: { categories: string[] }
+  /** months with any expense source on record, newest first */
+  monthsWithData: string[]
 }
 
 export interface ExpenseReportQuery {

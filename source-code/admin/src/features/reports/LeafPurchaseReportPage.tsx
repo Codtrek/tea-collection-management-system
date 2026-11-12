@@ -432,7 +432,7 @@ function Cards({ report }: { report: LeafPurchaseReport }) {
             'No processed settlement in this period'
           )
         }
-        rule="Net paid to owners by the processed settlements of the period: gross (at each settlement's own rates) − transport − fertilizer − advance deductions + adjustments. These deductions are recoveries from owners, not factory expenses — they are not on the Expense report."
+        rule="Net paid to owners by the processed settlements of the period: gross (at each settlement's own rates) − transport − fertilizer − advance deductions + adjustments. These deductions are recoveries from owners, not factory expenses: the Expense report shows them under Recovered from estate owners, never in its total."
       />
     </>
   )

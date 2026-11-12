@@ -155,11 +155,18 @@ export class FinanceService {
       ),
       to: hi(period.to, trendRange.to),
     };
-    const [inputs, stockLost, categories] = await Promise.all([
-      this.inputs(span),
-      this.stockLost(period),
-      this.expenseCategories.find({ order: { sortOrder: 'ASC', name: 'ASC' } }),
-    ]);
+    const [inputs, stockLost, categories, deliveryMonths, entryMonths] =
+      await Promise.all([
+        this.inputs(span),
+        this.stockLost(period),
+        this.expenseCategories.find({
+          order: { sortOrder: 'ASC', name: 'ASC' },
+        }),
+        this.collection.monthsWithData(),
+        this.expenses.manager.query<{ month: string }[]>(
+          `SELECT DISTINCT to_char(entry_date, 'YYYY-MM') AS month FROM expense_entries`,
+        ),
+      ]);
     return buildExpenseReport({
       today,
       period,
@@ -173,6 +180,9 @@ export class FinanceService {
       stockLost,
       // the filter offers the categories in use, and any that appear on old entries
       categories: categories.filter((c) => c.active).map((c) => c.name),
+      monthsWithData: [
+        ...new Set([...deliveryMonths, ...entryMonths.map((r) => r.month)]),
+      ].sort((a, b) => b.localeCompare(a)),
     });
   }
 
