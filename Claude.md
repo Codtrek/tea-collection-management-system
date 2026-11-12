@@ -1179,6 +1179,33 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - Factory Setup's date defaults to today, with `min` set to today.
 - **Charts:** a new `ComboChartCard` (bars + Rs/kg line on two axes). `axisWidth` now sizes to the rounded-up top tick, so no report axis clips.
 
+## Expense report RPT-03 + daily expense entries RPT-04 (2026-11-15, `feat/collection-report`)
+
+- **Expense vs recovery vs loan is defined once** in `docs/specs/Finance-Reports-Addendum.md`.
+  - Expenses: green leaf (at the rate in force), **processed** wages, fertilizer stock bought (qty × `unit_cost`), daily entries.
+  - Not expenses: transport / fertilizer / advance deductions (recovered from estate owners), advances issued (loans), wages estimated from attendance, write-offs.
+- **One finance service:** `backend/src/reports/finance-rules.ts` (pure) + `FinanceService` (`finance.service.ts`) load and decide every money figure. `LeafPurchaseService` reads rates and settlements through it.
+  - The gross formula is shared: `employees/payroll-gross.ts` (`grossFromHours`), used by `generatePayroll` and the wage estimate.
+- **Expense page** (`ExpenseReportPage.tsx`, `expense-report-view.ts`):
+  - It defaults to the **last complete month**; "latest with data" is gone.
+  - Four cards, stacked monthly bars, category bars, a "Not expenses" panel (recovered with Net leaf cost, loans, estimated wages), a Category/Month/Entry table, an empty state that says why, and CSV + Print.
+  - `GET /reports/expenses?month|from&to|thisMonth&groupBy&category`.
+- **Stock cost:** `stock_movements.unit_cost`, required on every new Incoming movement (migration `2026-11-15-stock-unit-cost.sql`). Older stock has no cost and is flagged, never guessed.
+- **Daily entries** (migration `2026-11-15-finance-expenses.sql`):
+  - Categories are data (`expense_categories`, ADM-01 → Expense Categories).
+  - Each entry has paid via cash / bank, and an optional receipt in `expense_receipts` (≤ 2 MB).
+  - Ids come from `expense_entry_seq`.
+  - New `expenses` permission module: Officer edit (own entry within `system_settings.expenses.editWindowDays` = 7, editable in ADM-03), Manager approve (any entry, with a reason after the window), Administrator view.
+  - Every change is audited before → after. There is no month close yet.
+  - The entry page `/reports/expenses/:id` is create / edit / view in one.
+- **Checks:** `REPORT_SQL_CHECK_URL=… npx jest finance.sql`. On Oct 2026, page = SQL: leaf 798,201.50, processed wages 0, estimated 536,400 (not in total), stock 0, entries 0.
+- **Shared components (opt-in props):**
+  - `StackedBarChartCard` `partial` (dashed month in progress)
+  - `HorizontalBarChartCard` per-bar `color`
+  - `EmptyState` accepts a node description
+  - `lib/api` `apiBlob` + FormData uploads
+  - `axisWidth` now measures the in-between ticks too
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

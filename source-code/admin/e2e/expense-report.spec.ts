@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -81,6 +81,32 @@ test('Log Daily Expense refuses a future date before saving', async ({ page }) =
   await date.fill('2099-01-01')
   await date.blur()
   await expect(page.getByText('An expense can’t be dated in the future')).toBeVisible()
+})
+
+test('Export Excel downloads the table as computed, the totals row equal to the Total card', async ({ page }) => {
+  await page.goto('/reports/expenses?month=2026-06')
+  await ready(page)
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export Excel' }).click()])
+  expect(download.suggestedFilename()).toBe('expenses-2026-06-category.csv')
+  const lines = readFileSync((await download.path())!, 'utf8').replace(/^\uFEFF/, '').split('\r\n')
+  expect(lines[4]).toMatch(/^Not counted: recovered from estate owners Rs 55500.00/)
+  const total = lines.at(-1)!.split(',')
+  expect(total[0]).toBe('Total')
+  const card = await page.locator('main p.leading-none').first().textContent()
+  expect(Number(total[3])).toBe(Number(card!.replace(/^Rs\.\s*/, '').replace(/,/g, '')))
+})
+
+test('print hides the controls and says what it shows; PDF, scheduling and sharing say "Coming soon"', async ({ page }) => {
+  await page.goto('/reports/expenses')
+  await ready(page)
+  for (const name of ['Export PDF', 'Schedule Report', 'Share Report']) {
+    await expect(page.getByRole('button', { name: `${name} (coming soon)` })).toBeDisabled()
+  }
+  await page.emulateMedia({ media: 'print' })
+  await expect(page.getByRole('button', { name: 'Export Excel' })).toBeHidden()
+  await expect(page.getByText(/October 2026 · All categories · printed/)).toBeVisible()
+  // what isn't counted is printed with the report
+  await expect(page.locator('#recoveries-body')).toBeVisible()
 })
 
 test('capture screenshots for review', async ({ page }) => {

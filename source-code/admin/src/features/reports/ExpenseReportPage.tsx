@@ -1,4 +1,5 @@
 import { useRef, useState, type Ref } from 'react'
+import { flushSync } from 'react-dom'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ChevronDown, Coins, HandCoins, Info, Leaf, Loader2, PieChart, Plus, Receipt, X } from 'lucide-react'
@@ -23,7 +24,16 @@ import { currentMonth, monthOptionsFor, periodOf, shiftMonth } from '@/lib/month
 import { formatCompact, formatCurrency, formatDate, formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { signedPct } from './collection-report-view'
-import { EXPENSE_KINDS, expenseQuery, expenseViewParams, readExpenseView, type ExpenseView } from './expense-report-view'
+import { downloadCsv } from '@/lib/csv'
+import {
+  EXPENSE_KINDS,
+  expenseCsv,
+  expenseCsvName,
+  expenseQuery,
+  expenseViewParams,
+  readExpenseView,
+  type ExpenseView,
+} from './expense-report-view'
 import type { ExpenseGroupBy, ExpenseKind, ExpenseReport, ExpenseTableRow } from './types'
 
 const GROUP_TABS: { id: ExpenseGroupBy; label: string }[] = [
@@ -59,6 +69,8 @@ export function ExpenseReportPage() {
     setView({ month: undefined, from: undefined, to: undefined, thisMonth: undefined, ...p })
   const recoveriesRef = useRef<HTMLElement>(null)
   const [recoveriesOpen, setRecoveriesOpen] = useState(false)
+  // while printing, the table shows every row (the print layout has no pager)
+  const [printing, setPrinting] = useState(false)
 
   const query = expenseQuery(view)
   const { data: report, isPending, isError, isFetching, refetch } = useQuery({
@@ -91,6 +103,11 @@ export function ExpenseReportPage() {
   )
   const periodMode = view.thisMonth ? 'thisMonth' : view.from ? 'custom' : 'month'
   const total = report.cards.total.value
+  const print = () => {
+    flushSync(() => setPrinting(true))
+    window.print()
+    setPrinting(false)
+  }
   const openRecoveries = () => {
     setRecoveriesOpen(true)
     recoveriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -121,6 +138,10 @@ export function ExpenseReportPage() {
       <ReportViewer
         filtersClassName="flex flex-1 flex-col gap-3 print:hidden"
         summaryClassName="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        actions={{
+          onExportExcel: () => downloadCsv(expenseCsvName(report), expenseCsv(report)),
+          onPrint: print,
+        }}
         filters={
           <>
             <div className="flex flex-wrap items-end gap-3">
@@ -262,7 +283,7 @@ export function ExpenseReportPage() {
                   columns={tableColumns(report)}
                   rows={report.table.rows}
                   rowKey={(r) => r.key}
-                  pageSize={25}
+                  pageSize={printing ? Math.max(1, report.table.rows.length) : 25}
                   defaultSort={report.table.groupBy === 'category' ? { key: 'amount', direction: 'desc' } : undefined}
                   footer={totalsRow(report)}
                   onRowClick={(r) => {

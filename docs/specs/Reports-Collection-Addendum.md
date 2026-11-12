@@ -129,9 +129,9 @@ query cache kept the previous page's scroll position, and its title sat under th
 
 `ReportActionsBar` only offers what works. Every report and EST-03's Timeline use it.
 
-| Action | RPT-01 | Revenue, Expense, Timeline |
+| Action | RPT-01, RPT-02, RPT-03 | Timeline |
 |---|---|---|
-| **Export Excel** | Works (see below) | Disabled · "Coming soon" |
+| **Export Excel** | Works (see below; RPT-02 §9.2, RPT-03 Finance-Reports-Addendum §9) | Disabled · "Coming soon" |
 | **Print** | Works (see below) | Disabled · "Coming soon" |
 | Export PDF | Disabled · "Coming soon" (no PDF library) | same |
 | Schedule Report | Disabled · "Coming soon" (no scheduling or email) | same |
@@ -325,16 +325,16 @@ These follow the same action-bar policy as §8.
   - the CSV equals the table and the card
   - the disabled actions say "Coming soon"
 
-## 10. Expenses (RPT-03) and leaf payments: one number, one name
+## 10. Expenses (RPT-03): see the Finance Reports addendum
 
-- **Added: "Green leaf purchases."** It is the Leaf Purchase Report's accrued value for the month,
-  exactly the same number (`LeafPurchaseService.valueByMonth`). Its row links to the report, and it
-  counts in the Expense total and trend.
-- **Removed: settlement "Fertilizer" and "Transport" lines.** They are amounts recovered from estate
-  owners' leaf payments, not money the factory spends. They appear only as **deductions** on the
-  Leaf Purchase Report.
-- Expenses no longer reads settlements at all. It used to include pending ones, while RPT-02 counted
-  processed only.
+What counts as an expense, a recovery from estate owners, a loan or an estimate is defined once in
+`docs/specs/Finance-Reports-Addendum.md`. Both this report and the Expense report follow it.
+
+- **Green leaf purchases** on the Expense report is this report's accrued value for the same period:
+  the same number from the same loaders (`FinanceService`, 2026-11-15).
+- **Transport and fertilizer deducted from estate owners are recoveries, not expenses.** The Expense
+  report shows them, with advance installments, in its "Recovered from estate owners" panel (from
+  processed settlements only), never in its total.
 
 ## 11. Future: Revenue (made-tea sales)
 
