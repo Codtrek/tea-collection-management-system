@@ -4,11 +4,12 @@ import { router } from "expo-router";
 import { ScrollView, StyleSheet, View } from "react-native";
 
 import { EstateCard } from "@/components/estate-owner";
-import { AppText, GeneralHeader, Screen, SearchBar } from "@/components/ui";
-import { estateProfiles } from "@/data/estateOwnerEstates";
+import { AppButton, AppText, GeneralHeader, Screen, SearchBar } from "@/components/ui";
+import { useEstateStore } from "@/store/estateStore";
 import { colors, spacing } from "@/theme";
 
 export default function Estates() {
+  const estateProfiles = useEstateStore((state) => state.estates);
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
   const filteredEstates = query
@@ -44,22 +45,39 @@ export default function Estates() {
         </View>
       </View> */}
 
-      <View style={styles.searchSection}>
+      {/* <View style={styles.searchSection}> */}
         {/* <AppText variant="label" style={styles.sectionTitle}>
           All estates
         </AppText> */}
-        <SearchBar
-          value={search}
-          placeholder="Search by name, location or manager"
-          onChangeText={setSearch}
-        />
-      </View>
+        {/* <View style={styles.searchInput}> */}
+        {/* <SearchBar */}
+          {/* value={search} */}
+          {/* placeholder="Search by name, location or manager" */}
+          {/* onChangeText={setSearch} */}
+        {/* /> */}
+        {/* </View> */}
+        {/* <AppButton title="+ Add estate" width="auto" style={styles.addButton} onPress={() => router.push("/(estate-owner)/add-estate")} /> */}
+      {/* </View> */}
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.searchSection}>
+        {/* <AppText variant="label" style={styles.sectionTitle}>
+          All estates
+        </AppText> */}
+        <View style={styles.searchInput}>
+          <SearchBar
+          value={search}
+          placeholder="Search by name, location or manager"
+          onChangeText={setSearch}
+          />
+        </View>
+          <AppButton title="+ Add estate" width="auto" style={styles.addButton} onPress={() => router.push("/(estate-owner)/add-estate")} />
+        </View>
+
         {filteredEstates.length > 0 ? (
           filteredEstates.map((estate) => (
             <EstateCard
@@ -130,7 +148,12 @@ const styles = StyleSheet.create({
   countText: {
     color: colors.brandDark,
   },
+  addButton: { height: 50, aspectRatio: undefined, paddingHorizontal: spacing.md },
+  searchInput: { flex: 1, minWidth: 0 },
   searchSection: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
     marginBottom: spacing.sm,
   },
   sectionTitle: {
