@@ -1,0 +1,47 @@
+name: harboost-db
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Database password required}
+      POSTGRES_DB: harboost
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - database
+    mem_limit: 256m
+    shm_size: 64m
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - work_mem=1MB
+      - -c
+      - maintenance_work_mem=16MB
+      - -c
+      - max_connections=30
+      - -c
+      - max_parallel_workers_per_gather=0
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d harboost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+
+networks:
+  database:
+    name: harboost-db-net
+

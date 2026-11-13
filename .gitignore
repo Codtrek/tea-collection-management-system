@@ -6,5 +6,4 @@ database-migration-dev-procedure.*
 .env
 .env.demo
 node_modules
-database
 .claude/worktrees/
