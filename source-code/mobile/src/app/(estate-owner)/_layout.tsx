@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export default function EstateOwnerLayout() {
     const pathname = usePathname();
     const activeTab =
-        pathname.endsWith("/estates") || pathname.includes("/estate/")
+        pathname.endsWith("/estates") || pathname.endsWith("/add-estate") || pathname.includes("/estate/")
             ? "estates"
             : "home";
 
