@@ -16,7 +16,7 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
 
-    mem_limit: 256m
+    mem_limit: 384m
 
     logging:
       driver: json-file
