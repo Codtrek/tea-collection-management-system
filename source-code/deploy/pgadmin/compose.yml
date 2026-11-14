@@ -1,0 +1,28 @@
+name: harboost-pgadmin
+
+services:
+  pgadmin:
+    image: dpage/pgadmin4:9
+    restart: unless-stopped
+
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?Email required}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Password required}
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
+
+    ports:
+      - "127.0.0.1:8080:80"
+
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+    mem_limit: 256m
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgadmin_data:
