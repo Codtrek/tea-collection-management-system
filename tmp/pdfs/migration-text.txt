@@ -1,0 +1,598 @@
+PAGE 1
+Harboost Database Migration Workflow
+A straightforward, step-by-step guide for developers
+Applies to feature branches and pull requests targeting GitHub
+dev
+. Run Git commands from the repository root unless
+stated otherwise.
+Workflow at a glance
+1.
+ Create branch
+!
+2.
+ Pull latest
+dev
+ !
+3.
+ Create migration
+!
+4.
+ Update entity
+!
+5.
+ Pull
+dev
+, commit &
+push
+ !
+ 6.
+ Open PR
+ !
+ 7.
+ Check CI
+ !
+ 8.
+ Request review
+1. Create a separate feature branch
+Start from your local
+dev
+branch, then create a feature branch. Replace the example branch name with a
+meaningful name for your change.
+git switch dev
+git switch -c feature/estate-registration-code
+Do not make database schema changes directly on
+ dev
+.
+2. Get the latest changes from GitHub dev
+While you are on your new feature branch, bring in the latest commits from
+ origin/dev
+:
+git pull origin dev
+This ensures the feature branch starts with the latest shared code. Resolve any Git conflicts before
+proceeding.
+3. Create the TypeORM migration file
+From the repository root, enter the backend directory and create the migration:
+cd source-code/backend
+npx typeorm-ts-node-commonjs migration:create src/migrations/AddEstateRegistrationCode
+cd ../..
+Open the generated migration under
+source-code/backend/src/migrations/
+. Define the intended
+database change in
+ up()
+ and its appropriate reversal in
+ down()
+.
+4. Update the matching TypeORM entity
+Edit the relevant
+*.entity.ts
+file under
+source-code/backend/src/
+. Ensure column names, types,
+lengths, nullability and defaults agree with the migration.
+Example:
+ If the migration adds
+estates.registration_code
+as a nullable
+VARCHAR(50)
+, the
+Estates
+entity must describe the same column definition.
+5. Commit changes, pull latest dev again, and push
+Before sharing the branch, stage the changes, commit them, incorporate the latest
+dev
+updates, and push
+to GitHub:
+git status
+git add -A source-code/backend/src
+git commit -m "Add estate registration code migration"
+git pull origin dev
+git push -u origin feature/estate-registration-code
+If
+git pull
+reports conflicts: fix the conflicting files, use
+git status
+to inspect them, commit the
+resolution if needed, then push. Check the staged changes before committing so unrelated files are not
+included.
+1
+
+PAGE 2
+6. Create a pull request targeting dev
+On GitHub, open
+ Pull requests
+ !
+ New pull request
+. Set:
+
+ Base branch:
+ dev
+
+ Compare branch:
+ your
+ feature/...
+ branch
+Describe the schema change, aected entity, and migration file; then create the PR.
+7. Watch the migration and schema drift checks
+After opening or pushing another commit to the PR, GitHub automatically starts
+ Neon PR branch
+.
+Where to find the results:
+
+ From the PR:
+ Open the PR
+ !
+ Checks
+ !
+ create-and-migrate
+.
+
+From GitHub Actions: Actions
+!
+Neon PR branch
+!
+select the PR run
+!
+create-and-migrate
+.
+In the job logs, inspect these
+ two steps
+:
+
+ Run migrations on the PR branch
+  checks that the migration can execute.
+
+ Check for missing migrations
+  checks TypeORM entity/schema drift.
+These are steps inside
+ one required CI job
+, not two separate GitHub status checks. Both must succeed
+for the job to pass. If either fails, inspect that step's logs, fix the branch, and push again; the PR workflow
+will rerun automatically.
+8. Request a review
+Once the CI job is green, open the PR's right-hand
+ Reviewers
+ section and request a review from the
+assigned reviewer or mentor. Merge only after the required approval and checks are satisfied.
+If GitHub says This branch is out-of-date with dev
+Another PR was merged into
+dev
+after you opened yours.
+ Do not merge the outdated PR.
+ Click
+ Update
+branch
+ on GitHub (if available), or update it locally:
+git switch feature/estate-registration-code
+git pull origin dev
+git push origin feature/estate-registration-code
+The new push triggers
+synchronize
+, so the required
+create-and-migrate
+job runs again. Wait for the latest
+check to pass before requesting or finalizing approval.
+Remember
+ The PR workflow validates migrations on a
+ temporary Neon PR database branch
+.
+Developers must not run these changes directly against the
+ shared Neon
+dev
+database. The separate
+Neon Dev Migrations
+workflow applies committed migrations to shared Dev
+ after
+ merging. It does not
+undo the merge if that job fails.
+2
+
+PAGE 3
+Understand schema drift
+Schema drift = TypeORM entities and the database schema do not match.
+The comparison happens
+ after
+ pending migration files are executed on the temporary Neon PR database.
+The expected schema is described by the
+*.entity.ts
+files; the actual schema includes columns, types,
+constraints, defaults and indexes in PostgreSQL.
+Example.
+ A developer adds
+registration_code
+to
+estates.entity.ts
+but forgets to add the column in a
+migration. The entity expects the column, while PostgreSQL does not have it. The workflow's
+ Check for
+missing migrations
+ step fails.
+Why it happens
+
+ An entity was changed, but the migration was not created or committed.
+
+ The migration's
+ VARCHAR
+ length, nullability, default, column name, or type diers from the entity.
+
+ Indexes, foreign-key constraints or check-constraint names do not match.
+
+A PR is being tested against an older Neon Dev snapshot, or changes from another PR introduced a
+mismatch.
+
+ SQL changes were made directly in a database without a corresponding migration/entity update.
+How to fix schema drift
+1.
+On the PR, open
+ Checks
+!
+create-and-migrate
+!
+Check for missing migrations
+. Read the SQL
+dierence reported in the log.
+2.
+Compare that dierence with the corresponding migration file and
+*.entity.ts
+file. Verify the intended
+database design first.
+3.
+Correct the missing or incorrect migration/entity definition; do not copy destructive SQL blindly. Preserve
+existing data.
+4.
+Commit and push the fix. The
+synchronize
+event reruns the PR workflow; confirm both migration
+execution and the drift check succeed.
+Before using local diagnostics: get the temporary Neon connection string
+You do not need Neon Console edit access.
+ The workflow publishes an encrypted connection string for
+each PR database. Only use it if the maintainer has authorized you to access that PR database.
+1.
+ Open the repository on GitHub and select
+ Pull requests
+. Open your PR (for example,
+ #42
+).
+2.
+Open
+ Checks
+!
+ create-and-migrate
+ !
+View details
+. Alternatively, navigate to
+ Actions
+!
+Neon
+PR branch
+ and choose the successful run for that PR.
+3.
+Open the
+ workflow-run Summary
+ (not just an individual log step). Find
+ Neon branch pr-42 is ready
+,
+then copy the
+ encrypted connection-string decryption command
+.
+4.
+Run the supplied command locally in a trusted terminal with
+ OpenSSL
+ installed. Use the team passphrase
+privately when prompted or when replacing
+YOUR_PASSPHRASE
+. Never paste the passphrase or decrypted
+URL into GitHub issues or chat. Be aware that typing a passphrase directly in a shell command can save it
+in shell history.
+5.
+Put the decrypted
+ temporary PR database
+ URL in
+source-code/backend/.env
+, as shown below.
+ Confirm
+it points to PR
+ pr-42
+, not shared Neon
+ dev
+.
+# source-code/backend/.env -- never commit this file
+DATABASE_URL_DIRECT=postgresql://<PR_ROLE>:<PASSWORD>@<PR_HOST>/<DB>?sslmode=require
+Important:
+ Your
+src/data-source.ts
+uses
+DATABASE_URL_DIRECT
+first and falls back to
+DATABASE_URL
+. An
+environment variable already set in the terminal may take precedence over the value in
+.env
+. Verify the selected
+database before running diagnostics.
+3
+
+PAGE 4
+Viewer access versus migration permission
+ Neon Console
+ Viewer
+ permission does not grant
+PostgreSQL table modification privileges, and viewers cannot fetch connection strings through the Neon
+Console. A separately shared URL, however, authenticates as its embedded PostgreSQL role. If the PR
+workflow's
+NEON_ROLE
+can alter tables, anyone who decrypts that URL may also be able to alter tables
+on that temporary PR database
+. The shared Dev credential must remain restricted to GitHub Actions
+and authorized maintainers. Prefer issuing a separate limited-privilege PR role when developers only
+need to inspect schema/data.
+Optional read-only diagnostic commands (temporary PR database only):
+cd source-code/backend
+npx typeorm-ts-node-commonjs migration:show -d src/data-source.ts
+npm run migration:generate -- src/migrations/CiDriftCheck --check --dryrun
+migration:show
+lists applied and pending migrations. The
+check dryrun
+command inspects schema
+dierences without applying them. These diagnostics require a working PostgreSQL connection and
+appropriate read access.
+ Do not use
+npm run migration:run
+as a diagnostic
+: it executes pending
+SQL and usually requires table-owner privileges. Normally the GitHub PR workflow runs the migrations
+for you.
+Common migration errors and fixes
+Migration execution errors occur when PostgreSQL cannot perform a statement in
+up()
+. Find them under
+Checks
+!
+create-and-migrate
+!
+Run migrations on the PR branch
+. Investigate the
+ first failing SQL
+statement
+, not just the final
+ exit code 1
+.
+1. Permission denied / must be owner of table
+ERROR: must be owner of table estate_documents
+Cause:
+ The connection role can connect but does not own the table or lack appropriate owner-role
+privileges for
+ ALTER TABLE
+.
+Fix:
+ Ask the database maintainer to check the connected role and the table owner; configure the approved
+migration role. Do
+ not
+ share credentials or try random grants. A normal
+GRANT ALL
+does not grant table
+ownership. This happened in Harboost's shared Dev migration run.
+2. Column, table or constraint already exists
+ERROR: column ... already exists
+ or
+ relation ... already exists
+Cause:
+ Another change already added the object, or the migration history and actual schema dier.
+Fix:
+ Update from
+dev
+; inspect the latest migrations and existing schema. Resolve the overlapping change
+in the feature branch. Never mark a migration as run merely to silence the error.
+3. NOT NULL / unique / foreign-key constraint violation
+column ... contains null values
+,
+duplicate key value
+, or
+violates foreign key constraint
+Cause:
+ Existing rows are incompatible with the new rule.
+Fix:
+ Inspect aected data; use a safe staged change (add nullable column, backfill or clean data, then
+apply the constraint), test on an isolated database, and obtain reviewer approval.
+4. Missing table, wrong column, or SQL syntax error
+relation ... does not exist
+,
+ column ... does not exist
+, or
+ syntax error
+Cause:
+ The migration assumes the wrong schema, order, naming, or SQL.
+Fix:
+ Compare the SQL with the actual database schema and existing migrations; repair the migration,
+push and rerun CI.
+5. Migration succeeds, but schema drift fails
+Cause:
+ SQL was valid but produced a schema dierent from the entity model.
+Fix:
+ Follow the schema-drift steps above; verify types, defaults, lengths, constraint names and indexes.
+6. SSL or dependency warning with successful SQL execution
+Cause:
+ A driver reports a configuration or deprecation warning, which is not necessarily an SQL failure.
+Fix:
+ Check the actual step status and first error. Report warnings separately rather than treating them
+as migration failures.
+4
+
+PAGE 5
+If a migration fails on shared Neon Dev:
+ stop and inspect the run logs and database state; notify
+the maintainer. Transactional operations may roll back, but do not assume every possible migration is
+fully reversible. Do not edit the shared database, delete records, alter migration history, or rerun blindly.
+Coordinate a corrected migration and a safe retry.
+Reviewer responsibilities
+A reviewer must assess
+ database readiness
+,
+ migration safety
+ and
+ application code quality
+. A green CI job does
+not replace human review.
+Before approving a migration PR
+1.
+Check shared Neon Dev first.
+ Go to
+ GitHub
+!
+Actions
+!
+Neon Dev Migrations
+. Open
+the run associated with the
+ latest current
+dev
+commit
+. Verify that the
+migrate-neon-dev
+job
+has
+ succeeded
+. If the latest run is queued, in progress, or failed,
+ do not approve the migration
+PR yet
+; report the issue.
+2.
+Check the PR is current.
+ Verify GitHub does not say
+ This branch is out of date
+. Require the
+developer to click
+ Update branch
+ or pull the latest
+ dev
+, then wait for fresh checks.
+3.
+Check CI results.
+ Open PR
+!
+Checks
+!
+create-and-migrate
+. Inspect
+ Run migrations on
+the PR branch
+ and
+ Check for missing migrations
+. Both steps must pass on the current PR
+commit.
+4.
+Review the migration and entity together.
+ Confirm table/column names, PostgreSQL types,
+nullable fields, defaults, indexes, keys, and constraint names match. Check SQL correctness and
+migration order.
+5.
+Review data safety.
+ Look for
+DROP TABLE
+,
+DROP COLUMN
+, large updates, type conversions, new
+NOT NULL
+constraints, and operations that may lose or lock data. Ask for a safe plan for existing
+records, and a realistic rollback/recovery strategy.
+6.
+Check scope and secrets.
+ Ensure the PR changes only intended files, contains no
+.env
+, connection
+strings or credentials, and does not directly change shared Neon Dev outside the approved workflow.
+7.
+Approve only when ready.
+ Otherwise use
+ Request changes
+ and tell the developer which log
+line or SQL statement to address.
+Important:
+ GitHub branch protection enforces the required status check and up-to-date Git branch. The
+shared Dev migration status check above is currently a
+ manual reviewer responsibility
+; it is not yet an
+automatic PR merge gate. Verify the latest run again if
+ dev
+ changed during review.
+5
+
+PAGE 6
+How Harboost's pipeline protects database changes
+Safety Gate 1  Before merge (required PR check)
+Neon PR branch
+runs on PR open and on subsequent pushes (
+synchronize
+). It creates or reuses
+a temporary Neon branch, refreshes it from shared Neon Dev, runs pending migrations, and checks
+entity/schema drift. The GitHub
+dev
+protection rule requires
+create-and-migrate
+to pass plus the
+required reviewer approval and an up-to-date branch.
+Safety Gate 2  After merge (shared database update)
+Neon Dev Migrations
+runs on a push to GitHub
+dev
+and applies pending migrations to the
+ shared
+ Neon
+Dev database using a GitHub Actions secret. It reports failure if SQL cannot be applied.
+ Important:
+the merge has already happened when this workflow starts; a failure does not undo that merge and is not
+yet wired to block backend deployment.
+Human safety check  During review
+The reviewer checks that the latest shared Dev migration run for the current
+dev
+commit has completed
+successfully before approving the next migration-related PR. This helps avoid validating work while Dev
+is still migrating.
+Security controls
+Database credentials and the Neon API key are stored in GitHub Secrets; the PR uses an isolated database
+branch; the post-merge job uses the shared Dev connection only after merge; role permissions govern
+schema changes; and the PR connection string is encrypted before being shown in the Actions summary.
+Branch protections reduce accidental merging but cannot guarantee migrations will never fail.
+Temporary connection string: quick reminder
+Open your PR
+!
+Checks
+!
+ create-and-migrate
+ !
+View details
+!
+workflow Summary
+. Copy the
+encrypted command under
+ Neon branch pr-... is ready
+, decrypt it with your authorized team passphrase, and
+configure
+ DATABASE_URL_DIRECT
+ in your local untracked
+ .env
+. Detailed instructions are provided immediately
+above the schema-drift diagnostic commands.
+Security:
+ The encrypted summary does not make the decrypted URL harmless. A PR connection string can
+grant database write or schema-change privileges regardless of the developer's Neon Console Viewer status.
+Never share the shared Neon Dev migration URL with ordinary developers; use least-privilege credentials and
+rotate exposed secrets.
+What is still planned?
+
+Automatic PR gate for shared Dev readiness:
+ block migration-related PR merging while the current
+shared Dev migration run has not succeeded.
+
+Automatic Git branch updating:
+ update open PRs after
+dev
+changes instead of relying on the developer's
+Update branch
+ action.
+
+Deployment blocking:
+ prevent Azure backend deployment if shared Neon Dev migration fails. This has
+been deferred for later work.
+6

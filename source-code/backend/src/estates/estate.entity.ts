@@ -7,6 +7,7 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { EstateManager } from '../users/estate-manager.entity'
 import { EstateOwnerEntity } from './estate-owner.entity';
 import type { DbEstateStatus } from './estate-map';
 import { RouteEntity } from './route.entity';
@@ -30,8 +31,28 @@ export class EstateEntity {
   @ForeignKey(() => EstateOwnerEntity, { name: 'estates_owner_id_fkey' })
   ownerId: number;
 
+  @Column({
+    name: 'manager_id',
+    type: 'integer',
+    nullable: true,
+  })
+  @ForeignKey(() => EstateManager, {
+    name: 'estates_manager_id_fkey',
+    onDelete: 'SET NULL',
+  })
+  managerId: number | null;
+
   @Column({ type: 'varchar', length: 100 })
   name: string;
+
+  @Column({
+    name: 'area_acres',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  areaAcres: string | null;
 
   @Column({ type: 'text' })
   location: string;
