@@ -1,0 +1,386 @@
+# Authentication Architecture Analysis
+
+Repository review date: 2026-11-08
+Scope: source-code only; no authentication or schema changes made.
+
+## Executive summary
+
+- Estate Owner authentication is implemented in the mobile app and backend. The mobile login screen calls `POST /auth/mobile/login`; the shared `AuthService.login()` authenticates the `users` row and returns a JWT plus an Estate Owner profile.
+- Tea Collector authentication is already implemented on the backend, contrary to what an earlier project-status note might suggest. `POST /auth/agent/login` verifies a Collection Agent login and returns an agent-specific JWT and a `mustChangePassword` flag. The Admin employee-registration path attempts to provision the login and return a one-time temporary password, but there is a likely missing required `users.name` value in the provisioning insert (details below).
+- The mobile app is not integrated with this Tea Collector backend flow. The role selector sends "Factory Collector" to a mock screen; its login service calls `/auth/mobile/login`, not `/auth/agent/login`. The mobile API client does not attach bearer tokens, and there is no mobile auth context, protected-route/session-restoration flow, or implemented logout.
+- Agent API security is implemented: agent tokens and portal tokens are accepted by separate Passport strategies, and `dispatch/me/*` resolves the current agent from the JWT subject and checks current employee/login status and the temporary-password flag on each call.
+- A relevant existing mismatch: `/auth/mobile/me` uses the portal `JwtAuthGuard`, whose strategy accepts only Administrator/Officer/Manager tokens. An Estate Owner or Estate Manager can get a successful login token, but that token is rejected by this guard. This route is not usable by the estate-role mobile session as currently written.
+- No new database table appears necessary for Tea Collector login if the current schema and migration are applied. The needed `users`, `factory_employees`, `employees`, and `collection_agents` relationships and temporary-password column are already represented. However, the TypeORM entity and DB baseline require `users.name`, which agent provisioning does not supply, and tracked `init.sql` omits `users.name`/`users.nic`; a fresh-database setup and real provisioning should be verified before depending on the flow.
+
+## 1. Backend authentication architecture
+
+### Relevant backend files
+
+| File | Responsibility |
+|---|---|
+| `source-code/backend/src/auth/auth.controller.ts` | `/auth/login`, agent login and agent password-change routes, and portal `/auth/me`. |
+| `source-code/backend/src/auth/auth.mobile.controller.ts` | `/auth/mobile/login`, `/auth/mobile/register`, and `/auth/mobile/me`. |
+| `source-code/backend/src/auth/auth.service.ts` | Credential lookup, bcrypt verification/hashing, role-specific profiles, JWT creation, agent login, and first-password change. |
+| `source-code/backend/src/auth/auth.module.ts` | Registers the controllers, strategies, repositories, and JWT secret/expiration configuration. |
+| `source-code/backend/src/auth/dto/login.dto.ts` | Login request validation: `phone` string and nonempty `password`. |
+| `source-code/backend/src/auth/dto/register.dto.ts` | Owner registration validation: name, Sri Lankan phone, NIC, password length, and matching confirmation. |
+| `source-code/backend/src/auth/dto/change-password.dto.ts` | Agent password-change body validation; new password is 8-72 characters. |
+| `source-code/backend/src/auth/dto/match.decorator.ts` | Custom class-validator decorator used to compare `confirmPassword` with `password`. |
+| `source-code/backend/src/auth/jwt-payload.interface.ts` | Portal and agent JWT payload types and the `CollectionAgent` role constant. |
+| `source-code/backend/src/auth/jwt.strategy.ts` | Verifies bearer JWTs for the portal strategy and rejects non-portal roles. |
+| `source-code/backend/src/auth/jwt-auth.guard.ts` | Nest Passport `jwt` guard for portal-protected routes. |
+| `source-code/backend/src/auth/agent-jwt.strategy.ts` | `jwt-agent` strategy; verifies bearer JWTs and accepts only `CollectionAgent`. |
+| `source-code/backend/src/auth/agent-jwt.guard.ts` | Nest Passport `jwt-agent` guard for agent-protected routes. |
+| `source-code/backend/src/auth/role-map.ts` | Maps DB roles to app roles; only factory roles are narrowed to portal roles. |
+| `source-code/backend/src/auth/identity-throttler.guard.ts` | Builds rate-limit identity keys using IP, verified JWT subject, and a hash of the submitted phone/NIC. |
+| `source-code/backend/src/users/user.entity.ts` | Shared `users` login row, role/status constraints, password hash, and temporary-password flag. |
+| `source-code/backend/src/users/users.service.ts` | User lookup, login timestamp, password update, account creation, and subtype-profile lookups. |
+| `source-code/backend/src/dispatch/agent-provisioning.service.ts` | Provisions/deprovisions the employee's agent identity and login. |
+| `source-code/backend/src/dispatch/agent-directory.service.ts` | Resolves active agent identities and current user credentials. |
+| `source-code/backend/src/dispatch/dispatch-agent.controller.ts` | Agent-only `/dispatch/me/*` API surface. |
+| `source-code/backend/src/dispatch/agent-self.service.ts` | Resolves the caller to their own agent and enforces active/suspended/temporary-password checks. |
+| `source-code/backend/src/dispatch/dispatch.module.ts` | Registers the agent controller, services, and repositories. |
+| `source-code/backend/src/app.module.ts` | Global validation, throttling, Redis storage, PostgreSQL setup, and module registration. |
+| `source-code/backend/src/main.ts` | Global `ValidationPipe`, CORS, and API listen port. |
+
+Authentication is implemented with NestJS, Passport JWT, TypeORM, `bcrypt`, and `@nestjs/jwt`. There is no custom `@Roles` or `@CurrentUser` decorator in the authentication path: route protection uses Nest `@UseGuards(...)`, and role/permission checks are performed in strategies or services. `@SkipThrottle` is used on selected login routes.
+
+### Login endpoints and request bodies
+
+| Endpoint | Method | Body / DTO | Purpose |
+|---|---|---|---|
+| `/auth/login` | POST | `LoginDto`: JSON object with phone and password fields | Shared login entry point, used by the Admin portal service. |
+| `/auth/mobile/login` | POST | Same `LoginDto` | Mobile owner/manager login. Calls the same `AuthService.login()` as `/auth/login`. |
+| `/auth/mobile/register` | POST | `RegisterDto`: `name`, `phone`, `nic`, `password`, `confirmPassword` | Public Estate Owner registration. |
+| `/auth/agent/login` | POST | Same `LoginDto` | Tea Collector login. Calls the separate `AuthService.agentLogin()`. |
+| `/auth/agent/change-password` | POST | `ChangePasswordDto`: `currentPassword`, `newPassword` | Agent-only first password change, guarded by `AgentJwtGuard`. |
+| `/auth/me` | GET | Authorization header containing JWT | Portal profile; guarded by `JwtAuthGuard`. |
+| `/auth/mobile/me` | GET | Authorization header containing JWT | Mobile profile handler; currently also guarded by `JwtAuthGuard`, so it accepts portal roles only (see the role-strategy issue below). |
+
+`LoginDto` checks that `phone` is a string and that password length is at least one; it does not apply the stricter Sri Lankan phone-number format used by registration. `RegisterDto` checks an LK phone number, a valid old/new Sri Lankan NIC pattern, a password of at least eight characters, and matching confirmation. `ChangePasswordDto` checks a nonempty current password and an 8-72 character new password. `main.ts` enables `ValidationPipe({ whitelist: true })`; validation properties not declared in a DTO are stripped.
+
+### Estate Owner login: verified backend sequence
+
+1. The mobile frontend posts `{ phone, password }` to `/auth/mobile/login`.
+2. `AuthMobileController.login()` passes both values to `AuthService.login()`.
+3. `UsersService.findByPhone()` looks up the unique `users.phone`.
+4. `AuthService.login()` returns HTTP 401 (`UnauthorizedException`) if there is no matching user; otherwise it runs `bcrypt.compare(password, user.password_hash)`. A mismatch also returns 401.
+5. A `users.status` value of `suspended` is rejected with 401. The schema only defines `active` and `suspended`, not an `inactive` account state.
+6. Successful login stamps `users.last_login_at`.
+7. For `users.role = estate_owner`, `buildEstateOwnerPublicUser()` maps the DB role to `Estate Owner`, calls `UsersService.getEstateOwnerProfile()`, and requires both an owner profile and an estate to return a profile. No matching profile/estate is rejected with 401.
+8. The service signs a payload containing `sub` (the string `users.id`) and `role` (`Estate Owner`).
+9. The response is `{ accessToken, user: { id, name, role, phone, estate } }`. `accessToken` is a signed JWT. Password/hash values are not in the response.
+
+`/auth/mobile/register` creates an `estate_owner` user and `tea_estate_owners` row, hashes the password with bcrypt cost 10, signs an Estate Owner JWT, and returns the same general `{ accessToken, user }` shape. It rejects duplicate phone/NIC with HTTP 409. Estate Owner registration through the Admin portal is a separate flow: the portal creates a `users` account with a random password hash; there is no password distribution/reset implementation in that flow.
+
+### Tea Collector login: backend support already present
+
+`POST /auth/agent/login` takes the same `{ phone, password }` body but calls `AuthService.agentLogin()`, not the generic login branch. It:
+
+1. Looks up the shared user row by unique phone.
+2. Verifies the submitted password against `password_hash` with `bcrypt.compare`.
+3. Rejects a suspended user.
+4. Requires `users.role === 'collection_agent'` and `AgentDirectoryService.byUserId(user.id)` to find an active HR employee of the Tea Collecting Agent job role linked to a collection-agent dispatch identity. Otherwise it returns 401 ("This account is not a collection agent.").
+5. Stamps `last_login_at`.
+6. Signs `{ sub: String(user.id), role: 'CollectionAgent' }`.
+7. Returns `{ accessToken, agent: { id, name, phone }, mustChangePassword }`. The `agent.id` is `collection_agents.id`, while token `sub` is `users.id`.
+
+The login response deliberately differs from `LoginResult`: it has `agent` and `mustChangePassword`, not `user`. The mobile `auth.api.ts` currently models only `LoginResult`, so it cannot accurately type/consume this endpoint yet.
+
+### Password storage and initial credentials
+
+- `users.password_hash` is a required text column. Runtime login compares a candidate password to it using `bcrypt.compare`; plaintext passwords are not stored.
+- Owner self-registration hashes with `bcrypt.hash(..., 10)`.
+- `AgentProvisioningService.provision()` generates a temporary password using `randomBytes(9).toString('base64url')`, hashes it at cost 10, creates the user with role `collection_agent`, and sets `must_change_password = true`. The generated value is returned once as `initialPassword` in the employee-create response; the code reviewed does not show a separate email/SMS delivery service.
+- The Admin employee create/update flow provisions a login when the selected employee role is `Tea Collecting Agent`. `POST /employees` is the create endpoint, and `EmployeesService.create()` requires an Administrator. It first saves the HR row, calls provisioning, and removes the HR row if provisioning fails. Provisioning writes the user, factory employee subtype, collection-agent dispatch row, and employee-to-user link.
+- Important schema/code mismatch to verify: `User.name` is non-null in `user.entity.ts` and `baseline.sql` (`name character varying(32) NOT NULL`), but `AgentProvisioningService.provision()` creates the User with phone, password hash, role, status, and temporary-password flag only; it does not supply `name`. Against that baseline, the user insert can fail at the database NOT NULL constraint. The agent provisioning unit test uses a mock repository and does not prove that this production insert succeeds.
+- On the first agent sign-in, `mustChangePassword` is returned to the app. `POST /auth/agent/change-password` compares the current password, rejects reusing the same password, hashes the new one at cost 10, and clears `must_change_password`.
+- Every protected agent-self-service operation calls `AgentSelfService.me()`, which checks that the user is not suspended and the temporary-password flag has been cleared. The check is per call, so deprovisioning/suspension and the first-password rule take effect despite an unexpired token.
+
+### JWTs, guards, roles, expiration, and errors
+
+- `AuthModule` requires `JWT_SECRET` and sets `expiresIn` from `JWT_EXPIRES_IN`, defaulting to `7d`. The actual environment values were not inspected or copied into this report.
+- `JwtStrategy` extracts the JWT from the Authorization header, verifies signature and expiration (`ignoreExpiration: false`), then accepts only `Administrator`, `Officer`, or `Manager` from `PORTAL_ROLES`.
+- `AgentJwtStrategy` uses a separate Passport strategy name (`jwt-agent`) and accepts only the `CollectionAgent` role claim. `AgentJwtGuard` protects the agent API.
+- Both token types use the configured JWT secret. Separation is by the validated role claim and distinct guard/strategy, not by a configured JWT `aud` claim.
+- `POST /auth/login` and `/auth/mobile/login` share `AuthService.login()`. That service explicitly handles `estate_owner` and `estate_manager`, and its default branch requires `toPortalRole()`. `collection_agent`, `receiving_officer`, and `plucking_employee` are not accepted through this generic branch.
+- `toAppRole()` maps factory admin/officer/manager and estate owner/manager. `toPortalRole()` further restricts to the three factory roles. Neither maps Collection Agent or Receiving Officer.
+- The API returns distinct 401 messages for unknown phone, wrong password, suspended account, missing profile, and unsupported role. This can reveal account/role state to a caller; consider a uniform public login error if that disclosure is not intended.
+- `IdentityThrottlerGuard` is globally registered. The named `auth` throttler is configured for 5 requests per 60 seconds and its path filter covers `/auth/login`, `/auth/mobile/login`, and `/auth/mobile/register`; `/auth/agent/login` does not match that custom filter, although the global short/medium/long throttlers still apply. Verify whether agent login should receive the dedicated auth bucket.
+- Portal `JwtStrategy` validates the signed token and role but does not reload the user's status. Thus a portal JWT already issued remains valid until expiry if the account is later suspended; the agent services do reload login status on every agent API call.
+- There is no refresh-token endpoint or server-side JWT revocation/blacklist evident in the reviewed authentication code. Logout is therefore client-side token removal.
+
+### Important authorization mismatch: mobile `/me`
+
+`AuthMobileController.me()` uses `JwtAuthGuard`, which selects the `jwt` strategy. That strategy rejects every role outside `PORTAL_ROLES`, including `Estate Owner` and `Estate Manager`. Consequently, an Estate Owner can pass `/auth/mobile/login` and receive a token, but `/auth/mobile/me` will reject that token. The current mobile app does not call `/auth/mobile/me`, so this does not prevent the login screen from reporting success, but it blocks using this endpoint to restore/validate an estate-role session.
+
+### Agent-only endpoints and ownership checks
+
+`DispatchAgentController` is guarded at controller level by `AgentJwtGuard` under `/dispatch/me`. Its endpoints include:
+
+- `POST /dispatch/me/shift/start`, `POST /dispatch/me/shift/end`
+- `POST /dispatch/me/absence`, `DELETE /dispatch/me/absence`
+- `POST /dispatch/me/pings`
+- `GET /dispatch/me/cover-requests`
+- `POST /dispatch/me/cover-requests/:id/accept`, `POST /dispatch/me/cover-requests/:id/decline`
+- `GET /dispatch/me/stops`
+- `POST /dispatch/me/push-token`
+
+Each handler passes the JWT subject (`users.id`) into `AgentSelfService`. The service resolves the active agent using that subject before retrieving or mutating agent-specific data. This prevents a caller from supplying a different agent identity in these request paths. The portal-side `/dispatch/*` controller instead uses `JwtAuthGuard` and the server-driven `dispatch` permission level. Other application controllers also use `JwtAuthGuard`; Collection Agent tokens are rejected by that portal strategy.
+
+## 2. End-to-end Estate Owner login flow
+
+```text
+Mobile app auth/login.tsx
+  -> app/services/api/auth.api.ts login(phone, password)
+  -> POST /auth/mobile/login
+  -> AuthMobileController.login(LoginDto)
+  -> AuthService.login(phone, password)
+  -> UsersService.findByPhone(phone) -> users row
+  -> bcrypt.compare(password, password_hash) + users.status check
+  -> Estate Owner profile lookup: tea_estate_owners -> estates
+  -> JwtService.sign({ sub: users.id, role: 'Estate Owner' })
+  -> { accessToken, user }
+  -> login screen persists accessToken/user
+  -> router.replace('/(estate-owner)/home')
+```
+
+Frontend details:
+
+- Screen: `source-code/mobile/src/app/auth/login.tsx`. It validates the phone via `getPhoneNumberError()` and requires a nonempty password. Failed API errors are routed to phone/password field messages where recognized, otherwise to a form-level message.
+- Service: `source-code/mobile/src/app/services/api/auth.api.ts`; uses `/auth/mobile/login`.
+- API URL: `source-code/mobile/src/app/services/api/client.ts` prefers `EXPO_PUBLIC_API_URL`; fallback uses the Expo dev host and port `3001`. Backend `main.ts` listens on the configured environment port and falls back to `3000`, so the deployment/dev environment must explicitly align these values. The actual runtime URL/port was not inspected.
+- Persistence: native runtime writes `accessToken` and serialized `user` to Expo SecureStore keys of those names; web runtime writes them to `localStorage` with the same keys. There is no central session store or boot-time restoration in the reviewed mobile code.
+- Navigation: successful Estate Owner login replaces the route with `/(estate-owner)/home`; Estate Manager routes to `/estate-manager`. The code has a redundant second Estate Owner check in the same handler. Other roles show "This account does not have a mobile dashboard yet."
+- Logout: the Tea Collector demo profile only shows a confirmation alert; its "Log out" action does not clear stored credentials or navigate away. The estate-owner layout has no logout implementation in the reviewed file.
+- Expired/invalid token handling: the mobile API client has no Authorization header and there is no token validation/401 cleanup path. It only parses a JSON response and throws `ApiError` for non-2xx results.
+- Registration: `auth/register.tsx` calls `/auth/mobile/register`, but its `persistSession()` helper is not called after the registration result; it navigates to the Estate Owner home without persisting the returned JWT/user.
+
+The Admin web portal has a separate factory-portal login integration, not an Estate Owner UI: `features/auth/LoginPage.tsx` posts phone/password through `services/auth.ts` to `/auth/login`, stores the token via `AuthContext`, and navigates to `/dashboard`. `lib/api.ts` uses `VITE_API_URL` (fallback `http://localhost:3000`), persists the JWT in `localStorage`, sets the Authorization header from the stored JWT on subsequent API requests, and notifies `AuthContext` on 401 so it logs out. `AuthContext` calls `/auth/me` on initial load and provides logout by clearing the token and user state. Its UI says "Sign in to the factory portal"; estate roles are not supported by the portal's protected API strategy.
+
+## 3. Shared user and business-role structure
+
+All implemented login identities use the shared `users` table. `users.role` is the DB role discriminator; the subtype/profile tables associate a login with its business record.
+
+| User type | `users.role` | Profile/identity relationship found in code/schema | Login state found |
+|---|---|---|---|
+| Estate Owner | `estate_owner` | `tea_estate_owners.user_id` is unique FK to `users.id`; estates refer to `tea_estate_owners.id` through `estates.owner_id`. | Supported by generic/mobile login; no owner-specific token strategy. |
+| Estate Manager | `estate_manager` | `users` -> `estate_employees.user_id` -> `tea_estate_managers.employee_id` and the managed estate. | Generic/mobile login maps the role and loads a manager profile. |
+| Tea Collector / Collection Agent | `collection_agent` | `users` -> `factory_employees.user_id`; `collection_agents.employee_id` -> `factory_employees.id`; `collection_agents.hr_employee_id` -> `employees.id`; `employees.user_id` -> `users.id`. `AgentDirectoryService` treats an Active employee with job title `Tea Collecting Agent` and a linked login/agent identity as dispatchable. | Dedicated `/auth/agent/login`; temporary password and separate agent guard. |
+| Receiving Officer | `receiving_officer` | `users` and `factory_employees` support the role; `receiving_officers.employee_id` links to `factory_employees`. | Role exists in schema but is not mapped by `toAppRole()` or accepted by either current login strategy. |
+| Factory Admin | `factory_admin` | `users` -> `factory_employees.user_id`; factory employee links to factory. | Supported as portal `Administrator`. |
+| Factory Manager | `factory_manager` | `users` -> `factory_employees.user_id`; factory employee links to factory. | Supported as portal `Manager`. |
+| Factory Officer | `factory_officer` | `users` -> `factory_employees.user_id`; factory employee links to factory. | Supported as portal `Officer`. |
+| Plucking Employee | `plucking_employee` | `users` -> `estate_employees.user_id`; plucking profile is separate. | Role exists but is not mapped by the reviewed auth role map. |
+
+The HR `employees` table is separate from `factory_employees`; most employee rows have no login. For Collection Agents, both records are linked to the shared user identity. The `collection_agents` entity has no direct `user_id` property; account resolution goes through the HR/user links above. The existing Admin employee-registration process creates Tea Collector accounts. There is no separate public Collection Agent registration endpoint.
+
+## 4. Tea Collector support: implemented versus missing
+
+| Capability | Finding |
+|---|---|
+| Shared authentication account | Implemented: each provisioned agent has a `users` row with role `collection_agent`. |
+| Login identifier | Implemented: employee contact is copied to unique `users.phone`; agent login takes phone + password. Agent contact edits can sync the user phone. |
+| Password hash | Implemented: bcrypt hash in `users.password_hash`; temporary credential returned once by employee provisioning. |
+| Account creation | Implemented through Administrator-only `POST /employees` / employee role selection; role `Tea Collecting Agent` triggers provisioning. |
+| Agent login endpoint | Implemented at `POST /auth/agent/login`; not called by current mobile auth service. |
+| JWT | Implemented; claim contains user id subject and role `CollectionAgent`. |
+| Agent-specific strategy/guard | Implemented (`jwt-agent` / `AgentJwtGuard`). |
+| First-login password change | Backend implemented at `POST /auth/agent/change-password`; mobile screen and service are not connected to it. |
+| Active/deactivated check | Implemented via HR status/job-role/link in `AgentDirectoryService`; suspended user and `must_change_password` are rechecked on every agent API operation. |
+| Agent-specific application API | Implemented for `/dispatch/me/*`; no Tea Collector calls to it are present in mobile API service code. |
+| Mobile login UI and type | Missing: no agent-specific login call/response type; role selector currently routes collectors directly to the demo UI. |
+| Mobile authenticated request support | Missing: the current mobile API client does not attach the token. |
+| Mobile session restoration/protected routing/logout | Missing in the reviewed code. |
+| Schema | Relationships are represented in `init.sql`; `2026-10-10-agent-employees.sql` adds the HR link and temporary password flag for existing databases. But `init.sql` omits `users.name` and `users.nic`, while the TypeORM User entity and `backend/src/migrations/baseline.sql` include them. Whether the target runtime DB matches the baseline and whether the agent migration was applied are unknown. |
+
+## 5. Mobile authentication and Tea Collector UI
+
+### Existing reusable pieces
+
+- Expo Router stack is configured in `source-code/mobile/src/app/_layout.tsx`.
+- Existing phone/password form and field-level errors are in `app/auth/login.tsx`.
+- `app/services/api/auth.api.ts` and `app/services/api/client.ts` provide a fetch service and basic API error type.
+- SecureStore is already a dependency and the login screen persists access token and user data on native platforms.
+- `components/ui/PasswordInput.tsx` and the existing password form can be reused.
+- The backend agent endpoint, token strategy, password-change DTO, and dispatch endpoints are ready to be integrated.
+
+### Existing limitations / not implemented
+
+- `source-code/mobile/src/data/userRoles.ts` sends Estate Owner and Estate Manager to `/auth/login`, but sends "Factory Collector" directly to `/teacollector/teacollectorMobile`. That collector destination is a demo screen with hard-coded stops, requests, identity, and interface components; it is not an authenticated data-backed screen.
+- The current login API calls `/auth/mobile/login`, whose generic login branch does not accept `collection_agent`. The correct backend login route is `/auth/agent/login`, and its response is `{ accessToken, agent, mustChangePassword }`, not `{ accessToken, user }`.
+- `api/client.ts` uses `fetch`, not Axios; despite Axios being a package dependency, no Axios instance/interceptor is used by this authentication service. No Authorization bearer header is added by `apiRequest()`.
+- There is no mobile `AuthContext` or Zustand auth store in the reviewed app code. `zustand` is installed but no authentication store use was found.
+- No boot-time SecureStore read, `/auth/.../me` hydration, protected-route guard, or centralized 401/expired-token handling was found.
+- The existing `auth/change-password.tsx` is a UI stub: its handler only logs fields and contains a TODO; it does not call `/auth/agent/change-password`. It is titled as a normal password change and its link says "Forgot password'" although no forgot-password API was found.
+- The demo Tea Collector profile's logout button only presents a confirmation alert and does not clear session data.
+- The Estate Owner/Manager token persistence code logs the submitted phone/password object and the returned access token to the JS console in `auth/login.tsx`. Remove such credential/token logging before production use.
+- Mobile fallback API port is 3001, while backend default listen port is 3000. Use the actual environment's `EXPO_PUBLIC_API_URL`/`PORT` values to confirm connectivity; those runtime settings were not read.
+
+## 6. Estate Owner versus Tea Collector comparison
+
+| Feature | Estate Owner authentication | Tea Collector authentication |
+|---|---|---|
+| User entity | Shared `users` table; role `estate_owner`; linked to `tea_estate_owners` and then an estate. | Shared `users` table; role `collection_agent`; linked through `factory_employees`, `collection_agents`, and HR `employees`. |
+| Login identifier | Phone number. | Phone number (employee contact). |
+| Password storage | bcrypt hash in `users.password_hash`; registration hashes with cost 10. | bcrypt hash in the same column; provisioned with one-time random temporary password and changed on first login. |
+| Login endpoint | Mobile calls `POST /auth/mobile/login` (generic `AuthService.login`). | Backend `POST /auth/agent/login` exists; mobile does not call it. |
+| Backend role | `estate_owner` -> `Estate Owner`. | `collection_agent` -> `CollectionAgent` token role in a dedicated login method. |
+| JWT generation | `{sub: users.id, role: 'Estate Owner'}`. | `{sub: users.id, role: 'CollectionAgent'}`. |
+| Response | `accessToken` + `user` profile (`id`, `name`, `role`, `phone`, `estate`). | `accessToken` + `agent` (`id`, `name`, `phone`) + `mustChangePassword`. |
+| Token validation | Generic `JwtAuthGuard`/`jwt` strategy only accepts portal roles; Estate Owner role is not accepted by `/auth/mobile/me`. | Dedicated `AgentJwtGuard`/`jwt-agent` strategy accepts only `CollectionAgent`. |
+| Provisioning | Mobile public registration, or Admin-side estate registration with random password hash and no distribution flow. | Admin-only HR employee create/update with Tea Collecting Agent job title provisions the login and one-time temporary password. |
+| Mobile token storage | Current login writes to SecureStore (native) / localStorage (web); no app-wide restore or bearer attachment. | No agent-specific mobile call yet; generic persistence helper exists but mobile endpoint/response is not wired. |
+| Protected routes | Estate-owner layout is navigation only; no auth guard found. Backend `/auth/mobile/me` currently mismatches token strategy. | Backend `/dispatch/me/*` routes are agent-guarded; mobile route is currently a demo and unguarded. |
+| Logout | No backend logout (JWT); estate-owner layout has no implemented token-clearing logout found. | Demo profile only shows a confirmation alert; it does not clear tokens. |
+| Password change | No estate-owner password-change endpoint found in reviewed auth routes. | Backend endpoint and validation exist; mobile UI/API wiring is missing. |
+
+## 7. Recommended implementation approach (analysis only; not implemented)
+
+### Backend
+
+1. Reuse `AuthService.agentLogin()`, `/auth/agent/login`, `AgentJwtStrategy`, and `AgentJwtGuard`; do not add another password table, JWT strategy, hashing utility, or generic login branch for agents.
+2. Reuse the Administrator-only employee registration/update workflow to provision or re-enable accounts. Confirm the one-time `initialPassword` is conveyed to the collector through an approved secure operational channel.
+3. Wire the mobile app to the existing agent-specific `/dispatch/me/*` endpoints. Continue deriving agent identity from the JWT subject; do not accept arbitrary agent/user IDs from the client for "my" operations.
+4. Review whether agent login should be included in the dedicated auth rate-limit path. The current named auth bucket's path filter excludes `/auth/agent/login`.
+5. Separately decide/fix the existing Estate Owner `/auth/mobile/me` guard mismatch before relying on that endpoint for Owner session hydration. Do not solve it by weakening the portal strategy to accept agent or estate roles.
+6. Preserve role separation when adding routes: portal controllers use `JwtAuthGuard`; agent-self routes use `AgentJwtGuard`; service-level permission and subject ownership checks remain server-side.
+
+### Mobile frontend
+
+1. Add an agent-specific auth service/response type for `/auth/agent/login`; do not reuse the current `{ accessToken, user }` shape without adapting it because the backend returns `agent` and `mustChangePassword`.
+2. Route the collector role through a real login flow rather than directly to the demo screen. On success, store the token and agent profile using the existing SecureStore pattern on native devices.
+3. Include the saved JWT in the authorization header for authenticated calls to `/dispatch/me/*`; centralize this in the existing API client and clear local state on unauthorized/expired responses.
+4. If `mustChangePassword` is true, force the change-password screen before displaying agent features. Add the call to `/auth/agent/change-password` using the current token and backend DTO; do not treat that screen as "forgot password."
+5. Restore/validate sessions at app startup, gate authenticated agent routes, and implement logout by removing the saved token/profile and returning to the unauthenticated flow.
+6. Replace mock screens incrementally with the existing agent API (starting with profile/stops/cover requests as required). Do not assume the Estate Owner API or profile shape is interchangeable with the agent API.
+7. Remove logs of passwords and access tokens from the current login screen; align `EXPO_PUBLIC_API_URL` with the backend port.
+
+### Database
+
+- No new table is indicated for basic Tea Collector authentication. `users`, `factory_employees`, `collection_agents`, and `employees` already carry the relationships; `users.must_change_password` and `collection_agents.hr_employee_id` are in `init.sql` and the `2026-10-10-agent-employees.sql` migration. Before relying on provisioning, reconcile `init.sql` with the User entity/baseline and ensure `AgentProvisioningService.provision()` supplies required `users.name`.
+- Before testing against an environment, confirm that this migration has been applied and that the agent employee has `status = Active`, the expected role title, and linked `users`/`collection_agents` records.
+- Confirm employee contact uniqueness against `users.phone`; the provisioning service checks it before creating the account.
+
+### Security and authorization considerations
+
+- Keep agent and portal tokens on distinct strategies/guards and test cross-audience rejection. Role validation is currently the audience-separation mechanism; both strategies use the same secret and no explicit `aud` claim.
+- Enforce account status and the must-change-password state server-side for every protected agent request, as the existing `AgentSelfService.me()` path does.
+- The portal guard does not re-check suspended status on each request; an already-issued portal token can remain valid until its configured expiry. Consider whether portal suspension should also revoke/deny existing tokens.
+- Do not log passwords or JWTs. The current mobile login handler logs both, and `IdentityThrottlerGuard` logs the submitted account value/tracker in the reviewed source.
+- Review the distinct error messages ("no account", "wrong password", "suspended") for account-enumeration policy.
+- Configure and verify the backend `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, and mobile `EXPO_PUBLIC_API_URL` outside the report. Secret values are intentionally not included here.
+
+### Testing requirements
+
+- Backend unit/integration: successful agent login returns the agent response shape and `mustChangePassword`; wrong password, unknown phone, suspended user, wrong role, missing/disabled HR agent, and non-active employee are rejected.
+- Password lifecycle: temporary password works for login but protected agent calls are blocked until a valid change; wrong current password and same-as-current password fail; successful change persists a bcrypt hash and clears the flag.
+- Authorization: agent JWT is rejected on portal endpoints; portal JWT is rejected on `/dispatch/me/*`; agent calls resolve only the agent represented by the JWT subject; suspended/deactivated/role-changed agents stop accessing the API.
+- Provisioning: administrator registration creates linked user/employee/factory-employee/collection-agent records; duplicate contact fails; returned initial password is one-time and never stored as plaintext; rollback leaves no partially provisioned employee.
+- Mobile: correct endpoint and response typing; SecureStore persistence and startup restoration; bearer header on agent API requests; forced password-change navigation; API/network/401/403 errors; logout clears data; no direct access to protected collector screens without a session.
+- End-to-end: provision one agent, sign in with temporary password, force password change, fetch own stops, verify portal APIs reject the agent token, and verify deactivation/suspension prevents subsequent requests.
+
+## 8. File and function reference
+
+Line numbers below refer to the current source reviewed on 2026-11-08.
+
+| File path | Relevant classes/functions and approximate lines | Responsibility |
+|---|---|---|
+| `source-code/backend/src/auth/auth.controller.ts` | `AuthController` 16; `login` 21-23; `agentLogin` 27-29; `changeAgentPassword` 33-44; `me` 47-51 | Main and agent auth endpoints. |
+| `source-code/backend/src/auth/auth.mobile.controller.ts` | `AuthMobileController` 10; `login` 15-18; `register` 21-28; `me` 31-35 | Mobile owner/manager login and registration endpoints. |
+| `source-code/backend/src/auth/auth.service.ts` | `AuthService.login` 64-127; `register` 130-173; `agentLogin` 177-208; `changeAgentPassword` 211-234; `me` 236 onward; public response interfaces 16-52 | Credential and token behavior. |
+| `source-code/backend/src/auth/auth.module.ts` | `JwtModule.registerAsync` 31-42; controller/strategy providers 45 onward | JWT config and DI registration. |
+| `source-code/backend/src/auth/dto/login.dto.ts` | `LoginDto` 3-10 | Phone/password input validation. |
+| `source-code/backend/src/auth/dto/register.dto.ts` | `RegisterDto` | Estate Owner registration validation. |
+| `source-code/backend/src/auth/dto/change-password.dto.ts` | `ChangePasswordDto` | Agent password-change validation. |
+| `source-code/backend/src/auth/jwt-payload.interface.ts` | `JwtPayload`, `AgentJwtPayload`, `AGENT_ROLE` | Token claim types. |
+| `source-code/backend/src/auth/jwt.strategy.ts` | constructor 10-16; `validate` 18-27 | Portal JWT validation and role rejection. |
+| `source-code/backend/src/auth/jwt-auth.guard.ts` | `JwtAuthGuard` 4-5 | Portal route guard. |
+| `source-code/backend/src/auth/agent-jwt.strategy.ts` | `AgentJwtStrategy` 9; `validate` 18 onward | Agent JWT validation. |
+| `source-code/backend/src/auth/agent-jwt.guard.ts` | `AgentJwtGuard` 4-5 | Agent route guard. |
+| `source-code/backend/src/auth/role-map.ts` | `DB_TO_APP_ROLE` 8; `toAppRole` 21; `toPortalRole` 35 | DB/app role mapping and portal restriction. |
+| `source-code/backend/src/auth/identity-throttler.guard.ts` | `IdentityThrottlerGuard.getTracker` and `generateKey` | Login/account/IP throttling identity. |
+| `source-code/backend/src/auth/auth.service.spec.ts` | Agent login/password-change tests | Unit coverage for agent temporary-password and rejection behavior. |
+| `source-code/backend/src/users/user.entity.ts` | `DbRole`, `UserStatus`, `User` | Shared login entity/roles/status/password fields. |
+| `source-code/backend/src/users/users.service.ts` | `findByPhone` 33; `setPassword` 42; `markLogin` 50; profile/account methods 64 onward | Shared account/profile database access. |
+| `source-code/backend/src/estates/estate-owner.entity.ts` | `EstateOwnerEntity` | Owner profile to user relationship. |
+| `source-code/backend/src/users/estate-manager.entity.ts` | `EstateManager` | Manager-to-employee/estate relationship. |
+| `source-code/backend/src/users/factory-employee.entity.ts` | `FactoryEmployee` | Factory login subtype, including legacy collection-agent link. |
+| `source-code/backend/src/employees/employee.entity.ts` | `EmployeeEntity` | HR employee row and optional shared user link. |
+| `source-code/backend/src/dispatch/collection-agent.entity.ts` | `CollectionAgentEntity` | Agent dispatch identity and HR/factory employee links. |
+| `source-code/backend/src/dispatch/agent-directory.service.ts` | `all`, `byUserId`, `credentials` | Active agent lookup and current login state. |
+| `source-code/backend/src/dispatch/agent-provisioning.service.ts` | `assertContactFree` 21; `provision` 40; `deprovision` 101; `syncContact` later in file | Agent login creation, suspension, and phone sync. |
+| `source-code/backend/src/dispatch/dispatch-agent.controller.ts` | `DispatchAgentController` 25 onward | Agent-only `/dispatch/me/*` API routes. |
+| `source-code/backend/src/dispatch/agent-self.service.ts` | `me(userId)` 79 onward | Resolves the JWT subject to active agent and enforces suspension/temp-password gates. |
+| `source-code/backend/src/employees/employees.controller.ts` | `EmployeesController` 39; `POST` create 141 onward; `GET roles` 130 onward | Admin employee API through which agent accounts are provisioned. |
+| `source-code/backend/src/employees/employees.service.ts` | `create` 66; agent trigger 83 onward; `update` 136 onward; Administrator guard 564 | HR create/update and agent provisioning orchestration. |
+| `source-code/backend/src/employees/employee-roles.ts` | `AGENT_JOB_ROLE` 7; `isAgentRole` 19 | Canonical Tea Collecting Agent job-title value. |
+| `source-code/backend/src/admin/admin-map.ts` | `PortalRole` 9; `PORTAL_ROLES` 29 | Factory portal role allowlist. |
+| `source-code/backend/src/app.module.ts` | throttler configuration 27-64; global guard 80 onward | Global rate limits and `IdentityThrottlerGuard` registration. |
+| `source-code/backend/src/main.ts` | validation/CORS/listen 6-16 | API bootstrap and default backend port. |
+| `source-code/database/init.sql` | users 5-23; owner tables 27 onward; factory employees/collection agents 134-154; employees/HR-agent link 526 onward | Current database schema shape. |
+| `source-code/backend/src/migrations/baseline.sql` | `public.users` 1468-1480 | Captured DB definition; includes required `name` and optional `nic` columns missing from `database/init.sql`. |
+| `source-code/database/migrations/2026-10-10-agent-employees.sql` | full migration | Existing agent-to-HR linkage and `must_change_password` addition/backfill. |
+| `source-code/mobile/src/app/auth/login.tsx` | `persistSession` 39; `handleLogIn` 51 onward; success navigation 76-94 | Current mobile owner/manager login. |
+| `source-code/mobile/src/app/auth/register.tsx` | `persistSession` 46; `handleRegister` 57 onward; home navigation 100 | Owner registration; token persistence helper currently unused in the handler. |
+| `source-code/mobile/src/app/auth/change-password.tsx` | `handleChangePassword` 16 onward | Password-change UI stub; no API call. |
+| `source-code/mobile/src/app/services/api/auth.api.ts` | `LoginResult` 13; `login` 17; `register` 29 onward | Mobile auth service; currently uses mobile generic endpoints only. |
+| `source-code/mobile/src/app/services/api/client.ts` | API URL selection 3-17; `apiRequest` 44 onward | Mobile fetch client; no bearer-token attachment. |
+| `source-code/mobile/src/app/_layout.tsx` | `RootLayout` | Expo Router stack; no auth guard. |
+| `source-code/mobile/src/data/userRoles.ts` | `userRoles` | Sends collector selection to the demo route, not login. |
+| `source-code/mobile/src/app/teacollector/teacollectorMobile.tsx` | `TeaCollector` demo screen and static data | Mock collector interface, not currently backend-authenticated. |
+| `source-code/mobile/src/app/teacollector/demo-teacollector-profile.tsx` | logout button around 70-84 | Demo confirmation only; does not clear auth state. |
+| `source-code/admin/src/features/auth/LoginPage.tsx` | `LoginPage.onSubmit` 18 onward | Factory-portal phone/password login UX. |
+| `source-code/admin/src/services/auth.ts` | `login` 9; `me` 17 | Admin portal auth API calls. |
+| `source-code/admin/src/lib/api.ts` | API/token constants 8-9; token methods 21-28; `apiFetch` 37 onward | Admin API URL, bearer attachment, and 401 handling. |
+| `source-code/admin/src/context/AuthContext.tsx` | `AuthProvider` 26; session hydration 35; `logout` 54; `login` 63 | Admin portal auth state. |
+
+## 9. Unresolved / environment-dependent items
+
+1. The actual backend runtime environment values (`JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`, `DATABASE_URL`, `REDIS_URL`, and `CORS_ORIGIN`) were not inspected. Secret values are intentionally omitted.
+2. `database/init.sql` and the TypeORM/baseline schema disagree on `users.name` and `users.nic`; current database state and the intended fresh-install schema need confirmation.
+3. Whether the target database has run `2026-10-10-agent-employees.sql` cannot be determined from source alone.
+4. The code returns a temporary agent password through the Administrator employee API response, but the reviewed source does not establish how the operator securely conveys it to the agent.
+5. There is no agent-specific `/auth/agent/me` route in the reviewed code. Login returns basic agent identity; the existing agent-self API exposes stops, cover requests, shift and related operations.
+6. Mobile collector role UX is still demo-based; exact production Tea Collector navigation, offline/session behavior, and profile fields beyond the login response need product confirmation.
+7. The Estate Owner `/auth/mobile/me` guard mismatch and mobile default-port mismatch are source-level findings; actual runtime effects depend on which routes and ports are currently used.
+
+## Change boundary
+
+This report is the only file intended to be created/modified for this analysis. No source code, configuration, dependency manifest, migration, or database file was changed.
+
+
+
+Current Mobile Authentication Findings
+
+1. Existing login screen and UI components
+
+- Screen: `source-code/mobile/src/app/auth/login.tsx` (`LogInScreen`). This is the existing phone-and-password screen used by Estate Owners and Estate Managers.
+- It composes shared UI components from `source-code/mobile/src/components/ui/`: `Screen`, `AppText`, `AppInput`, `PasswordInput`, and `AppButton`.
+- It also uses React Native `View`, `Image`, and `Pressable`; the brand image is `source-code/mobile/src/assets/brand/logo&wordmark/png/FullLogoGreen.png`.
+- `AppInput` collects the phone number and `PasswordInput` collects the password. The screen performs phone/password validation, displays field/form errors and loading state, and submits with the Sign in button. It includes links to `/auth/change-password` and `/auth/register`.
+- Although often described as the Estate Owner login, the same screen also serves the Estate Manager; it branches on the returned user role after successful login.
+
+2. Authentication API function
+
+- The screen imports and calls `login(phoneNumber, password)` from `source-code/mobile/src/app/services/api/auth.api.ts`.
+- That function sends `POST /auth/mobile/login` with `{ phone, password }` through `apiRequest` in `source-code/mobile/src/app/services/api/client.ts`.
+- The mobile endpoint is implemented by `source-code/backend/src/auth/auth.mobile.controller.ts` and calls the generic `AuthService.login()`. Its response is `{ accessToken, user }`.
+- The screen persists the token and user in SecureStore on native platforms (or localStorage on web). It routes Estate Owners to `/(estate-owner)/home` and Estate Managers to `/estate-manager`.
+
+3. Navigation to the login screen
+
+- `source-code/mobile/src/app/_layout.tsx` registers `auth/login` as an Expo Router stack screen. The route is also available directly as `/auth/login`.
+- The app's root `source-code/mobile/src/app/index.tsx` replaces the initial route with `/(onboarding)` after its splash delay.
+- From `source-code/mobile/src/app/(onboarding)/index.tsx`, Get Started navigates to `/(onboarding)/select-role`.
+- `source-code/mobile/src/data/userRoles.ts` sets both Estate Owner and Estate Manager routes to `/auth/login`, so selecting either role opens this screen.
+- Factory Collector currently routes to `/teacollector/teacollectorMobile`, not to the login screen. That destination is a demo experience, not a login flow.
+
+4. Reuse for Tea Collector login
+
+The visual/form portion is reusable, but this screen cannot authenticate and enter the Tea Collector app unchanged.
+
+- The existing screen calls `/auth/mobile/login`; Tea Collectors have a separate backend endpoint, `POST /auth/agent/login`, implemented in `source-code/backend/src/auth/auth.controller.ts` and `AuthService.agentLogin()`.
+- The agent endpoint returns `{ accessToken, agent, mustChangePassword }`, rather than the current `{ accessToken, user }` shape. It also issues an agent-specific token, and the backend has a separate agent change-password endpoint at `/auth/agent/change-password`.
+- The current success handler only routes Estate Owner and Estate Manager roles. It does not handle the agent response or navigate to the Tea Collector experience.
+- Therefore, the shared phone/password controls and much of the validation/error/loading presentation could be reused, but the API call and result 
