@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, dateTaken, latestLive, sameDraft, versionBefore } from './factory-setup-model'
+import { addDays, addMonths, dateTaken, latestLive, monthName, sameDraft, transportMonthOptions, versionBefore } from './factory-setup-model'
 import type { VersionStatus } from './types'
 
 const v = (effectiveDate: string, status: VersionStatus, rate = 1) => ({ effectiveDate, status, rate })
@@ -27,5 +27,17 @@ describe('Factory Setup versions', () => {
   it('an edit back to the starting values is not unsaved', () => {
     expect(sameDraft({ a: '185', b: 95 }, { a: 185, b: '95' })).toBe(true)
     expect(sameDraft({ a: '186', b: 95 }, { a: 185, b: 95 })).toBe(false)
+  })
+})
+
+describe('transport month options (Administration-Addendum §4)', () => {
+  it('next month onward; past months only while the first version can be back-dated', () => {
+    expect(addMonths('2026-12', 1)).toBe('2027-01')
+    expect(monthName('2026-07')).toBe('July 2026')
+    const first = transportMonthOptions('2026-12', '2026-07')
+    expect(first.slice(0, 6)).toEqual(['2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'])
+    const later = transportMonthOptions('2026-12', null)
+    expect(later[0]).toBe('2026-12')
+    expect(later).toHaveLength(24)
   })
 })

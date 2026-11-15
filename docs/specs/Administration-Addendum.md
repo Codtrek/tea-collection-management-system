@@ -38,7 +38,7 @@ the page, with unsaved changes asks first (react-router `useBlocker` + `beforeun
 |---|---|
 | General Info | Factory name, registration no., address, contact, email; **bank account** (bank, branch, account name, account number). Logo: "Coming soon (file storage)" |
 | Grade Rates | Super / Normal Rs per kg, versioned (§3) |
-| Transport Rates | Versioned; not yet calculated (§4) |
+| Transport Rates | One versioned monthly transport charge per estate (§4) |
 | Item Prices | Selling prices for items given to estate owners (§5) |
 | Pay Rates | Role rates, overrides, history, pay changes (§6–8) |
 | Beneficiary Item Types | Unchanged, report only (§9) |
@@ -78,28 +78,53 @@ the page, with unsaved changes asks first (react-router `useBlocker` + `beforeun
 - **Cancelled versions** are ignored by the Leaf Purchase and Expense reports.
 - **Schema:** `grade_rates` gains `reason`, `cancelled_at`, `cancelled_by` and `cancel_reason`, with a partial unique index on live dates.
 
-## 4. Transport rates
+## 4. Transport: a fixed monthly charge per estate
 
-**What exists today:**
-- **No transport formula exists anywhere.**
-- `settlements.transport_cost` holds seeded numbers.
-- The old tab's "Rs 42 per km, minimum Rs 500" were input defaults that were never saved.
-- Estates have lat/lng but **no distance**, and routes have no distances.
-- The only rule in force is the self-delivery exemption (`estates.self_delivery`).
-- There is no settlement generator; settlements are seeded, then processed.
+**Decided 2026-11-15:** transport is a **fixed amount per month, the same for every estate**.
 
-**`transport_rates`:**
-- Columns: effective date, basis `per_km` | `per_kg`, rate, minimum charge, `basis_confirmed`, reason and the cancel columns.
-- Seeded with 42 per km, minimum 500, effective 2019-01-01 (before the first delivery), with the basis **not confirmed**.
-- Versioned like grade rates.
+**Before:**
+- No transport formula existed anywhere; `settlements.transport_cost` held seeded numbers.
+- The old tab's "Rs 42 per km, minimum Rs 500" were never saved or charged.
+- Until the method was decided, settlement processing refused estates that pay transport ("Transport: not configured").
 
-**Until the factory confirms how it charges, and the formula is built** (`TRANSPORT_FORMULA_READY`), transport is **not configured**:
-- Settlement processing shows "Transport: not configured" for estates that pay transport.
-- The run is **refused** for them.
-- Transport is never deducted as Rs 0 silently.
-- Self-delivery estates still process.
+**The setting (Factory Setup → Transport Rates):**
+- One versioned value, **"Monthly transport charge per estate (Rs)"**, with a reason; audited old → new.
+- It **charges from a month**. The page picks a month and stores its 1st. In general a version applies from the first month that starts on or after its effective date, so there are no mid-month splits.
+- Statuses are the usual Scheduled / Current / past / cancelled. A scheduled version can be cancelled before it starts.
+- **Preview before publishing:** "Last month (October 2026) this would have charged N estates, total Rs Y" (`GET /admin/transport-rates/preview?amount=`): estates with at least one confirmed delivery last month, self-delivery left out.
+- **The one exception to "never in the past":** while no monthly charge has ever been published, the **first** may start from a past month, no earlier than the earliest month with unprocessed settlements, so the settlements already waiting can be processed. It is labelled "First version, back-dated" in history and in the audit line. Every later version starts next month or later.
+- `transport_rates.basis` keeps `per_km` / `per_kg` for the future; the page offers only the monthly charge (`fixed_month`).
+- The seeded 42/km row is kept in history, cancelled and marked **Never applied** (`never_applied`).
 
-Today this blocks the 4 pending July 2026 seed settlements.
+**The charge (`admin/transport-rules.ts`, `estates/settlement-transport.ts`):**
+- An estate is charged **once** for a settlement month in which it has **at least one confirmed delivery**, however many deliveries.
+- **No deliveries = no charge.** **Self-delivery estates are exempt** (`estates.self_delivery`).
+- The version used is the one covering that month.
+- **Due** = the month's charge + whatever was carried out of the estate's last processed settlement.
+- **Order:** adjustments, transport, fertilizer, advances. While fertilizer and advance deductions are still stored figures (no settlement generator yet), they can't shrink, so transport is the step that gives way. It takes at most gross + adjustment − those deductions, so net never goes below Rs 0. What isn't taken is **carried forward** to the estate's next settlement.
+
+**Processing (`processSettlements`):**
+- Blocked with "Transport: not configured. No monthly transport charge covers <Month>…" until a version covers the month. Self-delivery estates still process.
+- **Frozen at processing:** `settlements.transport_status` (charged / exempt / no_deliveries), `transport_charge`, `transport_version_id`, `transport_carried_in`, `transport_carried_out`, and `transport_cost` = what was taken. A later version never changes a processed settlement.
+- Settlements processed before this have no transport line (`transport_status` NULL); they show their stored figure and carry nothing.
+
+**What the pages show:**
+- Pending settlements work the line out live, on the list, the process page and the detail page:
+  - "Transport (fixed monthly) Rs X — version effective <Month>"
+  - "exempt (self-delivery)"
+  - "no deliveries this month, no charge"
+  - "Not configured"
+- A carry-forward note is added in or out when there is one (`features/estates/transport-line.ts`).
+
+**Checked on a copy of local `tea_dev` (2026-11-15):**
+- Before: not configured. Processing July was refused for the 2 estates that pay transport.
+- Back-dating the first version to June was refused, because the earliest unprocessed month is July. Rs 5,000 from July 2026 was accepted.
+- A second back-dated version was refused.
+- July lines: Green Valley and Hilltop charged Rs 5,000; Mount Rest exempt; Silver Peak no deliveries (missing bank, so not processed).
+- After processing, the lines were frozen. A December version (Rs 9,000) left them unchanged.
+- The preview for October 2026: 36 estates, Rs 180,000 at Rs 5,000.
+
+**Known gap:** the estate page's Payments tab (EST-03 lifetime) still shows a pending settlement's stored seeded transport figure. The settlement pages show the live line.
 
 ## 5. Item Prices
 
@@ -190,4 +215,4 @@ That model is kept (your choice); it now has history.
 
 ## 10. Migrations (local `tea_dev` only; mirrored in `init.sql`)
 
-`2026-11-15-factory-setup.sql`, `-item-prices.sql`, `-pay-rates.sql`, `-pay-adjustments.sql`.
+`2026-11-15-factory-setup.sql`, `-item-prices.sql`, `-pay-rates.sql`, `-pay-adjustments.sql`, `-transport-monthly.sql`.

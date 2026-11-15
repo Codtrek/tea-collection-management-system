@@ -10,6 +10,10 @@ import { GradeRateEntity } from './grade-rate.entity';
 import { TransportRateEntity } from './transport-rate.entity';
 import { RolePermissionEntity } from './role-permission.entity';
 import { SystemSettingEntity } from './system-setting.entity';
+import { TransportRatesService } from './transport-rates.service';
+import { SettlementEntity } from '../estates/settlement.entity';
+import { CollectionRecordEntity } from '../collections/collection-record.entity';
+import { EstateEntity } from '../estates/estate.entity';
 
 @Module({
   imports: [
@@ -23,11 +27,15 @@ import { SystemSettingEntity } from './system-setting.entity';
       // Reports uses for its read-only lookups).
       User,
       FactoryEmployee,
+      // transport (Administration-Addendum §4): the first version's earliest month and the preview
+      SettlementEntity,
+      CollectionRecordEntity,
+      EstateEntity,
     ]),
     UsersModule,
     AuditModule,
   ],
   controllers: [AdminController],
-  providers: [AdminService],
+  providers: [AdminService, TransportRatesService],
 })
 export class AdminModule {}

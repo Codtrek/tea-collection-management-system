@@ -28,14 +28,22 @@ export interface GradeRate {
   cancelled: VersionCancelled | null
 }
 
-export type TransportBasis = 'per_km' | 'per_kg'
+export type TransportBasis = 'per_km' | 'per_kg' | 'fixed_month'
+/** One transport version (Administration-Addendum §4). Only `fixed_month` is charged. */
 export interface TransportRate {
   id: number
   effectiveDate: string
+  /** 'YYYY-MM' — the first month it charges */
+  firstMonth: string
   basis: TransportBasis
+  /** fixed_month: the monthly charge per estate */
   rate: number
   minimumCharge: number
   basisConfirmed: boolean
+  /** never charged (the seeded per-km placeholder) */
+  neverApplied: boolean
+  /** the one-time first version that started in a past month */
+  backdated: boolean
   setBy: string
   reason: string | null
   status: VersionStatus
@@ -43,7 +51,19 @@ export interface TransportRate {
 }
 export interface TransportRates {
   versions: TransportRate[]
+  /** this month's status */
   status: { configured: boolean; reason: string | null }
+  /** while no monthly charge exists: the earliest past month the first one may start from */
+  firstVersionFrom: string | null
+  /** the earliest month a normal version can start from */
+  nextMonth: string
+}
+export interface TransportPreview {
+  /** 'YYYY-MM' — last complete month */
+  month: string
+  estates: number
+  total: number
+  exempt: number
 }
 
 /** The factory's details. The account number never leaves the server in full. */

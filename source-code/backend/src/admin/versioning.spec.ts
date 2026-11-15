@@ -1,4 +1,3 @@
-import { transportStatus, type TransportVersion } from './transport-rules';
 import {
   cancelError,
   newVersionError,
@@ -96,31 +95,6 @@ describe('publishing and cancelling', () => {
     expect(cancelError(rows[0], TODAY, 'x')).toMatch(/already started/);
     expect(cancelError(v('2026-05-01', 1, true), TODAY, 'x')).toMatch(
       /already cancelled/,
-    );
-  });
-});
-
-describe('transport status', () => {
-  const t = (o: Partial<TransportVersion> = {}): TransportVersion => ({
-    effectiveDate: '2019-01-01',
-    basis: 'per_km',
-    rate: 42,
-    minimumCharge: 500,
-    basisConfirmed: false,
-    cancelledAt: null,
-    ...o,
-  });
-
-  it('is not configured without a version, an unconfirmed basis, or the formula', () => {
-    expect(transportStatus([], TODAY).reason).toMatch(
-      /No transport rate is in force/,
-    );
-    expect(transportStatus([t()], TODAY).reason).toMatch(/per km or per kg/);
-    expect(
-      transportStatus([t({ basisConfirmed: true })], TODAY).reason,
-    ).toMatch(/isn’t built yet/);
-    expect(transportStatus([t({ basisConfirmed: true })], TODAY, true)).toEqual(
-      { configured: true, reason: null },
     );
   });
 });

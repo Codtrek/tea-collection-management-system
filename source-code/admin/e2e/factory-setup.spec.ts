@@ -61,14 +61,19 @@ test('grade rates: tomorrow by default, today warns, the same rates are refused,
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
 })
 
-test('transport is honest: not configured until the factory confirms its method', async ({ page }) => {
+test('transport: one monthly charge per estate — not configured until set, previewed before publishing', async ({ page }) => {
   // the settlement pages compile on first visit in a fresh dev server
   test.setTimeout(90_000)
   await page.goto('/admin/factory-setup')
   await ready(page)
   await page.getByRole('tab', { name: 'Transport Rates' }).click()
   await expect(page.getByText(/Transport: not configured\./).first()).toBeVisible()
-  await expect(page.getByText('Not confirmed').first()).toBeVisible()
+  // the seeded 42/km placeholder stays in history, marked never applied
+  await expect(page.getByText('Never applied').first()).toBeVisible()
+  await expect(page.getByText(/may start in a past month, back to July 2026/)).toBeVisible()
+  await page.getByLabel('Monthly transport charge per estate (Rs.)').fill('5000')
+  await expect(page.getByText(/Last month \(\w+ \d{4}\) this would have charged/)).toBeVisible()
+  await page.getByRole('button', { name: 'Discard' }).click()
   await page.goto('/estates/settlements/process?month=2026-07')
   await page.locator('main h1').first().waitFor({ timeout: 60_000 })
   await ready(page)

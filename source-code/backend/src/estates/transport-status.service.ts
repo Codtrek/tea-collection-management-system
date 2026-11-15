@@ -8,13 +8,13 @@ import {
   toTransportVersion,
   transportStatus,
   type TransportStatus,
+  type TransportVersion,
 } from '../admin/transport-rules';
 
 /**
- * Whether transport can be charged on a date (Administration-Addendum §4). Settlement processing
- * asks before deducting anything: until the factory confirms its method and the formula exists,
- * the answer is "not configured" and processing stops — transport is never deducted as Rs. 0
- * silently.
+ * Reads the transport versions for settlements (Administration-Addendum §4). A month with no
+ * monthly charge covering it is "not configured": processing stops for estates that pay
+ * transport — it is never deducted as Rs. 0 silently.
  */
 @Injectable()
 export class TransportStatusService {
@@ -23,19 +23,13 @@ export class TransportStatusService {
     private readonly rates: Repository<TransportRateEntity>,
   ) {}
 
-  /** The status on the last day of a settlement period ('July 2026'). */
-  async forPeriod(period: string): Promise<TransportStatus> {
-    const key = labelToKey(period);
-    if (!key) return this.status(localDate(new Date()));
-    const [y, m] = key.split('-').map(Number);
-    const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
-    return this.status(last);
+  async versions(): Promise<TransportVersion[]> {
+    return (await this.rates.find()).map(toTransportVersion);
   }
 
-  async status(date: string): Promise<TransportStatus> {
-    return transportStatus(
-      (await this.rates.find()).map(toTransportVersion),
-      date,
-    );
+  /** The status for a settlement period ('July 2026'); no period = this month. */
+  async forPeriod(period: string): Promise<TransportStatus> {
+    const key = labelToKey(period) || localDate(new Date()).slice(0, 7);
+    return transportStatus(await this.versions(), key);
   }
 }

@@ -14,6 +14,7 @@ import type { EstateEntity } from './estate.entity';
 import { settlementNet } from './estate-map';
 import { type Actor, EstatesService } from './estates.service';
 import type { TransportStatusService } from './transport-status.service';
+import type { TransportVersion } from '../admin/transport-rules';
 import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import type { RouteEntity } from './route.entity';
 import type { SettlementEntity } from './settlement.entity';
@@ -122,6 +123,11 @@ function makeSettlement(
     processedBy: null,
     processedOn: null,
     createdAt: new Date('2026-07-01T00:00:00.000Z'),
+    transportStatus: null,
+    transportCharge: null,
+    transportVersionId: null,
+    transportCarriedIn: '0',
+    transportCarriedOut: '0',
     ...overrides,
   };
 }
@@ -161,13 +167,22 @@ describe('EstatesService', () => {
   const admin: Actor = { name: 'A. Bandara', role: 'Administrator' };
   const officer: Actor = { name: 'S. Fernando', role: 'Officer' };
   const manager: Actor = { name: 'R. Jayasuriya', role: 'Manager' };
-  let transportState: () => Promise<{
-    configured: boolean;
-    reason: string | null;
-  }>;
+  // one monthly transport charge covering every month unless a test changes it
+  const monthly = (o: Partial<TransportVersion> = {}): TransportVersion => ({
+    id: 1,
+    effectiveDate: '2019-01-01',
+    basis: 'fixed_month',
+    rate: 5000,
+    minimumCharge: 0,
+    basisConfirmed: true,
+    neverApplied: false,
+    cancelledAt: null,
+    ...o,
+  });
+  let transportVersions: TransportVersion[];
 
   beforeEach(() => {
-    transportState = () => Promise.resolve({ configured: true, reason: null });
+    transportVersions = [monthly()];
     estateRepo = new FakeRepository();
     ownerRepo = new FakeRepository();
     documentRepo = new FakeRepository();
@@ -200,7 +215,7 @@ describe('EstatesService', () => {
       // transport configured, so these tests exercise the rest of processing; the
       // not-configured block has its own test below
       {
-        forPeriod: () => transportState(),
+        versions: () => Promise.resolve(transportVersions),
       } as unknown as TransportStatusService,
     );
   });
@@ -362,31 +377,109 @@ describe('EstatesService', () => {
     });
   });
 
-  describe('processSettlements — transport (Administration-Addendum §4)', () => {
-    it('stops a run while transport is not configured — never deducts Rs. 0 silently', async () => {
+  describe('processSettlements — transport, a fixed monthly charge (Administration-Addendum §4)', () => {
+    const delivery = (id: string, estateId: number, collectionDate: string) =>
+      ({
+        id,
+        estateId,
+        collectionDate,
+        status: 'confirmed',
+        settlementId: null,
+        // graded long ago: past the correction window
+        createdAt: new Date('2026-07-01T00:00:00Z'),
+        updatedAt: new Date('2026-07-01T00:00:00Z'),
+        gradedAt: new Date('2026-07-01T00:00:00Z'),
+      }) as unknown as CollectionRecordEntity;
+
+    it('blocks the run until a version covers the month — never deducts Rs. 0 silently', async () => {
       settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
-      transportState = () =>
-        Promise.resolve({
-          configured: false,
-          reason: 'Transport: not configured. Basis not confirmed.',
-        });
+      collectionRepo.seed(delivery('D1', 1, '2026-07-03'));
+      transportVersions = [monthly({ effectiveDate: '2026-08-01' })];
       await expect(service.processSettlements(officer)).rejects.toThrow(
-        /^Transport: not configured\. Basis not confirmed\. 1 settlement for July 2026 include transport/,
+        /^Transport: not configured\. No monthly transport charge covers July 2026 \(Factory Setup → Transport Rates\)\. 1 settlement for July 2026 include transport/,
       );
       expect((await settlementRepo.find())[0].status).toBe('pending');
+      // once a version covers July it processes
+      transportVersions = [monthly({ effectiveDate: '2026-07-01' })];
+      const [done] = await service.processSettlements(officer);
+      expect(done.status).toBe('Processed');
     });
 
-    it('self-delivery estates pay no transport, so they still process', async () => {
+    it('charges ONCE per month however many deliveries, and freezes the line', async () => {
+      settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
+      for (const [i, day] of ['03', '10', '17', '24'].entries()) {
+        collectionRepo.seed(delivery(`D${i}`, 1, `2026-07-${day}`));
+      }
+      const [done] = await service.processSettlements(officer);
+      expect(done.transportCost).toBe(5000);
+      const row = (await settlementRepo.find())[0];
+      expect(row).toMatchObject({
+        transportStatus: 'charged',
+        transportCharge: '5000',
+        transportVersionId: 1,
+        transportCarriedIn: '0',
+        transportCarriedOut: '0',
+        transportCost: '5000',
+      });
+    });
+
+    it('no deliveries in the month = no charge', async () => {
+      settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
+      collectionRepo.seed(delivery('D1', 1, '2026-06-28'));
+      const [done] = await service.processSettlements(officer);
+      expect(done.transportCost).toBe(0);
+      expect((await settlementRepo.find())[0].transportStatus).toBe(
+        'no_deliveries',
+      );
+    });
+
+    it('self-delivery estates are exempt, and process even with no version', async () => {
       settlementRepo.seed(
         makeSettlement({ id: 'SET-A', estateId: 1, selfDelivery: true }),
       );
-      transportState = () =>
-        Promise.resolve({
-          configured: false,
-          reason: 'Transport: not configured.',
-        });
-      const result = await service.processSettlements(officer);
-      expect(result.map((r) => r.status)).toEqual(['Processed']);
+      collectionRepo.seed(delivery('D1', 1, '2026-07-03'));
+      transportVersions = [];
+      const [done] = await service.processSettlements(officer);
+      expect(done.status).toBe('Processed');
+      expect(done.transportCost).toBe(0);
+      expect((await settlementRepo.find())[0].transportStatus).toBe('exempt');
+    });
+
+    it('a new version does not change a processed settlement', async () => {
+      settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
+      collectionRepo.seed(delivery('D1', 1, '2026-07-03'));
+      await service.processSettlements(officer);
+      transportVersions = [
+        monthly(),
+        monthly({ id: 2, effectiveDate: '2026-07-01', rate: 9000 }),
+      ];
+      const [listed] = await service.listSettlements();
+      expect(listed.transportCost).toBe(5000);
+      expect(listed.transport).toMatchObject({
+        charge: 5000,
+        versionId: 1,
+        frozen: true,
+      });
+    });
+
+    it('a pending settlement previews its live line; a shortfall carries forward', async () => {
+      // gross 408×185 + 175×95 = 92,105; stored fertilizer + advances 72,800 → room 19,305
+      settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
+      collectionRepo.seed(delivery('D1', 1, '2026-07-03'));
+      transportVersions = [monthly({ rate: 20000 })];
+      const [listed] = await service.listSettlements();
+      expect(listed.transport).toMatchObject({
+        status: 'charged',
+        charge: 20000,
+        taken: 19305,
+        carriedOut: 695,
+        frozen: false,
+      });
+      expect(listed.transportCost).toBe(19305);
+      const [done] = await service.processSettlements(officer);
+      expect(settlementNet({ ...(await settlementRepo.find())[0] })).toBe(0);
+      expect(done.transportCost).toBe(19305);
+      expect((await settlementRepo.find())[0].transportCarriedOut).toBe('695');
     });
   });
 
@@ -621,14 +714,14 @@ describe('EstatesService', () => {
         status: 'pending',
         appliedSettlementId: null,
       }); // another estate
-      // net = gross − deductions + adjustment
+      // net = gross − deductions + adjustment (no July deliveries here, so no transport charge)
       expect(
         settlementNet(
           (await settlementRepo.findOne({
             where: { id: 'SET-2026-07-001' },
           })) as SettlementEntity,
         ),
-      ).toBe(408 * 185 + 175 * 95 - 8400 - 22800 - 50000 + 1500);
+      ).toBe(408 * 185 + 175 * 95 - 0 - 22800 - 50000 + 1500);
     });
 
     it('an adjustment is applied once — the next run does not carry it again', async () => {

@@ -9,7 +9,6 @@ import type { FactoryEmployee } from '../users/factory-employee.entity';
 import type { User } from '../users/user.entity';
 import { AdminService, type Actor } from './admin.service';
 import type { GradeRateEntity } from './grade-rate.entity';
-import type { TransportRateEntity } from './transport-rate.entity';
 import type { RolePermissionEntity } from './role-permission.entity';
 import type { SystemSettingEntity } from './system-setting.entity';
 
@@ -82,10 +81,6 @@ const officer: Actor = { name: 'S. Fernando', role: 'Officer', sub: 2 };
 
 function build() {
   const gradeRepo = new FakeRepository<GradeRateEntity>((r) => r.id);
-  let transportSeq = 0;
-  const transportRepo = new FakeRepository<TransportRateEntity>(
-    (r) => (r.id ??= ++transportSeq),
-  );
   const permRepo = new FakeRepository<RolePermissionEntity>(
     (r) => `${r.role}:${r.module}`,
   );
@@ -96,7 +91,6 @@ function build() {
 
   const service = new AdminService(
     gradeRepo as unknown as Repository<GradeRateEntity>,
-    transportRepo as unknown as Repository<TransportRateEntity>,
     permRepo as unknown as Repository<RolePermissionEntity>,
     settingRepo as unknown as Repository<SystemSettingEntity>,
     userRepo as unknown as Repository<User>,
@@ -107,7 +101,6 @@ function build() {
   return {
     service,
     gradeRepo,
-    transportRepo,
     permRepo,
     settingRepo,
     userRepo,
@@ -273,84 +266,6 @@ describe('AdminService — grade rates: reason, identical, cancel (Administratio
           'Super Rs. 180 → 185/kg · Normal Rs. 92 → 95/kg — Market price',
       }),
     );
-  });
-});
-
-describe('AdminService — transport rates (Administration-Addendum §4)', () => {
-  const MARCH = new Date('2026-03-15T04:00:00Z');
-  const t = (
-    o: Partial<{
-      basis: 'per_km' | 'per_kg';
-      rate: number;
-      minimumCharge: number;
-      effectiveDate: string;
-      basisConfirmed: boolean;
-      reason: string;
-    }> = {},
-  ) => ({
-    basis: 'per_km' as const,
-    rate: 42,
-    minimumCharge: 500,
-    effectiveDate: '2026-04-01',
-    basisConfirmed: false,
-    reason: 'Seed',
-    ...o,
-  });
-
-  it('versions like grade rates; while the basis is unconfirmed transport is not configured', async () => {
-    const { service } = build();
-    await service.createTransportRate(
-      t({ effectiveDate: '2026-03-15' }),
-      admin,
-      MARCH,
-    );
-    const res = await service.createTransportRate(
-      t({ rate: 45, effectiveDate: '2026-04-01' }),
-      admin,
-      MARCH,
-    );
-    expect(res.versions.map((v) => [v.effectiveDate, v.status])).toEqual([
-      ['2026-04-01', 'scheduled'],
-      ['2026-03-15', 'current'],
-    ]);
-    expect(res.status).toEqual({
-      configured: false,
-      reason: expect.stringMatching(
-        /^Transport: not configured\. .*per km or per kg/,
-      ) as string,
-    });
-  });
-
-  it('identical versions are refused; scheduled ones can be cancelled', async () => {
-    const { service } = build();
-    await service.createTransportRate(
-      t({ effectiveDate: '2026-03-15' }),
-      admin,
-      MARCH,
-    );
-    await expect(
-      service.createTransportRate(t(), admin, MARCH),
-    ).rejects.toThrow(/same as/);
-    const res = await service.createTransportRate(
-      t({ rate: 50 }),
-      admin,
-      MARCH,
-    );
-    const id = res.versions.find((v) => v.status === 'scheduled')!.id;
-    const after = await service.cancelTransportRate(
-      id,
-      'Not agreed',
-      admin,
-      MARCH,
-    );
-    expect(after.versions.find((v) => v.id === id)?.status).toBe('cancelled');
-  });
-
-  it('Administrator only', async () => {
-    const { service } = build();
-    await expect(
-      service.createTransportRate(t(), officer, MARCH),
-    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
 

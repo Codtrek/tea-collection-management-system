@@ -1222,10 +1222,15 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - Value applies by **delivery date**, so a version starting today re-values today's recorded deliveries (warned).
   - The date defaults to tomorrow.
   - Reason and cancel columns, with a partial unique index on live dates.
-- **Transport:**
-  - **No formula exists**: the old tab never saved, estates have no distance, and settlement `transport_cost` is seeded.
-  - `transport_rates` is versioned and seeded at 42/km with a 500 minimum, basis **not confirmed**.
-  - Until the factory confirms the basis and the formula is built (`TRANSPORT_FORMULA_READY`), settlement processing shows "Transport: not configured" and refuses estates that pay transport. This blocks the July seed run.
+- **Transport (decided 2026-11-15: a FIXED MONTHLY charge per estate, the same for all):**
+  - One versioned "Monthly transport charge per estate". It charges from a month (stored as the 1st). Only the **first** version may be back-dated, and only to the earliest month with unprocessed settlements.
+  - Preview: "Last month this would have charged N estates, total Rs Y".
+  - Charged **once** per settlement month when the estate has ≥1 confirmed delivery. No deliveries = no charge; self-delivery = exempt.
+  - Transport gives way to the stored fertilizer and advance deductions: net is never below 0, and the rest is carried forward.
+  - Frozen on the settlement at processing (`transport_status/charge/version_id/carried_in/carried_out`). Processing is blocked ("Transport: not configured") until a version covers the month.
+  - Pure rules: `admin/transport-rules.ts` + `estates/settlement-transport.ts`.
+  - The seeded 42/km row is kept as **Never applied**.
+  - Gotcha: `transport_rates.basis` was VARCHAR(6), so `fixed_month` needed it widened. Jest fakes didn't catch it; the live check did.
 - **Item Prices:**
   - `fertilizer_item_prices` is the one selling-price source, per kg or per bag of N kg. `rate_per_kg` is still what a request snapshots at approval.
   - Average purchase cost from costed stock-ins, with a "Selling below cost" warning.

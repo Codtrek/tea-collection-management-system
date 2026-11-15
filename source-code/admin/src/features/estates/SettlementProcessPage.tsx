@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext'
 import * as estatesService from '@/services/estates'
 import { currentMonth, periodOf, readMonth, shiftMonth } from '@/lib/month'
 import { grossRevenue, netPayable } from './calc'
+import { transportLineText } from './transport-line'
 import { formatCurrency, formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
@@ -50,11 +51,10 @@ export function SettlementProcessPage() {
   const included = pending.filter((s) => !s.missingBank)
   const excluded = pending.filter((s) => s.missingBank)
   const total = included.reduce((sum, s) => sum + netPayable(s), 0)
-  // Administration-Addendum §4: transport is never deducted as Rs. 0 by default — while it isn't
-  // configured, a run with estates that pay transport can't be processed
-  const transportBlocked = transport !== undefined && !transport.configured
-  const payingTransport = included.filter((s) => !s.selfDelivery)
-  const blockedByTransport = transportBlocked && payingTransport.length > 0
+  // Administration-Addendum §4: transport is never deducted as Rs. 0 by default — while no monthly
+  // charge covers the month, a run with estates that pay transport can't be processed
+  const payingTransport = included.filter((s) => s.transport?.status === 'not_configured')
+  const blockedByTransport = payingTransport.length > 0
 
   const processMutation = useMutation({
     mutationFn: () => estatesService.processSettlements(period),
@@ -156,10 +156,7 @@ export function SettlementProcessPage() {
                       value={formatCurrency(s.normalKg * s.normalRate)}
                     />
                     <Row label="Gross revenue" value={formatCurrency(grossRevenue(s))} strong />
-                    <Row
-                      label={s.selfDelivery ? 'Less: Transport cost (exempt — self-delivery)' : 'Less: Transport cost'}
-                      value={s.selfDelivery ? '—' : transportBlocked ? 'Not configured' : `- ${formatCurrency(s.transportCost)}`}
-                    />
+                    <TransportRow s={s} />
                     <Row
                       label="Less: Fertilizer deduction (linked dispatches)"
                       value={s.fertilizerDeduction ? `- ${formatCurrency(s.fertilizerDeduction)}` : '—'}
@@ -248,5 +245,19 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
       <dt className={cn(strong ? 'font-medium text-text' : 'text-text-muted')}>{label}</dt>
       <dd className={cn('tabular shrink-0', strong ? 'font-semibold text-text-heading' : 'text-text')}>{value}</dd>
     </div>
+  )
+}
+
+function TransportRow({ s }: { s: Parameters<typeof transportLineText>[0] }) {
+  const t = transportLineText(s)
+  return (
+    <>
+      <Row label={t.label} value={t.value} />
+      {t.notes.map((n) => (
+        <p key={n} className="text-xs text-text-muted">
+          {n}
+        </p>
+      ))}
+    </>
   )
 }

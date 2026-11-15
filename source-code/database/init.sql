@@ -847,10 +847,12 @@ CREATE UNIQUE INDEX grade_rates_live_effective_key ON grade_rates (effective_dat
 CREATE TABLE transport_rates (
     id               SERIAL PRIMARY KEY,
     effective_date   DATE NOT NULL,
-    basis            VARCHAR(6) NOT NULL CHECK (basis IN ('per_km', 'per_kg')),
+    basis            VARCHAR(11) NOT NULL CHECK (basis IN ('per_km', 'per_kg', 'fixed_month')),
     rate             DECIMAL(10,2) NOT NULL CHECK (rate >= 0),
     minimum_charge   DECIMAL(10,2) NOT NULL DEFAULT 0 CHECK (minimum_charge >= 0),
     basis_confirmed  BOOLEAN NOT NULL DEFAULT FALSE,
+    -- the seeded 42/km row: kept in history, never applied (basis never confirmed)
+    never_applied    BOOLEAN NOT NULL DEFAULT FALSE,
     reason           TEXT,
     set_by           VARCHAR(100) NOT NULL,
     created_at       TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -859,10 +861,11 @@ CREATE TABLE transport_rates (
     cancel_reason    TEXT
 );
 CREATE UNIQUE INDEX transport_rates_live_effective_key ON transport_rates (effective_date) WHERE cancelled_at IS NULL;
-INSERT INTO transport_rates (effective_date, basis, rate, minimum_charge, basis_confirmed, reason, set_by)
-VALUES (DATE '2019-01-01', 'per_km', 42, 500, FALSE,
+INSERT INTO transport_rates (effective_date, basis, rate, minimum_charge, basis_confirmed, never_applied,
+                             reason, set_by, cancelled_at, cancelled_by, cancel_reason)
+VALUES (DATE '2019-01-01', 'per_km', 42, 500, FALSE, TRUE,
         'Values the Transport tab showed before rates were versioned (never saved); basis not confirmed',
-        'migration');
+        'migration', NOW(), 'migration', 'Never applied — the basis was never confirmed');
 
 -- ADM-02 — the data-driven permission matrix. One row per (role, module).
 -- Seeded from the portal's DEFAULT_PERMISSIONS; the backend is now the source
@@ -1538,3 +1541,12 @@ CREATE TABLE IF NOT EXISTS pay_adjustment_lines (
 CREATE INDEX IF NOT EXISTS idx_pay_adjustment_lines_adjustment ON pay_adjustment_lines(adjustment_id);
 
 ALTER TABLE pay_rates ADD CONSTRAINT pay_rates_adjustment_fk FOREIGN KEY (adjustment_id) REFERENCES pay_adjustments(id);
+
+-- Administration-Addendum §4 (2026-11-15): what a settlement was charged for transport (fixed
+-- monthly), frozen when it is processed. NULL status = settled before transport was configured.
+ALTER TABLE settlements
+    ADD COLUMN transport_status       VARCHAR(14) CHECK (transport_status IN ('charged', 'exempt', 'no_deliveries')),
+    ADD COLUMN transport_charge       DECIMAL(10,2),
+    ADD COLUMN transport_version_id   INTEGER REFERENCES transport_rates(id),
+    ADD COLUMN transport_carried_in   DECIMAL(10,2) NOT NULL DEFAULT 0,
+    ADD COLUMN transport_carried_out  DECIMAL(10,2) NOT NULL DEFAULT 0;

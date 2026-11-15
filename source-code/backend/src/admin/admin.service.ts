@@ -19,7 +19,6 @@ import {
   maskAccount,
   type FactoryProfile,
   type PublicFactoryProfile,
-  type PublicTransportRate,
   formatUserId,
   parseUserId,
   rowsToMatrix,
@@ -31,15 +30,8 @@ import {
 } from './admin-map';
 import {
   CreateGradeRateDto,
-  CreateTransportRateDto,
   UpdateFactoryProfileDto,
 } from './dto/create-grade-rate.dto';
-import { TransportRateEntity } from './transport-rate.entity';
-import {
-  toTransportVersion,
-  transportStatus,
-  type TransportStatus,
-} from './transport-rules';
 import {
   cancelError,
   newVersionError,
@@ -72,8 +64,6 @@ export class AdminService {
   constructor(
     @InjectRepository(GradeRateEntity)
     private readonly gradeRateRepo: Repository<GradeRateEntity>,
-    @InjectRepository(TransportRateEntity)
-    private readonly transportRepo: Repository<TransportRateEntity>,
     @InjectRepository(RolePermissionEntity)
     private readonly permissionRepo: Repository<RolePermissionEntity>,
     @InjectRepository(SystemSettingEntity)
@@ -199,112 +189,6 @@ export class AdminService {
       },
     );
     return this.listGradeRates(now);
-  }
-
-  // ── ADM-01 — transport rates (Administration-Addendum §4) ─────────
-
-  async listTransportRates(
-    now: Date = new Date(),
-  ): Promise<{ versions: PublicTransportRate[]; status: TransportStatus }> {
-    const rows = await this.transportRepo.find({
-      order: { effectiveDate: 'DESC' },
-    });
-    const today = localDate(now);
-    return {
-      versions: rows.map((r) => ({
-        id: r.id,
-        effectiveDate: r.effectiveDate,
-        basis: r.basis,
-        rate: Number(r.rate),
-        minimumCharge: Number(r.minimumCharge),
-        basisConfirmed: r.basisConfirmed,
-        setBy: r.setBy,
-        reason: r.reason,
-        status: versionStatus(r, rows, today),
-        cancelled: cancelledOf(r),
-      })),
-      status: transportStatus(rows.map(toTransportVersion), today),
-    };
-  }
-
-  async createTransportRate(
-    dto: CreateTransportRateDto,
-    actor: Actor,
-    now: Date = new Date(),
-  ): Promise<{ versions: PublicTransportRate[]; status: TransportStatus }> {
-    this.assertIsAdmin(actor);
-    const rows = await this.transportRepo.find();
-    const before = versionBefore(rows, dto.effectiveDate);
-    refuse(
-      newVersionError(
-        rows,
-        dto.effectiveDate,
-        localDate(now),
-        (v) =>
-          v.basis === dto.basis &&
-          Number(v.rate) === dto.rate &&
-          Number(v.minimumCharge) === dto.minimumCharge &&
-          v.basisConfirmed === dto.basisConfirmed,
-        'transport rate',
-        dto.reason,
-      ),
-    );
-    await this.transportRepo.save(
-      this.transportRepo.create({
-        effectiveDate: dto.effectiveDate,
-        basis: dto.basis,
-        rate: String(dto.rate),
-        minimumCharge: String(dto.minimumCharge),
-        basisConfirmed: dto.basisConfirmed,
-        reason: dto.reason.trim(),
-        setBy: actor.name,
-        cancelledAt: null,
-        cancelledBy: null,
-        cancelReason: null,
-      }),
-    );
-    const show = (b: string, r: number | string, m: number | string) =>
-      `Rs. ${Number(r)} ${b === 'per_km' ? 'per km' : 'per kg'}, minimum Rs. ${Number(m)}`;
-    await this.audit.record(
-      { name: actor.name, role: actor.role, sub: actor.sub },
-      {
-        action: 'Updated transport rates',
-        module: 'Administration',
-        record: `Transport effective ${dto.effectiveDate}`,
-        recordHref: SETUP_HREF,
-        details: `${before ? `${show(before.basis, before.rate, before.minimumCharge)} → ` : ''}${show(dto.basis, dto.rate, dto.minimumCharge)}${dto.basisConfirmed ? ' (basis confirmed)' : ' (basis not confirmed)'} — ${dto.reason.trim()}`,
-      },
-    );
-    return this.listTransportRates(now);
-  }
-
-  async cancelTransportRate(
-    id: number,
-    reason: string,
-    actor: Actor,
-    now: Date = new Date(),
-  ): Promise<{ versions: PublicTransportRate[]; status: TransportStatus }> {
-    this.assertIsAdmin(actor);
-    const row = await this.transportRepo.findOne({ where: { id } });
-    if (!row)
-      throw new NotFoundException(`Transport-rate version ${id} not found.`);
-    const why = cancelError(row, localDate(now), reason);
-    if (why) throw new BadRequestException(why);
-    row.cancelledAt = now;
-    row.cancelledBy = actor.name;
-    row.cancelReason = reason.trim();
-    await this.transportRepo.save(row);
-    await this.audit.record(
-      { name: actor.name, role: actor.role, sub: actor.sub },
-      {
-        action: 'Cancelled scheduled transport rates',
-        module: 'Administration',
-        record: `Transport effective ${row.effectiveDate}`,
-        recordHref: SETUP_HREF,
-        details: reason.trim(),
-      },
-    );
-    return this.listTransportRates(now);
   }
 
   // ── ADM-01 — factory profile (Administration-Addendum §2) ─────────
@@ -615,18 +499,18 @@ export class AdminService {
   }
 }
 
-const SETUP_HREF = '/admin/factory-setup';
+export const SETUP_HREF = '/admin/factory-setup';
 const FACTORY_PROFILE_KEY = 'factoryProfile';
 
 /** past / identical / missing reason → 400; a date clash → 409. */
-function refuse(r: VersionRefusal | null): void {
+export function refuse(r: VersionRefusal | null): void {
   if (!r) return;
   throw r.kind === 'clash'
     ? new ConflictException(r.message)
     : new BadRequestException(r.message);
 }
 
-function cancelledOf(r: {
+export function cancelledOf(r: {
   cancelledAt: Date | null;
   cancelledBy: string | null;
   cancelReason: string | null;

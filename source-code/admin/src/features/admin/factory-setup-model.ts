@@ -52,3 +52,29 @@ export const VERSION_BADGE: Record<VersionStatus, { label: string; tone: 'succes
 
 /** Factory Setup's tabs that hold unsaved drafts. */
 export type DraftTab = 'general' | 'grades' | 'transport' | 'prices'
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/** 'YYYY-MM' → 'July 2026'. */
+export function monthName(key: string): string {
+  return `${MONTHS[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`
+}
+
+/** 'YYYY-MM' + n months. */
+export function addMonths(key: string, n: number): string {
+  const [y, m] = key.split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 1 + n, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/**
+ * The months a new transport charge can start from (Administration-Addendum §4): `nextMonth`
+ * onward for 24 months, plus — only while no monthly charge has ever been published — the past
+ * months back to `firstVersionFrom` (the one-time back-dated first version).
+ */
+export function transportMonthOptions(nextMonth: string, firstVersionFrom: string | null): string[] {
+  const out: string[] = []
+  if (firstVersionFrom) for (let m = firstVersionFrom; m < nextMonth; m = addMonths(m, 1)) out.push(m)
+  for (let i = 0; i < 24; i += 1) out.push(addMonths(nextMonth, i))
+  return out
+}

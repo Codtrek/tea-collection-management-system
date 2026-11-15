@@ -56,8 +56,52 @@ export class SettlementEntity {
    * Signed Rs. carried in from approved grading corrections on already-SETTLED deliveries
    * (settlement_adjustments). Set when the settlement is processed; the past is never rewritten.
    */
-  @Column({ name: 'adjustment_amount', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({
+    name: 'adjustment_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
   adjustmentAmount: string;
+
+  /**
+   * Transport as frozen when processed (Administration-Addendum §4). NULL on rows processed
+   * before the monthly charge existed. `transportCost` is what was TAKEN; the month's charge
+   * plus what came in from the last settlement, minus what was taken, went out as a carry.
+   */
+  @Column({ name: 'transport_status', type: 'varchar', nullable: true })
+  transportStatus: 'charged' | 'exempt' | 'no_deliveries' | null;
+
+  @Column({
+    name: 'transport_charge',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  transportCharge: string | null;
+
+  @Column({ name: 'transport_version_id', type: 'int', nullable: true })
+  transportVersionId: number | null;
+
+  @Column({
+    name: 'transport_carried_in',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  transportCarriedIn: string;
+
+  @Column({
+    name: 'transport_carried_out',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  transportCarriedOut: string;
 
   @Column({ type: 'varchar' })
   status: DbSettlementStatus;

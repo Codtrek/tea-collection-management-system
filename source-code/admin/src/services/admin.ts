@@ -6,7 +6,7 @@ import type {
   PermissionEntry,
   PermissionMatrix,
   SystemUser,
-  TransportBasis,
+  TransportPreview,
   TransportRates,
 } from '@/features/admin/types'
 
@@ -38,15 +38,19 @@ export function cancelGradeRate(id: string, reason: string): Promise<GradeRate[]
   })
 }
 
-/* ── ADM-01 transport rates (Administration-Addendum §4) ────────── */
+/* ── ADM-01 transport: a fixed monthly charge per estate (Administration-Addendum §4) ── */
 
 export interface CreateTransportRateInput {
-  basis: TransportBasis
-  rate: number
-  minimumCharge: number
-  effectiveDate: string
-  basisConfirmed: boolean
+  /** Rs per estate per month */
+  amount: number
+  /** 'YYYY-MM' */
+  effectiveMonth: string
   reason: string
+}
+
+/** "Last month this would have charged N estates, total Rs Y." */
+export function previewTransportCharge(amount: number): Promise<TransportPreview> {
+  return apiFetch<TransportPreview>(`/admin/transport-rates/preview?amount=${encodeURIComponent(String(amount))}`)
 }
 
 export function getTransportRates(): Promise<TransportRates> {

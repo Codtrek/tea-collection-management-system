@@ -149,10 +149,17 @@ export interface PublicGradeRate {
 export interface PublicTransportRate {
   id: number;
   effectiveDate: string;
-  basis: 'per_km' | 'per_kg';
+  /** 'YYYY-MM' — the first month it charges */
+  firstMonth: string;
+  basis: 'per_km' | 'per_kg' | 'fixed_month';
+  /** fixed_month: the monthly charge per estate */
   rate: number;
   minimumCharge: number;
   basisConfirmed: boolean;
+  /** never charged (the seeded per-km placeholder) */
+  neverApplied: boolean;
+  /** the one-time first version that started in a past month */
+  backdated: boolean;
   setBy: string;
   reason: string | null;
   status: VersionStatus;

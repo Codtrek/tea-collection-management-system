@@ -6,9 +6,9 @@ import {
 } from 'typeorm';
 
 /**
- * ADM-01 — one effective-dated transport-rate version (Administration-Addendum §4). Inserted,
- * never edited; a scheduled version can be cancelled before it starts. `basisConfirmed` stays
- * false until the factory confirms how it charges; nothing calculates with these until then.
+ * ADM-01 — one effective-dated transport version (Administration-Addendum §4). Inserted, never
+ * edited; a scheduled version can be cancelled before it starts. Only `fixed_month` (a monthly
+ * charge per estate, in `rate`) is calculated; per km / per kg are kept for the future.
  */
 @Entity('transport_rates')
 export class TransportRateEntity {
@@ -19,7 +19,7 @@ export class TransportRateEntity {
   effectiveDate: string;
 
   @Column({ type: 'varchar' })
-  basis: 'per_km' | 'per_kg';
+  basis: 'per_km' | 'per_kg' | 'fixed_month';
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   rate: string;
@@ -29,6 +29,10 @@ export class TransportRateEntity {
 
   @Column({ name: 'basis_confirmed', default: false })
   basisConfirmed: boolean;
+
+  /** a row that was never charged (the seeded per-km placeholder) */
+  @Column({ name: 'never_applied', default: false })
+  neverApplied: boolean;
 
   @Column({ type: 'text', nullable: true })
   reason: string | null;

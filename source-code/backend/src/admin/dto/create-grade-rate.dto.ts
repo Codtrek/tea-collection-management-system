@@ -1,7 +1,6 @@
 import {
-  IsBoolean,
+  Matches,
   IsDateString,
-  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -30,26 +29,18 @@ export class CreateGradeRateDto {
   reason: string;
 }
 
-/** ADM-01 — publish a new transport-rate version (Administration-Addendum §4). */
-export class CreateTransportRateDto {
-  @IsIn(['per_km', 'per_kg'])
-  basis: 'per_km' | 'per_kg';
-
+/** ADM-01 — publish a monthly transport charge per estate (Administration-Addendum §4). */
+export class CreateTransportChargeDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  @Max(100000)
-  rate: number;
+  @Max(1000000)
+  amount: number;
 
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  minimumCharge: number;
-
-  @IsDateString()
-  effectiveDate: string;
-
-  /** the factory has confirmed this is how it charges */
-  @IsBoolean()
-  basisConfirmed: boolean;
+  /** 'YYYY-MM' — the version charges from this month */
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'effectiveMonth must be YYYY-MM',
+  })
+  effectiveMonth: string;
 
   @IsString()
   @MinLength(3)

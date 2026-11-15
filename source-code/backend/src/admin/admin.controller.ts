@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -19,15 +20,18 @@ import type {
   PublicFactoryProfile,
   PublicGradeRate,
   PublicSystemUser,
-  PublicTransportRate,
 } from './admin-map';
 import {
   CancelVersionDto,
   CreateGradeRateDto,
-  CreateTransportRateDto,
+  CreateTransportChargeDto,
   UpdateFactoryProfileDto,
 } from './dto/create-grade-rate.dto';
-import type { TransportStatus } from './transport-rules';
+import {
+  type TransportPreview,
+  TransportRatesService,
+  type TransportRatesView,
+} from './transport-rates.service';
 import { UpdatePermissionsDto } from './dto/update-permissions.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
@@ -39,6 +43,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly usersService: UsersService,
+    private readonly transportRates: TransportRatesService,
   ) {}
 
   // ── ADM-01 grade rates ──
@@ -69,24 +74,26 @@ export class AdminController {
     );
   }
 
-  // ── ADM-01 transport rates (Administration-Addendum §4) ──
+  // ── ADM-01 transport: a fixed monthly charge per estate (Administration-Addendum §4) ──
   @Get('transport-rates')
-  listTransportRates(): Promise<{
-    versions: PublicTransportRate[];
-    status: TransportStatus;
-  }> {
-    return this.adminService.listTransportRates();
+  listTransportRates(): Promise<TransportRatesView> {
+    return this.transportRates.list();
+  }
+
+  /** "Last month this would have charged N estates, total Rs Y" — before publishing. */
+  @Get('transport-rates/preview')
+  previewTransportCharge(
+    @Query('amount') amount?: string,
+  ): Promise<TransportPreview> {
+    return this.transportRates.preview(Number(amount));
   }
 
   @Post('transport-rates')
   async createTransportRate(
-    @Body() dto: CreateTransportRateDto,
+    @Body() dto: CreateTransportChargeDto,
     @Req() req: AuthedRequest,
-  ): Promise<{ versions: PublicTransportRate[]; status: TransportStatus }> {
-    return this.adminService.createTransportRate(
-      dto,
-      await this.resolveActor(req),
-    );
+  ): Promise<TransportRatesView> {
+    return this.transportRates.create(dto, await this.resolveActor(req));
   }
 
   @Post('transport-rates/:id/cancel')
@@ -94,8 +101,8 @@ export class AdminController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CancelVersionDto,
     @Req() req: AuthedRequest,
-  ): Promise<{ versions: PublicTransportRate[]; status: TransportStatus }> {
-    return this.adminService.cancelTransportRate(
+  ): Promise<TransportRatesView> {
+    return this.transportRates.cancel(
       id,
       dto.reason,
       await this.resolveActor(req),
