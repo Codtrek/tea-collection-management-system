@@ -51,4 +51,4 @@ export const VERSION_BADGE: Record<VersionStatus, { label: string; tone: 'succes
 }
 
 /** Factory Setup's tabs that hold unsaved drafts. */
-export type DraftTab = 'general' | 'grades' | 'transport'
+export type DraftTab = 'general' | 'grades' | 'transport' | 'prices'

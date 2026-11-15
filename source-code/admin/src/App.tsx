@@ -27,6 +27,7 @@ import { DispatchBoardPage } from './features/dispatch/DispatchBoardPage'
 import { CollectionDetailPage } from './features/collections/CollectionDetailPage'
 import { CollectionEditPage } from './features/collections/CollectionEditPage'
 import { FertilizerStockListPage } from './features/fertilizer/FertilizerStockListPage'
+import { ItemPricesPage } from './features/fertilizer/ItemPricesPage'
 import { StockMovementEntryPage } from './features/fertilizer/StockMovementEntryPage'
 import { BatchDetailPage } from './features/fertilizer/BatchDetailPage'
 import { FertilizerAlertsPage } from './features/fertilizer/FertilizerAlertsPage'
@@ -78,6 +79,7 @@ export const router = createBrowserRouter([
       { path: 'fertilizer', element: <FertilizerStockListPage /> },
       { path: 'fertilizer/movement/new', element: <StockMovementEntryPage /> },
       { path: 'fertilizer/alerts', element: <FertilizerAlertsPage /> },
+      { path: 'fertilizer/prices', element: <ItemPricesPage /> },
       // Request workflow — static paths must precede fertilizer/:batchId
       { path: 'fertilizer/requests', element: <RequestQueuePage /> },
       { path: 'fertilizer/requests/new', element: <LogRequestPage /> },

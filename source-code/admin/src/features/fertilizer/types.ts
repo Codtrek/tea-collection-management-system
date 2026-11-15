@@ -233,13 +233,29 @@ export interface FertilizerRequestDetail extends FertilizerRequest {
   managerApprovalAboveKg: number
 }
 
+/** Item Prices (Administration-Addendum §5) — one version of an item's selling price. */
 export interface FertilizerPrice {
   id: number
   item: string
+  /** the per-kg price a request snapshots when approved */
   ratePerKg: number
+  unit: 'kg' | 'bag'
+  bagSizeKg: number | null
+  pricePerUnit: number
   effectiveDate: string
   setBy: string
+  reason: string | null
+  status: 'current' | 'scheduled' | 'past' | 'cancelled'
   current: boolean
+  cancelled: { at: string; by: string | null; reason: string | null } | null
+}
+
+/** What recent costed stock-ins cost per kg (information only). */
+export interface PurchaseCost {
+  item: string
+  avgCostPerKg: number | null
+  stockIns: number
+  since: string
 }
 
 /** Coverage health of an item's available stock against its pending demand. */

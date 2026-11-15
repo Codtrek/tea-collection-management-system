@@ -43,6 +43,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     // Daily expense entries (Finance-Reports-Addendum §7): the Administrator views them and
     // manages the category list (Administration); entries are the Officer's and Manager's.
     expenses: 'view',
+    // Item Prices (Administration-Addendum §5): the Administrator sets selling prices
+    itemPrices: 'approve',
     dispatch: 'approve',
     // Grading is a separation-of-duties control: an Officer grades, a Manager approves corrections,
     // the Administrator audits (view). `gradingApproval` is its own module because the `approve`
@@ -71,6 +73,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     reports: 'edit',
     // edit = log a daily expense and change your own within the edit window
     expenses: 'edit',
+    // reads the selling prices requests are approved at
+    itemPrices: 'view',
     // Agent Dispatch: view the board · edit = mark absent / send cover · approve = permanent reassignment.
     dispatch: 'edit',
     grading: 'edit',
@@ -97,6 +101,7 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     reports: 'view',
     // approve = change any entry; after the creator's window, with a reason
     expenses: 'approve',
+    itemPrices: 'view',
     dispatch: 'approve',
     grading: 'view',
     gradingApproval: 'approve',

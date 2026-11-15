@@ -29,6 +29,7 @@ import type {
 import { FertilizerStockLedger } from '../fertilizer-stock-ledger.service';
 import { FertilizerViewService } from '../fertilizer-view.service';
 import { FertilizerService } from '../fertilizer.service';
+import { ItemPriceService } from '../item-price.service';
 import { StockMovementEntity } from '../stock-movement.entity';
 
 /** Friday 2026-10-09, 09:30 Sri Lanka — same clock as the dispatch harness. */
@@ -55,6 +56,9 @@ const MATRIX: [string, string, string][] = [
   ['Administrator', 'administration', 'approve'],
   ['Officer', 'administration', 'none'],
   ['Manager', 'administration', 'none'],
+  ['Administrator', 'itemPrices', 'approve'],
+  ['Officer', 'itemPrices', 'view'],
+  ['Manager', 'itemPrices', 'view'],
 ];
 
 /**
@@ -122,8 +126,15 @@ export function buildFertilizerHarness(
   prices.seed({
     item: 'Urea Fertilizer',
     ratePerKg: '90.00',
+    pricePerUnit: '90.00',
+    unit: 'kg',
+    bagSizeKg: null,
     effectiveDate: '2026-01-01',
     setBy: 'seed',
+    reason: 'Opening price',
+    cancelledAt: null,
+    cancelledBy: null,
+    cancelReason: null,
   } as FertilizerItemPriceEntity);
 
   const cast = <T>(r: unknown) => r as Repository<T & object>;
@@ -172,6 +183,13 @@ export function buildFertilizerHarness(
     access,
     audit as unknown as AuditService,
     view,
+  );
+  const itemPrices = new ItemPriceService(
+    cast(prices),
+    cast(movements),
+    cast(batches),
+    access,
+    audit as unknown as AuditService,
   );
   const delivery = new FertilizerDeliveryService(
     cast(requests),
@@ -226,6 +244,7 @@ export function buildFertilizerHarness(
     events,
     notices,
     prices,
+    itemPrices,
     owners,
     tokens,
     audit,

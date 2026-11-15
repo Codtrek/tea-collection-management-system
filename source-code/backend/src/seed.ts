@@ -2106,6 +2106,7 @@ const PERMISSION_MATRIX: Record<
     employees: 'approve', attendance: 'approve', performance: 'approve',
     reports: 'approve', administration: 'approve', dispatch: 'approve',
     expenses: 'view',
+    itemPrices: 'approve',
     grading: 'view', gradingApproval: 'view',
     fertilizerApproval: 'view', fertilizerManagerApproval: 'view',
   },
@@ -2117,6 +2118,7 @@ const PERMISSION_MATRIX: Record<
     employees: 'view', attendance: 'edit', performance: 'none',
     reports: 'edit', administration: 'none', dispatch: 'edit',
     expenses: 'edit',
+    itemPrices: 'view',
     grading: 'edit', gradingApproval: 'view',
     fertilizerApproval: 'approve', fertilizerManagerApproval: 'view',
   },
@@ -2128,6 +2130,7 @@ const PERMISSION_MATRIX: Record<
     employees: 'view', attendance: 'approve', performance: 'edit',
     reports: 'view', administration: 'none', dispatch: 'approve',
     expenses: 'approve',
+    itemPrices: 'view',
     grading: 'view', gradingApproval: 'approve',
     fertilizerApproval: 'view', fertilizerManagerApproval: 'approve',
   },
@@ -3048,9 +3051,9 @@ async function seed() {
 
     for (const p of FERTILIZER_PRICE_SEEDS) {
       await client.query(
-        `INSERT INTO fertilizer_item_prices (item, rate_per_kg, effective_date, set_by)
-         VALUES ($1, $2, '2026-01-01', 'seed')
-         ON CONFLICT (item, effective_date) DO NOTHING`,
+        `INSERT INTO fertilizer_item_prices (item, rate_per_kg, price_per_unit, unit, effective_date, set_by, reason)
+         VALUES ($1, $2, $2, 'kg', '2026-01-01', 'seed', 'Opening price')
+         ON CONFLICT (item, effective_date) WHERE cancelled_at IS NULL DO NOTHING`,
         [p.item, p.ratePerKg],
       );
     }

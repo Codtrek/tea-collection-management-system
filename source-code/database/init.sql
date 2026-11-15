@@ -1125,12 +1125,21 @@ CREATE INDEX IF NOT EXISTS idx_fertilizer_requests_order ON fertilizer_requests(
 CREATE TABLE IF NOT EXISTS fertilizer_item_prices (
     id             SERIAL PRIMARY KEY,
     item           VARCHAR(100) NOT NULL,
-    rate_per_kg    DECIMAL(8,2) NOT NULL CHECK (rate_per_kg >= 0),
+    rate_per_kg    DECIMAL(8,2) NOT NULL CHECK (rate_per_kg >= 0), -- the per-kg price a request snapshots
     effective_date DATE NOT NULL,
     set_by         VARCHAR(100) NOT NULL,
     created_at     TIMESTAMP DEFAULT NOW(),
-    UNIQUE (item, effective_date)
+    -- Administration-Addendum §5 (2026-11-15): priced per kg or per bag of bag_size_kg
+    unit           VARCHAR(3) NOT NULL DEFAULT 'kg' CHECK (unit IN ('kg', 'bag')),
+    bag_size_kg    DECIMAL(8,2) CHECK (bag_size_kg IS NULL OR bag_size_kg > 0),
+    price_per_unit DECIMAL(10,2) NOT NULL,
+    reason         TEXT,
+    cancelled_at   TIMESTAMP,
+    cancelled_by   VARCHAR(100),
+    cancel_reason  TEXT
 );
+CREATE UNIQUE INDEX IF NOT EXISTS fertilizer_item_prices_live_key
+    ON fertilizer_item_prices (item, effective_date) WHERE cancelled_at IS NULL;
 
 -- ─── FEFO allocations: which batch's stock is promised to which request ─────
 -- Committed = Σ qty_kg of ACTIVE rows. 'picked' = handed to an agent (left on-hand);
@@ -1443,3 +1452,11 @@ VALUES ('factoryProfile',
         '{"name": "Nuwara Eliya Tea Factory", "registrationNo": "REG-TF-1998-0042", "address": "Kandapola Rd, Nuwara Eliya", "contact": "0522223344", "email": "info@harboost.lk", "bank": {"bank": "", "branch": "", "accountName": "", "accountNumber": ""}}'::jsonb,
         'migration')
 ON CONFLICT (key) DO NOTHING;
+
+-- Administration-Addendum §5: Item Prices — the Administrator sets them; Officers and the Manager view.
+INSERT INTO role_permissions (role, module, level) VALUES
+    ('Administrator',    'itemPrices', 'approve'),
+    ('Officer',          'itemPrices', 'view'),
+    ('Manager',          'itemPrices', 'view'),
+    ('ReceivingOfficer', 'itemPrices', 'none')
+ON CONFLICT (role, module) DO NOTHING;

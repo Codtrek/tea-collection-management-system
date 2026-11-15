@@ -12,6 +12,7 @@ import { ExpenseCategoriesCard } from './ExpenseCategoriesCard'
 import { GeneralInfoTab, type ProfileDraft } from './GeneralInfoTab'
 import { GradeRatesTab, type GradeDraft } from './GradeRatesTab'
 import { TransportRatesTab, type TransportDraft } from './TransportRatesTab'
+import { ItemPricesTab, type PriceDraft } from './ItemPricesTab'
 import type { DraftTab } from './factory-setup-model'
 
 /*
@@ -30,6 +31,7 @@ const TABS = [
   { id: 'general', label: 'General Info' },
   { id: 'grades', label: 'Grade Rates' },
   { id: 'transport', label: 'Transport Rates' },
+  { id: 'prices', label: 'Item Prices' },
   { id: 'items', label: 'Beneficiary Item Types' },
   { id: 'expenses', label: 'Expense Categories' },
 ]
@@ -38,9 +40,10 @@ interface Drafts {
   general: ProfileDraft | null
   grades: GradeDraft | null
   transport: TransportDraft | null
+  prices: PriceDraft | null
 }
-const NO_DRAFTS: Drafts = { general: null, grades: null, transport: null }
-const isDraftTab = (t: string): t is DraftTab => t === 'general' || t === 'grades' || t === 'transport'
+const NO_DRAFTS: Drafts = { general: null, grades: null, transport: null, prices: null }
+const isDraftTab = (t: string): t is DraftTab => t === 'general' || t === 'grades' || t === 'transport' || t === 'prices'
 
 export function FactorySetupPage() {
   const { toast } = useToast()
@@ -87,6 +90,7 @@ export function FactorySetupPage() {
       {tab === 'general' && <GeneralInfoTab draft={drafts.general} onDraft={setDraft('general')} />}
       {tab === 'grades' && <GradeRatesTab draft={drafts.grades} onDraft={setDraft('grades')} />}
       {tab === 'transport' && <TransportRatesTab draft={drafts.transport} onDraft={setDraft('transport')} />}
+      {tab === 'prices' && <ItemPricesTab draft={drafts.prices} onDraft={setDraft('prices')} />}
 
       {tab === 'items' && (
         <Card className="max-w-2xl">

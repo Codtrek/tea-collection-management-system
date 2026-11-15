@@ -4,6 +4,7 @@ import type {
   FailReason,
   FertilizerBatch,
   FertilizerPrice,
+  PurchaseCost,
   FertilizerRequest,
   FertilizerRequestDetail,
   ItemPosition,
@@ -140,9 +141,28 @@ export function listPrices(): Promise<FertilizerPrice[]> {
   return apiFetch<FertilizerPrice[]>('/fertilizer/prices')
 }
 
-/** Administrator only. A new version — past prices are never edited. */
-export function setPrice(input: { item: string; ratePerKg: number; effectiveDate: string }): Promise<FertilizerPrice[]> {
+export interface SetPriceInput {
+  item: string
+  unit: 'kg' | 'bag'
+  bagSizeKg?: number
+  pricePerUnit: number
+  effectiveDate: string
+  reason: string
+}
+
+/** `itemPrices: edit`. A new version — past prices are never edited. */
+export function setPrice(input: SetPriceInput): Promise<FertilizerPrice[]> {
   return apiFetch<FertilizerPrice[]>('/fertilizer/prices', { method: 'POST', body: JSON.stringify(input) })
+}
+
+/** Cancel a scheduled price before it starts (reason required). */
+export function cancelPrice(id: number, reason: string): Promise<FertilizerPrice[]> {
+  return apiFetch<FertilizerPrice[]>(`/fertilizer/prices/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) })
+}
+
+/** Average purchase cost per kg from the last 90 days of costed stock-ins. */
+export function listPurchaseCosts(): Promise<PurchaseCost[]> {
+  return apiFetch<PurchaseCost[]>('/fertilizer/prices/costs')
 }
 
 export function listMovements(): Promise<StockMovement[]> {

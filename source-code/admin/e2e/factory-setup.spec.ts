@@ -76,13 +76,50 @@ test('transport is honest: not configured until the factory confirms its method'
   await expect(page.getByRole('button', { name: /^Process \d+ Settlements$/ })).toBeDisabled()
 })
 
+test('Item Prices: one price list, versioned, with purchase cost beside it', async ({ page }) => {
+  await page.goto('/admin/factory-setup')
+  await ready(page)
+  await page.getByRole('tab', { name: 'Item Prices' }).click()
+  await expect(page.getByRole('button', { name: /^Urea Fertilizer/ })).toBeVisible()
+  await expect(page.getByText('No purchase cost recorded yet').first()).toBeVisible()
+  // the draft starts from the item's current price: as it stands nothing would change
+  await expect(page.getByText(/same as the price in force from/)).toBeVisible()
+  await page.getByLabel('Sold by').selectOption('bag')
+  await page.getByLabel('Price per bag (Rs.)').fill('4750')
+  // the hint under the price field shows the per-kg equivalent
+  await expect(page.getByText('Rs. 95/kg').last()).toBeVisible()
+  await page.getByRole('button', { name: /^Urea Fertilizer/ }).click()
+  await expect(page.getByRole('cell', { name: /01 Jan 2026/ }).first()).toBeVisible()
+  // System Settings no longer carries a second price list
+  await page.getByRole('button', { name: 'Discard' }).click()
+  await page.goto('/admin/settings')
+  await ready(page)
+  await expect(page.getByText('Fertilizer prices')).toHaveCount(0)
+})
+
+test('Officers see item prices read-only', async ({ page }) => {
+  const res = await fetch(`${process.env.E2E_API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: process.env.E2E_OFFICER ?? '0771234568', password: process.env.E2E_PASS }),
+  })
+  const { accessToken } = (await res.json()) as { accessToken: string }
+  await page.addInitScript((t) => localStorage.setItem('harboost.token', t), accessToken)
+  await page.goto('/fertilizer/prices')
+  await page.locator('main h1').first().waitFor({ timeout: 60_000 })
+  await ready(page)
+  await expect(page.locator('main h1')).toHaveText('Item Prices')
+  await expect(page.getByRole('button', { name: /^Urea Fertilizer/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Publish New Price' })).toHaveCount(0)
+})
+
 test('capture screenshots for review', async ({ page }) => {
   test.skip(!process.env.SCREENSHOTS, 'set SCREENSHOTS=1 to capture')
   const out = path.resolve(import.meta.dirname, 'screenshots')
   mkdirSync(out, { recursive: true })
   await page.goto('/admin/factory-setup')
   await ready(page)
-  for (const tab of ['General Info', 'Grade Rates', 'Transport Rates']) {
+  for (const tab of ['General Info', 'Grade Rates', 'Transport Rates', 'Item Prices']) {
     await page.getByRole('tab', { name: tab }).click()
     await page.waitForTimeout(400)
     await page.screenshot({ path: path.join(out, `factory-setup-${tab.toLowerCase().replace(/ /g, '-')}.png`), fullPage: true })

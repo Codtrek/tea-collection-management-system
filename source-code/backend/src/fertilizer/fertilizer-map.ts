@@ -365,16 +365,6 @@ export interface PublicRequestDetail extends PublicRequest {
   managerApprovalAboveKg: number;
 }
 
-export interface PublicPrice {
-  id: number;
-  item: string;
-  ratePerKg: number;
-  effectiveDate: string;
-  setBy: string;
-  /** the version in force today */
-  current: boolean;
-}
-
 /** A fertilizer task on the agent's phone (`GET /dispatch/me/fertilizer`). */
 export interface PublicAgentTask {
   deliveryId: number;

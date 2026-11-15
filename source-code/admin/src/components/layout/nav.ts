@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   ScrollText,
   type LucideIcon,
+  Tags,
 } from 'lucide-react'
 import type { ModuleKey } from '@/types'
 
@@ -48,6 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Agent Dispatch', to: '/collections/dispatch', icon: Radar, module: 'dispatch' },
       { label: 'Fertilizer Inventory', to: '/fertilizer', icon: Sprout, module: 'fertilizer' },
       { label: 'Fertilizer Requests', to: '/fertilizer/requests', icon: ClipboardList, module: 'fertilizer' },
+      { label: 'Item Prices', to: '/fertilizer/prices', icon: Tags, module: 'itemPrices' },
     ],
   },
   {

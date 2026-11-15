@@ -3,7 +3,6 @@ import { Cloud, Loader2, MessageSquareText } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { AdminGuard } from './AdminGuard'
-import { FertilizerPricesCard } from './FertilizerPricesCard'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -205,7 +204,6 @@ export function SystemSettingsPage() {
               />
             </Card>
 
-            <FertilizerPricesCard />
           </div>
         </div>
       )}
