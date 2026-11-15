@@ -21,6 +21,7 @@ import {
   ScrollText,
   type LucideIcon,
   Tags,
+  BadgeDollarSign,
 } from 'lucide-react'
 import type { ModuleKey } from '@/types'
 
@@ -70,6 +71,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Estate Owners', to: '/estates', icon: Mountain, module: 'estateOwners' },
       { label: 'Employees', to: '/employees', icon: Users, module: 'employees' },
+      { label: 'Pay Rates', to: '/employees/pay-rates', icon: BadgeDollarSign, module: 'payRates' },
       { label: 'Attendance', to: '/employees/attendance', icon: CalendarCheck, module: 'attendance' },
       // Attendance-Leave-Addendum §4 — everyone with holidayCalendar: view; changes follow the holiday matrix
       { label: 'Holiday Calendar', to: '/holidays', icon: CalendarDays, module: 'holidayCalendar' },

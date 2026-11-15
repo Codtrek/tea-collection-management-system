@@ -24,7 +24,7 @@ import * as adminService from '@/services/admin'
 const NOTIFICATION_TYPES = [
   { key: 'route-assigned', label: 'Route Assigned', hint: 'Agent gets their day’s route' },
   { key: 'advance-approved', label: 'Advance Approved', hint: 'Employee/estate advance decisions' },
-  { key: 'fertilizer-expiry', label: 'Low / Expiring Fertilizer Stock', hint: 'Feeds FERT-04 alerts' },
+  { key: 'fertilizer-expiry', label: 'Low / Expiring Fertilizer Stock', hint: 'Feeds the fertilizer expiry alerts' },
   { key: 'payment-processed', label: 'Payment Processed', hint: 'Settlement & payroll completion' },
   { key: 'weight-mismatch', label: 'Weight Mismatch Complaint', hint: 'Owner-reported discrepancies' },
 ]
@@ -46,6 +46,10 @@ export function SystemSettingsPage() {
   const [passwordPolicy, setPasswordPolicy] = useState('standard')
   // Finance-Reports-Addendum §7: how long the person who logged a daily expense may change it
   const [expenseWindow, setExpenseWindow] = useState('7')
+  // Administration-Addendum §7: payroll rules for pay changes (blank minimum = not entered yet)
+  const [standardHours, setStandardHours] = useState('8')
+  const [minFactory, setMinFactory] = useState('')
+  const [minOffice, setMinOffice] = useState('')
   const [seededFrom, setSeededFrom] = useState<unknown>(null)
 
   // Seed the form from server state when it arrives (and on refetch). React's
@@ -60,9 +64,16 @@ export function SystemSettingsPage() {
     if (typeof settings.passwordPolicy === 'string') setPasswordPolicy(settings.passwordPolicy)
     const exp = settings.expenses as { editWindowDays?: unknown } | undefined
     if (typeof exp?.editWindowDays === 'number') setExpenseWindow(String(exp.editWindowDays))
+    const pay = settings.payroll as { standardHoursPerDay?: unknown; minimumDailyPay?: { factory?: unknown; office?: unknown } } | undefined
+    if (typeof pay?.standardHoursPerDay === 'number') setStandardHours(String(pay.standardHoursPerDay))
+    setMinFactory(typeof pay?.minimumDailyPay?.factory === 'number' ? String(pay.minimumDailyPay.factory) : '')
+    setMinOffice(typeof pay?.minimumDailyPay?.office === 'number' ? String(pay.minimumDailyPay.office) : '')
   }
 
   const windowValid = /^\d+$/.test(expenseWindow) && Number(expenseWindow) <= 31
+  const hoursValid = Number(standardHours) > 0 && Number(standardHours) <= 24
+  const minValid = (v: string) => v.trim() === '' || Number(v) > 0
+  const payrollValid = hoursValid && minValid(minFactory) && minValid(minOffice)
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -72,6 +83,15 @@ export function SystemSettingsPage() {
         sessionTimeout,
         passwordPolicy,
         expenses: { editWindowDays: Number(expenseWindow) },
+        // merged into what's stored, so the advance caps already set are kept
+        payroll: {
+          ...((settings?.payroll as Record<string, unknown> | undefined) ?? {}),
+          standardHoursPerDay: Number(standardHours),
+          minimumDailyPay: {
+            factory: minFactory.trim() ? Number(minFactory) : null,
+            office: minOffice.trim() ? Number(minOffice) : null,
+          },
+        },
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
@@ -87,7 +107,7 @@ export function SystemSettingsPage() {
         title="System Settings"
         breadcrumb={[{ label: 'Home', to: '/dashboard' }, { label: 'Administration' }, { label: 'System Settings' }]}
         actions={
-          <Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={isPending || isError || !windowValid}>
+          <Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={isPending || isError || !windowValid || !payrollValid}>
             Save Settings
           </Button>
         }
@@ -186,6 +206,51 @@ export function SystemSettingsPage() {
                 </li>
               </ul>
               <p className="mt-3 text-xs text-text-muted">Status display only — integrations are configured outside the UI.</p>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Payroll rules</CardTitle>
+              </CardHeader>
+              <div className="grid gap-4">
+                <Input
+                  label="Standard hours per day"
+                  type="number"
+                  min="1"
+                  max="24"
+                  step="0.5"
+                  value={standardHours}
+                  onChange={(e) => setStandardHours(e.target.value)}
+                  error={hoursValid ? undefined : 'Enter the hours in a standard working day'}
+                  hint="A day’s pay = day rate × these hours. Used for the minimum-wage check on pay changes."
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input
+                    label="Minimum daily pay, factory (Rs.)"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Not entered"
+                    value={minFactory}
+                    onChange={(e) => setMinFactory(e.target.value)}
+                    error={minValid(minFactory) ? undefined : 'Enter an amount, or leave it blank'}
+                  />
+                  <Input
+                    label="Minimum daily pay, office (Rs.)"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Not entered"
+                    value={minOffice}
+                    onChange={(e) => setMinOffice(e.target.value)}
+                    error={minValid(minOffice) ? undefined : 'Enter an amount, or leave it blank'}
+                  />
+                </div>
+                <p className="text-xs text-text-muted">
+                  The statutory minimum (Wages Board for factory workers, Shop &amp; Office Act for office staff). Pay changes that
+                  would go below it are blocked. Left blank, pay changes aren’t checked, and they say so.
+                </p>
+              </div>
             </Card>
 
             <Card>

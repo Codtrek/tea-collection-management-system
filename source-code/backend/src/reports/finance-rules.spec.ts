@@ -92,8 +92,23 @@ function inputs(o: Partial<FinanceInputs> = {}): FinanceInputs {
     payroll: [],
     attendance: [],
     employees: [
-      { id: 1, ...RATE },
-      { id: 2, ...RATE },
+      { id: 1, role: 'Machine Operator' },
+      { id: 2, role: 'Machine Operator' },
+    ],
+    // the role rate in force since 2019 (pay history, Administration-Addendum §6)
+    payVersions: [
+      {
+        id: 1,
+        scope: 'role',
+        role: 'Machine Operator',
+        employeeId: null,
+        effectiveDate: '2019-01-01',
+        ...RATE,
+        reason: 'r',
+        setBy: 's',
+        source: 'migration',
+        adjustmentId: null,
+      },
     ],
     stockIns: [],
     manual: [],

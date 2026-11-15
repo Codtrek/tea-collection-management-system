@@ -1460,3 +1460,34 @@ INSERT INTO role_permissions (role, module, level) VALUES
     ('Manager',          'itemPrices', 'view'),
     ('ReceivingOfficer', 'itemPrices', 'none')
 ON CONFLICT (role, module) DO NOTHING;
+
+-- Administration-Addendum §6 (2026-11-15): pay history — the 4 hourly rates, effective-dated per
+-- role (default) with a per-employee override. Inserted, never edited. The seed fills it from the
+-- employees' rates (same backfill as migration 2026-11-15-pay-rates.sql).
+CREATE TABLE IF NOT EXISTS pay_rates (
+    id             SERIAL PRIMARY KEY,
+    scope          VARCHAR(8) NOT NULL CHECK (scope IN ('role', 'employee')),
+    role           VARCHAR(100),
+    employee_id    INTEGER REFERENCES employees(id),
+    effective_date DATE NOT NULL,
+    day_rate       DECIMAL(8,2) NOT NULL CHECK (day_rate >= 0),
+    day_ot_rate    DECIMAL(8,2) NOT NULL CHECK (day_ot_rate >= 0),
+    night_rate     DECIMAL(8,2) NOT NULL CHECK (night_rate >= 0),
+    night_ot_rate  DECIMAL(8,2) NOT NULL CHECK (night_ot_rate >= 0),
+    reason         TEXT NOT NULL,
+    set_by         VARCHAR(100) NOT NULL,
+    source         VARCHAR(12) NOT NULL CHECK (source IN ('migration', 'registration', 'adjustment')),
+    adjustment_id  INTEGER,
+    created_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+    CHECK ((scope = 'role' AND role IS NOT NULL AND employee_id IS NULL)
+        OR (scope = 'employee' AND employee_id IS NOT NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS pay_rates_role_date_key ON pay_rates (role, effective_date) WHERE scope = 'role';
+CREATE UNIQUE INDEX IF NOT EXISTS pay_rates_employee_date_key ON pay_rates (employee_id, effective_date) WHERE scope = 'employee';
+
+INSERT INTO role_permissions (role, module, level) VALUES
+    ('Administrator',    'payRates', 'approve'),
+    ('Officer',          'payRates', 'none'),
+    ('Manager',          'payRates', 'edit'),
+    ('ReceivingOfficer', 'payRates', 'none')
+ON CONFLICT (role, module) DO NOTHING;

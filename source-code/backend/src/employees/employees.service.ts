@@ -47,7 +47,9 @@ import {
   projectSchedule,
   selfApprovalCheck,
 } from './advance-schedule';
-import { grossFromHours, sumHours } from './payroll-gross';
+import { grossByDay, payOn } from './pay-resolution';
+import { PayRatesService, type PublicEmployeePay } from './pay-rates.service';
+import { sumHours } from './payroll-gross';
 import { PayrollRunEntity } from './payroll-run.entity';
 import { SalaryAdvanceEntity } from './salary-advance.entity';
 
@@ -76,6 +78,7 @@ export class EmployeesService {
     @InjectRepository(AdvanceRecoveryEntity)
     private readonly recoveryRepo: Repository<AdvanceRecoveryEntity>,
     private readonly payrollSettings: PayrollSettingsService,
+    private readonly payRates: PayRatesService,
   ) {}
 
   async findAll(): Promise<PublicEmployee[]> {
@@ -85,6 +88,12 @@ export class EmployeesService {
 
   async findById(id: string): Promise<PublicEmployee> {
     return this.toPublic(await this.findEntity(id));
+  }
+
+  /** An employee's pay history (Administration-Addendum §6) — `payRates: view`. */
+  async payHistory(id: string, actor: Actor): Promise<PublicEmployeePay> {
+    await this.payRates.assertCanView(actor.role);
+    return this.payRates.forEmployee(await this.findEntity(id));
   }
 
   /** EMP-02 — Administrator only (portal: `employees: 'approve'`, Officer is view-only on the roster). */
@@ -147,6 +156,17 @@ export class EmployeesService {
         throw err;
       }
     }
+    // Administration-Addendum §6: the entered rates start this employee's pay history
+    await this.payRates.recordRegistration(
+      saved,
+      {
+        dayRate: dto.dayRate ?? 0,
+        dayOtRate: dto.dayOtRate ?? 0,
+        nightRate: dto.nightRate ?? 0,
+        nightOtRate: dto.nightOtRate ?? 0,
+      },
+      actor.name,
+    );
     await this.audit.record(actor, {
       action: 'Registered employee',
       module: 'Employee',
@@ -191,11 +211,21 @@ export class EmployeesService {
     employee.bankAccount = dto.account || null;
     employee.paymentMethod = dto.paymentMethod ?? employee.paymentMethod;
     employee.category = dto.category ?? employee.category;
-    if (dto.dayRate !== undefined) employee.dayRate = String(dto.dayRate);
-    if (dto.dayOtRate !== undefined) employee.dayOtRate = String(dto.dayOtRate);
-    if (dto.nightRate !== undefined) employee.nightRate = String(dto.nightRate);
-    if (dto.nightOtRate !== undefined)
-      employee.nightOtRate = String(dto.nightOtRate);
+    // Administration-Addendum §6: pay has a history and changes only through a pay change
+    // (prepared, approved, effective-dated) — never by overwriting the rates here.
+    const rateChange = (
+      [
+        [dto.dayRate, employee.dayRate],
+        [dto.dayOtRate, employee.dayOtRate],
+        [dto.nightRate, employee.nightRate],
+        [dto.nightOtRate, employee.nightOtRate],
+      ] as const
+    ).some(([next, cur]) => next !== undefined && next !== Number(cur));
+    if (rateChange) {
+      throw new BadRequestException(
+        'Pay rates can’t be edited here. Use “Change pay” on the employee or the Pay Rates tab, so the change is dated, approved and kept in the pay history.',
+      );
+    }
     employee.hasLogin = dto.hasLogin;
     employee.lastUpdatedBy = actor.name;
     employee.lastUpdatedOn = new Date();
@@ -495,6 +525,7 @@ export class EmployeesService {
     const existingRuns = await this.payrollRepo.find();
     const recoveries = await this.recoveryRepo.find();
     const { advanceDeductionCapPct } = await this.payrollSettings.get();
+    const payVersions = await this.payRates.versions();
 
     const results: PayrollRunEntity[] = [];
 
@@ -522,16 +553,24 @@ export class EmployeesService {
       );
       const totals = sumHours(periodAttendance);
 
-      const dayRate = Number(employee.dayRate);
-      const dayOtRate = Number(employee.dayOtRate);
-      const nightRate = Number(employee.nightRate);
-      const nightOtRate = Number(employee.nightOtRate);
-      const gross = grossFromHours(totals, {
-        dayRate,
-        dayOtRate,
-        nightRate,
-        nightOtRate,
-      });
+      // Administration-Addendum §6: each day is priced at the rates in force THAT day (role rate
+      // or the employee's override); the snapshot shows the rates in force at the month's end.
+      const { gross } = grossByDay(
+        periodAttendance.map((a) => ({
+          date: a.date,
+          dayHours: Number(a.dayHours),
+          dayOtHours: Number(a.dayOtHours),
+          nightHours: Number(a.nightHours),
+          nightOtHours: Number(a.nightOtHours),
+        })),
+        payVersions,
+        employee,
+      );
+      const snapshot = payOn(payVersions, employee, monthEnd(periodKey))?.rates;
+      const dayRate = snapshot?.dayRate ?? 0;
+      const dayOtRate = snapshot?.dayOtRate ?? 0;
+      const nightRate = snapshot?.nightRate ?? 0;
+      const nightOtRate = snapshot?.nightOtRate ?? 0;
 
       // Salary-Advances-Addendum §9: deduct only what the gross allows (the cap % of gross, after
       // other deductions) — the rest is carried forward, so net is never below Rs. 0. The row
@@ -1017,3 +1056,9 @@ export class EmployeesService {
 /** 'Rs. 5,000 × 4 from December 2026' (one deduction: 'one deduction in December 2026') */
 // The plan's wording now lives with the shared installment model (estate advances use it too).
 export { planText };
+
+/** 'YYYY-MM' → its last day. */
+function monthEnd(key: string): string {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}

@@ -4,6 +4,7 @@ import { AuditModule } from '../audit/audit.module';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { EmployeeAttendanceEntity } from '../employees/employee-attendance.entity';
 import { EmployeeEntity } from '../employees/employee.entity';
+import { PayRateEntity } from '../employees/pay-rate.entity';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
 import { SalaryAdvanceEntity } from '../employees/salary-advance.entity';
 import { EstateAdvanceRecoveryEntity } from '../estates/estate-advance-recovery.entity';
@@ -49,6 +50,7 @@ import { ReportsService } from './reports.service';
       FertilizerBatchEntity,
       EmployeeEntity,
       EmployeeAttendanceEntity,
+      PayRateEntity,
       SalaryAdvanceEntity,
       EstateAdvanceEntity,
       EstateAdvanceRecoveryEntity,

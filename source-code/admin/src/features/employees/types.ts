@@ -477,3 +477,41 @@ export interface DeclarePreview {
   attendance: { employeeId: string; name: string; date: string; status: string }[]
   routeDays: { routeId: number; routeName: string; date: string }[]
 }
+
+/* ── Pay history (Administration-Addendum §6) — the 4 hourly rates, effective-dated ── */
+
+export interface HourRates {
+  dayRate: number
+  dayOtRate: number
+  nightRate: number
+  nightOtRate: number
+}
+
+export interface PayVersion extends HourRates {
+  id: number
+  scope: 'role' | 'employee'
+  role: string | null
+  employeeId: string | null
+  effectiveDate: string
+  reason: string
+  setBy: string
+  source: 'migration' | 'registration' | 'adjustment'
+  adjustmentId: number | null
+  status: 'current' | 'scheduled' | 'past'
+}
+
+export interface RolePay {
+  role: string
+  current: HourRates | null
+  next: PayVersion | null
+  employees: { id: string; name: string; category: 'factory' | 'office'; status: string; onOverride: boolean; current: HourRates | null }[]
+  history: PayVersion[]
+}
+
+export interface EmployeePay {
+  employeeId: string
+  role: string
+  current: (HourRates & { source: 'override' | 'role' }) | null
+  next: PayVersion | null
+  history: PayVersion[]
+}

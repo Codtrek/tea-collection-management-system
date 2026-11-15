@@ -39,6 +39,11 @@ import {
   type PublicPayrollRow,
 } from './employee-map';
 import { type Actor, EmployeesService } from './employees.service';
+import {
+  PayRatesService,
+  type PublicEmployeePay,
+  type PublicRolePay,
+} from './pay-rates.service';
 import type {
   AdvanceListResult,
   AdvanceSort,
@@ -106,6 +111,7 @@ export class EmployeesController {
     private readonly advancePlans: AdvancePlanService,
     private readonly payrollSettings: PayrollSettingsService,
     private readonly attendance: AttendanceService,
+    private readonly payRates: PayRatesService,
   ) {}
 
   // Static segments (attendance/advances/payroll) are registered before the
@@ -355,6 +361,14 @@ export class EmployeesController {
     );
   }
 
+  /** Pay Rates (Administration-Addendum §6): every role's rate, next change and people — `payRates: view`. */
+  @Get('pay-rates')
+  async payRateRoles(@Req() req: AuthedRequest): Promise<PublicRolePay[]> {
+    const actor = await this.resolveActor(req);
+    await this.payRates.assertCanView(actor.role);
+    return this.payRates.roles();
+  }
+
   /** Single source for the role dropdown — and which title makes someone a collection agent. */
   @Get('roles')
   roles(): { roles: string[]; agentRole: string } {
@@ -384,6 +398,15 @@ export class EmployeesController {
    * grade lines, plus "Covering Route X" where they covered. Paginated, last 90 days by default.
    * Needs BOTH employee and collection access.
    */
+  /** An employee's pay: in force today, next change, history (Administration-Addendum §6). */
+  @Get(':id/pay')
+  async employeePay(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicEmployeePay> {
+    return this.employeesService.payHistory(id, await this.resolveActor(req));
+  }
+
   /** An employee's advances and outstanding balance (advance-balance.ts — same as payroll). */
   @Get(':id/advances')
   employeeAdvances(@Param('id') id: string): Promise<EmployeeAdvances> {

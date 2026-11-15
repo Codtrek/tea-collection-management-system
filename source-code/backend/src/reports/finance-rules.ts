@@ -19,8 +19,8 @@
       shown beside the total, never in it
     • Stock lost — fertilizer written off: its cost was counted when it was bought
 */
-import { grossFromHours, sumHours } from '../employees/payroll-gross';
-import type { HourRates, HourTotals } from '../employees/payroll-gross';
+import { grossByDay, type PayVersion } from '../employees/pay-resolution';
+import type { HourTotals } from '../employees/payroll-gross';
 import {
   changePct,
   inRange,
@@ -81,8 +81,10 @@ export interface AttendanceHoursInput extends HourTotals {
   date: string;
 }
 
-export interface EmployeeRatesInput extends HourRates {
+/** An employee for the wage estimate; their pay on each day comes from `payVersions`. */
+export interface EmployeeRatesInput {
   id: number;
+  role: string;
 }
 
 export interface StockInInput {
@@ -133,6 +135,8 @@ export interface FinanceInputs {
   payroll: PayrollInput[];
   attendance: AttendanceHoursInput[];
   employees: EmployeeRatesInput[];
+  /** pay history (Administration-Addendum §6): role rates and employee overrides, effective-dated */
+  payVersions: PayVersion[];
   stockIns: StockInInput[];
   manual: ManualExpenseInput[];
   settlements: SettlementInput[];
@@ -298,8 +302,8 @@ export interface WageEstimate {
 }
 
 /**
- * Wages for employee-months with no PROCESSED payroll row, from attendance × the employee's
- * current rates (the payroll formula, grossFromHours). Never part of the expense total.
+ * Wages for employee-months with no PROCESSED payroll row: each attendance day × the rates in force
+ * that day (pay history, the same grossByDay payroll uses). Never part of the expense total.
  */
 export function estimateWages(i: FinanceInputs, r: DateRange): WageEstimate {
   const processed = new Set(
@@ -307,12 +311,12 @@ export function estimateWages(i: FinanceInputs, r: DateRange): WageEstimate {
       .filter((p) => p.status === 'Processed')
       .map((p) => `${p.employeeId}|${p.month}`),
   );
-  const rates = new Map(i.employees.map((e) => [e.id, e]));
+  const people = new Map(i.employees.map((e) => [e.id, e]));
   const groups = new Map<string, AttendanceHoursInput[]>();
   for (const a of i.attendance) {
     if (!inRange(a.date, r)) continue;
     const key = `${a.employeeId}|${monthOf(a.date)}`;
-    if (processed.has(key) || !rates.has(a.employeeId)) continue;
+    if (processed.has(key) || !people.has(a.employeeId)) continue;
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(a);
   }
   const byMonth = new Map<
@@ -321,7 +325,11 @@ export function estimateWages(i: FinanceInputs, r: DateRange): WageEstimate {
   >();
   for (const [key, rows] of groups) {
     const [employeeId, month] = key.split('|');
-    const rs = grossFromHours(sumHours(rows), rates.get(Number(employeeId))!);
+    const rs = grossByDay(
+      rows,
+      i.payVersions,
+      people.get(Number(employeeId))!,
+    ).gross;
     const acc = byMonth.get(month) ?? { rs: 0, employees: 0, days: 0 };
     acc.rs += rs;
     acc.employees += 1;

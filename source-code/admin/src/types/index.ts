@@ -19,6 +19,7 @@ export type ModuleKey =
   | 'reports'
   | 'expenses'
   | 'itemPrices'
+  | 'payRates'
   | 'dispatch'
   | 'grading'
   | 'gradingApproval'

@@ -45,6 +45,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     expenses: 'view',
     // Item Prices (Administration-Addendum §5): the Administrator sets selling prices
     itemPrices: 'approve',
+    // Pay Rates (Administration-Addendum §6–7): the Administrator approves pay changes
+    payRates: 'approve',
     dispatch: 'approve',
     // Grading is a separation-of-duties control: an Officer grades, a Manager approves corrections,
     // the Administrator audits (view). `gradingApproval` is its own module because the `approve`
@@ -75,6 +77,7 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     expenses: 'edit',
     // reads the selling prices requests are approved at
     itemPrices: 'view',
+    payRates: 'none',
     // Agent Dispatch: view the board · edit = mark absent / send cover · approve = permanent reassignment.
     dispatch: 'edit',
     grading: 'edit',
@@ -102,6 +105,8 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     // approve = change any entry; after the creator's window, with a reason
     expenses: 'approve',
     itemPrices: 'view',
+    // prepares pay changes; the Administrator approves
+    payRates: 'edit',
     dispatch: 'approve',
     grading: 'view',
     gradingApproval: 'approve',

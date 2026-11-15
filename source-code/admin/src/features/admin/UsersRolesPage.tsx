@@ -44,6 +44,7 @@ const MATRIX_MODULES: Array<{ key: ModuleKey; label: string }> = [
   { key: 'reports', label: 'Reports' },
   { key: 'expenses', label: 'Daily Expenses' },
   { key: 'itemPrices', label: 'Item Prices' },
+  { key: 'payRates', label: 'Pay Rates' },
   { key: 'administration', label: 'Administration' },
 ]
 

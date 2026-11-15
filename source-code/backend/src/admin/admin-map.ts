@@ -27,6 +27,7 @@ export type ModuleKey =
   | 'reports'
   | 'expenses'
   | 'itemPrices'
+  | 'payRates'
   | 'dispatch'
   | 'grading'
   | 'gradingApproval'
@@ -56,6 +57,7 @@ export const MODULE_KEYS: ModuleKey[] = [
   'reports',
   'expenses',
   'itemPrices',
+  'payRates',
   'dispatch',
   'grading',
   'gradingApproval',

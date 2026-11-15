@@ -5,6 +5,8 @@ import { GradeRateEntity } from '../admin/grade-rate.entity';
 import { localDate } from '../dispatch/dispatch-map';
 import { EmployeeAttendanceEntity } from '../employees/employee-attendance.entity';
 import { EmployeeEntity } from '../employees/employee.entity';
+import { PayRateEntity } from '../employees/pay-rate.entity';
+import { toPayVersion } from '../employees/pay-resolution';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
 import { SalaryAdvanceEntity } from '../employees/salary-advance.entity';
 import { EstateAdvanceRecoveryEntity } from '../estates/estate-advance-recovery.entity';
@@ -75,6 +77,8 @@ export class FinanceService {
     private readonly expenses: Repository<ExpenseEntryEntity>,
     @InjectRepository(ExpenseCategoryEntity)
     private readonly expenseCategories: Repository<ExpenseCategoryEntity>,
+    @InjectRepository(PayRateEntity)
+    private readonly payRates: Repository<PayRateEntity>,
     @InjectRepository(EstateAdvanceEntity)
     private readonly estateAdvances: Repository<EstateAdvanceEntity>,
     @InjectRepository(EstateAdvanceRecoveryEntity)
@@ -204,6 +208,7 @@ export class FinanceService {
       estateAdvances,
       salaryAdvances,
       expenseCategories,
+      payRates,
     ] = await Promise.all([
       this.leafValues(span),
       this.payroll.find(),
@@ -217,6 +222,7 @@ export class FinanceService {
       this.estateAdvances.find(),
       this.salaryAdvances.find({ where: { status: 'Approved' } }),
       this.expenseCategories.find(),
+      this.payRates.find(),
     ]);
     const categoryName = new Map(expenseCategories.map((c) => [c.id, c.name]));
     const item = new Map(batches.map((b) => [b.id, b.item]));
@@ -261,13 +267,8 @@ export class FinanceService {
         nightHours: Number(a.nightHours),
         nightOtHours: Number(a.nightOtHours),
       })),
-      employees: employees.map((e) => ({
-        id: e.id,
-        dayRate: Number(e.dayRate),
-        dayOtRate: Number(e.dayOtRate),
-        nightRate: Number(e.nightRate),
-        nightOtRate: Number(e.nightOtRate),
-      })),
+      employees: employees.map((e) => ({ id: e.id, role: e.role })),
+      payVersions: payRates.map(toPayVersion),
       stockIns,
       manual: manual.map((e) => ({
         id: e.id,

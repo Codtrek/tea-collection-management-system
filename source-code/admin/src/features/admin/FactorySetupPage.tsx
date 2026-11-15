@@ -13,6 +13,7 @@ import { GeneralInfoTab, type ProfileDraft } from './GeneralInfoTab'
 import { GradeRatesTab, type GradeDraft } from './GradeRatesTab'
 import { TransportRatesTab, type TransportDraft } from './TransportRatesTab'
 import { ItemPricesTab, type PriceDraft } from './ItemPricesTab'
+import { PayRatesPanel } from '@/features/employees/PayRatesPanel'
 import type { DraftTab } from './factory-setup-model'
 
 /*
@@ -32,6 +33,7 @@ const TABS = [
   { id: 'grades', label: 'Grade Rates' },
   { id: 'transport', label: 'Transport Rates' },
   { id: 'prices', label: 'Item Prices' },
+  { id: 'pay', label: 'Pay Rates' },
   { id: 'items', label: 'Beneficiary Item Types' },
   { id: 'expenses', label: 'Expense Categories' },
 ]
@@ -91,6 +93,11 @@ export function FactorySetupPage() {
       {tab === 'grades' && <GradeRatesTab draft={drafts.grades} onDraft={setDraft('grades')} />}
       {tab === 'transport' && <TransportRatesTab draft={drafts.transport} onDraft={setDraft('transport')} />}
       {tab === 'prices' && <ItemPricesTab draft={drafts.prices} onDraft={setDraft('prices')} />}
+      {tab === 'pay' && (
+        <div className="max-w-5xl">
+          <PayRatesPanel />
+        </div>
+      )}
 
       {tab === 'items' && (
         <Card className="max-w-2xl">

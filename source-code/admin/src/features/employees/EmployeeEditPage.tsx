@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -157,13 +157,21 @@ function EditForm({ employee }: { employee: Employee }) {
               <Select label="Category" options={CATEGORY_OPTIONS} {...register('category')} />
             </div>
             <div>
-              <p className="mb-2 text-sm font-medium text-text">Pay rates (Rs. / hour)</p>
+              <p className="mb-2 text-sm font-medium text-text">Pay rates in force today (Rs. / hour)</p>
+              {/* Administration-Addendum §6: pay has a history; it isn't edited here */}
               <div className="grid gap-4 sm:grid-cols-4">
-                <Input label="Day" type="number" step="0.01" error={errors.dayRate?.message} {...register('dayRate', { valueAsNumber: true })} />
-                <Input label="Day OT" type="number" step="0.01" error={errors.dayOtRate?.message} {...register('dayOtRate', { valueAsNumber: true })} />
-                <Input label="Night" type="number" step="0.01" error={errors.nightRate?.message} {...register('nightRate', { valueAsNumber: true })} />
-                <Input label="Night OT" type="number" step="0.01" error={errors.nightOtRate?.message} {...register('nightOtRate', { valueAsNumber: true })} />
+                <Input label="Day" type="number" readOnly className="bg-surface-sunken" {...register('dayRate', { valueAsNumber: true })} />
+                <Input label="Day OT" type="number" readOnly className="bg-surface-sunken" {...register('dayOtRate', { valueAsNumber: true })} />
+                <Input label="Night" type="number" readOnly className="bg-surface-sunken" {...register('nightRate', { valueAsNumber: true })} />
+                <Input label="Night OT" type="number" readOnly className="bg-surface-sunken" {...register('nightOtRate', { valueAsNumber: true })} />
               </div>
+              <p className="mt-2 text-xs text-text-muted">
+                Pay changes are dated and approved, and kept in the pay history:{' '}
+                <Link to={`/employees/${employee.id}?tab=pay`} className="font-medium text-primary hover:underline">
+                  see the Pay tab
+                </Link>
+                .
+              </p>
             </div>
           </div>
         </Card>

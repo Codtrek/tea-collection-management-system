@@ -2107,6 +2107,7 @@ const PERMISSION_MATRIX: Record<
     reports: 'approve', administration: 'approve', dispatch: 'approve',
     expenses: 'view',
     itemPrices: 'approve',
+    payRates: 'approve',
     grading: 'view', gradingApproval: 'view',
     fertilizerApproval: 'view', fertilizerManagerApproval: 'view',
   },
@@ -2119,6 +2120,7 @@ const PERMISSION_MATRIX: Record<
     reports: 'edit', administration: 'none', dispatch: 'edit',
     expenses: 'edit',
     itemPrices: 'view',
+    payRates: 'none',
     grading: 'edit', gradingApproval: 'view',
     fertilizerApproval: 'approve', fertilizerManagerApproval: 'view',
   },
@@ -2131,6 +2133,7 @@ const PERMISSION_MATRIX: Record<
     reports: 'view', administration: 'none', dispatch: 'approve',
     expenses: 'approve',
     itemPrices: 'view',
+    payRates: 'edit',
     grading: 'view', gradingApproval: 'approve',
     fertilizerApproval: 'view', fertilizerManagerApproval: 'approve',
   },
@@ -3258,6 +3261,32 @@ async function seed() {
       );
     }
     console.log(`Seeded ${AUDIT_LOG_SEEDS.length} audit-log baseline rows`);
+
+    // Pay history (Administration-Addendum §6): the same backfill as migration
+    // 2026-11-15-pay-rates.sql — each role's most common rate set is its default, and an employee
+    // whose rates differ gets an override, all effective 2019-01-01. Idempotent.
+    await client.query(
+      `INSERT INTO pay_rates (scope, role, effective_date, day_rate, day_ot_rate, night_rate, night_ot_rate, reason, set_by, source)
+       SELECT 'role', m.role, DATE '2019-01-01', m.day_rate, m.day_ot_rate, m.night_rate, m.night_ot_rate,
+              'Rates on record when pay history started', 'seed', 'migration'
+         FROM (SELECT role, day_rate, day_ot_rate, night_rate, night_ot_rate,
+                      row_number() OVER (PARTITION BY role ORDER BY count(*) DESC, min(id)) AS rk
+                 FROM employees
+                GROUP BY role, day_rate, day_ot_rate, night_rate, night_ot_rate) m
+        WHERE m.rk = 1
+          AND NOT EXISTS (SELECT 1 FROM pay_rates p WHERE p.scope = 'role' AND p.role = m.role)`,
+    );
+    await client.query(
+      `INSERT INTO pay_rates (scope, employee_id, effective_date, day_rate, day_ot_rate, night_rate, night_ot_rate, reason, set_by, source)
+       SELECT 'employee', e.id, DATE '2019-01-01', e.day_rate, e.day_ot_rate, e.night_rate, e.night_ot_rate,
+              'Rates on record when pay history started (different from the role rate)', 'seed', 'migration'
+         FROM employees e
+         JOIN pay_rates r ON r.scope = 'role' AND r.role = e.role AND r.effective_date = DATE '2019-01-01'
+        WHERE (e.day_rate, e.day_ot_rate, e.night_rate, e.night_ot_rate)
+              IS DISTINCT FROM (r.day_rate, r.day_ot_rate, r.night_rate, r.night_ot_rate)
+          AND NOT EXISTS (SELECT 1 FROM pay_rates p WHERE p.scope = 'employee' AND p.employee_id = e.id)`,
+    );
+    console.log('Seeded pay history from the employees\' rates');
   } finally {
     await client.end();
   }

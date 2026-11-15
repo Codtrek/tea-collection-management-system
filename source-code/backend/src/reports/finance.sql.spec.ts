@@ -5,6 +5,7 @@ import type { CollectionSettingsService } from '../collections/collection-settin
 import { DeliveryGradeLineEntity } from '../collections/delivery-grade-line.entity';
 import { EmployeeAttendanceEntity } from '../employees/employee-attendance.entity';
 import { EmployeeEntity } from '../employees/employee.entity';
+import { PayRateEntity } from '../employees/pay-rate.entity';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
 import { SalaryAdvanceEntity } from '../employees/salary-advance.entity';
 import { EstateAdvanceRecoveryEntity } from '../estates/estate-advance-recovery.entity';
@@ -82,6 +83,7 @@ export const FINANCE_ENTITIES = [
   FertilizerBatchEntity,
   ExpenseEntryEntity,
   ExpenseCategoryEntity,
+  PayRateEntity,
 ];
 
 (URL ? describe : describe.skip)(`RPT-03 vs direct SQL (${MONTH})`, () => {
@@ -117,6 +119,7 @@ export const FINANCE_ENTITIES = [
       r(FertilizerBatchEntity),
       r(ExpenseEntryEntity),
       r(ExpenseCategoryEntity),
+      r(PayRateEntity),
       r(EstateAdvanceEntity),
       r(EstateAdvanceRecoveryEntity),
       r(SalaryAdvanceEntity),
