@@ -245,7 +245,26 @@ export function EmployeeDetailPage() {
       ),
     },
     // Administration-Addendum §6 — pay history (payRates: view)
-    ...(can('payRates', 'view') ? [{ id: 'pay', label: 'Pay', content: <EmployeePayTab employeeId={employee.id} /> }] : []),
+    ...(can('payRates', 'view')
+      ? [
+          {
+            id: 'pay',
+            label: 'Pay',
+            content: (
+              <EmployeePayTab
+                employeeId={employee.id}
+                actions={
+                  can('payRates', 'edit') && employee.status === 'Active' ? (
+                    <Button variant="secondary" onClick={() => navigate(`/employees/pay-rates/change?employee=${employee.id}`)}>
+                      Change pay
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ),
+          },
+        ]
+      : []),
     // Performance-Addendum §5 — Manager and Administrator only (data-driven)
     ...(can('performance', 'view') ? [{ id: 'performance', label: 'Performance', content: <EmployeePerformanceTab employeeId={employee.id} /> }] : []),
     { id: 'documents', label: 'Documents', content: <EmptyState title="No documents uploaded" description="NIC copy and photo appear here." /> },

@@ -53,7 +53,7 @@ recoveries panel with its rule.
 ## 4. Wages
 
 - Only **Processed** payroll is a wage expense.
-- For a month that isn't processed yet, the report shows "Estimated wages (not in total)": attendance hours × each employee's current day / OT / night / night-OT rates.
+- For a month that isn't processed yet, the report shows "Estimated wages (not in total)": each attendance day × the day / OT / night / night-OT rates **in force that day** from pay history (`Administration-Addendum.md` §6: the employee's own rate, else their role's), the same `grossByDay` payroll uses.
 - When the month is processed, its gross becomes Wages and the estimate disappears.
 - A Pending run's own gross is not used, because it may be stale.
 

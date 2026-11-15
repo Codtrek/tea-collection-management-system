@@ -9,6 +9,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Put,
@@ -39,6 +40,15 @@ import {
   type PublicPayrollRow,
 } from './employee-map';
 import { type Actor, EmployeesService } from './employees.service';
+import {
+  PayAdjustmentDecisionDto,
+  PayAdjustmentDto,
+} from './dto/pay-adjustment.dto';
+import {
+  PayAdjustmentService,
+  type PublicPayAdjustment,
+  type PublicPreview,
+} from './pay-adjustment.service';
 import {
   PayRatesService,
   type PublicEmployeePay,
@@ -112,6 +122,7 @@ export class EmployeesController {
     private readonly payrollSettings: PayrollSettingsService,
     private readonly attendance: AttendanceService,
     private readonly payRates: PayRatesService,
+    private readonly payAdjustments_: PayAdjustmentService,
   ) {}
 
   // Static segments (attendance/advances/payroll) are registered before the
@@ -367,6 +378,46 @@ export class EmployeesController {
     const actor = await this.resolveActor(req);
     await this.payRates.assertCanView(actor.role);
     return this.payRates.roles();
+  }
+
+  /* ── Pay adjustments (Administration-Addendum §8): Manager prepares, Administrator approves ── */
+
+  @Get('pay-adjustments')
+  async payAdjustments(
+    @Req() req: AuthedRequest,
+  ): Promise<PublicPayAdjustment[]> {
+    return this.payAdjustments_.list(await this.resolveActor(req));
+  }
+
+  /** What a change would do, per employee, before it is prepared — nothing is saved. */
+  @Post('pay-adjustments/preview')
+  async previewPayAdjustment(
+    @Body() dto: PayAdjustmentDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicPreview> {
+    return this.payAdjustments_.preview(dto, await this.resolveActor(req));
+  }
+
+  @Post('pay-adjustments')
+  async preparePayAdjustment(
+    @Body() dto: PayAdjustmentDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicPayAdjustment> {
+    return this.payAdjustments_.prepare(dto, await this.resolveActor(req));
+  }
+
+  @Patch('pay-adjustments/:aid/decide')
+  async decidePayAdjustment(
+    @Param('aid', ParseIntPipe) aid: number,
+    @Body() dto: PayAdjustmentDecisionDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicPayAdjustment> {
+    return this.payAdjustments_.decide(
+      aid,
+      dto.decision,
+      dto.reason,
+      await this.resolveActor(req),
+    );
   }
 
   /** Single source for the role dropdown — and which title makes someone a collection agent. */

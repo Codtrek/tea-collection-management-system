@@ -1,11 +1,13 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, Loader2 } from 'lucide-react'
+import { ChevronDown, Loader2, Plus } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { ErrorState } from '@/components/data/ErrorState'
 import { cn } from '@/lib/cn'
+import { useAuth } from '@/context/AuthContext'
+import { PayAdjustmentsList } from './PayAdjustmentsList'
 import { formatCurrency, formatDate } from '@/lib/format'
 import * as employeesService from '@/services/employees'
 import type { PayVersion } from './types'
@@ -72,6 +74,7 @@ export function PayHistoryTable({ versions, showScope = false }: { versions: Pay
 }
 
 export function PayRatesPanel({ actions }: { actions?: ReactNode }) {
+  const { can } = useAuth()
   const [open, setOpen] = useState<string | null>(null)
   const { data, isPending, isError, refetch } = useQuery({ queryKey: ['employees', 'pay-rates'], queryFn: employeesService.getPayRates })
 
@@ -89,7 +92,12 @@ export function PayRatesPanel({ actions }: { actions?: ReactNode }) {
               their role’s rate. Payroll prices each day at the rates in force that day; processed payroll never changes.
             </p>
           </div>
-          {actions}
+          {actions ??
+            (can('payRates', 'edit') && (
+              <Link to="/employees/pay-rates/change" className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-hover">
+                <Plus className="size-4" aria-hidden /> New pay change
+              </Link>
+            ))}
         </div>
         <div className="hidden grid-cols-[1.3fr_1fr_2fr_1.3fr] gap-3 border-b border-border px-5 py-2 text-xs font-medium uppercase tracking-wide text-text-muted md:grid">
           <span>Role</span>
@@ -152,6 +160,7 @@ export function PayRatesPanel({ actions }: { actions?: ReactNode }) {
           })}
         </ul>
       </Card>
+      <PayAdjustmentsList />
     </div>
   )
 }

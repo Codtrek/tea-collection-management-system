@@ -1,23 +1,13 @@
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
+import { actAs } from './act-as'
 
 /* Pay Rates (Administration-Addendum §6–7): pay history by role, an employee's Pay tab, who sees what. Read-only. */
 
 async function ready(page: Page) {
   await page.locator('main h1').first().waitFor({ timeout: 60_000 })
   await page.locator('main .animate-spin').first().waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {})
-}
-
-/** Act as another seeded portal user instead of the Administrator the suite logs in as. */
-export async function actAs(page: Page, phone: string) {
-  const res = await fetch(`${process.env.E2E_API_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, password: process.env.E2E_PASS }),
-  })
-  const { accessToken } = (await res.json()) as { accessToken: string }
-  await page.addInitScript((t) => localStorage.setItem('harboost.token', t), accessToken)
 }
 
 const MANAGER = process.env.E2E_MANAGER ?? '0771234569'
@@ -40,7 +30,7 @@ test('an employee’s Pay tab shows the rate in force, where it comes from, and 
   await page.goto('/employees/EMP-0002?tab=pay')
   await ready(page)
   await expect(page.getByText('Pay in force today (Rs./hour)')).toBeVisible()
-  await expect(page.getByText('Machine Operator role rate')).toBeVisible()
+  await expect(page.getByText('Machine Operator role rate', { exact: true })).toBeVisible()
   // pay is never edited on the edit form
   await page.goto('/employees/EMP-0002/edit')
   await ready(page)

@@ -9,6 +9,11 @@ import { UsersModule } from '../users/users.module';
 import { EmployeeAttendanceEntity } from './employee-attendance.entity';
 import { EmployeeEntity } from './employee.entity';
 import { EmployeesController } from './employees.controller';
+import {
+  PayAdjustmentEntity,
+  PayAdjustmentLineEntity,
+} from './pay-adjustment.entity';
+import { PayAdjustmentService } from './pay-adjustment.service';
 import { PayRateEntity } from './pay-rate.entity';
 import { PayRatesService } from './pay-rates.service';
 import { EmployeesService } from './employees.service';
@@ -37,6 +42,8 @@ import { SystemSettingEntity } from '../admin/system-setting.entity';
       SystemSettingEntity,
       // pay history (Administration-Addendum §6)
       PayRateEntity,
+      PayAdjustmentEntity,
+      PayAdjustmentLineEntity,
     ]),
     UsersModule,
     AuditModule,
@@ -57,6 +64,7 @@ import { SystemSettingEntity } from '../admin/system-setting.entity';
     AdvancePlanService,
     AttendanceService,
     PayRatesService,
+    PayAdjustmentService,
   ],
 })
 export class EmployeesModule {}

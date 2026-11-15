@@ -9,6 +9,11 @@ alter the value of leaf already delivered. ADM-01 already kept versions, but thr
 that rule. This addendum closes them, and makes the rates the source of the Leaf Purchase Report
 (Reports addendum §9).
 
+> **Update 2026-11-15 (`Administration-Addendum.md` §1, §3):** every version now needs a reason, the
+> date defaults to tomorrow, a version identical to the one it follows is refused, and a SCHEDULED
+> version can be cancelled before it starts (kept and audited; the unique date index covers live
+> versions only). Cancelled versions are ignored everywhere.
+
 ## 1. Storage (already in place)
 
 `grade_rates` keeps one row per version: `id` (`GR-YYYY-NNNN`), `super_rate`, `normal_rate`,

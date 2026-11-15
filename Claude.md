@@ -1206,6 +1206,49 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - `lib/api` `apiBlob` + FormData uploads
   - `axisWidth` now measures the in-between ticks too
 
+## Factory Setup, Item Prices, Pay Rates and pay changes (2026-11-15, `feat/factory-setup-pay-rates`)
+
+- **One rule for every money rate** (`docs/specs/Administration-Addendum.md`, `backend/src/admin/versioning.ts`):
+  - Rates are effective-dated, never edited, and start today or later; there is one live version per date, and a version identical to the one it follows is refused.
+  - A reason is required, and the change is audited old → new.
+  - A scheduled version can be cancelled before it starts; it is kept, and ignored from then on.
+  - This covers grade rates, transport rates, item prices and pay rates.
+- **Factory Setup:**
+  - Each tab saves or publishes on its own, and unsaved changes prompt when switching tabs or leaving the page (`useBlocker`).
+  - General Info is real (`system_settings.factoryProfile`), with the factory bank account. Only the last 4 digits ever leave the server, via `/admin/factory-profile`, Administrator only.
+  - The logo upload says "Coming soon (file storage)".
+  - Spec references are removed from the UI.
+- **Grade rates:**
+  - Value applies by **delivery date**, so a version starting today re-values today's recorded deliveries (warned).
+  - The date defaults to tomorrow.
+  - Reason and cancel columns, with a partial unique index on live dates.
+- **Transport:**
+  - **No formula exists**: the old tab never saved, estates have no distance, and settlement `transport_cost` is seeded.
+  - `transport_rates` is versioned and seeded at 42/km with a 500 minimum, basis **not confirmed**.
+  - Until the factory confirms the basis and the formula is built (`TRANSPORT_FORMULA_READY`), settlement processing shows "Transport: not configured" and refuses estates that pay transport. This blocks the July seed run.
+- **Item Prices:**
+  - `fertilizer_item_prices` is the one selling-price source, per kg or per bag of N kg. `rate_per_kg` is still what a request snapshots at approval.
+  - Average purchase cost from costed stock-ins, with a "Selling below cost" warning.
+  - New `itemPrices` key: Admin sets; Officer and Manager view.
+  - Tab in Factory Setup, read-only page at `/fertilizer/prices`. Removed from System Settings.
+- **Pay history:**
+  - `pay_rates` holds the 4 **hourly** rates, effective-dated per role with a per-employee override.
+  - `payOn`: the override in force that day, else the role rate (`employees/pay-resolution.ts`).
+  - Payroll and the Expense wage estimate price each attendance day at that day's rates (`grossByDay`); processed runs keep their snapshot.
+  - Migrated from the rates on record, effective 2019. Local result: 5 role rates, 0 overrides; 48/48 employee-months unchanged (opt-in `pay-history.sql.spec`).
+  - The edit form no longer edits pay (the API refuses it); registration starts the history.
+  - Pay Rates appears in Factory Setup and People → Pay Rates; the employee page has a Pay tab.
+  - New `payRates` key: Admin approve, Manager edit, Officer none.
+  - System Settings → Payroll rules: standard hours/day (8), and minimum daily pay per category, blank until entered.
+- **Pay changes** (`/employees/pay-rates/change`, `pay-adjustment-rules.ts` + `PayAdjustmentService`):
+  - Who: all, a role, or selected employees. The change is ±% or ±Rs per hour on all 4 rates, with rounding to 10/50; Rs 0 rates are untouched.
+  - Starts today or later, never in or before a processed payroll month.
+  - The preview shows old → new per person and the monthly cost from last month's hours.
+  - Blocks: below the minimum blocks; an unset minimum shows "No minimum set — not checked"; a decrease needs the written-agreement checkbox.
+  - Approval: Administrator only, via HighStakesConfirmFlow. Nobody approves their own change or one that includes them (NIC).
+  - Re-checked at approval; written to pay_rates only then; audited.
+- **Migrations** (local `tea_dev` only, mirrored in `init.sql`): `2026-11-15-factory-setup.sql`, `-item-prices.sql`, `-pay-rates.sql`, `-pay-adjustments.sql`.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

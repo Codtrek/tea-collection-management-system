@@ -17,6 +17,7 @@ import { AdvanceListPage } from './features/employees/AdvanceListPage'
 import { AdvanceDetailPage } from './features/employees/AdvanceDetailPage'
 import { AdvanceRequestPage } from './features/employees/AdvanceRequestPage'
 import { PayRatesPage } from './features/employees/PayRatesPage'
+import { PayChangePage } from './features/employees/PayChangePage'
 import { PayrollListPage } from './features/employees/PayrollListPage'
 import { PayrollProcessingPage } from './features/employees/PayrollProcessingPage'
 import { PayslipPage } from './features/employees/PayslipPage'
@@ -112,6 +113,7 @@ export const router = createBrowserRouter([
       { path: 'employees/advances/:id', element: <AdvanceDetailPage /> },
       { path: 'employees/payroll', element: <PayrollListPage /> },
       { path: 'employees/pay-rates', element: <PayRatesPage /> },
+      { path: 'employees/pay-rates/change', element: <PayChangePage /> },
       { path: 'employees/payroll/process', element: <PayrollProcessingPage /> },
       { path: 'employees/payroll/:id/payslip', element: <PayslipPage /> },
       { path: 'employees/performance', element: <PerformancePage /> },
