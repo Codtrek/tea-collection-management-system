@@ -11,10 +11,6 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { AgentJwtPayload, JwtPayload } from './jwt-payload.interface';
-import { AuthService,  type LoginResult, type PublicUser } from './auth.service';
-import { LoginDto } from './dto/login.dto';
-import { JwtAuthGuard } from './jwt-auth.guard';
-import type { JwtPayload } from './jwt-payload.interface';
 import { SkipThrottle } from '@nestjs/throttler';
 
 @Controller('auth')

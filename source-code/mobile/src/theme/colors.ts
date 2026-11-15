@@ -9,6 +9,7 @@ export const colors = {
 
   // Backgrounds
   background: "#FFFFFF",
+  backgroundGray: "#eeeeee",
   surface: "#F9FAFB",
   ImageBackground: "#d8dde2",
 

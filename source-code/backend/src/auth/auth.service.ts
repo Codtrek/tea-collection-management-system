@@ -21,17 +21,21 @@ import {
   type AgentJwtPayload,
   type JwtPayload,
 } from './jwt-payload.interface';
-import { toAppRole, type AppRole } from './role-map';
+import { toAppRole, toPortalRole, type AppRole } from './role-map';
 
 export interface PublicUser {
   id: string;
   name: string;
   role: AppRole;
   phone: string;
-  factory: string;
-  /** The role's server-stored permission map — the portal's `can()` reads this. */
-  permissions: Record<ModuleKey, PermissionLevel>;
+  /** Factory-side roles only. */
   factory?: string;
+  /**
+   * The role's server-stored permission map — the portal's `can()` reads this.
+   * Factory-side roles only; estate roles have no portal permissions.
+   */
+  permissions?: Record<ModuleKey, PermissionLevel>;
+  /** Estate-side roles only. */
   estate?: string;
 }
 
@@ -74,10 +78,6 @@ export class AuthService {
     }
 
     await this.usersService.markLogin(user.id);
-    const publicUser = await this.buildPublicUser(
-      user.id,
-      user.phone,
-      user.role,
     switch (user.role) {
       case 'estate_owner': {
         const estateOwnerPublicUser = await this.buildEstateOwnerPublicUser(
@@ -293,7 +293,7 @@ export class AuthService {
     phone: string,
     dbRole: DbRole,
   ): Promise<PublicUser> {
-    const role = toAppRole(dbRole);
+    const role = toPortalRole(dbRole);
     const profile = await this.usersService.getProfile(id);
     if (!profile) {
       throw new UnauthorizedException(

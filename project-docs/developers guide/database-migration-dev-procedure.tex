@@ -1,0 +1,289 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=20mm,top=20mm,bottom=21mm]{geometry}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\usepackage{microtype}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{needspace}
+\definecolor{navy}{HTML}{0D301C}
+\definecolor{teal}{HTML}{2C7850}
+\definecolor{pale}{HTML}{F0F7F1}
+\definecolor{graytext}{HTML}{506C58}
+\definecolor{lightborder}{HTML}{C8DFC9}
+\definecolor{amber}{HTML}{A66915}
+\definecolor{red}{HTML}{9B3A38}
+\hypersetup{colorlinks=true,linkcolor=teal,urlcolor=teal}
+\titleformat{\section}{\Large\bfseries\color{navy}}{}{0pt}{}
+\titlespacing*{\section}{0pt}{9pt}{6pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\footnotesize\color{graytext}\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\setlist[itemize]{nosep,leftmargin=18pt,topsep=2pt}
+\lstdefinestyle{command}{
+    basicstyle=\ttfamily\footnotesize,
+    backgroundcolor=\color{pale},
+    frame=single,
+    rulecolor=\color{lightborder},
+    framesep=6pt,
+    breaklines=true,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false
+}
+\newtcolorbox{stepbox}[2]{enhanced,breakable,colback=white,colframe=lightborder,boxrule=0.7pt,arc=2mm,left=9pt,right=9pt,top=6pt,bottom=5pt,before skip=6pt,after skip=6pt, borderline west={3pt}{0pt}{teal},title={\textbf{#1. #2}},fonttitle=\bfseries,colbacktitle=pale,coltitle=navy,attach boxed title to top left={yshift=-2mm,xshift=8pt},boxed title style={boxrule=0pt,frame hidden,arc=1mm}}
+\begin{document}
+
+{\Huge\bfseries\color{navy}Harboost Database Migration Workflow}\par
+{\large\color{graytext}A straightforward, step-by-step guide for developers}\par
+\vspace{2pt}
+{\small\color{graytext}Applies to feature branches and pull requests targeting GitHub \texttt{dev}. Run Git commands from the repository root unless stated otherwise.}\par
+\vspace{6pt}
+\begin{tcolorbox}[colback=pale,colframe=lightborder,boxrule=.7pt,arc=2mm]
+\textbf{Workflow at a glance}\par
+\small
+\textbf{1.} Create branch \(\rightarrow\) \textbf{2.} Pull latest \texttt{dev} \(\rightarrow\) \textbf{3.} Create migration \(\rightarrow\) \textbf{4.} Update entity \(\rightarrow\) \textbf{5.} Pull \texttt{dev}, commit \& push \(\rightarrow\) \textbf{6.} Open PR \(\rightarrow\) \textbf{7.} Check CI \(\rightarrow\) \textbf{8.} Request review
+\end{tcolorbox}
+
+\begin{stepbox}{1}{Create a separate feature branch}
+Start from your local \texttt{dev} branch, then create a feature branch. Replace the example branch name with a meaningful name for your change.
+\begin{lstlisting}[style=command]
+git switch dev
+git switch -c feature/estate-registration-code
+\end{lstlisting}
+\textit{Do not make database schema changes directly on \texttt{dev}.}
+\end{stepbox}
+
+\begin{stepbox}{2}{Get the latest changes from GitHub dev}
+While you are on your new feature branch, bring in the latest commits from \texttt{origin/dev}:
+\begin{lstlisting}[style=command]
+git pull origin dev
+\end{lstlisting}
+This ensures the feature branch starts with the latest shared code. Resolve any Git conflicts before proceeding.
+\end{stepbox}
+
+\begin{stepbox}{3}{Create the TypeORM migration file}
+From the repository root, enter the backend directory and create the migration:
+\begin{lstlisting}[style=command]
+cd source-code/backend
+npx typeorm-ts-node-commonjs migration:create src/migrations/AddEstateRegistrationCode
+cd ../..
+\end{lstlisting}
+Open the generated migration under \texttt{source-code/backend/src/migrations/}. Define the intended database change in \texttt{up()} and its appropriate reversal in \texttt{down()}.
+\end{stepbox}
+
+\begin{stepbox}{4}{Update the matching TypeORM entity}
+Edit the relevant \texttt{*.entity.ts} file under \texttt{source-code/backend/src/}. Ensure column names, types, lengths, nullability and defaults agree with the migration.
+
+\textbf{Example:} If the migration adds \texttt{estates.registration\_code} as a nullable \texttt{VARCHAR(50)}, the \texttt{Estates} entity must describe the same column definition.
+\end{stepbox}
+
+\begin{stepbox}{5}{Commit changes, pull latest dev again, and push}
+Before sharing the branch, stage the changes, commit them, incorporate the latest \texttt{dev} updates, and push to GitHub:
+\begin{lstlisting}[style=command]
+git status
+git add -A source-code/backend/src
+git commit -m "Add estate registration code migration"
+git pull origin dev
+git push -u origin feature/estate-registration-code
+\end{lstlisting}
+If \texttt{git pull} reports conflicts: fix the conflicting files, use \texttt{git status} to inspect them, commit the resolution if needed, then push. Check the staged changes before committing so unrelated files are not included.
+\end{stepbox}
+
+\begin{stepbox}{6}{Create a pull request targeting dev}
+On GitHub, open \textbf{Pull requests} \(\rightarrow\) \textbf{New pull request}. Set:
+\begin{itemize}
+  \item \textbf{Base branch:} \texttt{dev}
+  \item \textbf{Compare branch:} your \texttt{feature/...} branch
+\end{itemize}
+Describe the schema change, affected entity, and migration file; then create the PR.
+\end{stepbox}
+
+\begin{stepbox}{7}{Watch the migration and schema drift checks}
+After opening or pushing another commit to the PR, GitHub automatically starts \texttt{Neon PR branch}.
+
+\textbf{Where to find the results:}
+\begin{itemize}
+  \item \textbf{From the PR:} Open the PR \(\rightarrow\) \textbf{Checks} \(\rightarrow\) \texttt{create-and-migrate}.
+  \item \textbf{From GitHub Actions:} \textbf{Actions} \(\rightarrow\) \textbf{Neon PR branch} \(\rightarrow\) select the PR run \(\rightarrow\) \texttt{create-and-migrate}.
+\end{itemize}
+
+In the job logs, inspect these \textbf{two steps}:
+\begin{itemize}
+  \item \textbf{Run migrations on the PR branch} --- checks that the migration can execute.
+  \item \textbf{Check for missing migrations} --- checks TypeORM entity/schema drift.
+\end{itemize}
+These are steps inside \textbf{one required CI job}, not two separate GitHub status checks. Both must succeed for the job to pass. If either fails, inspect that step's logs, fix the branch, and push again; the PR workflow will rerun automatically.
+\end{stepbox}
+
+\begin{stepbox}{8}{Request a review}
+Once the CI job is green, open the PR's right-hand \textbf{Reviewers} section and request a review from the assigned reviewer or mentor. Merge only after the required approval and checks are satisfied.
+\end{stepbox}
+
+\section*{If GitHub says ``This branch is out-of-date with dev''}
+Another PR was merged into \texttt{dev} after you opened yours. \textbf{Do not merge the outdated PR.} Click \textbf{Update branch} on GitHub (if available), or update it locally:
+\begin{lstlisting}[style=command]
+git switch feature/estate-registration-code
+git pull origin dev
+git push origin feature/estate-registration-code
+\end{lstlisting}
+The new push triggers \texttt{synchronize}, so the required \texttt{create-and-migrate} job runs again. Wait for the latest check to pass before requesting or finalizing approval.
+
+\begin{tcolorbox}[colback=pale,colframe=lightborder,boxrule=.7pt,arc=2mm]
+\textbf{Remember}\quad
+The PR workflow validates migrations on a \textbf{temporary Neon PR database branch}. Developers must not run these changes directly against the \textbf{shared Neon \texttt{dev}} database. The separate \texttt{Neon Dev Migrations} workflow applies committed migrations to shared Dev \textbf{after} merging. It does not undo the merge if that job fails.
+\end{tcolorbox}
+
+
+
+\clearpage
+\section*{Understand schema drift}
+\begin{tcolorbox}[colback=pale,colframe=lightborder,boxrule=.7pt,arc=2mm]
+\textbf{Schema drift = TypeORM entities and the database schema do not match.}
+
+The comparison happens \emph{after} pending migration files are executed on the temporary Neon PR database. The expected schema is described by the \texttt{*.entity.ts} files; the actual schema includes columns, types, constraints, defaults and indexes in PostgreSQL.
+\end{tcolorbox}
+
+\textbf{Example.} A developer adds \texttt{registration\_code} to \texttt{estates.entity.ts} but forgets to add the column in a migration. The entity expects the column, while PostgreSQL does not have it. The workflow's \textbf{Check for missing migrations} step fails.
+
+\textbf{Why it happens}
+\begin{itemize}
+  \item An entity was changed, but the migration was not created or committed.
+  \item The migration's \texttt{VARCHAR} length, nullability, default, column name, or type differs from the entity.
+  \item Indexes, foreign-key constraints or check-constraint names do not match.
+  \item A PR is being tested against an older Neon Dev snapshot, or changes from another PR introduced a mismatch.
+  \item SQL changes were made directly in a database without a corresponding migration/entity update.
+\end{itemize}
+
+\textbf{How to fix schema drift}
+\begin{enumerate}[leftmargin=21pt,nosep]
+  \item On the PR, open \textbf{Checks $\rightarrow$ create-and-migrate $\rightarrow$ Check for missing migrations}. Read the SQL difference reported in the log.
+  \item Compare that difference with the corresponding migration file and \texttt{*.entity.ts} file. Verify the intended database design first.
+  \item Correct the missing or incorrect migration/entity definition; do not copy destructive SQL blindly. Preserve existing data.
+  \item Commit and push the fix. The \texttt{synchronize} event reruns the PR workflow; confirm both migration execution and the drift check succeed.
+\end{enumerate}
+
+\subsection*{Before using local diagnostics: get the temporary Neon connection string}
+\textbf{You do not need Neon Console edit access.} The workflow publishes an encrypted connection string for each PR database. Only use it if the maintainer has authorized you to access that PR database.
+\begin{enumerate}[leftmargin=21pt,itemsep=3pt]
+  \item Open the repository on GitHub and select \textbf{Pull requests}. Open your PR (for example, \texttt{\#42}).
+  \item Open \textbf{Checks} $\rightarrow$ \texttt{create-and-migrate} $\rightarrow$ \textbf{View details}. Alternatively, navigate to \textbf{Actions} $\rightarrow$ \textbf{Neon PR branch} and choose the successful run for that PR.
+  \item Open the \textbf{workflow-run Summary} (not just an individual log step). Find \emph{Neon branch pr-42 is ready}, then copy the \textbf{encrypted connection-string decryption command}.
+  \item Run the supplied command locally in a trusted terminal with \textbf{OpenSSL} installed. Use the team passphrase privately when prompted or when replacing \texttt{YOUR\_PASSPHRASE}. Never paste the passphrase or decrypted URL into GitHub issues or chat. Be aware that typing a passphrase directly in a shell command can save it in shell history.
+  \item Put the decrypted \emph{temporary PR database} URL in \texttt{source-code/backend/.env}, as shown below. \textbf{Confirm it points to PR \texttt{pr-42}, not shared Neon \texttt{dev}.}
+\end{enumerate}
+\begin{lstlisting}[style=command]
+# source-code/backend/.env -- never commit this file
+DATABASE_URL_DIRECT=postgresql://<PR_ROLE>:<PASSWORD>@<PR_HOST>/<DB>?sslmode=require
+\end{lstlisting}
+\textbf{Important:} Your \texttt{src/data-source.ts} uses \texttt{DATABASE\_URL\_DIRECT} first and falls back to \texttt{DATABASE\_URL}. An environment variable already set in the terminal may take precedence over the value in \texttt{.env}. Verify the selected database before running diagnostics.
+
+\begin{tcolorbox}[colback=pale,colframe=lightborder,boxrule=.7pt,arc=2mm]
+\textbf{Viewer access versus migration permission}
+Neon Console \emph{Viewer} permission does not grant PostgreSQL table modification privileges, and viewers cannot fetch connection strings through the Neon Console. A separately shared URL, however, authenticates as its embedded PostgreSQL role. If the PR workflow's \texttt{NEON\_ROLE} can alter tables, anyone who decrypts that URL may also be able to alter tables \emph{on that temporary PR database}. The shared Dev credential must remain restricted to GitHub Actions and authorized maintainers. Prefer issuing a separate limited-privilege PR role when developers only need to inspect schema/data.
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=white,colframe=lightborder,boxrule=.7pt,arc=2mm]
+\textbf{Optional read-only diagnostic commands (temporary PR database only):}
+\begin{lstlisting}[style=command]
+cd source-code/backend
+npx typeorm-ts-node-commonjs migration:show -d src/data-source.ts
+npm run migration:generate -- src/migrations/CiDriftCheck --check --dryrun
+\end{lstlisting}
+\texttt{migration:show} lists applied and pending migrations. The \texttt{--check --dryrun} command inspects schema differences without applying them. These diagnostics require a working PostgreSQL connection and appropriate read access. \textbf{Do not use \texttt{npm run migration:run} as a diagnostic}: it executes pending SQL and usually requires table-owner privileges. Normally the GitHub PR workflow runs the migrations for you.
+\end{tcolorbox}
+
+\section*{Common migration errors and fixes}
+Migration execution errors occur when PostgreSQL cannot perform a statement in \texttt{up()}. Find them under \textbf{Checks $\rightarrow$ create-and-migrate $\rightarrow$ Run migrations on the PR branch}. Investigate the \emph{first failing SQL statement}, not just the final \texttt{exit code 1}.
+
+\begin{tcolorbox}[breakable,colback=white,colframe=lightborder,boxrule=.7pt,arc=2mm]
+\textbf{1. Permission denied / must be owner of table}\par
+\texttt{ERROR: must be owner of table estate\_documents}\par
+\textit{Cause:} The connection role can connect but does not own the table or lack appropriate owner-role privileges for \texttt{ALTER TABLE}.\par
+\textit{Fix:} Ask the database maintainer to check the connected role and the table owner; configure the approved migration role. Do \textbf{not} share credentials or try random grants. A normal \texttt{GRANT ALL} does not grant table ownership. This happened in Harboost's shared Dev migration run.\par
+\medskip
+\textbf{2. Column, table or constraint already exists}\par
+\texttt{ERROR: column ... already exists} or \texttt{relation ... already exists}\par
+\textit{Cause:} Another change already added the object, or the migration history and actual schema differ.\par
+\textit{Fix:} Update from \texttt{dev}; inspect the latest migrations and existing schema. Resolve the overlapping change in the feature branch. Never mark a migration as run merely to silence the error.\par
+\medskip
+\textbf{3. NOT NULL / unique / foreign-key constraint violation}\par
+\texttt{column ... contains null values}, \texttt{duplicate key value}, or \texttt{violates foreign key constraint}\par
+\textit{Cause:} Existing rows are incompatible with the new rule.\par
+\textit{Fix:} Inspect affected data; use a safe staged change (add nullable column, backfill or clean data, then apply the constraint), test on an isolated database, and obtain reviewer approval.\par
+\medskip
+\textbf{4. Missing table, wrong column, or SQL syntax error}\par
+\texttt{relation ... does not exist}, \texttt{column ... does not exist}, or \texttt{syntax error}\par
+\textit{Cause:} The migration assumes the wrong schema, order, naming, or SQL.\par
+\textit{Fix:} Compare the SQL with the actual database schema and existing migrations; repair the migration, push and rerun CI.\par
+\medskip
+\textbf{5. Migration succeeds, but schema drift fails}\par
+\textit{Cause:} SQL was valid but produced a schema different from the entity model.\par
+\textit{Fix:} Follow the schema-drift steps above; verify types, defaults, lengths, constraint names and indexes.\par
+\medskip
+\textbf{6. SSL or dependency warning with successful SQL execution}\par
+\textit{Cause:} A driver reports a configuration or deprecation warning, which is not necessarily an SQL failure.\par
+\textit{Fix:} Check the actual step status and first error. Report warnings separately rather than treating them as migration failures.
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=pale,colframe=lightborder,boxrule=.7pt,arc=2mm]
+\textbf{If a migration fails on shared Neon Dev:} stop and inspect the run logs and database state; notify the maintainer. Transactional operations may roll back, but do not assume every possible migration is fully reversible. Do not edit the shared database, delete records, alter migration history, or rerun blindly. Coordinate a corrected migration and a safe retry.
+\end{tcolorbox}
+
+\section*{Reviewer responsibilities}
+A reviewer must assess \emph{database readiness}, \emph{migration safety} and \emph{application code quality}. A green CI job does not replace human review.
+
+\begin{tcolorbox}[breakable,colback=white,colframe=lightborder,boxrule=.7pt,arc=2mm]
+\textbf{Before approving a migration PR}
+\begin{enumerate}[leftmargin=21pt,itemsep=5pt]
+  \item \textbf{Check shared Neon Dev first.} Go to \textbf{GitHub $\rightarrow$ Actions $\rightarrow$ Neon Dev Migrations}. Open the run associated with the \textbf{latest current \texttt{dev} commit}. Verify that the \texttt{migrate-neon-dev} job has \textbf{succeeded}. If the latest run is queued, in progress, or failed, \textbf{do not approve the migration PR yet}; report the issue.
+  \item \textbf{Check the PR is current.} Verify GitHub does not say \emph{This branch is out of date}. Require the developer to click \textbf{Update branch} or pull the latest \texttt{dev}, then wait for fresh checks.
+  \item \textbf{Check CI results.} Open PR $\rightarrow$ \textbf{Checks $\rightarrow$ create-and-migrate}. Inspect \textbf{Run migrations on the PR branch} and \textbf{Check for missing migrations}. Both steps must pass on the current PR commit.
+  \item \textbf{Review the migration and entity together.} Confirm table/column names, PostgreSQL types, nullable fields, defaults, indexes, keys, and constraint names match. Check SQL correctness and migration order.
+  \item \textbf{Review data safety.} Look for \texttt{DROP TABLE}, \texttt{DROP COLUMN}, large updates, type conversions, new \texttt{NOT NULL} constraints, and operations that may lose or lock data. Ask for a safe plan for existing records, and a realistic rollback/recovery strategy.
+  \item \textbf{Check scope and secrets.} Ensure the PR changes only intended files, contains no \texttt{.env}, connection strings or credentials, and does not directly change shared Neon Dev outside the approved workflow.
+  \item \textbf{Approve only when ready.} Otherwise use \textbf{Request changes} and tell the developer which log line or SQL statement to address.
+\end{enumerate}
+\end{tcolorbox}
+
+\textbf{Important:} GitHub branch protection enforces the required status check and up-to-date Git branch. The shared Dev migration status check above is currently a \textbf{manual reviewer responsibility}; it is not yet an automatic PR merge gate. Verify the latest run again if \texttt{dev} changed during review.
+
+\section*{How Harboost's pipeline protects database changes}
+\begin{tcolorbox}[colback=pale,colframe=lightborder,boxrule=.7pt,arc=2mm]
+\textbf{Safety Gate 1 --- Before merge (required PR check)}\par
+\texttt{Neon PR branch} runs on PR open and on subsequent pushes (\texttt{synchronize}). It creates or reuses a temporary Neon branch, refreshes it from shared Neon Dev, runs pending migrations, and checks entity/schema drift. The GitHub \texttt{dev} protection rule requires \texttt{create-and-migrate} to pass plus the required reviewer approval and an up-to-date branch.\par
+\medskip
+\textbf{Safety Gate 2 --- After merge (shared database update)}\par
+\texttt{Neon Dev Migrations} runs on a push to GitHub \texttt{dev} and applies pending migrations to the \textbf{shared} Neon Dev database using a GitHub Actions secret. It reports failure if SQL cannot be applied. \textbf{Important:} the merge has already happened when this workflow starts; a failure does not undo that merge and is not yet wired to block backend deployment.\par
+\medskip
+\textbf{Human safety check --- During review}\par
+The reviewer checks that the latest shared Dev migration run for the current \texttt{dev} commit has completed successfully before approving the next migration-related PR. This helps avoid validating work while Dev is still migrating.\par
+\medskip
+\textbf{Security controls}\par
+Database credentials and the Neon API key are stored in GitHub Secrets; the PR uses an isolated database branch; the post-merge job uses the shared Dev connection only after merge; role permissions govern schema changes; and the PR connection string is encrypted before being shown in the Actions summary. Branch protections reduce accidental merging but cannot guarantee migrations will never fail.
+\end{tcolorbox}
+
+\section*{Temporary connection string: quick reminder}
+Open your PR $\rightarrow$ \textbf{Checks} $\rightarrow$ \texttt{create-and-migrate} $\rightarrow$ \textbf{View details} $\rightarrow$ \textbf{workflow Summary}. Copy the encrypted command under \emph{Neon branch pr-... is ready}, decrypt it with your authorized team passphrase, and configure \texttt{DATABASE\_URL\_DIRECT} in your local untracked \texttt{.env}. Detailed instructions are provided immediately above the schema-drift diagnostic commands.
+
+\textbf{Security:} The encrypted summary does not make the decrypted URL harmless. A PR connection string can grant database write or schema-change privileges regardless of the developer's Neon Console Viewer status. Never share the shared Neon Dev migration URL with ordinary developers; use least-privilege credentials and rotate exposed secrets.
+
+\section*{What is still planned?}
+\begin{itemize}
+  \item \textbf{Automatic PR gate for shared Dev readiness:} block migration-related PR merging while the current shared Dev migration run has not succeeded.
+  \item \textbf{Automatic Git branch updating:} update open PRs after \texttt{dev} changes instead of relying on the developer's \textbf{Update branch} action.
+  \item \textbf{Deployment blocking:} prevent Azure backend deployment if shared Neon Dev migration fails. This has been deferred for later work.
+\end{itemize}
+
+\end{document}

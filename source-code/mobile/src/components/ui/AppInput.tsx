@@ -9,6 +9,7 @@ import {
 	ViewStyle,
 	TextStyle,
 } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 // import {TextInput} from "react-native-paper";
 
@@ -22,6 +23,7 @@ interface AppInputProps extends TextInputProps {
 	labelStyle?: StyleProp<TextStyle>;
 	helperTextStyle?: StyleProp<TextStyle>;
 	errorStyle?: StyleProp<TextStyle>;
+	leftIcon?: keyof typeof MaterialCommunityIcons.glyphMap;
 	rightAccessory?: React.ReactNode;
 }
 
@@ -36,23 +38,41 @@ export default function AppInput({
 	style,
 	onFocus,
 	onBlur,
+	leftIcon,
 	rightAccessory,
 	...props
 }: AppInputProps) {
 	const [isFocused, setIsFocused] = useState(false);
+	const iconColor = error
+		? colors.error
+		: isFocused
+			? colors.brandDark
+			: colors.text.tertiary;
 
 	return (
 		<View style={[styles.container, containerStyle]}>
 			{label ? <Text style={[styles.label, labelStyle]}>{label}</Text> : null}
 
-			<View style={[
-				styles.inputWrapper
-				, isFocused && styles.focused
-				, error && styles.errorInput
-			]}>
+			<View
+				style={[
+					styles.inputWrapper,
+					isFocused && styles.focused,
+					error && styles.errorInput,
+				]}
+			>
+				{leftIcon ? (
+					<MaterialCommunityIcons
+						name={leftIcon}
+						size={21}
+						color={iconColor}
+						style={styles.leadingIcon}
+					/>
+				) : null}
+
 				<TextInput
 					{...props}
 					underlineColorAndroid="transparent"
+					selectionColor={colors.primary}
 					onFocus={(event) => {
 						setIsFocused(true);
 						onFocus?.(event);
@@ -62,18 +82,24 @@ export default function AppInput({
 						onBlur?.(event);
 					}}
 					placeholderTextColor={colors.text.placeholder}
-					style={[
-						styles.input
-					]}
+					style={[styles.input, style]}
 				/>
 
-				{rightAccessory}
-
-
+				{rightAccessory ? (
+					<View style={styles.trailingAccessory}>{rightAccessory}</View>
+				) : null}
 			</View>
 
-
-			{error ? <Text style={[styles.errorText, errorStyle]}>{error}</Text> : null}
+			{error ? (
+				<View style={styles.messageRow}>
+					<MaterialCommunityIcons
+						name="alert-circle-outline"
+						size={14}
+						color={colors.error}
+					/>
+					<Text style={[styles.errorText, errorStyle]}>{error}</Text>
+				</View>
+			) : null}
 			{!error && helperText ? (
 				<Text style={[styles.helperText, helperTextStyle]}>{helperText}</Text>
 			) : null}
@@ -84,7 +110,7 @@ export default function AppInput({
 const styles = StyleSheet.create({
 	container: {
 		width: "100%",
-		marginBottom: 16,
+		marginBottom: 18,
 	},
 
 	inputWrapper: {
@@ -93,14 +119,14 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		borderWidth: 1,
 		borderColor: colors.border.default,
-		borderRadius: 12,
-		backgroundColor: colors.surface,
-		minHeight: 52,
-		paddingHorizontal: 12,	
+		borderRadius: 14,
+		backgroundColor: colors.white,
+		minHeight: 56,
+		paddingHorizontal: 14,
 	},
 
 	label: {
-		marginBottom: 8,
+		marginBottom: 7,
 		color: colors.text.primary,
 		fontSize: 14,
 		fontWeight: "600",
@@ -108,18 +134,37 @@ const styles = StyleSheet.create({
 
 	input: {
 		flex: 1,
-		paddingVertical: 14,
+		paddingVertical: 15,
 		color: colors.text.primary,
 		fontSize: 16,
+		lineHeight: 22,
 		paddingHorizontal: 0,
 	},
 
 	focused: {
-		borderColor: colors.border.focused,
+		borderColor: colors.primary,
+		borderWidth: 2,
+		backgroundColor: colors.brandSurface,
 	},
 
 	errorInput: {
 		borderColor: colors.error,
+		backgroundColor: "#FFF8F8",
+	},
+
+	leadingIcon: {
+		marginRight: 10,
+	},
+
+	trailingAccessory: {
+		marginLeft: 8,
+	},
+
+	messageRow: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		gap: 6,
+		marginTop: 6,
 	},
 
 	helperText: {
@@ -129,8 +174,9 @@ const styles = StyleSheet.create({
 	},
 
 	errorText: {
-		marginTop: 6,
+		flex: 1,
 		color: colors.error,
 		fontSize: 12,
+		lineHeight: 16,
 	},
 });

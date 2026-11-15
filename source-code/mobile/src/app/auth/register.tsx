@@ -160,6 +160,9 @@ export default function SignUpScreen() {
             <AppInput
               label="Full name"
               placeholder="Eg: Kasun Perera"
+              leftIcon="account-outline"
+              autoComplete="name"
+              textContentType="name"
               maxLength={32}
               value={name}
               error={fieldErrors.name}
@@ -172,7 +175,10 @@ export default function SignUpScreen() {
             <AppInput
               label="Phone number"
               placeholder="Eg: 0712345678"
+              leftIcon="phone-outline"
               keyboardType="phone-pad"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
               maxLength={10}
               value={phoneNumber}
               error={fieldErrors.phoneNumber}
@@ -185,6 +191,7 @@ export default function SignUpScreen() {
             <AppInput
               label="NIC number"
               placeholder="Eg: 20XXXXXXXXXX or 123456789V"
+              leftIcon="card-account-details-outline"
               keyboardType="default"
               autoCapitalize="characters"
               maxLength={12}
@@ -200,6 +207,8 @@ export default function SignUpScreen() {
             <PasswordInput
               label="Password"
               placeholder="Create a password"
+              autoComplete="new-password"
+              textContentType="newPassword"
               value={password}
               error={fieldErrors.password}
               onChangeText={(value) => {
@@ -215,6 +224,8 @@ export default function SignUpScreen() {
             <PasswordInput
               label="Confirm password"
               placeholder="Re-enter your password"
+              autoComplete="new-password"
+              textContentType="newPassword"
               value={confirmPassword}
               error={fieldErrors.confirmPassword}
               onChangeText={(value) => {
