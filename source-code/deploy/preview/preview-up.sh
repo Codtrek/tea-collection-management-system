@@ -23,6 +23,7 @@ fi
 docker image inspect "$IMAGE" >/dev/null
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 docker run -d --name "$NAME" --restart unless-stopped \
+  --network harboost-db-net \
   --memory 256m --memory-swap 512m \
   -p 127.0.0.1:${INTERNAL}:3000 \
   -e NODE_ENV=production -e NODE_OPTIONS=--max-old-space-size=160 \
