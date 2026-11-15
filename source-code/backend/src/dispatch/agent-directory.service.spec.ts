@@ -1,4 +1,5 @@
 import { buildHarness } from './testing/harness';
+import { AGENT_JOB_ROLE } from '../employees/employee-roles';
 
 describe('AgentDirectoryService — agents are driven by EMPLOYEES', () => {
   it('lists Active employees with the agent role who are linked to dispatch', async () => {
@@ -17,6 +18,13 @@ describe('AgentDirectoryService — agents are driven by EMPLOYEES', () => {
     h.registerAgent(6, 'P. Fernando');
     const all = await h.directory.all();
     expect(all.map((a) => a.name)).toContain('P. Fernando');
+  });
+
+  it('returns the active agent job title from the employee record', async () => {
+    const h = buildHarness();
+    expect(await h.directory.roleByUserId(h.uid(2))).toBe(AGENT_JOB_ROLE);
+    h.setEmployee(2, { role: 'Driver' });
+    expect(await h.directory.roleByUserId(h.uid(2))).toBeNull();
   });
 
   it.each(['Inactive', 'Suspended'] as const)(

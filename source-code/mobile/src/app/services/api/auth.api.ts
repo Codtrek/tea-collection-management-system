@@ -22,6 +22,7 @@ export interface AgentLoginResult {
     id: number;
     name: string;
     phone: string;
+    role: string;
   };
   mustChangePassword: boolean;
 }

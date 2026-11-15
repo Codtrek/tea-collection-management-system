@@ -46,7 +46,7 @@ export interface LoginResult {
 
 export interface AgentLoginResult {
   accessToken: string;
-  agent: { id: number; name: string; phone: string };
+  agent: { id: number; name: string; phone: string; role: string };
   /** true while the one-time temporary password is still in use — the app must force a change */
   mustChangePassword: boolean;
 }
@@ -300,8 +300,9 @@ export class AuthService {
       user.role === 'collection_agent'
         ? await this.agentDirectory.byUserId(user.id)
         : null;
+    const role = agent ? await this.agentDirectory.roleByUserId(user.id) : null;
 
-    if (!agent) {
+    if (!agent || !role) {
       throw new UnauthorizedException(
         'This account is not a collection agent.',
       );
@@ -320,6 +321,7 @@ export class AuthService {
         id: agent.agentId,
         name: agent.name,
         phone: user.phone,
+        role,
       },
       mustChangePassword: user.must_change_password,
     };
