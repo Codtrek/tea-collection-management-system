@@ -5,16 +5,55 @@
 */
 import type { ModuleKey, PermissionLevel, Role } from '@/types'
 
+/** Every effective-dated version (Administration-Addendum §1). */
+export type VersionStatus = 'current' | 'scheduled' | 'past' | 'cancelled'
+export interface VersionCancelled {
+  at: string
+  by: string | null
+  reason: string | null
+}
+
 export interface GradeRate {
   id: string
   superRate: number
   normalRate: number
   effectiveDate: string // 'YYYY-MM-DD'
   setBy: string
+  reason: string | null
+  status: VersionStatus
   /** in force today */
   current: boolean
-  /** starts after today */
+  /** starts after today (and not cancelled) */
   scheduled: boolean
+  cancelled: VersionCancelled | null
+}
+
+export type TransportBasis = 'per_km' | 'per_kg'
+export interface TransportRate {
+  id: number
+  effectiveDate: string
+  basis: TransportBasis
+  rate: number
+  minimumCharge: number
+  basisConfirmed: boolean
+  setBy: string
+  reason: string | null
+  status: VersionStatus
+  cancelled: VersionCancelled | null
+}
+export interface TransportRates {
+  versions: TransportRate[]
+  status: { configured: boolean; reason: string | null }
+}
+
+/** The factory's details. The account number never leaves the server in full. */
+export interface FactoryProfile {
+  name: string
+  registrationNo: string
+  address: string
+  contact: string
+  email: string
+  bank: { bank: string; branch: string; accountName: string; accountNumberMasked: string }
 }
 
 export interface SystemUser {

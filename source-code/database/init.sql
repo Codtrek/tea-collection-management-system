@@ -832,9 +832,37 @@ CREATE TABLE grade_rates (
     effective_date DATE NOT NULL,
     set_by         VARCHAR(100) NOT NULL,
     created_at     TIMESTAMP DEFAULT NOW(),
-    -- one version per date; versions are never edited (Grade-Rates-Addendum, 2026-11-15)
-    CONSTRAINT grade_rates_effective_date_key UNIQUE (effective_date)
+    -- Administration-Addendum §3: why the rates changed; a scheduled version can be cancelled
+    -- before it starts (kept, never deleted)
+    reason         TEXT,
+    cancelled_at   TIMESTAMP,
+    cancelled_by   VARCHAR(100),
+    cancel_reason  TEXT
 );
+-- one LIVE version per date; versions are never edited (Grade-Rates-Addendum)
+CREATE UNIQUE INDEX grade_rates_live_effective_key ON grade_rates (effective_date) WHERE cancelled_at IS NULL;
+
+-- Administration-Addendum §4 (2026-11-15): transport rates, effective-dated like grade rates.
+-- Nothing calculates with them until the factory confirms the basis (per km / per kg).
+CREATE TABLE transport_rates (
+    id               SERIAL PRIMARY KEY,
+    effective_date   DATE NOT NULL,
+    basis            VARCHAR(6) NOT NULL CHECK (basis IN ('per_km', 'per_kg')),
+    rate             DECIMAL(10,2) NOT NULL CHECK (rate >= 0),
+    minimum_charge   DECIMAL(10,2) NOT NULL DEFAULT 0 CHECK (minimum_charge >= 0),
+    basis_confirmed  BOOLEAN NOT NULL DEFAULT FALSE,
+    reason           TEXT,
+    set_by           VARCHAR(100) NOT NULL,
+    created_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+    cancelled_at     TIMESTAMP,
+    cancelled_by     VARCHAR(100),
+    cancel_reason    TEXT
+);
+CREATE UNIQUE INDEX transport_rates_live_effective_key ON transport_rates (effective_date) WHERE cancelled_at IS NULL;
+INSERT INTO transport_rates (effective_date, basis, rate, minimum_charge, basis_confirmed, reason, set_by)
+VALUES (DATE '2019-01-01', 'per_km', 42, 500, FALSE,
+        'Values the Transport tab showed before rates were versioned (never saved); basis not confirmed',
+        'migration');
 
 -- ADM-02 — the data-driven permission matrix. One row per (role, module).
 -- Seeded from the portal's DEFAULT_PERMISSIONS; the backend is now the source
@@ -1407,4 +1435,11 @@ ON CONFLICT (role, module) DO NOTHING;
 
 INSERT INTO system_settings (key, value, updated_by)
 VALUES ('expenses', '{"editWindowDays": 7}'::jsonb, 'migration')
+ON CONFLICT (key) DO NOTHING;
+
+-- Administration-Addendum §2 (2026-11-15): the factory's details and bank account.
+INSERT INTO system_settings (key, value, updated_by)
+VALUES ('factoryProfile',
+        '{"name": "Nuwara Eliya Tea Factory", "registrationNo": "REG-TF-1998-0042", "address": "Kandapola Rd, Nuwara Eliya", "contact": "0522223344", "email": "info@harboost.lk", "bank": {"bank": "", "branch": "", "accountName": "", "accountNumber": ""}}'::jsonb,
+        'migration')
 ON CONFLICT (key) DO NOTHING;

@@ -7,6 +7,7 @@ import { UsersModule } from '../users/users.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { GradeRateEntity } from './grade-rate.entity';
+import { TransportRateEntity } from './transport-rate.entity';
 import { RolePermissionEntity } from './role-permission.entity';
 import { SystemSettingEntity } from './system-setting.entity';
 
@@ -14,6 +15,7 @@ import { SystemSettingEntity } from './system-setting.entity';
   imports: [
     TypeOrmModule.forFeature([
       GradeRateEntity,
+      TransportRateEntity,
       RolePermissionEntity,
       SystemSettingEntity,
       // Read/write of the user's status + read of their profile name for the

@@ -9,6 +9,7 @@ import type { FactoryEmployee } from '../users/factory-employee.entity';
 import type { User } from '../users/user.entity';
 import { AdminService, type Actor } from './admin.service';
 import type { GradeRateEntity } from './grade-rate.entity';
+import type { TransportRateEntity } from './transport-rate.entity';
 import type { RolePermissionEntity } from './role-permission.entity';
 import type { SystemSettingEntity } from './system-setting.entity';
 
@@ -81,6 +82,10 @@ const officer: Actor = { name: 'S. Fernando', role: 'Officer', sub: 2 };
 
 function build() {
   const gradeRepo = new FakeRepository<GradeRateEntity>((r) => r.id);
+  let transportSeq = 0;
+  const transportRepo = new FakeRepository<TransportRateEntity>(
+    (r) => (r.id ??= ++transportSeq),
+  );
   const permRepo = new FakeRepository<RolePermissionEntity>(
     (r) => `${r.role}:${r.module}`,
   );
@@ -91,6 +96,7 @@ function build() {
 
   const service = new AdminService(
     gradeRepo as unknown as Repository<GradeRateEntity>,
+    transportRepo as unknown as Repository<TransportRateEntity>,
     permRepo as unknown as Repository<RolePermissionEntity>,
     settingRepo as unknown as Repository<SystemSettingEntity>,
     userRepo as unknown as Repository<User>,
@@ -98,7 +104,16 @@ function build() {
     audit as unknown as AuditService,
   );
 
-  return { service, gradeRepo, permRepo, settingRepo, userRepo, feRepo, audit };
+  return {
+    service,
+    gradeRepo,
+    transportRepo,
+    permRepo,
+    settingRepo,
+    userRepo,
+    feRepo,
+    audit,
+  };
 }
 
 describe('AdminService — grade rates (ADM-01)', () => {
@@ -108,7 +123,7 @@ describe('AdminService — grade rates (ADM-01)', () => {
     superRate: number,
     normalRate: number,
     effectiveDate: string,
-  ) => ({ superRate, normalRate, effectiveDate });
+  ) => ({ superRate, normalRate, effectiveDate, reason: 'Board decision' });
 
   it('rejects a non-Administrator', async () => {
     const { service } = build();
@@ -162,6 +177,246 @@ describe('AdminService — grade rates (ADM-01)', () => {
     expect(inApril.find((r) => r.current)?.effectiveDate).toBe('2026-04-01');
     expect(inApril.some((r) => r.scheduled)).toBe(false);
     expect(audit.record).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('AdminService — grade rates: reason, identical, cancel (Administration-Addendum §3)', () => {
+  const MARCH = new Date('2026-03-15T04:00:00Z');
+  const rate = (
+    superRate: number,
+    normalRate: number,
+    effectiveDate: string,
+    reason = 'Board decision',
+  ) => ({
+    superRate,
+    normalRate,
+    effectiveDate,
+    reason,
+  });
+
+  it('a reason is required', async () => {
+    const { service } = build();
+    await expect(
+      service.createGradeRate(rate(190, 98, '2026-04-01', '  '), admin, MARCH),
+    ).rejects.toThrow(/reason/);
+  });
+
+  it('refuses a version identical to the one it would follow', async () => {
+    const { service } = build();
+    await service.createGradeRate(rate(180, 92, '2026-03-15'), admin, MARCH);
+    await expect(
+      service.createGradeRate(rate(180, 92, '2026-04-01'), admin, MARCH),
+    ).rejects.toThrow(/same as the grade rate in force from 2026-03-15/);
+    await expect(
+      service.createGradeRate(rate(181, 92, '2026-04-01'), admin, MARCH),
+    ).resolves.toMatchObject({ scheduled: true });
+  });
+
+  it('a scheduled version can be cancelled before it starts: kept, audited, ignored', async () => {
+    const { service, audit } = build();
+    await service.createGradeRate(rate(180, 92, '2026-03-15'), admin, MARCH);
+    const next = await service.createGradeRate(
+      rate(190, 98, '2026-04-01'),
+      admin,
+      MARCH,
+    );
+    const list = await service.cancelGradeRate(
+      next.id,
+      'Wrong figure',
+      admin,
+      MARCH,
+    );
+    expect(list.find((r) => r.id === next.id)).toMatchObject({
+      status: 'cancelled',
+      scheduled: false,
+      cancelled: { by: 'A. Bandara', reason: 'Wrong figure' },
+    });
+    expect(audit.record).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ action: 'Cancelled scheduled grade rates' }),
+    );
+    // in April the cancelled version never took over: March's rates are still current
+    const april = await service.listGradeRates(
+      new Date('2026-04-02T04:00:00Z'),
+    );
+    expect(april.find((r) => r.current)?.effectiveDate).toBe('2026-03-15');
+    // and its date is free again
+    await expect(
+      service.createGradeRate(rate(191, 99, '2026-04-01'), admin, MARCH),
+    ).resolves.toMatchObject({ scheduled: true });
+  });
+
+  it('a version that has started can’t be cancelled', async () => {
+    const { service } = build();
+    const now = await service.createGradeRate(
+      rate(180, 92, '2026-03-15'),
+      admin,
+      MARCH,
+    );
+    await expect(
+      service.cancelGradeRate(now.id, 'x y z', admin, MARCH),
+    ).rejects.toThrow(/already started/);
+  });
+
+  it('the audit line shows old → new rates', async () => {
+    const { service, audit } = build();
+    await service.createGradeRate(rate(180, 92, '2026-03-15'), admin, MARCH);
+    await service.createGradeRate(
+      rate(185, 95, '2026-04-01', 'Market price'),
+      admin,
+      MARCH,
+    );
+    expect(audit.record).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        details:
+          'Super Rs. 180 → 185/kg · Normal Rs. 92 → 95/kg — Market price',
+      }),
+    );
+  });
+});
+
+describe('AdminService — transport rates (Administration-Addendum §4)', () => {
+  const MARCH = new Date('2026-03-15T04:00:00Z');
+  const t = (
+    o: Partial<{
+      basis: 'per_km' | 'per_kg';
+      rate: number;
+      minimumCharge: number;
+      effectiveDate: string;
+      basisConfirmed: boolean;
+      reason: string;
+    }> = {},
+  ) => ({
+    basis: 'per_km' as const,
+    rate: 42,
+    minimumCharge: 500,
+    effectiveDate: '2026-04-01',
+    basisConfirmed: false,
+    reason: 'Seed',
+    ...o,
+  });
+
+  it('versions like grade rates; while the basis is unconfirmed transport is not configured', async () => {
+    const { service } = build();
+    await service.createTransportRate(
+      t({ effectiveDate: '2026-03-15' }),
+      admin,
+      MARCH,
+    );
+    const res = await service.createTransportRate(
+      t({ rate: 45, effectiveDate: '2026-04-01' }),
+      admin,
+      MARCH,
+    );
+    expect(res.versions.map((v) => [v.effectiveDate, v.status])).toEqual([
+      ['2026-04-01', 'scheduled'],
+      ['2026-03-15', 'current'],
+    ]);
+    expect(res.status).toEqual({
+      configured: false,
+      reason: expect.stringMatching(
+        /^Transport: not configured\. .*per km or per kg/,
+      ) as string,
+    });
+  });
+
+  it('identical versions are refused; scheduled ones can be cancelled', async () => {
+    const { service } = build();
+    await service.createTransportRate(
+      t({ effectiveDate: '2026-03-15' }),
+      admin,
+      MARCH,
+    );
+    await expect(
+      service.createTransportRate(t(), admin, MARCH),
+    ).rejects.toThrow(/same as/);
+    const res = await service.createTransportRate(
+      t({ rate: 50 }),
+      admin,
+      MARCH,
+    );
+    const id = res.versions.find((v) => v.status === 'scheduled')!.id;
+    const after = await service.cancelTransportRate(
+      id,
+      'Not agreed',
+      admin,
+      MARCH,
+    );
+    expect(after.versions.find((v) => v.id === id)?.status).toBe('cancelled');
+  });
+
+  it('Administrator only', async () => {
+    const { service } = build();
+    await expect(
+      service.createTransportRate(t(), officer, MARCH),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe('AdminService — factory profile (Administration-Addendum §2)', () => {
+  const profile = {
+    name: 'Nuwara Eliya Tea Factory',
+    registrationNo: 'REG-1',
+    address: 'Kandapola',
+    contact: '0522223344',
+    email: 'info@harboost.lk',
+    bank: 'BOC',
+    branch: 'Nuwara Eliya',
+    accountName: 'NETF Ltd',
+    accountNumber: '0071 2345 6789',
+  };
+
+  it('stores the account number but only ever returns its last 4 digits; audit is masked too', async () => {
+    const { service, audit, settingRepo } = build();
+    const saved = await service.updateFactoryProfile(profile, admin);
+    expect(saved.bank).toEqual({
+      bank: 'BOC',
+      branch: 'Nuwara Eliya',
+      accountName: 'NETF Ltd',
+      accountNumberMasked: '••••6789',
+    });
+    expect(
+      JSON.stringify(await service.getFactoryProfile(admin)),
+    ).not.toContain('0071');
+    expect(JSON.stringify(audit.record.mock.calls)).not.toContain('00712345');
+    expect(
+      (await settingRepo.findOne({ where: { key: 'factoryProfile' } }))?.value,
+    ).toMatchObject({ bank: { accountNumber: '007123456789' } });
+  });
+
+  it('omitting the account number keeps the one on record', async () => {
+    const { service } = build();
+    await service.updateFactoryProfile(profile, admin);
+    const { accountNumber: _omit, ...rest } = profile;
+    void _omit;
+    const saved = await service.updateFactoryProfile(
+      { ...rest, branch: 'Kandy' },
+      admin,
+    );
+    expect(saved.bank).toMatchObject({
+      branch: 'Kandy',
+      accountNumberMasked: '••••6789',
+    });
+  });
+
+  it('is kept out of the generic settings map, and can’t be written through it', async () => {
+    const { service } = build();
+    await service.updateFactoryProfile(profile, admin);
+    expect(await service.getSettings()).not.toHaveProperty('factoryProfile');
+    await expect(
+      service.updateSettings({ settings: { factoryProfile: {} } }, admin),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('Administrator only, and the number must be digits', async () => {
+    const { service } = build();
+    await expect(service.getFactoryProfile(officer)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    await expect(
+      service.updateFactoryProfile({ ...profile, accountNumber: 'abc' }, admin),
+    ).rejects.toThrow(/6 to 20 digits/);
   });
 });
 

@@ -25,4 +25,18 @@ export class GradeRateEntity {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  /** why the rates changed (Administration-Addendum §3); null on versions made before 2026-11-15 */
+  @Column({ type: 'text', nullable: true })
+  reason: string | null;
+
+  /** a scheduled version cancelled before it started — kept, ignored from then on */
+  @Column({ name: 'cancelled_at', type: 'timestamp', nullable: true })
+  cancelledAt: Date | null;
+
+  @Column({ name: 'cancelled_by', type: 'varchar', nullable: true })
+  cancelledBy: string | null;
+
+  @Column({ name: 'cancel_reason', type: 'text', nullable: true })
+  cancelReason: string | null;
 }

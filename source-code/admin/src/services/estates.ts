@@ -172,6 +172,14 @@ export function listUnsettledOwners(month: string): Promise<UnsettledOwner[]> {
   return apiFetch<UnsettledOwner[]>(`/estates/settlements/unsettled?month=${month}`)
 }
 
+/**
+ * Whether transport can be charged for a settlement period (Administration-Addendum §4). Until the
+ * factory's method is configured, processing estates that pay transport is refused.
+ */
+export function getTransportStatus(period: string): Promise<{ configured: boolean; reason: string | null }> {
+  return apiFetch(`/estates/settlements/transport-status?period=${encodeURIComponent(period)}`)
+}
+
 /** EST-08 — processes the Pending settlements of one period ('July 2026'). */
 export function processSettlements(period: string): Promise<Settlement[]> {
   return apiFetch<Settlement[]>('/estates/settlements/process', {

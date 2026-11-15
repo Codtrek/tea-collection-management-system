@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
+import { TransportStatusService } from './transport-status.service';
 import type { AppRole } from '../auth/role-map';
 import { UsersService } from '../users/users.service';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
@@ -76,6 +77,7 @@ export class EstatesService {
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
     private readonly advanceSettings: EstateAdvanceSettingsService,
+    private readonly transport: TransportStatusService,
   ) {}
 
   async findAll(): Promise<PublicEstate[]> {
@@ -319,6 +321,22 @@ export class EstatesService {
       );
     }
 
+    // Administration-Addendum §4: transport is never deducted as Rs. 0 silently. Until the
+    // factory's transport method is configured, a run with any estate that pays transport stops.
+    for (const p of [
+      ...new Set(eligible.filter((s) => !s.selfDelivery).map((s) => s.period)),
+    ]) {
+      const t = await this.transport.forPeriod(p);
+      if (!t.configured) {
+        const n = eligible.filter(
+          (s) => !s.selfDelivery && s.period === p,
+        ).length;
+        throw new ConflictException(
+          `${t.reason} ${n} settlement${n === 1 ? '' : 's'} for ${p} include transport, so they can't be processed yet.`,
+        );
+      }
+    }
+
     const now = new Date();
     const processed: SettlementEntity[] = [];
     const allAdvances = await this.advanceRepo.find();
@@ -340,7 +358,8 @@ export class EstatesService {
         (a) => a.estateId === settlement.estateId,
       );
       settlement.adjustmentAmount = String(
-        Math.round(carried.reduce((s, a) => s + Number(a.amountRs), 0) * 100) / 100,
+        Math.round(carried.reduce((s, a) => s + Number(a.amountRs), 0) * 100) /
+          100,
       );
       settlement.status = 'processed';
       settlement.processedBy = actor.name;

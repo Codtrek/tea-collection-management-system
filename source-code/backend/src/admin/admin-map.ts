@@ -1,3 +1,4 @@
+import type { VersionStatus } from './versioning';
 /**
  * DB ↔ portal mapping for the Administration module (ADM-01..03) plus the
  * shared permission-matrix vocabulary. These `ModuleKey`/`PermissionLevel`/
@@ -130,10 +131,61 @@ export interface PublicGradeRate {
   normalRate: number;
   effectiveDate: string; // 'YYYY-MM-DD'
   setBy: string;
+  reason: string | null;
+  status: VersionStatus;
   /** in force today */
   current: boolean;
-  /** starts after today */
+  /** starts after today (and not cancelled) */
   scheduled: boolean;
+  cancelled: { at: string; by: string | null; reason: string | null } | null;
+}
+
+/* ── ADM-01 transport rates (Administration-Addendum §4) ─────────── */
+
+export interface PublicTransportRate {
+  id: number;
+  effectiveDate: string;
+  basis: 'per_km' | 'per_kg';
+  rate: number;
+  minimumCharge: number;
+  basisConfirmed: boolean;
+  setBy: string;
+  reason: string | null;
+  status: VersionStatus;
+  cancelled: { at: string; by: string | null; reason: string | null } | null;
+}
+
+/* ── ADM-01 factory profile (Administration-Addendum §2) ─────────── */
+
+export interface FactoryProfile {
+  name: string;
+  registrationNo: string;
+  address: string;
+  contact: string;
+  email: string;
+  bank: {
+    bank: string;
+    branch: string;
+    accountName: string;
+    accountNumber: string;
+  };
+}
+
+/** What the portal gets: the account number masked to its last 4 digits. */
+export interface PublicFactoryProfile extends Omit<FactoryProfile, 'bank'> {
+  bank: {
+    bank: string;
+    branch: string;
+    accountName: string;
+    /** '••••1234', or '' when none is on record */
+    accountNumberMasked: string;
+  };
+}
+
+/** '••••1234' — never more than the last 4 digits leave the server. */
+export function maskAccount(n: string): string {
+  const digits = n.replace(/\s/g, '');
+  return digits ? `••••${digits.slice(-4)}` : '';
 }
 
 /** 'GR-2026-0001' — embeds the effective year and a running sequence. */

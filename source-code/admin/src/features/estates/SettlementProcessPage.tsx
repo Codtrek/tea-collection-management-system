@@ -41,10 +41,20 @@ export function SettlementProcessPage() {
     queryFn: () => estatesService.listSettlements({ month, status: 'Pending', limit: 0 }),
   })
 
+  const { data: transport } = useQuery({
+    queryKey: ['estates', 'transport-status', period],
+    queryFn: () => estatesService.getTransportStatus(period),
+  })
+
   const pending = data?.rows ?? []
   const included = pending.filter((s) => !s.missingBank)
   const excluded = pending.filter((s) => s.missingBank)
   const total = included.reduce((sum, s) => sum + netPayable(s), 0)
+  // Administration-Addendum §4: transport is never deducted as Rs. 0 by default — while it isn't
+  // configured, a run with estates that pay transport can't be processed
+  const transportBlocked = transport !== undefined && !transport.configured
+  const payingTransport = included.filter((s) => !s.selfDelivery)
+  const blockedByTransport = transportBlocked && payingTransport.length > 0
 
   const processMutation = useMutation({
     mutationFn: () => estatesService.processSettlements(period),
@@ -92,6 +102,17 @@ export function SettlementProcessPage() {
         <SummaryTile label="Total payable" value={formatCurrency(total)} highlight={total > 0} />
       </div>
 
+      {blockedByTransport && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-[var(--radius-md)] border border-warning-fg/25 bg-warning-bg p-4">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning-fg" />
+          <p className="text-sm text-warning-fg">
+            <span className="font-medium">{transport?.reason}</span> {payingTransport.length} estate
+            {payingTransport.length === 1 ? ' pays' : 's pay'} transport, so this run can’t be processed yet. Transport is
+            never deducted as Rs. 0 by default.
+          </p>
+        </div>
+      )}
+
       {excluded.length > 0 && (
         <div className="mb-4 flex items-start gap-2.5 rounded-[var(--radius-md)] border border-danger-fg/20 bg-danger-bg/60 p-4">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger-fg" />
@@ -137,7 +158,7 @@ export function SettlementProcessPage() {
                     <Row label="Gross revenue" value={formatCurrency(grossRevenue(s))} strong />
                     <Row
                       label={s.selfDelivery ? 'Less: Transport cost (exempt — self-delivery)' : 'Less: Transport cost'}
-                      value={s.selfDelivery ? '—' : `- ${formatCurrency(s.transportCost)}`}
+                      value={s.selfDelivery ? '—' : transportBlocked ? 'Not configured' : `- ${formatCurrency(s.transportCost)}`}
                     />
                     <Row
                       label="Less: Fertilizer deduction (linked dispatches)"
@@ -177,7 +198,7 @@ export function SettlementProcessPage() {
         <Button variant="secondary" onClick={() => navigate(backHref)}>
           Cancel
         </Button>
-        <Button size="lg" onClick={() => setConfirming(true)}>
+        <Button size="lg" onClick={() => setConfirming(true)} disabled={blockedByTransport || included.length === 0}>
           Process {included.length} Settlements
         </Button>
       </div>

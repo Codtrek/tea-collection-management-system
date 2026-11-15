@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Post,
   Put,
   Req,
@@ -15,10 +16,18 @@ import { UsersService } from '../users/users.service';
 import { type Actor, AdminService } from './admin.service';
 import type {
   PermissionMatrix,
+  PublicFactoryProfile,
   PublicGradeRate,
   PublicSystemUser,
+  PublicTransportRate,
 } from './admin-map';
-import { CreateGradeRateDto } from './dto/create-grade-rate.dto';
+import {
+  CancelVersionDto,
+  CreateGradeRateDto,
+  CreateTransportRateDto,
+  UpdateFactoryProfileDto,
+} from './dto/create-grade-rate.dto';
+import type { TransportStatus } from './transport-rules';
 import { UpdatePermissionsDto } from './dto/update-permissions.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
@@ -46,6 +55,72 @@ export class AdminController {
     return this.adminService.createGradeRate(dto, await this.resolveActor(req));
   }
 
+  /** Cancel a scheduled version before it starts (reason required, audited). */
+  @Post('grade-rates/:id/cancel')
+  async cancelGradeRate(
+    @Param('id') id: string,
+    @Body() dto: CancelVersionDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicGradeRate[]> {
+    return this.adminService.cancelGradeRate(
+      id,
+      dto.reason,
+      await this.resolveActor(req),
+    );
+  }
+
+  // ── ADM-01 transport rates (Administration-Addendum §4) ──
+  @Get('transport-rates')
+  listTransportRates(): Promise<{
+    versions: PublicTransportRate[];
+    status: TransportStatus;
+  }> {
+    return this.adminService.listTransportRates();
+  }
+
+  @Post('transport-rates')
+  async createTransportRate(
+    @Body() dto: CreateTransportRateDto,
+    @Req() req: AuthedRequest,
+  ): Promise<{ versions: PublicTransportRate[]; status: TransportStatus }> {
+    return this.adminService.createTransportRate(
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
+  @Post('transport-rates/:id/cancel')
+  async cancelTransportRate(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelVersionDto,
+    @Req() req: AuthedRequest,
+  ): Promise<{ versions: PublicTransportRate[]; status: TransportStatus }> {
+    return this.adminService.cancelTransportRate(
+      id,
+      dto.reason,
+      await this.resolveActor(req),
+    );
+  }
+
+  // ── ADM-01 factory profile (Administration-Addendum §2) ──
+  @Get('factory-profile')
+  async getFactoryProfile(
+    @Req() req: AuthedRequest,
+  ): Promise<PublicFactoryProfile> {
+    return this.adminService.getFactoryProfile(await this.resolveActor(req));
+  }
+
+  @Put('factory-profile')
+  async updateFactoryProfile(
+    @Body() dto: UpdateFactoryProfileDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicFactoryProfile> {
+    return this.adminService.updateFactoryProfile(
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
   // ── ADM-02 permission matrix ──
   @Get('permissions')
   getPermissions(): Promise<PermissionMatrix> {
@@ -57,7 +132,10 @@ export class AdminController {
     @Body() dto: UpdatePermissionsDto,
     @Req() req: AuthedRequest,
   ): Promise<PermissionMatrix> {
-    return this.adminService.updatePermissions(dto, await this.resolveActor(req));
+    return this.adminService.updatePermissions(
+      dto,
+      await this.resolveActor(req),
+    );
   }
 
   // ── ADM-03 system settings ──

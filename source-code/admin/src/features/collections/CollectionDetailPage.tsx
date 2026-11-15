@@ -316,7 +316,7 @@ export function CollectionDetailPage() {
               <Lock className="size-3.5" aria-hidden />{' '}
               {state === 'open'
                 ? 'Confirmed — still editable until the correction window ends.'
-                : 'Confirmed with photographic evidence — this record is locked (§7.1). Changes need a Manager-approved correction.'}
+                : 'Confirmed with photographic evidence — this record is locked. Changes need a Manager-approved correction.'}
             </p>
           )}
         </section>

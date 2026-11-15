@@ -13,6 +13,7 @@ import type { EstateOwnerEntity } from './estate-owner.entity';
 import type { EstateEntity } from './estate.entity';
 import { settlementNet } from './estate-map';
 import { type Actor, EstatesService } from './estates.service';
+import type { TransportStatusService } from './transport-status.service';
 import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import type { RouteEntity } from './route.entity';
 import type { SettlementEntity } from './settlement.entity';
@@ -32,7 +33,9 @@ class FakeRepository<T extends { id: string | number }> {
       [...this.store.values()].filter(
         (r) =>
           !where ||
-          (Object.entries(where) as [keyof T, unknown][]).every(([k, v]) => r[k] === v),
+          (Object.entries(where) as [keyof T, unknown][]).every(
+            ([k, v]) => r[k] === v,
+          ),
       ),
     );
   }
@@ -158,8 +161,13 @@ describe('EstatesService', () => {
   const admin: Actor = { name: 'A. Bandara', role: 'Administrator' };
   const officer: Actor = { name: 'S. Fernando', role: 'Officer' };
   const manager: Actor = { name: 'R. Jayasuriya', role: 'Manager' };
+  let transportState: () => Promise<{
+    configured: boolean;
+    reason: string | null;
+  }>;
 
   beforeEach(() => {
+    transportState = () => Promise.resolve({ configured: true, reason: null });
     estateRepo = new FakeRepository();
     ownerRepo = new FakeRepository();
     documentRepo = new FakeRepository();
@@ -183,10 +191,17 @@ describe('EstatesService', () => {
       adjustmentRepo as unknown as Repository<SettlementAdjustmentEntity>,
       recoveryRepo as unknown as Repository<EstateAdvanceRecoveryEntity>,
       {} as UsersService,
-      { record: jest.fn().mockResolvedValue(undefined) } as unknown as import('../audit/audit.service').AuditService,
+      {
+        record: jest.fn().mockResolvedValue(undefined),
+      } as unknown as import('../audit/audit.service').AuditService,
       {
         get: () => Promise.resolve(DEFAULT_ESTATE_ADVANCE_SETTINGS),
       } as unknown as EstateAdvanceSettingsService,
+      // transport configured, so these tests exercise the rest of processing; the
+      // not-configured block has its own test below
+      {
+        forPeriod: () => transportState(),
+      } as unknown as TransportStatusService,
     );
   });
 
@@ -347,6 +362,34 @@ describe('EstatesService', () => {
     });
   });
 
+  describe('processSettlements — transport (Administration-Addendum §4)', () => {
+    it('stops a run while transport is not configured — never deducts Rs. 0 silently', async () => {
+      settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
+      transportState = () =>
+        Promise.resolve({
+          configured: false,
+          reason: 'Transport: not configured. Basis not confirmed.',
+        });
+      await expect(service.processSettlements(officer)).rejects.toThrow(
+        /^Transport: not configured\. Basis not confirmed\. 1 settlement for July 2026 include transport/,
+      );
+      expect((await settlementRepo.find())[0].status).toBe('pending');
+    });
+
+    it('self-delivery estates pay no transport, so they still process', async () => {
+      settlementRepo.seed(
+        makeSettlement({ id: 'SET-A', estateId: 1, selfDelivery: true }),
+      );
+      transportState = () =>
+        Promise.resolve({
+          configured: false,
+          reason: 'Transport: not configured.',
+        });
+      const result = await service.processSettlements(officer);
+      expect(result.map((r) => r.status)).toEqual(['Processed']);
+    });
+  });
+
   describe('processSettlements — missing-bank exclusion (UC-054)', () => {
     it('excludes missing-bank estates and processes the rest', async () => {
       settlementRepo.seed(makeSettlement({ id: 'SET-A', estateId: 1 }));
@@ -468,16 +511,21 @@ describe('EstatesService', () => {
 
     it('with a period, processes only that month — other pending months stay pending', async () => {
       settlementRepo.seed(makeSettlement());
-      settlementRepo.seed(makeSettlement({ id: 'SET-2026-06-009', period: 'June 2026' }));
+      settlementRepo.seed(
+        makeSettlement({ id: 'SET-2026-06-009', period: 'June 2026' }),
+      );
       const processed = await service.processSettlements(officer, 'July 2026');
       expect(processed.map((s) => s.id)).toEqual(['SET-2026-07-001']);
-      const june = (await settlementRepo.find()).find((s) => s.id === 'SET-2026-06-009');
+      const june = (await settlementRepo.find()).find(
+        (s) => s.id === 'SET-2026-06-009',
+      );
       expect(june?.status).toBe('pending');
     });
   });
 
   describe('processSettlements — deliveries linked as paid; OPEN ones skipped; corrections carried', () => {
-    const lockedAt = (minsFromNow: number) => new Date(Date.now() + minsFromNow * 60_000);
+    const lockedAt = (minsFromNow: number) =>
+      new Date(Date.now() + minsFromNow * 60_000);
     const delivery = (id: string, over: Partial<CollectionRecordEntity> = {}) =>
       ({
         id,
@@ -499,8 +547,12 @@ describe('EstatesService', () => {
       collectionRepo.seed(delivery('D-LEGACY', { lockedAt: null }));
       await service.processSettlements(officer);
       const rows = await collectionRepo.find();
-      expect(rows.find((r) => r.id === 'D-LOCKED')?.settlementId).toBe('SET-2026-07-001');
-      expect(rows.find((r) => r.id === 'D-LEGACY')?.settlementId).toBe('SET-2026-07-001');
+      expect(rows.find((r) => r.id === 'D-LOCKED')?.settlementId).toBe(
+        'SET-2026-07-001',
+      );
+      expect(rows.find((r) => r.id === 'D-LEGACY')?.settlementId).toBe(
+        'SET-2026-07-001',
+      );
     });
 
     it('SKIPS deliveries still inside the correction window — they stay unlinked and unpaid', async () => {
@@ -509,16 +561,22 @@ describe('EstatesService', () => {
       await service.processSettlements(officer);
       const rows = await collectionRepo.find();
       expect(rows.find((r) => r.id === 'D-OPEN')?.settlementId).toBeNull();
-      expect(rows.find((r) => r.id === 'D-LOCKED')?.settlementId).toBe('SET-2026-07-001');
+      expect(rows.find((r) => r.id === 'D-LOCKED')?.settlementId).toBe(
+        'SET-2026-07-001',
+      );
     });
 
     it('does not link other estates, other months, ungraded/collected records, or already-paid deliveries', async () => {
       collectionRepo.seed(delivery('D-OTHER-ESTATE', { estateId: 2 }));
-      collectionRepo.seed(delivery('D-OTHER-MONTH', { collectionDate: '2026-06-30' }));
+      collectionRepo.seed(
+        delivery('D-OTHER-MONTH', { collectionDate: '2026-06-30' }),
+      );
       collectionRepo.seed(delivery('D-COLLECTED', { status: 'collected' }));
       collectionRepo.seed(delivery('D-PAID', { settlementId: 'SET-OLD' }));
       await service.processSettlements(officer);
-      const byId = new Map((await collectionRepo.find()).map((r) => [r.id, r.settlementId]));
+      const byId = new Map(
+        (await collectionRepo.find()).map((r) => [r.id, r.settlementId]),
+      );
       expect(byId.get('D-OTHER-ESTATE')).toBeNull();
       expect(byId.get('D-OTHER-MONTH')).toBeNull();
       expect(byId.get('D-COLLECTED')).toBeNull();
@@ -526,9 +584,27 @@ describe('EstatesService', () => {
     });
 
     it('carries pending signed adjustments for the estate into the settlement, marks them applied, and nets them in', async () => {
-      adjustmentRepo.seed({ id: 1, estateId: 1, amountRs: '1800.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
-      adjustmentRepo.seed({ id: 2, estateId: 1, amountRs: '-300.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
-      adjustmentRepo.seed({ id: 3, estateId: 2, amountRs: '999.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
+      adjustmentRepo.seed({
+        id: 1,
+        estateId: 1,
+        amountRs: '1800.00',
+        status: 'pending',
+        appliedSettlementId: null,
+      } as unknown as SettlementAdjustmentEntity);
+      adjustmentRepo.seed({
+        id: 2,
+        estateId: 1,
+        amountRs: '-300.00',
+        status: 'pending',
+        appliedSettlementId: null,
+      } as unknown as SettlementAdjustmentEntity);
+      adjustmentRepo.seed({
+        id: 3,
+        estateId: 2,
+        amountRs: '999.00',
+        status: 'pending',
+        appliedSettlementId: null,
+      } as unknown as SettlementAdjustmentEntity);
 
       const before = (await service.listSettlements())[0];
       expect(before.adjustment).toBe(1500); // a pending settlement previews what it will carry
@@ -536,18 +612,37 @@ describe('EstatesService', () => {
       const [processed] = await service.processSettlements(officer);
       expect(processed.adjustment).toBe(1500);
       const adj = await adjustmentRepo.find();
-      expect(adj.find((a) => a.id === 1)).toMatchObject({ status: 'applied', appliedSettlementId: 'SET-2026-07-001' });
+      expect(adj.find((a) => a.id === 1)).toMatchObject({
+        status: 'applied',
+        appliedSettlementId: 'SET-2026-07-001',
+      });
       expect(adj.find((a) => a.id === 2)).toMatchObject({ status: 'applied' });
-      expect(adj.find((a) => a.id === 3)).toMatchObject({ status: 'pending', appliedSettlementId: null }); // another estate
+      expect(adj.find((a) => a.id === 3)).toMatchObject({
+        status: 'pending',
+        appliedSettlementId: null,
+      }); // another estate
       // net = gross − deductions + adjustment
-      expect(settlementNet(await settlementRepo.findOne({ where: { id: 'SET-2026-07-001' } }) as SettlementEntity))
-        .toBe(408 * 185 + 175 * 95 - 8400 - 22800 - 50000 + 1500);
+      expect(
+        settlementNet(
+          (await settlementRepo.findOne({
+            where: { id: 'SET-2026-07-001' },
+          })) as SettlementEntity,
+        ),
+      ).toBe(408 * 185 + 175 * 95 - 8400 - 22800 - 50000 + 1500);
     });
 
     it('an adjustment is applied once — the next run does not carry it again', async () => {
-      adjustmentRepo.seed({ id: 1, estateId: 1, amountRs: '1800.00', status: 'pending', appliedSettlementId: null } as unknown as SettlementAdjustmentEntity);
+      adjustmentRepo.seed({
+        id: 1,
+        estateId: 1,
+        amountRs: '1800.00',
+        status: 'pending',
+        appliedSettlementId: null,
+      } as unknown as SettlementAdjustmentEntity);
       await service.processSettlements(officer);
-      settlementRepo.seed(makeSettlement({ id: 'SET-2026-08-001', period: 'August 2026' }));
+      settlementRepo.seed(
+        makeSettlement({ id: 'SET-2026-08-001', period: 'August 2026' }),
+      );
       const [second] = await service.processSettlements(officer);
       expect(second.adjustment).toBe(0);
     });

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Between, IsNull, Repository } from 'typeorm';
 import { GradeRateEntity } from '../admin/grade-rate.entity';
 import { localDate } from '../dispatch/dispatch-map';
 import { EmployeeAttendanceEntity } from '../employees/employee-attendance.entity';
@@ -86,11 +86,14 @@ export class FinanceService {
   /* ── Leaf (shared with RPT-02) ── */
 
   async rateVersions(): Promise<RateVersion[]> {
-    return (await this.rates.find()).map((r) => ({
-      effectiveDate: r.effectiveDate,
-      superRate: Number(r.superRate),
-      normalRate: Number(r.normalRate),
-    }));
+    // a cancelled scheduled version never applies (Administration-Addendum §3)
+    return (await this.rates.find({ where: { cancelledAt: IsNull() } })).map(
+      (r) => ({
+        effectiveDate: r.effectiveDate,
+        superRate: Number(r.superRate),
+        normalRate: Number(r.normalRate),
+      }),
+    );
   }
 
   async settlementRows(): Promise<SettlementInput[]> {
