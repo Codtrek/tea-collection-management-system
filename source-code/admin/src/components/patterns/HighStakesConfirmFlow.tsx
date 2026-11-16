@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { formatCurrency } from '@/lib/format'
+import { amountMatches, CONFIRM_PLACEHOLDER } from './confirm-amount'
 
 export interface HighStakesConfirmFlowProps {
   open: boolean
@@ -23,7 +24,8 @@ export interface HighStakesConfirmFlowProps {
   modal's generic "Are you sure?", this requires the user to RE-TYPE the exact
   total before the irreversible action unlocks. First built for EMP-12 Payroll,
   reused by EST-06/EST-08. Irreversible ≠ destructive, so the confirm button is
-  primary (green), never danger/red (foundations §4).
+  primary (green), never danger/red (foundations §4). The input starts empty with a
+  neutral placeholder — never the number (confirm-amount.ts).
 */
 export function HighStakesConfirmFlow({
   open,
@@ -36,8 +38,7 @@ export function HighStakesConfirmFlow({
   loading,
 }: HighStakesConfirmFlowProps) {
   const [typed, setTyped] = useState('')
-  const expected = String(Math.round(amount))
-  const matches = typed.replace(/[,\s]/g, '') === expected
+  const matches = amountMatches(typed, amount)
 
   const close = () => {
     setTyped('')
@@ -77,11 +78,12 @@ export function HighStakesConfirmFlow({
           </p>
           <div className="mt-3 max-w-xs">
             <Input
-              label={`Re-type ${expected}`}
+              label="Re-type the amount"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              placeholder={expected}
-              inputMode="numeric"
+              placeholder={CONFIRM_PLACEHOLDER}
+              inputMode="decimal"
+              autoComplete="off"
               error={typed && !matches ? "Amount doesn't match" : undefined}
             />
           </div>
