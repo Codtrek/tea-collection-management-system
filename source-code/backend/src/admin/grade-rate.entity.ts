@@ -13,6 +13,10 @@ import {
  */
 @Entity('grade_rates')
 @Index('idx_grade_rates_effective', ['effectiveDate'])
+@Index('grade_rates_live_effective_key', ['effectiveDate'], {
+  unique: true,
+  where: `(cancelled_at IS NULL)`,
+})
 export class GradeRateEntity {
   /** Business key, e.g. 'GR-2026-0001'. */
   @PrimaryColumn({ type: 'varchar', length: 20 })
@@ -42,7 +46,12 @@ export class GradeRateEntity {
   @Column({ name: 'cancelled_at', type: 'timestamp', nullable: true })
   cancelledAt: Date | null;
 
-  @Column({ name: 'cancelled_by', type: 'varchar', nullable: true })
+  @Column({
+    name: 'cancelled_by',
+    type: 'varchar',
+    nullable: true,
+    length: 100,
+  })
   cancelledBy: string | null;
 
   @Column({ name: 'cancel_reason', type: 'text', nullable: true })

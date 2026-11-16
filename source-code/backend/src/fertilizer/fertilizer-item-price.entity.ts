@@ -3,8 +3,8 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
-  Unique,
 } from 'typeorm';
 
 /**
@@ -15,14 +15,22 @@ import {
  * Past versions are never edited; a scheduled one can be cancelled before it starts.
  */
 @Entity('fertilizer_item_prices')
-@Unique('fertilizer_item_prices_item_effective_date_key', [
-  'item',
-  'effectiveDate',
-])
 @Check(
   'fertilizer_item_prices_rate_per_kg_check',
   `(rate_per_kg >= (0)::numeric)`,
 )
+@Check(
+  'fertilizer_item_prices_bag_size_kg_check',
+  `((bag_size_kg IS NULL) OR (bag_size_kg > (0)::numeric))`,
+)
+@Check(
+  'fertilizer_item_prices_unit_check',
+  `((unit)::text = ANY ((ARRAY['kg'::character varying, 'bag'::character varying])::text[]))`,
+)
+@Index('fertilizer_item_prices_live_key', ['item', 'effectiveDate'], {
+  unique: true,
+  where: `(cancelled_at IS NULL)`,
+})
 export class FertilizerItemPriceEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -43,7 +51,7 @@ export class FertilizerItemPriceEntity {
   @CreateDateColumn({ name: 'created_at', nullable: true })
   createdAt: Date;
 
-  @Column({ type: 'varchar', default: 'kg' })
+  @Column({ type: 'varchar', default: 'kg', length: 3 })
   unit: 'kg' | 'bag';
 
   @Column({
@@ -65,7 +73,12 @@ export class FertilizerItemPriceEntity {
   @Column({ name: 'cancelled_at', type: 'timestamp', nullable: true })
   cancelledAt: Date | null;
 
-  @Column({ name: 'cancelled_by', type: 'varchar', nullable: true })
+  @Column({
+    name: 'cancelled_by',
+    type: 'varchar',
+    nullable: true,
+    length: 100,
+  })
   cancelledBy: string | null;
 
   @Column({ name: 'cancel_reason', type: 'text', nullable: true })

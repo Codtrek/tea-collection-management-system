@@ -24,7 +24,7 @@ export class ExpenseCategoryEntity {
   @Column({ name: 'sort_order', type: 'int', default: 0 })
   sortOrder: number;
 
-  @Column({ name: 'updated_by', type: 'varchar', nullable: true })
+  @Column({ name: 'updated_by', type: 'varchar', nullable: true, length: 100 })
   updatedBy: string | null;
 
   @Column({ name: 'updated_at', type: 'timestamp', nullable: true })

@@ -33,6 +33,10 @@ import type { DbMovementType, WriteOffReason } from './fertilizer-map';
   'stock_movements_write_off_reason_required',
   `(((type)::text <> 'Write-off'::text) OR (write_off_reason IS NOT NULL))`,
 )
+@Check(
+  'stock_movements_unit_cost_check',
+  `((unit_cost IS NULL) OR (unit_cost > (0)::numeric))`,
+)
 export class StockMovementEntity {
   @PrimaryGeneratedColumn()
   id: number;

@@ -7,6 +7,7 @@ import {
   Index,
   PrimaryColumn,
 } from 'typeorm';
+import { TransportRateEntity } from '../admin/transport-rate.entity';
 import { EstateEntity } from './estate.entity';
 import type { DbSettlementStatus } from './estate-map';
 
@@ -19,6 +20,10 @@ import type { DbSettlementStatus } from './estate-map';
 @Check('settlements_status_check', `"status" IN ('pending', 'processed')`)
 @Index('idx_settlements_estate', ['estateId'])
 @Index('idx_settlements_status', ['status'])
+@Check(
+  'settlements_transport_status_check',
+  `((transport_status)::text = ANY ((ARRAY['charged'::character varying, 'exempt'::character varying, 'no_deliveries'::character varying])::text[]))`,
+)
 export class SettlementEntity {
   /** Business key, e.g. 'SET-2026-07-001' — not a generated id. */
   @PrimaryColumn({ type: 'varchar', length: 20 })
@@ -103,7 +108,12 @@ export class SettlementEntity {
    * before the monthly charge existed. `transportCost` is what was TAKEN; the month's charge
    * plus what came in from the last settlement, minus what was taken, went out as a carry.
    */
-  @Column({ name: 'transport_status', type: 'varchar', nullable: true })
+  @Column({
+    name: 'transport_status',
+    type: 'varchar',
+    nullable: true,
+    length: 14,
+  })
   transportStatus: 'charged' | 'exempt' | 'no_deliveries' | null;
 
   @Column({
@@ -116,6 +126,9 @@ export class SettlementEntity {
   transportCharge: string | null;
 
   @Column({ name: 'transport_version_id', type: 'int', nullable: true })
+  @ForeignKey(() => TransportRateEntity, {
+    name: 'settlements_transport_version_id_fkey',
+  })
   transportVersionId: number | null;
 
   @Column({
