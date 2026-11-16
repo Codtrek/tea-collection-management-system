@@ -20,6 +20,14 @@ import type { DbAttendanceStatus } from './employee-map';
 @Unique('employee_attendance_employee_id_date_key', ['employeeId', 'date'])
 @Index('idx_employee_attendance_date', ['date'])
 @Index('idx_employee_attendance_employee', ['employeeId'])
+@Check(
+  'employee_attendance_half_check',
+  `((half IS NULL) OR ((half)::text = ANY ((ARRAY['AM'::character varying, 'PM'::character varying])::text[])))`,
+)
+@Check(
+  'employee_attendance_source_check',
+  `((source)::text = ANY ((ARRAY['portal'::character varying, 'dispatch'::character varying, 'app'::character varying, 'leave'::character varying, 'holiday'::character varying])::text[]))`,
+)
 export class EmployeeAttendanceEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -77,7 +85,7 @@ export class EmployeeAttendanceEntity {
 
   // ── Attendance-Leave-Addendum Phase 1 ──
   /** Half-day: which half was worked */
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', nullable: true, length: 2 })
   half: 'AM' | 'PM' | null;
 
   /** Short leave: 'HH:MM' out and back */
@@ -102,7 +110,7 @@ export class EmployeeAttendanceEntity {
   @Column({ name: 'edit_reason', type: 'text', nullable: true })
   editReason: string | null;
 
-  @Column({ type: 'varchar', default: 'portal' })
+  @Column({ type: 'varchar', default: 'portal', length: 10 })
   source: 'portal' | 'dispatch' | 'app' | 'leave' | 'holiday';
 
   /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
