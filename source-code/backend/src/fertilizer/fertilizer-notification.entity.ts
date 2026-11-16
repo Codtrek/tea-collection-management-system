@@ -1,4 +1,12 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Check,
+  Column,
+  Entity,
+  ForeignKey,
+  Index,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { FertilizerRequestEntity } from './fertilizer-request.entity';
 import type { NotificationKind } from './fertilizer-map';
 
 export type FertilizerNotificationStatus =
@@ -14,20 +22,32 @@ export type FertilizerNotificationStatus =
  * it was queued (reason, quantities, dates, amount owed).
  */
 @Entity('fertilizer_notifications')
+@Check(
+  'fertilizer_notifications_kind_check',
+  `((kind)::text = ANY ((ARRAY['approved'::character varying, 'partially_approved'::character varying, 'rejected'::character varying, 'dispatched'::character varying, 'delivered'::character varying, 'failed'::character varying, 'cancelled'::character varying])::text[]))`,
+)
+@Check(
+  'fertilizer_notifications_status_check',
+  `((status)::text = ANY ((ARRAY['queued'::character varying, 'sending'::character varying, 'sent'::character varying, 'failed'::character varying, 'cancelled'::character varying])::text[]))`,
+)
+@Index('idx_fert_notifications_due', ['status', 'sendAfter'])
 export class FertilizerNotificationEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ name: 'request_id' })
+  @ForeignKey(() => FertilizerRequestEntity, {
+    name: 'fertilizer_notifications_request_id_fkey',
+  })
   requestId: number;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', length: 20 })
   kind: NotificationKind;
 
-  @Column({ type: 'varchar', default: 'queued' })
+  @Column({ type: 'varchar', default: 'queued', length: 10 })
   status: FertilizerNotificationStatus;
 
-  @Column({ name: 'send_after', type: 'timestamptz' })
+  @Column({ name: 'send_after', type: 'timestamptz', default: () => 'now()' })
   sendAfter: Date;
 
   @Column({ default: 0 })
@@ -46,12 +66,12 @@ export class FertilizerNotificationEntity {
   @Column({ type: 'jsonb', default: () => "'{}'" })
   payload: Record<string, string | number | boolean | null>;
 
-  @Column({ name: 'dedupe_key', type: 'varchar' })
+  @Column({ name: 'dedupe_key', type: 'varchar', length: 80, unique: true })
   dedupeKey: string;
 
-  @Column({ name: 'created_at', type: 'timestamptz' })
+  @Column({ name: 'created_at', type: 'timestamptz', default: () => 'now()' })
   createdAt: Date;
 
-  @Column({ name: 'updated_at', type: 'timestamptz' })
+  @Column({ name: 'updated_at', type: 'timestamptz', default: () => 'now()' })
   updatedAt: Date;
 }

@@ -19,7 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // A mobile agent token is signed with the same secret — it must NOT open the portal API.
     if (
       (payload.role as string) === AGENT_ROLE ||
-      !PORTAL_ROLES.includes(payload.role)
+      !(PORTAL_ROLES as string[]).includes(payload.role)
     ) {
       throw new UnauthorizedException(
         'This token cannot access the factory portal.',

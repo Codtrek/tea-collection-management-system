@@ -1100,6 +1100,15 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Portal:** `features/performance/` (team overview, `EmployeePerformanceTab`, `HowMeasuredPage`). `MEASURE_DEFINITIONS` is the one copy of each measure's wording.
 - **Permission** `performance`: Manager edit, Administrator approve, Officer none.
 
+## Schema changes are TypeORM migrations now (2026-11-16, stack merge into dev)
+
+dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/data-source.ts`). The stack's hand-applied `database/migrations/*.sql` files are being converted PR by PR (`docs/specs/Stack-Merge-Addendum.md`).
+
+- **New schema work:** add a migration class numbered after the latest one. Keep `init.sql` in step while it's still mounted. Keep the entity exact: lengths, timestamptz, defaults, and CHECK / FK / UNIQUE / index **names**, which TypeORM matches by name. `migration:generate --dryrun` against a freshly migrated database must report no changes; the team's PR pipeline checks schema drift.
+- **Never run migrations or seeds against the hosted DB (Azure VM).** The team's pipeline does that.
+- **Local databases: port 5433 is shared.** 127.0.0.1:5433 can be an ssh tunnel to the hosted DB. Use `DATABASE_URL=postgresql://tea@localhost:5433/<db>?host=::1`. `npm run seed` refuses non-local URLs and non-local servers (`src/local-db-guard.ts`).
+- **A fresh local database:** `createdb` → `npm run migration:run` → `npm run seed`.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

@@ -1,10 +1,12 @@
+
 name: Compile LaTeX
 
 on:
   push:
     paths:
-      - project-docs/project-proposal/**
-      - .github/workflows/latex_build.yml
+      - 'project-docs/project-proposal/**'
+      - 'project-docs/developers guide/**'
+      - '.github/workflows/latex_build.yml'
 
   workflow_dispatch:
 
@@ -23,8 +25,23 @@ jobs:
           root_file: projectProposal.tex
           latexmk_shell_escape: true
 
-      - name: Upload PDF artifact
+      - name: Upload Project Proposal PDF
         uses: actions/upload-artifact@v4
         with:
           name: projectProposal.pdf
           path: project-docs/project-proposal/projectProposal.pdf
+          if-no-files-found: error
+
+      - name: Compile database-migration-dev-procedure.pdf
+        uses: xu-cheng/latex-action@v4
+        with:
+          working_directory: 'project-docs/developers guide'
+          root_file: database-migration-dev-procedure.tex
+
+      - name: Upload Migration Developer Guide PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-migration-dev-procedure.pdf
+          path: 'project-docs/developers guide/database-migration-dev-procedure.pdf'
+          if-no-files-found: error
+
