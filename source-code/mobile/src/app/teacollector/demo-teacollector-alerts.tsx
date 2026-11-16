@@ -1,19 +1,33 @@
 import React from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/colors';
 import { fonts } from "@/theme/fonts";
 
-type NotificationType = 'pickup' | 'success' | 'warning' | 'info' | 'fertilizer';
+type NotificationType =
+  | 'pickup'
+  | 'success'
+  | 'warning'
+  | 'info'
+  | 'fertilizer'
+  | 'pendingFertilizer'
+  | 'collectionReport'
+  | 'pickupCancelled'
+  | 'fertilizerCancelled';
 
-interface Notification {
-  icon: keyof typeof Ionicons.glyphMap;
+type Notification = {
   type: NotificationType;
   title: string;
   desc: string;
   time: string;
   read?: boolean;
-}
+} & (
+  | { icon: keyof typeof Ionicons.glyphMap; iconFamily?: 'ionicons' }
+  | {
+      icon: keyof typeof MaterialCommunityIcons.glyphMap;
+      iconFamily: 'materialCommunity';
+    }
+);
 
 interface DemoTeaCollectorAlertsProps {
   notifications: Notification[];
@@ -46,6 +60,26 @@ const notificationStyles: Record<
   fertilizer: {
     backgroundColor: colors.successBackground,
     color: colors.primary,
+    label: 'Fertilizer',
+  },
+  pendingFertilizer: {
+    backgroundColor: colors.warningBackground,
+    color: colors.warning,
+    label: 'Fertilizer',
+  },
+  collectionReport: {
+    backgroundColor: colors.successBackground,
+    color: colors.primary,
+    label: 'Submit',
+  },
+  pickupCancelled: {
+    backgroundColor: colors.errorBackground,
+    color: colors.error,
+    label: 'Pickup',
+  },
+  fertilizerCancelled: {
+    backgroundColor: colors.errorBackground,
+    color: colors.error,
     label: 'Fertilizer',
   },
 };
@@ -96,7 +130,15 @@ export default function DemoTeaCollectorAlerts({
               ]}
             >
               <View style={[styles.notificationIcon, { backgroundColor: typeStyle.backgroundColor }]}>
-                <Ionicons name={notification.icon} size={20} color={typeStyle.color} />
+                {notification.iconFamily === 'materialCommunity' ? (
+                  <MaterialCommunityIcons
+                    name={notification.icon}
+                    size={20}
+                    color={typeStyle.color}
+                  />
+                ) : (
+                  <Ionicons name={notification.icon} size={20} color={typeStyle.color} />
+                )}
               </View>
               <View style={styles.notificationBody}>
                 <View style={styles.notificationTitleRow}>

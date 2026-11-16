@@ -1,8 +1,10 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
   PrimaryGeneratedColumn,
+  Unique,
 } from 'typeorm';
 
 /**
@@ -13,11 +15,19 @@ import {
  * Past versions are never edited; a scheduled one can be cancelled before it starts.
  */
 @Entity('fertilizer_item_prices')
+@Unique('fertilizer_item_prices_item_effective_date_key', [
+  'item',
+  'effectiveDate',
+])
+@Check(
+  'fertilizer_item_prices_rate_per_kg_check',
+  `(rate_per_kg >= (0)::numeric)`,
+)
 export class FertilizerItemPriceEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ type: 'varchar', length: 100 })
   item: string;
 
   @Column({ name: 'rate_per_kg', type: 'decimal', precision: 8, scale: 2 })
@@ -26,10 +36,11 @@ export class FertilizerItemPriceEntity {
   @Column({ name: 'effective_date', type: 'date' })
   effectiveDate: string;
 
-  @Column({ name: 'set_by', type: 'varchar' })
+  @Column({ name: 'set_by', type: 'varchar', length: 100 })
   setBy: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
+  @CreateDateColumn({ name: 'created_at', nullable: true })
   createdAt: Date;
 
   @Column({ type: 'varchar', default: 'kg' })

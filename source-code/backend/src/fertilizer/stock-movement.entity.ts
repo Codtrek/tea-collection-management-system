@@ -1,9 +1,15 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
+  ForeignKey,
+  Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { EstateEntity } from '../estates/estate.entity';
+import { FertilizerBatchEntity } from './fertilizer-batch.entity';
+import { FertilizerRequestEntity } from './fertilizer-request.entity';
 import type { DbMovementType, WriteOffReason } from './fertilizer-map';
 
 /**
@@ -13,23 +19,44 @@ import type { DbMovementType, WriteOffReason } from './fertilizer-map';
  * 2026-07-27, see PLAN.md) — both draw down the same batch.
  */
 @Entity('stock_movements')
+@Check(
+  'stock_movements_type_check',
+  `"type" IN ('Incoming', 'Outgoing', 'Write-off')`,
+)
+@Index('idx_stock_movements_batch', ['batchId'])
+@Index('idx_stock_movements_estate', ['estateId'])
+@Check(
+  'stock_movements_write_off_reason_check',
+  `((write_off_reason)::text = ANY ((ARRAY['expired'::character varying, 'damaged'::character varying, 'other'::character varying])::text[]))`,
+)
+@Check(
+  'stock_movements_write_off_reason_required',
+  `(((type)::text <> 'Write-off'::text) OR (write_off_reason IS NOT NULL))`,
+)
 export class StockMovementEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'batch_id' })
+  @Column({ name: 'batch_id', type: 'int' })
+  @ForeignKey(() => FertilizerBatchEntity, {
+    name: 'stock_movements_batch_id_fkey',
+  })
   batchId: number;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', length: 10 })
   type: DbMovementType;
 
   @Column({ name: 'quantity_kg', type: 'decimal', precision: 10, scale: 2 })
   quantityKg: string;
 
-  @Column({ name: 'movement_date', type: 'date' })
+  @Column({
+    name: 'movement_date',
+    type: 'date',
+    default: () => 'CURRENT_DATE',
+  })
   movementDate: string;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   destination: string | null;
 
   /**
@@ -39,12 +66,16 @@ export class StockMovementEntity {
    * passed explicitly for an ad-hoc dispatch that's billable to an estate.
    */
   @Column({ name: 'estate_id', type: 'int', nullable: true })
+  @ForeignKey(() => EstateEntity, { name: 'stock_movements_estate_id_fkey' })
   estateId: number | null;
 
   @Column({ name: 'linked_request_id', type: 'int', nullable: true })
+  @ForeignKey(() => FertilizerRequestEntity, {
+    name: 'stock_movements_linked_request_id_fkey',
+  })
   linkedRequestId: number | null;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   supplier: string | null;
 
   /**
@@ -62,15 +93,21 @@ export class StockMovementEntity {
   unitCost: string | null;
 
   /** Write-off only (expired / damaged / other); null on Incoming and Outgoing. */
-  @Column({ name: 'write_off_reason', type: 'varchar', nullable: true })
+  @Column({
+    name: 'write_off_reason',
+    type: 'varchar',
+    nullable: true,
+    length: 10,
+  })
   writeOffReason: WriteOffReason | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
-  @Column({ name: 'recorded_by', type: 'varchar', nullable: true })
+  @Column({ name: 'recorded_by', type: 'varchar', length: 100, nullable: true })
   recordedBy: string | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
+  @CreateDateColumn({ name: 'created_at', nullable: true })
   createdAt: Date;
 }

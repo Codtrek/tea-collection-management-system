@@ -106,6 +106,7 @@ export class EstatesService {
     const ownerUser = await this.usersService.createUser(
       dto.contact,
       'estate_owner',
+      dto.ownerName,
     );
     let owner = await this.ownerRepo.findOne({
       where: { userId: ownerUser.id },

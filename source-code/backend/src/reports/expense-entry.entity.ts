@@ -1,4 +1,10 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryColumn,
+} from 'typeorm';
 
 /**
  * RPT-04 — one row per daily operating expense (Finance-Reports-Addendum §6–7): firewood,
@@ -6,15 +12,16 @@ import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
  * FinanceService at query time and never stored here.
  */
 @Entity('expense_entries')
+@Index('idx_expense_entries_date', ['entryDate'])
 export class ExpenseEntryEntity {
   /** Business key, e.g. 'EXP-2026-0137' — from `expense_entry_seq`. */
-  @PrimaryColumn()
+  @PrimaryColumn({ type: 'varchar', length: 20 })
   id: string;
 
   @Column({ name: 'category_id', type: 'int' })
   categoryId: number;
 
-  @Column()
+  @Column({ type: 'varchar', length: 200 })
   description: string;
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
@@ -27,7 +34,7 @@ export class ExpenseEntryEntity {
   @Column({ name: 'paid_via', type: 'varchar', nullable: true })
   paidVia: 'cash' | 'bank' | null;
 
-  @Column({ name: 'entered_by' })
+  @Column({ name: 'entered_by', type: 'varchar', length: 100 })
   enteredBy: string;
 
   /** the creator — who may change the entry within the edit window; null on old entries */
@@ -44,6 +51,7 @@ export class ExpenseEntryEntity {
   @Column({ name: 'edit_reason', type: 'text', nullable: true })
   editReason: string | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
+  @CreateDateColumn({ name: 'created_at', nullable: true })
   createdAt: Date;
 }

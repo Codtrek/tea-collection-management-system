@@ -38,21 +38,31 @@ function Meta({ icon, text }: { icon: IconName; text: string }) {
 
 interface RequestListItemProps {
   request: PickupRequest;
+  title?: string;
+  showFactory?: boolean;
+  highlight?: boolean;
   onPress?: () => void;
 }
 
 export default function RequestListItem({
   request,
+  title = request.estateName,
+  showFactory = true,
+  highlight = false,
   onPress,
 }: RequestListItemProps) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.card,
+        highlight && styles.highlightedCard,
+        pressed && styles.pressed,
+      ]}
     >
       <View style={styles.header}>
         <AppText variant="body" style={styles.name} numberOfLines={1}>
-          {request.estateName}
+          {title}
         </AppText>
         <StatusPill
           label={STATUS_LABELS[request.status]}
@@ -61,7 +71,9 @@ export default function RequestListItem({
       </View>
 
       <View style={styles.metaRow}>
-        <Meta icon="business-outline" text={request.factory} />
+        {showFactory ? (
+          <Meta icon="business-outline" text={request.factory} />
+        ) : null}
         <Meta
           icon="scale-outline"
           text={formatKg(request.estimatedWeightKg)}
@@ -79,6 +91,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border.light,
     borderRadius: 16,
     padding: spacing.md,
+  },
+  highlightedCard: {
+    borderColor: colors.primary,
   },
 
   pressed: {

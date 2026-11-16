@@ -18,6 +18,7 @@ import 'dotenv/config';
 import { mkdirSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { Client } from 'pg';
+import { assertLocalDatabaseUrl, assertLocalServer } from '../local-db-guard';
 import {
   addDays,
   type Assignment,
@@ -83,21 +84,8 @@ const ESTATE_NAMES = [
 
 // ── safety ────────────────────────────────────────────────────────────────
 
-/** Refuse anything that isn't a database on this machine. */
-function assertLocal(url: string | undefined): void {
-  if (!url) throw new Error('DATABASE_URL is not set.');
-  let host: string;
-  try {
-    host = new URL(url).hostname.replace(/^\[|\]$/g, '');
-  } catch {
-    throw new Error('DATABASE_URL is not a valid URL.');
-  }
-  if (!['localhost', '127.0.0.1', '::1'].includes(host) || /neon/i.test(url)) {
-    throw new Error(
-      `Refusing to run: the database host "${host}" is not local. The demo seed only runs on a local dev database.`,
-    );
-  }
-}
+// The URL must be local (host and any host / hostaddr parameter), and so must the server once
+// connected — an ssh tunnel can make the hosted database answer on 127.0.0.1 (local-db-guard.ts).
 
 // ── registry ──────────────────────────────────────────────────────────────
 
@@ -676,10 +664,11 @@ async function report(db: Client): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  assertLocal(process.env.DATABASE_URL);
+  assertLocalDatabaseUrl(process.env.DATABASE_URL);
   const db = new Client({ connectionString: process.env.DATABASE_URL });
   await db.connect();
   try {
+    await assertLocalServer(db);
     await db.query('BEGIN');
     if (process.argv.includes('--reset')) await reset(db);
     else await seed(db);

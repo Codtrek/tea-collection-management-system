@@ -11,6 +11,7 @@
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { Client } from 'pg';
+import { assertLocalDatabaseUrl, assertLocalServer } from './local-db-guard';
 import { AGENT_JOB_ROLE } from './employees/employee-roles';
 
 const DEV_PASSWORD = 'Password123!';
@@ -34,6 +35,18 @@ const SEED_USERS = [
     role: 'factory_manager',
     name: 'R. Jayasuriya',
     nic: '198812345603',
+  },
+  {
+    phone: '0788157139',
+    role: 'estate_owner',
+    name: 'Sandaru',
+    nic: '200311910230',
+  },
+  {
+    phone: '0788157140',
+    role: 'estate_manager',
+    name: 'K. Perera',
+    nic: '199511910231',
   },
 ] as const;
 
@@ -2409,8 +2422,16 @@ async function seedDispatch(client: Client, ctx: DispatchSeedContext) {
 }
 
 async function seed() {
+  // never the hosted database: the URL must be local, and so must the server (local-db-guard.ts)
+  assertLocalDatabaseUrl(process.env.DATABASE_URL);
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
+  try {
+    await assertLocalServer(client);
+  } catch (err) {
+    await client.end();
+    throw err;
+  }
 
   try {
     // `factories` has no unique constraint, so this can't rely on ON CONFLICT —
@@ -2427,12 +2448,67 @@ async function seed() {
 
     for (const seedUser of SEED_USERS) {
       const user = await client.query<{ id: number }>(
-        `INSERT INTO users (phone, password_hash, role) VALUES ($1, $2, $3)
+        `INSERT INTO users (phone, password_hash, role, name) VALUES ($1, $2, $3, $4)
          ON CONFLICT (phone) DO UPDATE SET password_hash = EXCLUDED.password_hash
          RETURNING id`,
-        [seedUser.phone, passwordHash, seedUser.role],
+        [seedUser.phone, passwordHash, seedUser.role, seedUser.name.slice(0, 32)],
       );
       const userId = user.rows[0].id;
+
+      if (seedUser.role === 'estate_owner') {
+        const estateOwner = await client.query<{ id: number }>(
+          `INSERT INTO tea_estate_owners (user_id, name)
+           VALUES ($1, $2)
+           ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name
+           RETURNING id`,
+          [userId, seedUser.name],
+        );
+        const estateOwnerId = estateOwner.rows[0].id;
+
+        await client.query(
+          `INSERT INTO estates (owner_id, name, location)
+           SELECT $1, $2, $3
+           WHERE NOT EXISTS (
+             SELECT 1 FROM estates WHERE owner_id = $1
+           )`,
+          [estateOwnerId, 'Sandaru Tea Estate', 'Nuwara Eliya'],
+        );
+
+        console.log(
+          `Seeded ${seedUser.role} — phone: ${seedUser.phone}, password: ${DEV_PASSWORD}`,
+        );
+        continue;
+      }
+
+      if (seedUser.role === 'estate_manager') {
+        const employee = await client.query<{ id: number }>(
+          `INSERT INTO estate_employees (user_id, estate_id, name, date_of_birth, nic, role)
+           SELECT $1, e.id, $2, $3, $4, 'manager'
+           FROM estates e
+           ORDER BY e.id
+           LIMIT 1
+           ON CONFLICT (user_id) DO UPDATE SET
+             estate_id = EXCLUDED.estate_id,
+             name = EXCLUDED.name,
+             nic = EXCLUDED.nic,
+             role = EXCLUDED.role
+           RETURNING id`,
+          [userId, seedUser.name, '1995-05-01', seedUser.nic],
+        );
+        const employeeId = employee.rows[0].id;
+
+        await client.query(
+          `INSERT INTO tea_estate_managers (employee_id, estate_id)
+           SELECT $1, estate_id FROM estate_employees WHERE id = $1
+           ON CONFLICT (employee_id) DO UPDATE SET estate_id = EXCLUDED.estate_id`,
+          [employeeId],
+        );
+
+        console.log(
+          `Seeded ${seedUser.role} — phone: ${seedUser.phone}, password: ${DEV_PASSWORD}`,
+        );
+        continue;
+      }
 
       await client.query(
         `INSERT INTO factory_employees (user_id, factory_id, name, nic, role)
@@ -2463,10 +2539,10 @@ async function seed() {
     const estateOwnerIds: Record<string, number> = {};
     for (const e of ESTATE_SEEDS) {
       const ownerUser = await client.query<{ id: number }>(
-        `INSERT INTO users (phone, password_hash, role) VALUES ($1, $2, 'estate_owner')
+        `INSERT INTO users (phone, password_hash, role, name) VALUES ($1, $2, 'estate_owner', $3)
          ON CONFLICT (phone) DO UPDATE SET password_hash = EXCLUDED.password_hash
          RETURNING id`,
-        [e.ownerPhone, passwordHash],
+        [e.ownerPhone, passwordHash, e.ownerName.slice(0, 32)],
       );
       const ownerUserId = ownerUser.rows[0].id;
 
@@ -2797,8 +2873,8 @@ async function seed() {
         await client.query(
           `INSERT INTO advance_recoveries
              (advance_id, kind, period, payroll_run_id, status, planned_amount, amount)
-           SELECT $1, 'payroll', $2, p.id, 'reserved', $3, $3
-             FROM payroll_runs p WHERE p.employee_id = $4 AND p.period = $2
+           SELECT $1, 'payroll', $2::varchar, p.id, 'reserved', $3, $3
+             FROM payroll_runs p WHERE p.employee_id = $4 AND p.period = $2::varchar
            ON CONFLICT DO NOTHING`,
           [a.id, PAYROLL_PERIOD, a.amount, employeeId],
         );
@@ -2829,10 +2905,10 @@ async function seed() {
     const agentIds: Record<string, number> = {};
     for (const a of AGENT_SEEDS) {
       const agentUser = await client.query<{ id: number }>(
-        `INSERT INTO users (phone, password_hash, role) VALUES ($1, $2, 'collection_agent')
+        `INSERT INTO users (phone, password_hash, role, name) VALUES ($1, $2, 'collection_agent', $3)
          ON CONFLICT (phone) DO UPDATE SET password_hash = EXCLUDED.password_hash
          RETURNING id`,
-        [a.phone, passwordHash],
+        [a.phone, passwordHash, a.name.slice(0, 32)],
       );
       const agentUserId = agentUser.rows[0].id;
 
