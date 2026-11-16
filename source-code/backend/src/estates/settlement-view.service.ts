@@ -25,6 +25,9 @@ import {
   toSettlementRow,
 } from './settlement-view';
 import { SettlementGeneratorService } from './settlement-generator.service';
+import type { SettlementCalculation } from './settlement-generator';
+import { SettlementEntity } from './settlement.entity';
+import { SystemSettingEntity } from '../admin/system-setting.entity';
 
 /** An estate with deliveries in the month and no settlement yet — and why. */
 export interface UnsettledOwner {
@@ -41,8 +44,31 @@ export interface UnsettledOwner {
   reason: string;
 }
 
+/** The owner statement's letterhead and addressee (Settlement-Addendum). */
+export interface StatementParties {
+  factory: {
+    name: string;
+    address: string;
+    contact: string;
+    email: string;
+    registrationNo: string;
+  };
+  owner: {
+    name: string;
+    estateName: string;
+    address: string;
+    payoutMethod: 'bank' | 'cash';
+    bank: string;
+    /** only the last 4 digits */
+    accountMasked: string;
+  };
+}
+
 export interface SettlementDetail {
   settlement: SettlementRow;
+  /** a generated settlement's calculation — frozen once processed, live for a draft; null on seeded rows */
+  calculation: SettlementCalculation | null;
+  statement: StatementParties;
   deliveries: {
     id: string;
     date: string;
@@ -91,6 +117,10 @@ export class SettlementViewService {
     @InjectRepository(EstateAdvanceEntity)
     private readonly advanceRepo: Repository<EstateAdvanceEntity>,
     private readonly generator: SettlementGeneratorService,
+    @InjectRepository(SettlementEntity)
+    private readonly settlementRepo: Repository<SettlementEntity>,
+    @InjectRepository(SystemSettingEntity)
+    private readonly settingRepo: Repository<SystemSettingEntity>,
   ) {}
 
   async list(q: SettlementQuery): Promise<SettlementListResult> {
@@ -194,10 +224,10 @@ export class SettlementViewService {
     // recovered by THIS settlement; a pending one previews the estate's outstanding deduct charges
     const charges = (await this.chargeRepo.find({ where: { estateId } }))
       .filter((c) =>
-        settlement.status === 'Processed'
-          ? c.settlementId === settlement.id
-          : c.settlementId === null &&
-            (c.paymentMethod ?? 'deduct') === 'deduct',
+        settlement.status === 'Pending'
+          ? c.settlementId === null &&
+            (c.paymentMethod ?? 'deduct') === 'deduct'
+          : c.settlementId === settlement.id,
       )
       .map((c) => ({
         id: formatChargeId(c.id),
@@ -210,10 +240,12 @@ export class SettlementViewService {
 
     const advances = (await this.advanceRepo.find({ where: { estateId } }))
       .filter((a) =>
-        settlement.status === 'Processed'
-          ? a.dateIssued.slice(0, 7) <= settlement.month &&
-            a.status === 'deducted'
-          : a.status === 'pending_deduction',
+        settlement.status === 'Legacy'
+          ? false
+          : settlement.status === 'Processed'
+            ? a.dateIssued.slice(0, 7) <= settlement.month &&
+              a.status === 'deducted'
+            : a.status === 'pending_deduction',
       )
       .sort((a, b) => b.dateIssued.localeCompare(a.dateIssued))
       .map((a) => ({
@@ -224,7 +256,63 @@ export class SettlementViewService {
         status: toAppAdvanceStatus(a.status),
       }));
 
-    return { settlement, deliveries, fertilizerCharges: charges, advances };
+    return {
+      settlement,
+      deliveries,
+      fertilizerCharges: charges,
+      advances,
+      calculation: await this.calculationOf(id, settlement),
+      statement: await this.parties(estateId),
+    };
+  }
+
+  /** Processed: the frozen calculation. Draft: as of now (it recalculates until processed). */
+  private async calculationOf(
+    id: string,
+    settlement: SettlementRow,
+  ): Promise<SettlementCalculation | null> {
+    if (!settlement.generated) return null;
+    if (settlement.status === 'Pending') {
+      const run = await this.generator.run(settlement.month);
+      const live = run.rows.find((r) => r.settlementId === id);
+      if (live) return live.calc;
+    }
+    const row = await this.settlementRepo.findOne({ where: { id } });
+    return (row?.calculation as SettlementCalculation) ?? null;
+  }
+
+  private async parties(estateId: number): Promise<StatementParties> {
+    const [estate, profileRow] = await Promise.all([
+      this.estateRepo.findOne({ where: { id: estateId } }),
+      this.settingRepo.findOne({ where: { key: 'factoryProfile' } }),
+    ]);
+    const owner = estate
+      ? await this.ownerRepo.findOne({ where: { id: estate.ownerId } })
+      : null;
+    const p = (profileRow?.value ?? {}) as Partial<
+      Record<
+        'name' | 'address' | 'contact' | 'email' | 'registrationNo',
+        string
+      >
+    >;
+    const account = estate?.bankAccount?.trim() ?? '';
+    return {
+      factory: {
+        name: p.name ?? '',
+        address: p.address ?? '',
+        contact: p.contact ?? '',
+        email: p.email ?? '',
+        registrationNo: p.registrationNo ?? '',
+      },
+      owner: {
+        name: owner?.name ?? 'Unknown',
+        estateName: estate?.name ?? '',
+        address: estate?.address ?? estate?.location ?? '',
+        payoutMethod: estate?.paymentMethod ?? 'bank',
+        bank: [estate?.bankName, estate?.bankBranch].filter(Boolean).join(', '),
+        accountMasked: account ? `•••• ${account.slice(-4)}` : '',
+      },
+    };
   }
 
   private async allRows(

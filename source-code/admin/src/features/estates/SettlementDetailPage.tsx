@@ -1,19 +1,22 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { History, Info, Loader2 } from 'lucide-react'
+import { History, Info, Loader2, Printer } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ErrorState } from '@/components/data/ErrorState'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import * as estatesService from '@/services/estates'
+import type { SettlementDetail } from './types'
 import { transportLineText } from './transport-line'
+import { OwnerStatement } from './OwnerStatement'
 import { formatCurrency, formatDate, formatWeight } from '@/lib/format'
 
 /*
-  EST-07 detail (Settlement-Period-View-Addendum): one settlement — the period's deliveries and
-  grade lines, each deduction line and net payable. The stored totals are what was (or will be)
-  paid; the lines are the supporting detail. The owner's full history is EST-10's timeline.
+  EST-07 detail (Settlement-Period-View-Addendum, Settlement-Addendum): one settlement. A generated
+  one shows the owner statement — its whole calculation (frozen once processed, live while a draft)
+  — and prints it on its own. A seeded row keeps the stored-totals view; a Legacy (seed) one says
+  why it is read-only. The owner's full history is EST-10's timeline.
 */
 export function SettlementDetailPage() {
   const { id = '' } = useParams()
@@ -34,7 +37,7 @@ export function SettlementDetailPage() {
     return <ErrorState title="Couldn't load this settlement" description="It may not exist." onRetry={() => void refetch()} />
   }
 
-  const { settlement: s, deliveries, fertilizerCharges, advances } = data
+  const { settlement: s, deliveries, fertilizerCharges, advances, calculation, statement } = data
   const back = `/estates/settlements?month=${s.month}`
   const chargesTotal = fertilizerCharges.reduce((sum, c) => sum + c.totalCharge, 0)
   const advancesTotal = advances.reduce((sum, a) => sum + a.amount, 0)
@@ -44,23 +47,36 @@ export function SettlementDetailPage() {
 
   return (
     <div>
-      <PageHeader
-        title={`${s.estateName} — ${s.period}`}
-        breadcrumb={[
-          { label: 'Home', to: '/dashboard' },
-          { label: 'Settlements', to: back },
-          { label: s.id },
-        ]}
-        description={`${s.ownerName} · ${s.route || 'No route'} · paid by ${s.paymentMethod === 'cash' ? 'cash' : 'bank'}`}
-        actions={
-          <Button variant="secondary" onClick={() => navigate(`/estates/${s.estateId}?tab=timeline`)}>
-            <History className="size-4" /> Owner's full history
-          </Button>
-        }
-      />
+      <div className="print:hidden">
+        <PageHeader
+          title={`${s.estateName} — ${s.period}`}
+          breadcrumb={[
+            { label: 'Home', to: '/dashboard' },
+            { label: 'Settlements', to: back },
+            { label: s.id },
+          ]}
+          description={`${s.ownerName} · ${s.route || 'No route'} · paid by ${s.paymentMethod === 'cash' ? 'cash' : 'bank'}`}
+          actions={
+            <div className="flex flex-wrap gap-2 print:hidden">
+              <Button variant="secondary" onClick={() => navigate(`/estates/${s.estateId}?tab=timeline`)}>
+                <History className="size-4" /> Owner's full history
+              </Button>
+              {calculation && (
+                <Button onClick={() => window.print()}>
+                  <Printer className="size-4" /> Print owner statement
+                </Button>
+              )}
+            </div>
+          }
+        />
+      </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <StatusBadge tone={s.status === 'Processed' ? 'success' : 'warning'}>{s.status}</StatusBadge>
+      <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
+        <StatusBadge tone={s.status === 'Processed' ? 'success' : s.status === 'Legacy' ? 'neutral' : 'warning'}>
+          {s.status === 'Legacy' ? 'Legacy (seed)' : s.status === 'Pending' && s.generated ? 'Draft' : s.status}
+        </StatusBadge>
+        {s.legacyReason && <span className="text-xs text-text-muted">{s.legacyReason}</span>}
+        {s.excludedReason && <StatusBadge tone="danger">{s.excludedReason}</StatusBadge>}
         {s.processedOn && (
           <span className="text-xs text-text-muted">
             by {s.processedBy} on {formatDate(s.processedOn)}
@@ -69,41 +85,17 @@ export function SettlementDetailPage() {
         {s.missingBank && <StatusBadge tone="danger">No bank details</StatusBadge>}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+      {calculation ? (
         <div className="flex flex-col gap-4">
-          <Card className="p-0">
-            <CardHeader className="px-5 pt-4">
-              <CardTitle>Deliveries in {s.period}</CardTitle>
-            </CardHeader>
-            {deliveries.length === 0 ? (
-              <p className="px-5 pb-4 text-sm text-text-muted">No confirmed deliveries are on record for this month.</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-surface-sunken text-[11px] uppercase tracking-wide text-text-muted">
-                  <tr>
-                    <th className="px-5 py-2 text-left">Delivery</th>
-                    <th className="px-5 py-2 text-left">Date</th>
-                    <th className="px-5 py-2 text-right">Super</th>
-                    <th className="px-5 py-2 text-right">Normal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliveries.map((d) => (
-                    <tr key={d.id} className="border-t border-border">
-                      <td className="px-5 py-2">
-                        <Link to={`/collections/${d.id}`} className="id text-primary hover:underline">
-                          {d.id}
-                        </Link>
-                      </td>
-                      <td className="px-5 py-2">{formatDate(d.date)}</td>
-                      <td className="tabular px-5 py-2 text-right">{formatWeight(d.superKg)}</td>
-                      <td className="tabular px-5 py-2 text-right">{formatWeight(d.normalKg)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <OwnerStatement settlement={s} calc={calculation} parties={statement} />
+          <div className="print:hidden">
+            <DeliveriesCard s={s} deliveries={deliveries} />
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+        <div className="flex flex-col gap-4">
+          <DeliveriesCard s={s} deliveries={deliveries} />
 
           <Card className="p-0">
             <CardHeader className="px-5 pt-4">
@@ -197,7 +189,46 @@ export function SettlementDetailPage() {
             </p>
           )}
         </Card>
-      </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function DeliveriesCard({ s, deliveries }: { s: SettlementDetail['settlement']; deliveries: SettlementDetail['deliveries'] }) {
+  return (
+    <Card className="p-0">
+      <CardHeader className="px-5 pt-4">
+        <CardTitle>Deliveries in {s.period}</CardTitle>
+      </CardHeader>
+      {deliveries.length === 0 ? (
+        <p className="px-5 pb-4 text-sm text-text-muted">No confirmed deliveries are on record for this month.</p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="bg-surface-sunken text-[11px] uppercase tracking-wide text-text-muted">
+            <tr>
+              <th className="px-5 py-2 text-left">Delivery</th>
+              <th className="px-5 py-2 text-left">Date</th>
+              <th className="px-5 py-2 text-right">Super</th>
+              <th className="px-5 py-2 text-right">Normal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {deliveries.map((d) => (
+              <tr key={d.id} className="border-t border-border">
+                <td className="px-5 py-2">
+                  <Link to={`/collections/${d.id}`} className="id text-primary hover:underline">
+                    {d.id}
+                  </Link>
+                </td>
+                <td className="px-5 py-2">{formatDate(d.date)}</td>
+                <td className="tabular px-5 py-2 text-right">{formatWeight(d.superKg)}</td>
+                <td className="tabular px-5 py-2 text-right">{formatWeight(d.normalKg)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
   )
 }

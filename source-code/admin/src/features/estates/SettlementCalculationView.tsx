@@ -150,7 +150,13 @@ function Line({
     <div className="flex justify-between gap-4">
       <div>
         <p className={cn(strong ? 'font-medium text-text' : 'text-text')}>
-          {label} {badge && <StatusBadge tone="warning">{badge}</StatusBadge>}
+          {label}{' '}
+          {/* a note for the factory, not the owner: never printed on the statement */}
+          {badge && (
+            <span className="print:hidden">
+              <StatusBadge tone="warning">{badge}</StatusBadge>
+            </span>
+          )}
         </p>
         {source && <p className="text-xs text-text-muted">{source}</p>}
       </div>

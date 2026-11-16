@@ -1,3 +1,4 @@
+import type { SettlementCalculation } from './settlement-run-types'
 export type EstateStatus = 'Active' | 'Inactive'
 
 export interface EstateOwner {
@@ -247,8 +248,25 @@ export interface UnsettledOwner {
   reason: string
 }
 
+/** The owner statement's letterhead and addressee. */
+export interface StatementParties {
+  factory: { name: string; address: string; contact: string; email: string; registrationNo: string }
+  owner: {
+    name: string
+    estateName: string
+    address: string
+    payoutMethod: OwnerPaymentMethod
+    bank: string
+    /** only the last 4 digits */
+    accountMasked: string
+  }
+}
+
 export interface SettlementDetail {
   settlement: SettlementRow
+  /** a generated settlement's calculation — frozen once processed, live for a draft; null on seeded rows */
+  calculation: SettlementCalculation | null
+  statement: StatementParties
   deliveries: { id: string; date: string; superKg: number; normalKg: number; paid: boolean }[]
   fertilizerCharges: { id: string; date: string; quantityKg: number; ratePerKg: number; totalCharge: number; recovered: boolean }[]
   advances: { id: string; dateIssued: string; amount: number; reason: string; status: EstateAdvanceStatus }[]
