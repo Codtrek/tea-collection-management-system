@@ -33,6 +33,7 @@ import {
   generateSettlement,
   monthRatePeriods,
   runTotals,
+  sameCalculation,
   type GenRateVersion,
   type RunTotals,
   type SettlementCalculation,
@@ -113,10 +114,6 @@ interface Facts {
   >['deductionOrder'];
   transportVersions: Awaited<ReturnType<TransportStatusService['versions']>>;
 }
-
-/** The comparable part of a calculation (not when it was made). */
-const fingerprint = (c: SettlementCalculation) =>
-  JSON.stringify({ ...c, calculatedAt: undefined });
 
 /**
  * The settlement generator (Settlement-Addendum): prepares one draft per estate with payable
@@ -557,8 +554,7 @@ export class SettlementGeneratorService {
         calc,
         changedSincePrepared:
           !!draft?.calculation &&
-          fingerprint(draft.calculation as SettlementCalculation) !==
-            fingerprint(calc),
+          !sameCalculation(draft.calculation as SettlementCalculation, calc),
         ready: !!draft && reasons.length === 0,
         reasons,
       });

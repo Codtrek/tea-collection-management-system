@@ -233,7 +233,10 @@ function groupReasons(rows: RunRow[]): [string, string[]][] {
   for (const r of rows) {
     const reason = r.settlementId ? (r.reasons[0] ?? 'Not ready') : 'Not prepared yet'
     // one bucket per kind of reason, not per delivery id
-    const key = reason.replace(/\(.*?\)/g, '').replace(/^\d+ deliver(y is|ies are)/, 'Deliveries are')
+    const key = reason
+      .replace(/\s*\(.*?\)/g, '')
+      .replace(/^\d+ deliver(y is|ies are)/, 'Deliveries are')
+      .replace(/Grade (it|them), or exclude (it|them)/, 'Grade or exclude them')
     by.set(key, [...(by.get(key) ?? []), r.estateName])
   }
   return [...by.entries()]

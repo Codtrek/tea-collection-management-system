@@ -606,6 +606,32 @@ function groupByRatePeriod(
   );
 }
 
+/** A value with its object keys sorted — Postgres JSONB doesn't keep key order. */
+function canonical(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonical);
+  if (v && typeof v === 'object') {
+    return Object.fromEntries(
+      Object.keys(v)
+        .sort()
+        .map((k) => [k, canonical((v as Record<string, unknown>)[k])]),
+    );
+  }
+  return v;
+}
+
+/**
+ * Whether two calculations say the same thing — ignoring when they were made and the order their
+ * keys came back in (a draft stored as JSONB is read back with its keys reordered).
+ */
+export function sameCalculation(
+  a: SettlementCalculation,
+  b: SettlementCalculation,
+): boolean {
+  const strip = (c: SettlementCalculation) =>
+    JSON.stringify(canonical({ ...c, calculatedAt: null, frozenAt: null }));
+  return strip(a) === strip(b);
+}
+
 /** Totals over many estates' calculations — the ONE object the Process page and its popup read. */
 export interface RunTotals {
   estates: number;

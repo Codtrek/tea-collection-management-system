@@ -4,6 +4,7 @@ import {
   monthRatePeriods,
   periodLabel,
   runTotals,
+  sameCalculation,
   type GenCharge,
   type GenDelivery,
   type GenerateInput,
@@ -501,5 +502,33 @@ describe('runTotals — one object for the Process page and its popup', () => {
       transport: 1000,
       net: a.net + b.net,
     });
+  });
+});
+
+describe('sameCalculation — a stored draft vs the calculation now', () => {
+  const reorder = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(reorder)
+      : v && typeof v === 'object'
+        ? Object.fromEntries(
+            Object.entries(v)
+              .reverse()
+              .map(([k, x]) => [k, reorder(x)]),
+          )
+        : v;
+
+  it('ignores key order (JSONB) and when it was calculated', () => {
+    const a = generateSettlement(input());
+    const stored = reorder(JSON.parse(JSON.stringify(a))) as typeof a;
+    const later = generateSettlement(
+      input({ now: new Date('2026-08-20T04:00:00Z') }),
+    );
+    expect(sameCalculation(stored, later)).toBe(true);
+  });
+
+  it('sees a real change', () => {
+    const a = generateSettlement(input());
+    const b = generateSettlement(input({ transportCarriedIn: 10 }));
+    expect(sameCalculation(a, b)).toBe(false);
   });
 });
