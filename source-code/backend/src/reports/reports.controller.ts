@@ -8,12 +8,8 @@ import {
   Post,
   Query,
   Req,
-  StreamableFile,
-  UploadedFile,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt-payload.interface';
@@ -23,7 +19,6 @@ import {
   ExpenseCategoryDto,
   UpdateExpenseDto,
 } from './dto/create-expense.dto';
-import { MAX_RECEIPT_BYTES } from './expense-entry-rules';
 import type { CollectionReport } from './collection-report-rules';
 import type { LeafPurchaseReport } from './leaf-purchase-rules';
 import {
@@ -37,11 +32,7 @@ import {
 import type { ExpenseReport } from './finance-rules';
 import { FinanceService, type ExpenseReportQuery } from './finance.service';
 import type { PublicExpenseCategory, PublicExpenseEntry } from './reports-map';
-import {
-  type Actor,
-  ReportsService,
-  type UploadedReceipt,
-} from './reports.service';
+import { type Actor, ReportsService } from './reports.service';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -185,41 +176,6 @@ export class ReportsController {
       dto,
       await this.resolveActor(req),
     );
-  }
-
-  /** Attach or replace the receipt (multipart `file`, photo or PDF, ≤ 2 MB; `reason` when needed). */
-  @Post('expenses/:id/receipt')
-  @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: MAX_RECEIPT_BYTES + 1 } }),
-  )
-  async saveReceipt(
-    @Param('id') id: string,
-    @UploadedFile() file: UploadedReceipt | undefined,
-    @Body('reason') reason: string | undefined,
-    @Req() req: AuthedRequest,
-  ): Promise<PublicExpenseEntry> {
-    return this.reportsService.saveReceipt(
-      id,
-      file,
-      reason,
-      await this.resolveActor(req),
-    );
-  }
-
-  @Get('expenses/:id/receipt')
-  async getReceipt(
-    @Param('id') id: string,
-    @Req() req: AuthedRequest,
-  ): Promise<StreamableFile> {
-    const r = await this.reportsService.getReceipt(
-      id,
-      await this.resolveActor(req),
-    );
-    return new StreamableFile(r.data, {
-      type: r.mimeType,
-      length: r.sizeBytes,
-      disposition: `inline; filename="${r.fileName.replace(/[^\w.\- ]/g, '_')}"`,
-    });
   }
 
   /** Resolves the JWT's `sub` to the acting user's display name + role for stamping. */

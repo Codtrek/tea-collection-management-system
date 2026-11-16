@@ -77,6 +77,9 @@ test('Log Daily Expense refuses a future date before saving', async ({ page }) =
   await page.goto('/reports/expenses/new')
   await ready(page)
   await expect(page.getByLabel('Category')).toContainText('Firewood / dryer fuel')
+  // receipts wait for the shared file-storage task: no upload, nothing stored in the database
+  await expect(page.getByText('Receipts: coming soon (file storage)')).toBeVisible()
+  await expect(page.getByLabel('Receipt file')).toHaveCount(0)
   const date = page.getByLabel('Date')
   await date.fill('2099-01-01')
   await date.blur()

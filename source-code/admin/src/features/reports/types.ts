@@ -303,7 +303,6 @@ export interface ExpenseEntry {
   updatedBy: string | null
   updatedAt: string | null
   editReason: string | null
-  receipt: { fileName: string; mimeType: string; sizeBytes: number } | null
   /** what the viewer may do with it (server-decided) */
   access: { canEdit: boolean; needsReason: boolean; note: string | null }
   editWindowDays: number

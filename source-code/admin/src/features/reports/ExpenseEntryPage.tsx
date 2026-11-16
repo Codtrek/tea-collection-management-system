@@ -1,10 +1,9 @@
-import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Banknote, FileText, Loader2, Paperclip, Wallet } from 'lucide-react'
+import { Banknote, Loader2, Paperclip, Wallet } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -27,9 +26,6 @@ import type { ExpenseCategory, ExpenseEntry, PaidVia } from './types'
   edit window, then only by the Factory Manager with a reason (the server decides and says why).
   Leaf purchases, wages and fertilizer stock are never entered here: the Expense report derives them.
 */
-
-const MAX_RECEIPT = 2 * 1024 * 1024
-const RECEIPT_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,application/pdf'
 
 const schema = (today: string, needsReason: boolean) =>
   z
@@ -101,8 +97,6 @@ function EntryForm({ entry, categories }: { entry?: ExpenseEntry; categories: Ex
   const today = factoryToday()
   const editable = !entry || entry.access.canEdit
   const needsReason = !!entry?.access.needsReason
-  const [file, setFile] = useState<File | null>(null)
-  const [fileError, setFileError] = useState<string | null>(null)
 
   const {
     register,
@@ -147,34 +141,11 @@ function EntryForm({ entry, categories }: { entry?: ExpenseEntry; categories: Ex
         description: data.description.trim(),
       }
       const reason = data.reason?.trim() || undefined
-      let saved = entry
-        ? isDirty
-          ? await reportsService.updateExpense(entry.id, { ...input, reason })
-          : entry
-        : await reportsService.createExpense(input)
-      if (file) saved = await reportsService.uploadExpenseReceipt(saved.id, file, reason)
-      return saved
+      return entry ? reportsService.updateExpense(entry.id, { ...input, reason }) : reportsService.createExpense(input)
     },
     onSuccess: (saved) => done(saved, entry ? 'saved' : 'logged'),
     onError: (err) => toast(err instanceof Error ? err.message : 'Could not save this expense', 'danger'),
   })
-
-  const openReceipt = async () => {
-    try {
-      const blob = await reportsService.getExpenseReceipt(entry!.id)
-      window.open(URL.createObjectURL(blob), '_blank', 'noopener')
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Could not open the receipt', 'danger')
-    }
-  }
-
-  const pickFile = (f: File | undefined) => {
-    setFileError(null)
-    if (!f) return setFile(null)
-    if (f.size > MAX_RECEIPT) return setFileError('A receipt can be at most 2 MB.')
-    if (!RECEIPT_ACCEPT.split(',').includes(f.type)) return setFileError('Use a photo (JPG, PNG, WebP, HEIC) or a PDF.')
-    setFile(f)
-  }
 
   const title = entry ? `Expense ${entry.id}` : 'Log Daily Expense'
   return (
@@ -270,36 +241,11 @@ function EntryForm({ entry, categories }: { entry?: ExpenseEntry; categories: Ex
               {...register('description')}
             />
 
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-text-muted">Receipt (optional)</span>
-              {entry?.receipt && (
-                <button
-                  type="button"
-                  onClick={() => void openReceipt()}
-                  className="flex items-center gap-2 self-start text-sm font-medium text-primary hover:underline"
-                >
-                  <FileText className="size-4" aria-hidden />
-                  {entry.receipt.fileName} ({Math.ceil(entry.receipt.sizeBytes / 1024)} KB)
-                </button>
-              )}
-              {editable && (
-                <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] border border-dashed border-border bg-surface-sunken px-4 py-5 text-center hover:bg-surface-hover">
-                  <Paperclip className="size-5 text-text-muted" strokeWidth={1.5} aria-hidden />
-                  <span className="text-sm font-medium text-text">
-                    {file ? file.name : entry?.receipt ? 'Replace the receipt' : 'Attach a photo or PDF'}
-                  </span>
-                  <span className="text-xs text-text-muted">At most 2 MB</span>
-                  <input
-                    type="file"
-                    accept={RECEIPT_ACCEPT}
-                    className="sr-only"
-                    aria-label="Receipt file"
-                    onChange={(e) => pickFile(e.target.files?.[0])}
-                  />
-                </label>
-              )}
-              {fileError && <p className="text-xs text-danger-fg">{fileError}</p>}
-            </div>
+            {/* Receipts wait for the shared file-storage task: nothing is stored in the database. */}
+            <p className="flex items-center gap-2 text-sm text-text-muted">
+              <Paperclip className="size-4" strokeWidth={1.5} aria-hidden />
+              Receipts: coming soon (file storage)
+            </p>
 
             {needsReason && (
               <Input
@@ -324,7 +270,7 @@ function EntryForm({ entry, categories }: { entry?: ExpenseEntry; categories: Ex
                 {editable ? 'Cancel' : 'Back'}
               </Button>
               {editable && (
-                <Button type="submit" loading={save.isPending} disabled={!!entry && !isDirty && !file}>
+                <Button type="submit" loading={save.isPending} disabled={!!entry && !isDirty}>
                   {entry ? 'Save Changes' : 'Save Expense'}
                 </Button>
               )}

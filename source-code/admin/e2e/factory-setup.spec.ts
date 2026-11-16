@@ -17,6 +17,8 @@ test('each tab saves on its own — no page-level Save', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Save Changes' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Save General Info' })).toBeDisabled()
   await expect(page.getByText('Coming soon (file storage)')).toBeVisible()
+  // the hard-coded Beneficiary Item Types list is gone (Rice is an Item Prices / fertilizer item)
+  await expect(page.getByRole('tab', { name: 'Beneficiary Item Types' })).toHaveCount(0)
   await page.getByRole('tab', { name: 'Grade Rates' }).click()
   await expect(page.getByRole('button', { name: 'Publish New Version' })).toBeVisible()
 })

@@ -1193,7 +1193,7 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Stock cost:** `stock_movements.unit_cost`, required on every new Incoming movement (migration `2026-11-15-stock-unit-cost.sql`). Older stock has no cost and is flagged, never guessed.
 - **Daily entries** (migration `2026-11-15-finance-expenses.sql`):
   - Categories are data (`expense_categories`, ADM-01 → Expense Categories).
-  - Each entry has paid via cash / bank, and an optional receipt in `expense_receipts` (≤ 2 MB).
+  - Each entry has paid via cash / bank. **No receipts** (removed 2026-11-16): the DB upload is gone and `expense_receipts` is kept empty for the shared Cloudinary task. Don't add database file storage.
   - Ids come from `expense_entry_seq`.
   - New `expenses` permission module: Officer edit (own entry within `system_settings.expenses.editWindowDays` = 7, editable in ADM-03), Manager approve (any entry, with a reason after the window), Administrator view.
   - Every change is audited before → after. There is no month close yet.

@@ -23,12 +23,9 @@ import {
   createError,
   editAccess,
   editError,
-  MAX_RECEIPT_BYTES,
-  RECEIPT_TYPES,
   type EditContext,
 } from './expense-entry-rules';
 import { ExpenseEntryEntity } from './expense-entry.entity';
-import { ExpenseReceiptEntity } from './expense-receipt.entity';
 import {
   formatExpenseId,
   type PublicExpenseCategory,
@@ -40,14 +37,6 @@ export interface Actor {
   role: AppRole;
   /** users.id */
   sub: number | null;
-}
-
-/** The parts of an uploaded file the service reads (multer's shape). */
-export interface UploadedReceipt {
-  originalname: string;
-  mimetype: string;
-  size: number;
-  buffer: Buffer;
 }
 
 const DEFAULT_EDIT_WINDOW_DAYS = 7;
@@ -72,8 +61,6 @@ export class ReportsService {
     private readonly expenseRepo: Repository<ExpenseEntryEntity>,
     @InjectRepository(ExpenseCategoryEntity)
     private readonly categoryRepo: Repository<ExpenseCategoryEntity>,
-    @InjectRepository(ExpenseReceiptEntity)
-    private readonly receiptRepo: Repository<ExpenseReceiptEntity>,
     @InjectRepository(SystemSettingEntity)
     private readonly settingsRepo: Repository<SystemSettingEntity>,
     private readonly access: DispatchAccessService,
@@ -305,64 +292,6 @@ export class ReportsService {
     return this.toPublic(saved, actor, now);
   }
 
-  async saveReceipt(
-    id: string,
-    file: UploadedReceipt | undefined,
-    reason: string | undefined,
-    actor: Actor,
-    now: Date = new Date(),
-  ): Promise<PublicExpenseEntry> {
-    const entry = await this.findEntry(id);
-    const ctx = await this.editContext(entry, actor, now);
-    const why = editError(ctx, undefined, reason);
-    if (why) throw this.refusal(ctx, why);
-    if (!file?.size) throw new BadRequestException('Choose a receipt file.');
-    if (file.size > MAX_RECEIPT_BYTES) {
-      throw new BadRequestException('A receipt can be at most 2 MB.');
-    }
-    if (!RECEIPT_TYPES.includes(file.mimetype)) {
-      throw new BadRequestException(
-        'A receipt must be a photo (JPG, PNG, WebP, HEIC) or a PDF.',
-      );
-    }
-    const had = await this.receiptRepo.findOne({
-      where: { entryId: id },
-      select: { entryId: true, fileName: true },
-    });
-    await this.receiptRepo.save(
-      this.receiptRepo.create({
-        entryId: id,
-        fileName: file.originalname.slice(0, 200),
-        mimeType: file.mimetype,
-        sizeBytes: file.size,
-        data: file.buffer,
-        uploadedBy: actor.name,
-        uploadedAt: now,
-      }),
-    );
-    const why2 = editAccess(ctx).needsReason ? reason!.trim() : null;
-    await this.audit.record(actor, {
-      action: had ? 'Replaced expense receipt' : 'Attached expense receipt',
-      module: 'Reports',
-      record: id,
-      recordHref: `/reports/expenses/${id}`,
-      details: `${had ? `${had.fileName} → ` : ''}${file.originalname} (${Math.ceil(file.size / 1024)} KB)${why2 ? ` — reason: ${why2}` : ''}`,
-    });
-    return this.toPublic(entry, actor, now);
-  }
-
-  async getReceipt(id: string, actor: Actor): Promise<ExpenseReceiptEntity> {
-    await this.access.require(
-      actor.role,
-      'view',
-      'view daily expenses',
-      'expenses',
-    );
-    const r = await this.receiptRepo.findOne({ where: { entryId: id } });
-    if (!r) throw new NotFoundException(`Expense ${id} has no receipt.`);
-    return r;
-  }
-
   /* ── helpers ── */
 
   /** Not allowed at all → 403; allowed but the change is invalid (future date, no reason) → 400. */
@@ -415,17 +344,8 @@ export class ReportsService {
     actor: Actor,
     now: Date,
   ): Promise<PublicExpenseEntry> {
-    const [category, receipt, ctx] = await Promise.all([
+    const [category, ctx] = await Promise.all([
       this.categoryRepo.findOne({ where: { id: e.categoryId } }),
-      this.receiptRepo.findOne({
-        where: { entryId: e.id },
-        select: {
-          entryId: true,
-          fileName: true,
-          mimeType: true,
-          sizeBytes: true,
-        },
-      }),
       this.editContext(e, actor, now),
     ]);
     const a = editAccess(ctx);
@@ -442,13 +362,6 @@ export class ReportsService {
       updatedBy: e.updatedBy,
       updatedAt: e.updatedAt ? new Date(e.updatedAt).toISOString() : null,
       editReason: e.editReason,
-      receipt: receipt
-        ? {
-            fileName: receipt.fileName,
-            mimeType: receipt.mimeType,
-            sizeBytes: receipt.sizeBytes,
-          }
-        : null,
       access: { canEdit: a.allowed, needsReason: a.needsReason, note: a.note },
       editWindowDays: ctx.windowDays,
     };

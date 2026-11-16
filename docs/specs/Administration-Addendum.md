@@ -41,7 +41,6 @@ the page, with unsaved changes asks first (react-router `useBlocker` + `beforeun
 | Transport Rates | One versioned monthly transport charge per estate (§4) |
 | Item Prices | Selling prices for items given to estate owners (§5) |
 | Pay Rates | Role rates, overrides, history, pay changes (§6–8) |
-| Beneficiary Item Types | Unchanged, report only (§9) |
 | Expense Categories | Daily expense categories (Finance-Reports-Addendum §6) |
 
 | System Settings (behaviour) | Contents |
@@ -206,12 +205,11 @@ That model is kept (your choice); it now has history.
 - **Audit:** request, approval and rejection are all audited.
 - **Schema:** `pay_adjustments` + `pay_adjustment_lines` (old → new rates, hours basis, monthly change).
 
-## 9. Beneficiary Item Types (report only, unchanged)
+## 9. Beneficiary Item Types (removed 2026-11-16)
 
-- The tab is a hard-coded list (Rice, Dhal, Flour) that **nothing reads**.
-- Beneficiary items exist as `fertilizer_batches.category = 'Beneficiary'`: today only **Rice** (1 batch).
-- They are requested and priced through the fertilizer request flow (2 requests, priced on Item Prices).
-- **Decision pending:** fold the tab into Item Prices / Fertilizer, or remove it.
+- The tab was a hard-coded list (Rice, Dhal, Flour) that **nothing read**. It has been removed, together with its list.
+- Beneficiary items stay where they really live: `fertilizer_batches.category = 'Beneficiary'` (today only **Rice**, 1 batch).
+- They are requested through the fertilizer request flow and priced on **Item Prices** (§5).
 
 ## 10. Migrations (local `tea_dev` only; mirrored in `init.sql`)
 

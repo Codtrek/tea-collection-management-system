@@ -10,7 +10,6 @@ import type { AuditService } from '../audit/audit.service';
 import type { DispatchAccessService } from '../dispatch/dispatch-access.service';
 import type { ExpenseCategoryEntity } from './expense-category.entity';
 import type { ExpenseEntryEntity } from './expense-entry.entity';
-import type { ExpenseReceiptEntity } from './expense-receipt.entity';
 import { type Actor, ReportsService } from './reports.service';
 
 /** RPT-04 daily expense entries — permissions, the edit window and the audit trail. */
@@ -85,7 +84,6 @@ describe('ReportsService — daily expense entries', () => {
   beforeEach(() => {
     entries = new FakeRepo<ExpenseEntryEntity>('id');
     categories = new FakeRepo<ExpenseCategoryEntity>('id');
-    const receipts = new FakeRepo<ExpenseReceiptEntity>('entryId');
     categories.rows = [
       { id: 1, name: 'Electricity', active: true, sortOrder: 2 },
       { id: 2, name: 'Water', active: true, sortOrder: 3 },
@@ -99,7 +97,6 @@ describe('ReportsService — daily expense entries', () => {
     service = new ReportsService(
       entries as unknown as Repository<ExpenseEntryEntity>,
       categories as unknown as Repository<ExpenseCategoryEntity>,
-      receipts as unknown as Repository<ExpenseReceiptEntity>,
       settings as unknown as Repository<SystemSettingEntity>,
       access as unknown as DispatchAccessService,
       audit as unknown as AuditService,
@@ -212,48 +209,9 @@ describe('ReportsService — daily expense entries', () => {
     expect(seen.access.canEdit).toBe(false);
   });
 
-  it('a receipt: photo or PDF up to 2 MB, audited', async () => {
-    const { id } = await log();
-    const file = (size: number, mimetype = 'image/jpeg') => ({
-      originalname: 'ceb.jpg',
-      mimetype,
-      size,
-      buffer: Buffer.alloc(size),
-    });
-    await expect(
-      service.saveReceipt(
-        id,
-        file(3 * 1024 * 1024),
-        undefined,
-        officer,
-        NOV_10,
-      ),
-    ).rejects.toThrow(/2 MB/);
-    await expect(
-      service.saveReceipt(
-        id,
-        file(10, 'text/plain'),
-        undefined,
-        officer,
-        NOV_10,
-      ),
-    ).rejects.toThrow(/photo/);
-    const e = await service.saveReceipt(
-      id,
-      file(2048),
-      undefined,
-      officer,
-      NOV_10,
-    );
-    expect(e.receipt).toEqual({
-      fileName: 'ceb.jpg',
-      mimeType: 'image/jpeg',
-      sizeBytes: 2048,
-    });
-    expect(audit.record).toHaveBeenLastCalledWith(
-      officer,
-      expect.objectContaining({ action: 'Attached expense receipt' }),
-    );
+  it('no receipt storage: the entry carries no receipt (it waits for file storage)', async () => {
+    const e = await log();
+    expect(e).not.toHaveProperty('receipt');
   });
 
   it('categories: Administrator only, unique names, audited', async () => {

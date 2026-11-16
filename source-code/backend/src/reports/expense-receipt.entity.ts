@@ -1,9 +1,9 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
 
 /**
- * RPT-04 — one receipt (photo or PDF, at most 2 MB) per daily expense entry, stored in the
- * database until file storage (Cloudinary) lands. Read only through
- * `GET /reports/expenses/:id/receipt`; never sent with the entry itself.
+ * RPT-04 — the `expense_receipts` table, kept EMPTY and unused (decided 2026-11-16: no file
+ * storage in the database). Receipts wait for the shared file-storage (Cloudinary) task, which
+ * will decide whether this table holds a file reference or is dropped. Nothing reads or writes it.
  */
 @Entity('expense_receipts')
 export class ExpenseReceiptEntity {

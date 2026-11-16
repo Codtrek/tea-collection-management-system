@@ -62,7 +62,6 @@ export interface PublicExpenseEntry {
   updatedBy: string | null;
   updatedAt: string | null;
   editReason: string | null;
-  receipt: { fileName: string; mimeType: string; sizeBytes: number } | null;
   /** what the viewer may do with it (Finance-Reports-Addendum §7) */
   access: { canEdit: boolean; needsReason: boolean; note: string | null };
   editWindowDays: number;

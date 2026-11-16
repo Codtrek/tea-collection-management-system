@@ -14,15 +14,6 @@
 import { daysBack } from '../employees/attendance-rules';
 import type { PermissionLevel } from '../admin/admin-map';
 
-export const MAX_RECEIPT_BYTES = 2 * 1024 * 1024;
-export const RECEIPT_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/heic',
-  'application/pdf',
-];
-
 export function createError(
   level: PermissionLevel,
   date: string,

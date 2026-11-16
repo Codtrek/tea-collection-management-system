@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useBlocker } from 'react-router-dom'
-import { Plus } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { LightConfirmModal } from '@/components/patterns/LightConfirmModal'
 import { Tabs } from '@/components/ui/Tabs'
-import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { useToast } from '@/components/ui/Toast'
 import { AdminGuard } from './AdminGuard'
 import { ExpenseCategoriesCard } from './ExpenseCategoriesCard'
 import { GeneralInfoTab, type ProfileDraft } from './GeneralInfoTab'
@@ -22,19 +18,12 @@ import type { DraftTab } from './factory-setup-model'
   here, so switching tabs or leaving the page with unsaved changes asks first.
 */
 
-const ITEM_TYPES = [
-  { name: 'Rice', unit: 'kg' },
-  { name: 'Dhal', unit: 'kg' },
-  { name: 'Flour', unit: 'kg' },
-]
-
 const TABS = [
   { id: 'general', label: 'General Info' },
   { id: 'grades', label: 'Grade Rates' },
   { id: 'transport', label: 'Transport Rates' },
   { id: 'prices', label: 'Item Prices' },
   { id: 'pay', label: 'Pay Rates' },
-  { id: 'items', label: 'Beneficiary Item Types' },
   { id: 'expenses', label: 'Expense Categories' },
 ]
 
@@ -48,7 +37,6 @@ const NO_DRAFTS: Drafts = { general: null, grades: null, transport: null, prices
 const isDraftTab = (t: string): t is DraftTab => t === 'general' || t === 'grades' || t === 'transport' || t === 'prices'
 
 export function FactorySetupPage() {
-  const { toast } = useToast()
   const [tab, setTab] = useState('general')
   const [drafts, setDrafts] = useState<Drafts>(NO_DRAFTS)
   const [leavingTo, setLeavingTo] = useState<string | null>(null)
@@ -97,28 +85,6 @@ export function FactorySetupPage() {
         <div className="max-w-5xl">
           <PayRatesPanel />
         </div>
-      )}
-
-      {tab === 'items' && (
-        <Card className="max-w-2xl">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-text-heading">Beneficiary item types</h3>
-            <Button size="sm" variant="secondary" onClick={() => toast('Item type added (demo)')}>
-              <Plus className="size-4" /> Add Item Type
-            </Button>
-          </div>
-          <ul className="divide-y divide-border rounded-[var(--radius-md)] border border-border">
-            {ITEM_TYPES.map((t) => (
-              <li key={t.name} className="flex items-center justify-between px-4 py-3">
-                <span className="text-sm font-medium text-text">{t.name}</span>
-                <span className="text-xs text-text-muted">Unit: {t.unit}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-xs text-text-muted">
-            Feeds the beneficiary-item workflow if that scope folds into Fertilizer Inventory later.
-          </p>
-        </Card>
       )}
 
       {tab === 'expenses' && (

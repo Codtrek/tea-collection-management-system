@@ -32,6 +32,7 @@ import { ReportsService } from './reports.service';
     TypeOrmModule.forFeature([
       ExpenseEntryEntity,
       ExpenseCategoryEntity,
+      // kept, empty, for the file-storage (Cloudinary) task — nothing reads or writes it
       ExpenseReceiptEntity,
       // the expense edit window (system_settings.expenses)
       SystemSettingEntity,

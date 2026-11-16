@@ -81,11 +81,13 @@ recoveries panel with its rule.
   - Maintenance → Machinery maintenance
   - Miscellaneous and Other → Miscellaneous
   - Utilities → kept as an out-of-use "Utilities", since it can't be split into electricity and water after the fact
-- **An entry has:** date, category, amount, description, paid via (cash / bank) and an optional receipt.
+- **An entry has:** date, category, amount, description and paid via (cash / bank).
   - Ids come from `expense_entry_seq` (`EXP-YYYY-NNNN`). The old `count()+1` could collide.
-- **Receipts:** one per entry, a photo (JPG, PNG, WebP, HEIC) or a PDF, at most 2 MB.
-  - Stored in `expense_receipts` (bytea) until file storage (Cloudinary) lands.
-  - Uploaded with `POST /reports/expenses/:id/receipt` (multipart `file`), read back with `GET` on the same path.
+- **Receipts: not stored (decided 2026-11-16).**
+  - Database receipt storage was added on 15 Nov (commit `6af584a`) and removed on 16 Nov: the upload box, `POST` / `GET /reports/expenses/:id/receipt` and the entry's `receipt` field are gone.
+  - The page says "Receipts: coming soon (file storage)".
+  - Receipts wait for the shared file-storage (Cloudinary) task. No file is stored in the database.
+  - The `expense_receipts` table is kept, empty and unused, for that task to reuse (as a file reference) or drop.
 
 ## 7. Entry rules (`expense-entry-rules.ts`)
 
@@ -99,7 +101,7 @@ recoveries panel with its rule.
 | Administrator | view | View entries; manage the category list (`administration`) |
 
 - **Edit window:** `system_settings.expenses.editWindowDays`, default **7**. It is edited in ADM-03 System Settings → Daily expense entries and counted from the day the entry was logged.
-- **Audit:** every create, change and receipt upload writes an `audit_logs` row with the change (`Amount: Rs. 52,000 → Rs. 51,000 — reason: …`). The latest reason is kept on the entry (`edit_reason`), with `updated_by` / `updated_at`.
+- **Audit:** every create and change writes an `audit_logs` row with the change (`Amount: Rs. 52,000 → Rs. 51,000 — reason: …`). The latest reason is kept on the entry (`edit_reason`), with `updated_by` / `updated_at`.
 - **Month close:** none exists in the system yet. When one is added, a closed month should lock its entries here (a single check in `editError`). Until then nothing is locked by month.
 
 ## 8. Checking against the database

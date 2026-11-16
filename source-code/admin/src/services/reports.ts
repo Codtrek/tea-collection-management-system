@@ -1,4 +1,4 @@
-import { apiBlob, apiFetch } from '@/lib/api'
+import { apiFetch } from '@/lib/api'
 import type {
   CollectionReport,
   CollectionReportQuery,
@@ -126,16 +126,4 @@ export function updateExpense(id: string, input: UpdateExpenseInput): Promise<Ex
     method: 'PATCH',
     body: JSON.stringify(input),
   })
-}
-
-/** Attach or replace the receipt (photo or PDF, at most 2 MB). */
-export function uploadExpenseReceipt(id: string, file: File, reason?: string): Promise<ExpenseEntry> {
-  const body = new FormData()
-  body.set('file', file)
-  if (reason) body.set('reason', reason)
-  return apiFetch<ExpenseEntry>(`/reports/expenses/${encodeURIComponent(id)}/receipt`, { method: 'POST', body })
-}
-
-export function getExpenseReceipt(id: string): Promise<Blob> {
-  return apiBlob(`/reports/expenses/${encodeURIComponent(id)}/receipt`)
 }
