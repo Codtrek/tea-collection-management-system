@@ -7,6 +7,7 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { RouteEntity } from '../estates/route.entity';
 import { EstateEntity } from '../estates/estate.entity';
 import { EstateOwnerEntity } from '../estates/estate-owner.entity';
 import { EstateEmployee } from '../users/estate-employee.entity';
@@ -36,10 +37,15 @@ import type {
 )
 @Check(
   'fertilizer_requests_status_check',
-  `"status" IN ('Submitted', 'Approved', 'Partially Dispatched', 'Dispatched', 'Deducted', 'Rejected', 'Cancelled')`,
+  `"status" IN ('Requested', 'Awaiting manager approval', 'Approved', 'Partially approved', 'Rejected', 'Ready for dispatch', 'Picked up', 'Out for delivery', 'Partially delivered', 'Delivered', 'Failed', 'Returned to factory', 'Rescheduled', 'Needs review', 'Cancelled')`,
 )
 @Index('idx_fertilizer_requests_estate', ['estateId'])
 @Index('idx_fertilizer_requests_status', ['status'])
+@Check(
+  'fertilizer_requests_payment_method_check',
+  `((payment_method)::text = ANY ((ARRAY['deduct'::character varying, 'cash'::character varying, 'bank'::character varying])::text[]))`,
+)
+@Index('idx_fertilizer_requests_order', ['orderRef'])
 export class FertilizerRequestEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -102,7 +108,7 @@ export class FertilizerRequestEntity {
   @Column({ type: 'varchar', length: 10, default: 'web' })
   origin: DbRequestOrigin;
 
-  @Column({ type: 'varchar', length: 20, default: 'Submitted' })
+  @Column({ type: 'varchar', length: 30, default: 'Requested' })
   status: DbRequestStatus;
 
   @Column({
@@ -132,14 +138,20 @@ export class FertilizerRequestEntity {
   /* ── Fertilizer-Delivery-Addendum ── */
 
   /** shared by the requests one order produced (one per item) */
-  @Column({ name: 'order_ref', type: 'varchar', nullable: true })
+  @Column({ name: 'order_ref', type: 'varchar', nullable: true, length: 30 })
   orderRef: string | null;
 
   /** the estate's route, auto-filled (each estate belongs to exactly one route) */
   @Column({ name: 'route_id', type: 'int', nullable: true })
+  @ForeignKey(() => RouteEntity, { name: 'fertilizer_requests_route_id_fkey' })
   routeId: number | null;
 
-  @Column({ name: 'payment_method', type: 'varchar', default: 'deduct' })
+  @Column({
+    name: 'payment_method',
+    type: 'varchar',
+    default: 'deduct',
+    length: 10,
+  })
   paymentMethod: PaymentMethod;
 
   /** why a partial approval or a rejection — shown to the owner */
@@ -172,13 +184,23 @@ export class FertilizerRequestEntity {
   @Column({ name: 'cycle_failures', type: 'int', default: 0 })
   cycleFailures: number;
 
-  @Column({ name: 'manager_decided_by', type: 'varchar', nullable: true })
+  @Column({
+    name: 'manager_decided_by',
+    type: 'varchar',
+    nullable: true,
+    length: 100,
+  })
   managerDecidedBy: string | null;
 
   @Column({ name: 'manager_decided_on', type: 'timestamp', nullable: true })
   managerDecidedOn: Date | null;
 
-  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  @Column({
+    name: 'updated_at',
+    type: 'timestamp',
+    nullable: true,
+    default: () => 'now()',
+  })
   updatedAt: Date | null;
 
   /** Nullable in the DB, but always filled by its `DEFAULT now()`. */

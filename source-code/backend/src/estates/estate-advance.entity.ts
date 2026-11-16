@@ -58,7 +58,7 @@ export class EstateAdvanceEntity {
   installmentMonths: number | null;
 
   /** 'December 2026' — the first settlement period it deducts from */
-  @Column({ name: 'start_period', type: 'varchar', nullable: true })
+  @Column({ name: 'start_period', type: 'varchar', nullable: true, length: 30 })
   startPeriod: string | null;
 
   /** Nullable in the DB, but always filled by its `DEFAULT now()`. */

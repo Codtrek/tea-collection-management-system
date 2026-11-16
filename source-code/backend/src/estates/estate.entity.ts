@@ -23,6 +23,10 @@ import { RouteEntity } from './route.entity';
 @Entity('estates')
 @Check('estates_status_check', `"status" IN ('active', 'inactive')`)
 @Index('idx_estates_owner', ['ownerId'])
+@Check(
+  'estates_payment_method_check',
+  `((payment_method)::text = ANY ((ARRAY['bank'::character varying, 'cash'::character varying])::text[]))`,
+)
 export class EstateEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -92,7 +96,12 @@ export class EstateEntity {
   bankAccount: string | null;
 
   /** How the owner is paid (Settlement-Period-View-Addendum). Cash owners need no bank details. */
-  @Column({ name: 'payment_method', type: 'varchar', default: 'bank' })
+  @Column({
+    name: 'payment_method',
+    type: 'varchar',
+    default: 'bank',
+    length: 10,
+  })
   paymentMethod: OwnerPaymentMethod;
 
   @Column({

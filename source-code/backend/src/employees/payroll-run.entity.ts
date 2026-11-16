@@ -153,7 +153,7 @@ export class PayrollRunEntity {
   @Column({ name: 'excluded_reason', type: 'text', nullable: true })
   excludedReason: string | null;
 
-  @Column({ name: 'excluded_by', type: 'varchar', nullable: true })
+  @Column({ name: 'excluded_by', type: 'varchar', nullable: true, length: 100 })
   excludedBy: string | null;
 
   @Column({ name: 'excluded_on', type: 'timestamp', nullable: true })

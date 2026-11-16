@@ -27,6 +27,10 @@ import type { DbEmployeeStatus, DbEmploymentType } from './employee-map';
   'employees_status_check',
   `"status" IN ('Active', 'Suspended', 'Inactive')`,
 )
+@Check(
+  'employees_payment_method_check',
+  `((payment_method)::text = ANY ((ARRAY['bank'::character varying, 'cash'::character varying])::text[]))`,
+)
 export class EmployeeEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -83,7 +87,12 @@ export class EmployeeEntity {
   bankAccount: string | null;
 
   /** how the employee is paid (Payroll filters) — cash-paid employees need no bank details */
-  @Column({ name: 'payment_method', type: 'varchar', default: 'bank' })
+  @Column({
+    name: 'payment_method',
+    type: 'varchar',
+    default: 'bank',
+    length: 10,
+  })
   paymentMethod: EmployeePaymentMethod;
 
   /** when the employee left — that month's payroll is their final one (Salary-Advances-Addendum §10) */

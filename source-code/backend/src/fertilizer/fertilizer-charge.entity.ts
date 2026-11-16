@@ -6,6 +6,7 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { FertilizerDeliveryEntity } from './fertilizer-delivery.entity';
 import { EstateEntity } from '../estates/estate.entity';
 import { FertilizerRequestEntity } from './fertilizer-request.entity';
 import { StockMovementEntity } from './stock-movement.entity';
@@ -47,6 +48,9 @@ export class FertilizerChargeEntity {
 
   /** the delivery attempt that billed it (Fertilizer-Delivery-Addendum: charged at delivery) */
   @Column({ name: 'delivery_id', type: 'int', unique: true, nullable: true })
+  @ForeignKey(() => FertilizerDeliveryEntity, {
+    name: 'fertilizer_charges_delivery_id_fkey',
+  })
   deliveryId: number | null;
 
   /** the request's payment method at delivery; null on legacy rows (= deduct) */

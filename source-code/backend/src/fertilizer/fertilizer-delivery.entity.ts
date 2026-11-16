@@ -1,4 +1,16 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Check,
+  Column,
+  Entity,
+  ForeignKey,
+  Index,
+  PrimaryGeneratedColumn,
+  Unique,
+} from 'typeorm';
+import { CollectionAgentEntity } from '../dispatch/collection-agent.entity';
+import { EstateEntity } from '../estates/estate.entity';
+import { FertilizerRequestEntity } from './fertilizer-request.entity';
+import { RouteEntity } from '../estates/route.entity';
 import type {
   DeliveryOutcome,
   DeliveryPhoto,
@@ -11,26 +23,52 @@ import type {
  * (`getAgentForRoute`, cover-aware) sees it. The officer's handover pins `pickupAgentId`.
  */
 @Entity('fertilizer_deliveries')
+@Check(
+  'fertilizer_deliveries_fail_reason_check',
+  `((fail_reason)::text = ANY ((ARRAY['owner_not_available'::character varying, 'road_not_passable'::character varying, 'owner_refused'::character varying, 'wrong_estate'::character varying, 'other'::character varying])::text[]))`,
+)
+@Check(
+  'fertilizer_deliveries_outcome_check',
+  `((outcome)::text = ANY ((ARRAY['delivered'::character varying, 'partial'::character varying, 'failed'::character varying])::text[]))`,
+)
+@Unique('fertilizer_deliveries_request_id_attempt_no_key', [
+  'requestId',
+  'attemptNo',
+])
+@Index('idx_fert_deliveries_agent', ['pickupAgentId'])
+@Index('idx_fert_deliveries_route_date', ['routeId', 'scheduledDate'])
 export class FertilizerDeliveryEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ name: 'request_id' })
+  @ForeignKey(() => FertilizerRequestEntity, {
+    name: 'fertilizer_deliveries_request_id_fkey',
+  })
   requestId: number;
 
   @Column({ name: 'attempt_no' })
   attemptNo: number;
 
   @Column({ name: 'estate_id' })
+  @ForeignKey(() => EstateEntity, {
+    name: 'fertilizer_deliveries_estate_id_fkey',
+  })
   estateId: number;
 
   @Column({ name: 'route_id' })
+  @ForeignKey(() => RouteEntity, {
+    name: 'fertilizer_deliveries_route_id_fkey',
+  })
   routeId: number;
 
   @Column({ name: 'scheduled_date', type: 'date' })
   scheduledDate: string;
 
   @Column({ name: 'pickup_agent_id', type: 'int', nullable: true })
+  @ForeignKey(() => CollectionAgentEntity, {
+    name: 'fertilizer_deliveries_pickup_agent_id_fkey',
+  })
   pickupAgentId: number | null;
 
   @Column({
@@ -42,7 +80,7 @@ export class FertilizerDeliveryEntity {
   })
   handoverQtyKg: string | null;
 
-  @Column({ name: 'handover_by', type: 'varchar', nullable: true })
+  @Column({ name: 'handover_by', type: 'varchar', nullable: true, length: 100 })
   handoverBy: string | null;
 
   @Column({ name: 'handover_at', type: 'timestamptz', nullable: true })
@@ -64,13 +102,19 @@ export class FertilizerDeliveryEntity {
   @Column({ name: 'pickup_mismatch', default: false })
   pickupMismatch: boolean;
 
-  @Column({ name: 'pickup_sync_key', type: 'varchar', nullable: true })
+  @Column({
+    name: 'pickup_sync_key',
+    type: 'varchar',
+    nullable: true,
+    length: 80,
+    unique: true,
+  })
   pickupSyncKey: string | null;
 
   @Column({ name: 'out_for_delivery_at', type: 'timestamptz', nullable: true })
   outForDeliveryAt: Date | null;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', nullable: true, length: 10 })
   outcome: DeliveryOutcome | null;
 
   @Column({
@@ -85,7 +129,7 @@ export class FertilizerDeliveryEntity {
   @Column({ name: 'shortfall_reason', type: 'text', nullable: true })
   shortfallReason: string | null;
 
-  @Column({ name: 'owner_name', type: 'varchar', nullable: true })
+  @Column({ name: 'owner_name', type: 'varchar', nullable: true, length: 100 })
   ownerName: string | null;
 
   /** device time of the owner's confirm tap on the agent's phone */
@@ -95,7 +139,7 @@ export class FertilizerDeliveryEntity {
   @Column({ type: 'jsonb', default: () => "'[]'" })
   photos: DeliveryPhoto[];
 
-  @Column({ name: 'fail_reason', type: 'varchar', nullable: true })
+  @Column({ name: 'fail_reason', type: 'varchar', nullable: true, length: 20 })
   failReason: FailReason | null;
 
   @Column({ name: 'fail_note', type: 'text', nullable: true })
@@ -109,7 +153,13 @@ export class FertilizerDeliveryEntity {
   @Column({ name: 'synced_at', type: 'timestamptz', nullable: true })
   syncedAt: Date | null;
 
-  @Column({ name: 'outcome_sync_key', type: 'varchar', nullable: true })
+  @Column({
+    name: 'outcome_sync_key',
+    type: 'varchar',
+    nullable: true,
+    length: 80,
+    unique: true,
+  })
   outcomeSyncKey: string | null;
 
   @Column({
@@ -121,7 +171,12 @@ export class FertilizerDeliveryEntity {
   })
   checkedInQtyKg: string | null;
 
-  @Column({ name: 'checked_in_by', type: 'varchar', nullable: true })
+  @Column({
+    name: 'checked_in_by',
+    type: 'varchar',
+    nullable: true,
+    length: 100,
+  })
   checkedInBy: string | null;
 
   @Column({ name: 'checked_in_at', type: 'timestamptz', nullable: true })
