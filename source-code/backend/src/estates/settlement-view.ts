@@ -1,7 +1,8 @@
 /**
- * Settlement period view (Settlement-Period-View-Addendum) — pure helpers, no repositories, so
- * every rule is unit-tested in settlement-view.spec.ts. Viewing only: the amounts come straight
- * from the stored settlement row and `settlementNet`; how a settlement is calculated is unchanged.
+ * Settlement period view (Settlement-Period-View-Addendum, Settlement-Addendum) — pure helpers,
+ * no repositories, so every rule is unit-tested in settlement-view.spec.ts. Viewing only: the
+ * amounts come from the stored settlement row and `settlementNet`. Legacy (seed) rows are listed
+ * but never counted in a period's figures.
  */
 import { labelToKey } from '../reports/reports-map';
 import {
@@ -13,10 +14,9 @@ import {
 import type { PaginatedResult } from './estate-lifetime-map';
 
 export interface SettlementDeductions {
+  transport: number;
   fertilizer: number;
   advances: number;
-  /** transport (the only other stored deduction) */
-  other: number;
 }
 
 export interface SettlementRow extends PublicSettlement {
@@ -35,19 +35,35 @@ export interface SettlementRow extends PublicSettlement {
 export interface SettlementSummary {
   /** 'YYYY-MM', or null for "All periods" */
   month: string | null;
-  /** owners with a settlement row in the period (pending or processed) */
-  ownersSettled: number;
+  /** settlements made for the period: drafts + processed (legacy never counts) */
+  prepared: number;
+  /** estates that need one: payable deliveries this month, or already processed; null for all periods */
+  eligible: number | null;
   processed: number;
+  /** drafts not processed yet */
   pending: number;
-  activeOwners: number;
+  /** seeded snapshots kept read-only */
+  legacy: number;
+  /** gross leaf value */
   gross: number;
-  deductions: SettlementDeductions;
+  /** by type; adjustments are signed (+/−) and shown on their own */
+  deductions: SettlementDeductions & { adjustments: number };
+  /** transport + fertilizer + advances */
   deductionsTotal: number;
   net: number;
-  /** active owners with confirmed deliveries this month but no settlement row; null for all periods */
-  notYetSettled: number | null;
+  /** estates with payable deliveries but no draft yet; null for all periods */
+  notPrepared: number | null;
+  /** how many estates "Prepare settlements" would make or recalculate a draft for; null for all periods */
+  willPrepare: number | null;
   /** newest month that has any settlement — for the empty state's "View latest" */
   latestMonth: string | null;
+}
+
+/** What the generator says about a month (null for "All periods"). */
+export interface PeriodPreparation {
+  eligible: number;
+  notPrepared: number;
+  willPrepare: number;
 }
 
 export interface SettlementListResult extends PaginatedResult<SettlementRow> {
@@ -70,7 +86,7 @@ export interface SettlementQuery {
   month: string;
   search?: string;
   routeId?: number;
-  status?: 'Pending' | 'Processed';
+  status?: 'Pending' | 'Processed' | 'Legacy';
   method?: OwnerPaymentMethod;
   /** only rows whose net payable is zero or negative */
   nonPositive?: boolean;
@@ -99,9 +115,9 @@ export function toSettlementRow(
 ): SettlementRow {
   const gross = round2(settlementGross(s));
   const deductions = {
+    transport: s.transportCost,
     fertilizer: s.fertilizerDeduction,
     advances: s.advanceDeduction,
-    other: s.transportCost,
   };
   return {
     ...s,
@@ -113,7 +129,7 @@ export function toSettlementRow(
     gross,
     deductions,
     deductionsTotal: round2(
-      deductions.fertilizer + deductions.advances + deductions.other,
+      deductions.transport + deductions.fertilizer + deductions.advances,
     ),
     net: round2(
       settlementNet({
@@ -197,67 +213,37 @@ export function settledMonths(rows: SettlementRow[]): string[] {
     .reverse();
 }
 
-/**
- * Active estates that delivered (confirmed) in `month` and have no settlement row for it —
- * the "Owners not yet settled" list. Only confirmed deliveries count: they are the ones a
- * settlement pays for.
- */
-export function unsettledEstateIds(
-  estates: Map<number, EstateFacts>,
-  deliveries: {
-    estateId: number | null;
-    status: string;
-    collectionDate: string;
-  }[],
-  periodRows: SettlementRow[],
-  month: string,
-): number[] {
-  const settled = new Set(periodRows.map((r) => r.estateId));
-  const delivered = new Set<number>();
-  for (const d of deliveries) {
-    if (
-      d.estateId !== null &&
-      d.status === 'confirmed' &&
-      d.collectionDate.slice(0, 7) === month
-    ) {
-      delivered.add(d.estateId);
-    }
-  }
-  return [...delivered]
-    .filter((id) => estates.get(id)?.active && !settled.has(formatId(id)))
-    .sort((a, b) => a - b);
-}
-
-// settlements carry the formatted estate id ('EST-0001')
-const formatId = (id: number) => `EST-${String(id).padStart(4, '0')}`;
-
 export function summarize(
   periodRows: SettlementRow[],
   month: string,
-  activeOwners: number,
-  notYetSettled: number | null,
+  prep: PeriodPreparation | null,
   latestMonth: string | null,
 ): SettlementSummary {
+  const live = periodRows.filter((r) => r.status !== 'Legacy');
   const sum = (f: (r: SettlementRow) => number) =>
-    round2(periodRows.reduce((s, r) => s + f(r), 0));
+    round2(live.reduce((s, r) => s + f(r), 0));
   const deductions = {
+    transport: sum((r) => r.deductions.transport),
     fertilizer: sum((r) => r.deductions.fertilizer),
     advances: sum((r) => r.deductions.advances),
-    other: sum((r) => r.deductions.other),
+    adjustments: sum((r) => r.adjustment),
   };
+  const processed = live.filter((r) => r.status === 'Processed').length;
   return {
     month: month === ALL_PERIODS ? null : month,
-    ownersSettled: new Set(periodRows.map((r) => r.estateId)).size,
-    processed: periodRows.filter((r) => r.status === 'Processed').length,
-    pending: periodRows.filter((r) => r.status === 'Pending').length,
-    activeOwners,
+    prepared: live.length,
+    eligible: prep ? prep.eligible : null,
+    processed,
+    pending: live.filter((r) => r.status === 'Pending').length,
+    legacy: periodRows.length - live.length,
     gross: sum((r) => r.gross),
     deductions,
     deductionsTotal: round2(
-      deductions.fertilizer + deductions.advances + deductions.other,
+      deductions.transport + deductions.fertilizer + deductions.advances,
     ),
     net: sum((r) => r.net),
-    notYetSettled,
+    notPrepared: prep ? prep.notPrepared : null,
+    willPrepare: prep ? prep.willPrepare : null,
     latestMonth,
   };
 }

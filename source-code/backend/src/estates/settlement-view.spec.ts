@@ -7,7 +7,6 @@ import {
   sortRows,
   summarize,
   toSettlementRow,
-  unsettledEstateIds,
 } from './settlement-view';
 
 const facts = (over: Partial<EstateFacts> = {}): EstateFacts => ({
@@ -73,9 +72,9 @@ describe('settlement period view', () => {
     const r = rows[0];
     expect(r.gross).toBe(30000);
     expect(r.deductions).toEqual({
+      transport: 1000,
       fertilizer: 2000,
       advances: 3000,
-      other: 1000,
     });
     expect(r.deductionsTotal).toBe(6000);
     expect(r.net).toBe(24000);
@@ -126,45 +125,39 @@ describe('settlement period view', () => {
 
   it('the summary is the whole period — filters never change it', () => {
     const july = rowsInPeriod(rows, '2026-07');
-    const s = summarize(july, '2026-07', 4, 1, '2026-07');
+    const s = summarize(
+      july,
+      '2026-07',
+      { eligible: 5, notPrepared: 1, willPrepare: 3 },
+      '2026-07',
+    );
     expect(s).toMatchObject({
-      ownersSettled: 2,
+      prepared: 2,
+      eligible: 5,
       pending: 2,
       processed: 0,
-      activeOwners: 4,
+      legacy: 0,
       gross: 31000,
       deductionsTotal: 12000,
       net: 19000,
-      notYetSettled: 1,
+      notPrepared: 1,
+      willPrepare: 3,
     });
     expect(s.deductions).toEqual({
+      transport: 2000,
       fertilizer: 4000,
       advances: 6000,
-      other: 2000,
+      adjustments: 0,
     });
   });
 
-  it('"owners not yet settled" = active owners with confirmed deliveries that month and no settlement row', () => {
-    const estates = new Map<number, EstateFacts>([
-      [1, facts()],
-      [2, facts()],
-      [3, facts()],
-      [4, facts({ active: false })],
-    ]);
-    const deliveries = [
-      { estateId: 1, status: 'confirmed', collectionDate: '2026-07-03' }, // settled
-      { estateId: 3, status: 'confirmed', collectionDate: '2026-07-14' }, // ← not yet settled
-      { estateId: 3, status: 'confirmed', collectionDate: '2026-07-20' },
-      { estateId: 2, status: 'collected', collectionDate: '2026-07-10' }, // not confirmed
-      { estateId: 2, status: 'confirmed', collectionDate: '2026-08-01' }, // other month
-      { estateId: 4, status: 'confirmed', collectionDate: '2026-07-05' }, // inactive
-    ];
-    const july = rowsInPeriod(rows, '2026-07').filter(
-      (r) => r.estateId === 'EST-0001',
+  it('Legacy (seed) rows are listed but never counted in the figures', () => {
+    const july = rowsInPeriod(rows, '2026-07').map((r, i) =>
+      i === 0 ? { ...r, status: 'Legacy' as const } : r,
     );
-    expect(unsettledEstateIds(estates, deliveries, july, '2026-07')).toEqual([
-      3,
-    ]);
+    const s = summarize(july, '2026-07', null, '2026-07');
+    expect(s).toMatchObject({ prepared: 1, legacy: 1, eligible: null });
+    expect(s.gross).toBe(july[1].gross);
   });
 
   it('pages 0-based; limit 0 returns every row for the export', () => {

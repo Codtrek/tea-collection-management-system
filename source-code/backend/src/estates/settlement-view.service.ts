@@ -5,7 +5,7 @@ import { CollectionRecordEntity } from '../collections/collection-record.entity'
 import { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
 import { formatChargeId } from '../fertilizer/fertilizer-map';
 import { EstateAdvanceEntity } from './estate-advance.entity';
-import { formatEstateId, toAppAdvanceStatus } from './estate-map';
+import { toAppAdvanceStatus } from './estate-map';
 import { EstateOwnerEntity } from './estate-owner.entity';
 import { EstateEntity } from './estate.entity';
 import { EstatesService } from './estates.service';
@@ -23,17 +23,22 @@ import {
   sortRows,
   summarize,
   toSettlementRow,
-  unsettledEstateIds,
 } from './settlement-view';
+import { SettlementGeneratorService } from './settlement-generator.service';
 
+/** An estate with deliveries in the month and no settlement yet — and why. */
 export interface UnsettledOwner {
   estateId: string;
   estateName: string;
   ownerName: string;
   route: string;
   paymentMethod: EstateFacts['paymentMethod'];
+  /** payable deliveries (a draft would pay for these) */
   deliveries: number;
   gradedKg: number;
+  /** 'not_prepared' = Prepare settlements makes its draft; 'waiting' = nothing payable yet */
+  state: 'not_prepared' | 'waiting';
+  reason: string;
 }
 
 export interface SettlementDetail {
@@ -85,6 +90,7 @@ export class SettlementViewService {
     private readonly chargeRepo: Repository<FertilizerChargeEntity>,
     @InjectRepository(EstateAdvanceEntity)
     private readonly advanceRepo: Repository<EstateAdvanceEntity>,
+    private readonly generator: SettlementGeneratorService,
   ) {}
 
   async list(q: SettlementQuery): Promise<SettlementListResult> {
@@ -92,11 +98,9 @@ export class SettlementViewService {
     const all = await this.allRows(facts);
     const periodRows = rowsInPeriod(all, q.month);
     const months = settledMonths(all);
-    const notYetSettled =
-      q.month === ALL_PERIODS
-        ? null
-        : (await this.unsettledIds(facts, periodRows, q.month)).length;
-    const activeOwners = [...facts.values()].filter((f) => f.active).length;
+    // the generator says what the month still needs (Settlement-Addendum)
+    const run =
+      q.month === ALL_PERIODS ? null : await this.generator.run(q.month);
 
     const filtered = sortRows(applyFilters(periodRows, q), q.sort, q.dir);
     const routes = (await this.routeRepo.find())
@@ -107,8 +111,13 @@ export class SettlementViewService {
       summary: summarize(
         periodRows,
         q.month,
-        activeOwners,
-        notYetSettled,
+        run
+          ? {
+              eligible: run.candidates + run.processed,
+              notPrepared: run.notPrepared,
+              willPrepare: run.candidates,
+            }
+          : null,
         months[0] ?? null,
       ),
       months,
@@ -116,38 +125,43 @@ export class SettlementViewService {
     };
   }
 
+  /** Estates with deliveries in `month` and no settlement yet: not prepared, or waiting. */
   async unsettled(month: string): Promise<UnsettledOwner[]> {
+    const run = await this.generator.run(month);
     const facts = await this.estateFacts();
-    const periodRows = rowsInPeriod(await this.allRows(facts), month);
-    const ids = await this.unsettledIds(facts, periodRows, month);
-    const deliveries = (
-      await this.collectionRepo.find({ where: { status: 'confirmed' } })
-    ).filter((d) => d.collectionDate.slice(0, 7) === month);
-    const estates = await this.estateRepo.find();
-    return ids.map((id) => {
-      const f = facts.get(id)!;
-      const own = deliveries.filter((d) => d.estateId === id);
-      return {
-        estateId: formatEstateId(id),
-        estateName: estates.find((e) => e.id === id)?.name ?? '',
-        ownerName: f.ownerName,
-        route: f.route,
-        paymentMethod: f.paymentMethod,
-        deliveries: own.length,
-        gradedKg:
-          Math.round(
-            own.reduce(
-              (s, d) =>
-                s +
-                (d.gradeLines ?? []).reduce(
-                  (t, l) => t + Number(l.weightKg),
-                  0,
-                ),
-              0,
-            ) * 100,
-          ) / 100,
-      };
-    });
+    const fact = (estateId: string) =>
+      facts.get(Number(estateId.replace(/^EST-/, '')));
+    const notPrepared: UnsettledOwner[] = run.rows
+      .filter((r) => !r.settlementId)
+      .map((r) => ({
+        estateId: r.estateId,
+        estateName: r.estateName,
+        ownerName: r.ownerName,
+        route: r.route,
+        paymentMethod: r.payoutMethod,
+        deliveries: r.calc.leaf.length,
+        gradedKg: Math.round((r.calc.superKg + r.calc.normalKg) * 100) / 100,
+        state: 'not_prepared',
+        reason: 'Not prepared yet — Prepare settlements makes its draft.',
+      }));
+    const waiting: UnsettledOwner[] = run.waiting.map((w) => ({
+      estateId: w.estateId,
+      estateName: w.estateName,
+      ownerName: fact(w.estateId)?.ownerName ?? 'Unknown',
+      route: fact(w.estateId)?.route ?? '',
+      paymentMethod: fact(w.estateId)?.paymentMethod ?? 'bank',
+      deliveries: 0,
+      gradedKg: 0,
+      state: 'waiting',
+      reason: [
+        w.ungraded ? `${w.ungraded} not graded yet` : '',
+        w.open ? `${w.open} inside the grading window` : '',
+        w.excluded ? `${w.excluded} excluded (rolls to next month)` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    }));
+    return [...notPrepared, ...waiting];
   }
 
   async detail(id: string): Promise<SettlementDetail> {
@@ -220,17 +234,6 @@ export class SettlementViewService {
     return settlements.map((s) =>
       toSettlementRow(s, facts.get(Number(s.estateId.replace(/^EST-/, '')))),
     );
-  }
-
-  private async unsettledIds(
-    facts: Map<number, EstateFacts>,
-    periodRows: SettlementRow[],
-    month: string,
-  ): Promise<number[]> {
-    const deliveries = await this.collectionRepo.find({
-      where: { status: 'confirmed' },
-    });
-    return unsettledEstateIds(facts, deliveries, periodRows, month);
   }
 
   /** Owner / route / method per estate — also used by EstateAdvanceViewService. */

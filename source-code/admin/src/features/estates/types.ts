@@ -117,7 +117,8 @@ export interface EstateAdvanceContext {
   maxInstallmentMonths: number
 }
 
-export type SettlementStatus = 'Pending' | 'Processed'
+/** 'Legacy' = a seeded snapshot kept read-only and never processed (Settlement-Addendum). */
+export type SettlementStatus = 'Pending' | 'Processed' | 'Legacy'
 
 /*
   Settlement per the proposal's payment formula:
@@ -148,6 +149,14 @@ export interface Settlement {
   processedOn?: string
   /** Administration-Addendum §4 — frozen when processed, live while pending; null on older history */
   transport?: TransportLine | null
+  /** the gross the generator priced (rate periods); absent on seeded rows */
+  grossAmount?: number
+  /** made by the settlement generator (its calculation is frozen once processed) */
+  generated?: boolean
+  legacyReason?: string
+  /** a generated draft the run leaves out, and why */
+  excludedReason?: string
+  payoutMethod?: OwnerPaymentMethod
 }
 
 /** The transport line of a settlement: a fixed monthly charge per estate. */
@@ -172,10 +181,9 @@ export interface TransportLine {
   `settlement-view.ts`. Every figure, the summary and the filtering are server-side.
 */
 export interface SettlementDeductions {
+  transport: number
   fertilizer: number
   advances: number
-  /** transport */
-  other: number
 }
 
 export interface SettlementRow extends Settlement {
@@ -190,17 +198,26 @@ export interface SettlementRow extends Settlement {
   net: number
 }
 
+/** A period's figures (Legacy rows never count). Mirrors the backend's `settlement-view.ts`. */
 export interface SettlementSummary {
   month: string | null
-  ownersSettled: number
+  /** drafts + processed */
+  prepared: number
+  /** estates that need a settlement this month; null for all periods */
+  eligible: number | null
   processed: number
   pending: number
-  activeOwners: number
+  legacy: number
+  /** gross leaf value */
   gross: number
-  deductions: SettlementDeductions
+  /** adjustments are signed (+/−) */
+  deductions: SettlementDeductions & { adjustments: number }
   deductionsTotal: number
   net: number
-  notYetSettled: number | null
+  /** estates with payable deliveries but no draft yet; null for all periods */
+  notPrepared: number | null
+  /** estates "Prepare settlements" makes or recalculates a draft for; null for all periods */
+  willPrepare: number | null
   latestMonth: string | null
 }
 
@@ -215,14 +232,19 @@ export interface SettlementListResult {
   routes: { id: number; name: string }[]
 }
 
+/** An estate with deliveries in the month and no settlement yet — and why. */
 export interface UnsettledOwner {
   estateId: string
   estateName: string
   ownerName: string
   route: string
   paymentMethod: OwnerPaymentMethod
+  /** payable deliveries */
   deliveries: number
   gradedKg: number
+  /** 'not_prepared' = Prepare settlements makes its draft; 'waiting' = nothing payable yet */
+  state: 'not_prepared' | 'waiting'
+  reason: string
 }
 
 export interface SettlementDetail {

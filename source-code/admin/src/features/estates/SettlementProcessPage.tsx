@@ -57,10 +57,9 @@ export function SettlementProcessPage() {
   const blockedByTransport = payingTransport.length > 0
 
   const processMutation = useMutation({
-    mutationFn: () => estatesService.processSettlements(period),
-    onSuccess: (processed) => {
-      const processedTotal = processed.reduce((sum, s) => sum + netPayable(s), 0)
-      toast(`Settlement processed by ${user?.name} — ${formatCurrency(processedTotal)} across ${processed.length} estates`)
+    mutationFn: () => estatesService.processSettlements(month, total),
+    onSuccess: ({ processed, totals }) => {
+      toast(`Settlement processed by ${user?.name} — ${formatCurrency(totals.net)} across ${processed.length} estates`)
       void queryClient.invalidateQueries({ queryKey: ['estates', 'settlements'] })
       void queryClient.invalidateQueries({ queryKey: ['estates', 'advances'] })
       navigate(backHref)

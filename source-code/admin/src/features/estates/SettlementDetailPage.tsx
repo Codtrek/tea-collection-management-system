@@ -172,7 +172,7 @@ export function SettlementDetailPage() {
             <dt className="text-text-muted">− Advances</dt>
             <dd className="text-right">{formatCurrency(s.deductions.advances)}</dd>
             <dt className="text-text-muted">− {transport.label.replace(/^Less: /, '')}</dt>
-            <dd className="text-right">{transport.notConfigured ? 'Not configured' : formatCurrency(s.deductions.other)}</dd>
+            <dd className="text-right">{transport.notConfigured ? 'Not configured' : formatCurrency(s.deductions.transport)}</dd>
             {transport.notes.map((n) => (
               <p key={n} className="col-span-2 text-xs text-text-muted">
                 {n}

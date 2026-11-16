@@ -221,7 +221,9 @@ export class EstatesController {
       search,
       routeId: routeId ? Number(routeId) : undefined,
       status:
-        status === 'Pending' || status === 'Processed' ? status : undefined,
+        status === 'Pending' || status === 'Processed' || status === 'Legacy'
+          ? status
+          : undefined,
       method: method === 'bank' || method === 'cash' ? method : undefined,
       nonPositive: nonPositive === 'true' || nonPositive === '1',
       sort: SETTLEMENT_SORTS.includes(sort as SettlementSort)
