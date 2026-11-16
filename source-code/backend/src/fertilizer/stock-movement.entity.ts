@@ -19,9 +19,20 @@ import type { DbMovementType, WriteOffReason } from './fertilizer-map';
  * 2026-07-27, see PLAN.md) — both draw down the same batch.
  */
 @Entity('stock_movements')
-@Check('stock_movements_type_check', `"type" IN ('Incoming', 'Outgoing')`)
+@Check(
+  'stock_movements_type_check',
+  `"type" IN ('Incoming', 'Outgoing', 'Write-off')`,
+)
 @Index('idx_stock_movements_batch', ['batchId'])
 @Index('idx_stock_movements_estate', ['estateId'])
+@Check(
+  'stock_movements_write_off_reason_check',
+  `((write_off_reason)::text = ANY ((ARRAY['expired'::character varying, 'damaged'::character varying, 'other'::character varying])::text[]))`,
+)
+@Check(
+  'stock_movements_write_off_reason_required',
+  `(((type)::text <> 'Write-off'::text) OR (write_off_reason IS NOT NULL))`,
+)
 export class StockMovementEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -68,7 +79,12 @@ export class StockMovementEntity {
   supplier: string | null;
 
   /** Write-off only (expired / damaged / other); null on Incoming and Outgoing. */
-  @Column({ name: 'write_off_reason', type: 'varchar', nullable: true })
+  @Column({
+    name: 'write_off_reason',
+    type: 'varchar',
+    nullable: true,
+    length: 10,
+  })
   writeOffReason: WriteOffReason | null;
 
   @Column({ type: 'text', nullable: true })
