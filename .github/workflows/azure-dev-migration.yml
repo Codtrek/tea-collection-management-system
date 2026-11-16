@@ -53,8 +53,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "::group::Checking required secrets"
-
           failed=0
 
           for name in SSH_HOST SSH_KEY KNOWN_HOSTS DB_PASSWORD; do
@@ -66,14 +64,12 @@ jobs:
             fi
           done
 
-          echo "::endgroup::"
-
           if [[ "$failed" -ne 0 ]]; then
             exit 1
           fi
 
       # -----------------------------------
-      # 3. Configure SSH securely
+      # 3. Configure SSH
       # -----------------------------------
       - name: Configure SSH
         env:
@@ -105,7 +101,7 @@ jobs:
           echo "SSH configuration validated"
 
       # -----------------------------------
-      # 4. Verify Azure VM SSH authentication
+      # 4. Verify Azure VM SSH access
       # -----------------------------------
       - name: Verify Azure SSH access
         env:
@@ -124,15 +120,13 @@ jobs:
             'echo "Azure VM SSH authentication succeeded"'; then
 
             echo "::error::Azure VM SSH verification failed"
-            echo "Check AZURE_VM_HOST, AZURE_VM_SSH_KEY,"
-            echo "AZURE_VM_KNOWN_HOSTS and server permissions"
             exit 1
           fi
 
       # -----------------------------------
-      # 5. SSH tunnel and PostgreSQL preflight
+      # 5. SSH tunnel and database checks
       # -----------------------------------
-      - name: Verify private PostgreSQL connection
+      - name: Verify PostgreSQL and inspect migrations
         env:
           SSH_HOST: ${{ secrets.AZURE_VM_HOST }}
           MIGRATION_DB_PASSWORD: ${{ secrets.AZURE_DEV_MIGRATION_PASSWORD }}
@@ -150,6 +144,9 @@ jobs:
 
           trap cleanup EXIT
 
+          # -----------------------------------
+          # 5.1 Open SSH tunnel
+          # -----------------------------------
           echo "::group::Opening SSH tunnel"
 
           ssh -N \
@@ -191,27 +188,44 @@ jobs:
           echo "PostgreSQL tunnel is reachable"
           echo "::endgroup::"
 
+          # -----------------------------------
+          # 5.2 Build connection URL
+          # -----------------------------------
+          echo "::group::Preparing migration connection"
+
+          DATABASE_URL_DIRECT="$(node <<'NODE'
+          const url = new URL(
+            'postgresql://127.0.0.1:15433/harboost_dev'
+          );
+
+          url.username = 'harboost_dev_migrator';
+          url.password = process.env.MIGRATION_DB_PASSWORD;
+
+          url.searchParams.set(
+            'options',
+            '-c role=harboost_dev_owner'
+          );
+
+          process.stdout.write(url.toString());
+          NODE
+          )"
+
+          export DATABASE_URL_DIRECT
+
+          echo "Migration connection URL prepared"
+          echo "::endgroup::"
+
+          # -----------------------------------
+          # 5.3 Verify PostgreSQL identity
+          # -----------------------------------
           echo "::group::Verifying PostgreSQL identity"
 
           node <<'NODE'
           const { Client } = require('pg');
 
           async function main() {
-            // Use a URL object so passwords containing
-            // special characters are encoded correctly.
-            const url = new URL(
-              'postgresql://127.0.0.1:15433/harboost_dev'
-            );
-
-            url.username = 'harboost_dev_migrator';
-            url.password = process.env.MIGRATION_DB_PASSWORD;
-            url.searchParams.set(
-              'options',
-              '-c role=harboost_dev_owner'
-            );
-
             const client = new Client({
-              connectionString: url.toString(),
+              connectionString: process.env.DATABASE_URL_DIRECT,
               connectionTimeoutMillis: 10000,
               ssl: false,
             });
@@ -242,7 +256,7 @@ jobs:
               console.log('Database: harboost_dev');
               console.log('Login role: harboost_dev_migrator');
               console.log('Effective role: harboost_dev_owner');
-              console.log('Database connection verification passed');
+              console.log('Database identity verified');
 
             } finally {
               await client.end();
@@ -250,7 +264,7 @@ jobs:
           }
 
           main().catch(error => {
-            // Avoid printing connection strings or passwords.
+            // Do not expose credentials or connection URLs.
             console.error(
               `PostgreSQL verification failed (${error.code || 'connection error'})`
             );
@@ -260,8 +274,21 @@ jobs:
 
           echo "::endgroup::"
 
+          # -----------------------------------
+          # 5.4 Inspect pending migrations
+          # -----------------------------------
+          echo "::group::Checking pending TypeORM migrations"
+
+          npx --no-install typeorm-ts-node-commonjs \
+            migration:show \
+            -d src/data-source.ts
+
+          echo "::endgroup::"
+
+          echo "Azure PostgreSQL verification completed"
+
       # -----------------------------------
-      # 6. Report results
+      # 6. GitHub Actions summary
       # -----------------------------------
       - name: Success summary
         if: success()
@@ -269,15 +296,16 @@ jobs:
           {
             echo "## Azure Dev Migration Verification"
             echo ""
-            echo "Status: PASSED"
+            echo "**Status:** PASSED"
             echo ""
             echo "- SSH credentials validated"
             echo "- Azure VM authentication succeeded"
             echo "- PostgreSQL tunnel reachable"
             echo "- Database identity verified"
             echo "- Effective migration role verified"
+            echo "- TypeORM migration status inspected"
             echo ""
-            echo "No migrations executed."
+            echo "**No migrations executed.**"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Failure summary
@@ -286,9 +314,9 @@ jobs:
           {
             echo "## Azure Dev Migration Verification"
             echo ""
-            echo "Status: FAILED"
+            echo "**Status:** FAILED"
             echo ""
-            echo "Review the failed workflow step for diagnostics."
+            echo "Review the failed step for diagnostics."
             echo ""
             echo "No migration command was executed."
           } >> "$GITHUB_STEP_SUMMARY"
