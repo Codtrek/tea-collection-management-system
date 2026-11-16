@@ -2,7 +2,10 @@
 name: Azure Dev Migrations
 
 on:
-  workflow_dispatch:
+    push:
+        branches:
+            -dev
+    workflow_dispatch:
 
 permissions:
   contents: read
@@ -281,6 +284,11 @@ jobs:
 
           npx --no-install typeorm-ts-node-commonjs \
             migration:show \
+            echo "::group::Running TypeORM migrations"
+
+            npm run migration:run
+
+            echo "::endgroup::"
             -d src/data-source.ts
 
           echo "::endgroup::"
