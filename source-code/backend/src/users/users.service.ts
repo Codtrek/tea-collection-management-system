@@ -61,14 +61,20 @@ export class UsersService {
    * random hash is stored to satisfy the schema in the meantime. Reuses the
    * existing row if this phone is already registered.
    */
-  async createUser(phone: string, role: DbRole): Promise<User> {
+  /** `name` fills `users.name` (VARCHAR(32), NOT NULL in the hosted schema). */
+  async createUser(phone: string, role: DbRole, name: string): Promise<User> {
     const existing = await this.findByPhone(phone);
     if (existing) return existing;
     const password_hash = await bcrypt.hash(
       randomBytes(24).toString('hex'),
       10,
     );
-    const user = this.usersRepository.create({ phone, password_hash, role });
+    const user = this.usersRepository.create({
+      phone,
+      password_hash,
+      role,
+      name: name.trim().slice(0, 32),
+    });
     return this.usersRepository.save(user);
   }
 

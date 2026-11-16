@@ -2427,10 +2427,10 @@ async function seed() {
 
     for (const seedUser of SEED_USERS) {
       const user = await client.query<{ id: number }>(
-        `INSERT INTO users (phone, password_hash, role) VALUES ($1, $2, $3)
+        `INSERT INTO users (phone, password_hash, role, name) VALUES ($1, $2, $3, $4)
          ON CONFLICT (phone) DO UPDATE SET password_hash = EXCLUDED.password_hash
          RETURNING id`,
-        [seedUser.phone, passwordHash, seedUser.role],
+        [seedUser.phone, passwordHash, seedUser.role, seedUser.name.slice(0, 32)],
       );
       const userId = user.rows[0].id;
 
@@ -2518,10 +2518,10 @@ async function seed() {
     const estateOwnerIds: Record<string, number> = {};
     for (const e of ESTATE_SEEDS) {
       const ownerUser = await client.query<{ id: number }>(
-        `INSERT INTO users (phone, password_hash, role) VALUES ($1, $2, 'estate_owner')
+        `INSERT INTO users (phone, password_hash, role, name) VALUES ($1, $2, 'estate_owner', $3)
          ON CONFLICT (phone) DO UPDATE SET password_hash = EXCLUDED.password_hash
          RETURNING id`,
-        [e.ownerPhone, passwordHash],
+        [e.ownerPhone, passwordHash, e.ownerName.slice(0, 32)],
       );
       const ownerUserId = ownerUser.rows[0].id;
 
@@ -2847,8 +2847,8 @@ async function seed() {
         await client.query(
           `INSERT INTO advance_recoveries
              (advance_id, kind, period, payroll_run_id, status, planned_amount, amount)
-           SELECT $1, 'payroll', $2, p.id, 'reserved', $3, $3
-             FROM payroll_runs p WHERE p.employee_id = $4 AND p.period = $2
+           SELECT $1, 'payroll', $2::varchar, p.id, 'reserved', $3, $3
+             FROM payroll_runs p WHERE p.employee_id = $4 AND p.period = $2::varchar
            ON CONFLICT DO NOTHING`,
           [a.id, PAYROLL_PERIOD, a.amount, employeeId],
         );
@@ -2879,10 +2879,10 @@ async function seed() {
     const agentIds: Record<string, number> = {};
     for (const a of AGENT_SEEDS) {
       const agentUser = await client.query<{ id: number }>(
-        `INSERT INTO users (phone, password_hash, role) VALUES ($1, $2, 'collection_agent')
+        `INSERT INTO users (phone, password_hash, role, name) VALUES ($1, $2, 'collection_agent', $3)
          ON CONFLICT (phone) DO UPDATE SET password_hash = EXCLUDED.password_hash
          RETURNING id`,
-        [a.phone, passwordHash],
+        [a.phone, passwordHash, a.name.slice(0, 32)],
       );
       const agentUserId = agentUser.rows[0].id;
 
