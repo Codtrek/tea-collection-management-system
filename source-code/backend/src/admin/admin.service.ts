@@ -7,7 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
-import { toAppRole } from '../auth/role-map';
+import { toPortalRole } from '../auth/role-map';
 import { FactoryEmployee } from '../users/factory-employee.entity';
 import { User } from '../users/user.entity';
 import {
@@ -212,7 +212,7 @@ export class AdminService {
       .map((u) => ({
         id: formatUserId(u.id),
         name: nameByUserId.get(u.id) ?? 'Unknown',
-        role: toAppRole(u.role),
+        role: toPortalRole(u.role),
         phone: u.phone,
         status: (u.status === 'suspended' ? 'Suspended' : 'Active') as
           | 'Active'
@@ -287,7 +287,7 @@ export class AdminService {
     return {
       id: formatUserId(user.id),
       name: profile?.name ?? 'Unknown',
-      role: toAppRole(user.role),
+      role: toPortalRole(user.role),
       phone: user.phone,
       status: user.status === 'suspended' ? 'Suspended' : 'Active',
       lastLogin: user.last_login_at ? user.last_login_at.toISOString() : null,

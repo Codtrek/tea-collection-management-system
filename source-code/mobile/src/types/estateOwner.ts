@@ -4,7 +4,7 @@
  * (estates, pickup requests, deliveries).
  */
 
-export type EstateGrade = "Super" | "Normal" | "Mixed";
+export type EstateGrade = "Super" | "Normal" | "Mixed" | "Not graded";
 
 export interface Estate {
   id: string;
@@ -12,6 +12,30 @@ export interface Estate {
   location: string;
   areaAcres: number;
   grade: EstateGrade;
+}
+
+export interface EstateProfile extends Estate {
+  imageSrc: string;
+  managerName: string;
+  managerPhone: string;
+  factories: {
+    name: string;
+    address: string;
+  }[];
+  workersActive: number;
+  workersTotal: number;
+  workers: {
+    id: string;
+    name: string;
+    role: string;
+  }[];
+  weeklyPluckedWeightsKg: number[];
+  recentActivities: {
+    id: string;
+    description: string;
+    factory: string;
+    timeAgo: string;
+  }[];
 }
 
 export type PickupRequestStatus =

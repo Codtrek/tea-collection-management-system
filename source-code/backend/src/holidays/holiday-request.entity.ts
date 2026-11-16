@@ -1,4 +1,12 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Check,
+  Column,
+  Entity,
+  ForeignKey,
+  Index,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { User } from '../users/user.entity';
 
 export type HolidayRequestKind = 'weekly_rule' | 'closure' | 'emergency';
 export type HolidayRequestStatus =
@@ -25,14 +33,23 @@ export interface AttendanceSnapshot {
  * emergency closure that already took effect and waits for review (keep or revert).
  */
 @Entity('holiday_requests')
+@Check(
+  'holiday_requests_kind_check',
+  `((kind)::text = ANY ((ARRAY['weekly_rule'::character varying, 'closure'::character varying, 'emergency'::character varying])::text[]))`,
+)
+@Check(
+  'holiday_requests_status_check',
+  `((status)::text = ANY ((ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'kept'::character varying, 'reverted'::character varying])::text[]))`,
+)
+@Index('idx_holiday_requests_status', ['status'])
 export class HolidayRequestEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', length: 12 })
   kind: HolidayRequestKind;
 
-  @Column({ type: 'varchar', default: 'pending' })
+  @Column({ type: 'varchar', default: 'pending', length: 10 })
   status: HolidayRequestStatus;
 
   @Column({ type: 'jsonb' })
@@ -44,16 +61,19 @@ export class HolidayRequestEntity {
   @Column({ name: 'date_to', type: 'date' })
   dateTo: string;
 
-  @Column({ name: 'requested_by', type: 'varchar' })
+  @Column({ name: 'requested_by', type: 'varchar', length: 100 })
   requestedBy: string;
 
   @Column({ name: 'requested_by_user_id', type: 'int', nullable: true })
+  @ForeignKey(() => User, {
+    name: 'holiday_requests_requested_by_user_id_fkey',
+  })
   requestedByUserId: number | null;
 
-  @Column({ name: 'requested_at', type: 'timestamptz' })
+  @Column({ name: 'requested_at', type: 'timestamptz', default: () => 'now()' })
   requestedAt: Date;
 
-  @Column({ name: 'decided_by', type: 'varchar', nullable: true })
+  @Column({ name: 'decided_by', type: 'varchar', nullable: true, length: 100 })
   decidedBy: string | null;
 
   @Column({ name: 'decided_at', type: 'timestamptz', nullable: true })

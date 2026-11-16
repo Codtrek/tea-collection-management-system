@@ -95,6 +95,7 @@ export class EstatesService {
     const ownerUser = await this.usersService.createUser(
       dto.contact,
       'estate_owner',
+      dto.ownerName,
     );
     let owner = await this.ownerRepo.findOne({
       where: { userId: ownerUser.id },
@@ -340,7 +341,8 @@ export class EstatesService {
         (a) => a.estateId === settlement.estateId,
       );
       settlement.adjustmentAmount = String(
-        Math.round(carried.reduce((s, a) => s + Number(a.amountRs), 0) * 100) / 100,
+        Math.round(carried.reduce((s, a) => s + Number(a.amountRs), 0) * 100) /
+          100,
       );
       settlement.status = 'processed';
       settlement.processedBy = actor.name;
