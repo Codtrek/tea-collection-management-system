@@ -10,5 +10,6 @@ export const STATUS_STYLE: Record<string, { bg: string; fg: string; label: strin
   confirmed: { bg: colors.successBackground, fg: colors.success, label: 'Confirmed' },
 
   cancelled: { bg: colors.errorBackground, fg: colors.error, label: 'Cancelled' },
+  declined: { bg: colors.errorBackground, fg: colors.error, label: 'Declined' },
   mismatch: { bg: colors.errorBackground, fg: colors.error, label: 'Mismatch reported' },
 };

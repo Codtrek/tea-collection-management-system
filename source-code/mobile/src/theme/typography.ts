@@ -15,9 +15,15 @@ export const typography = {
 
 
   // Section titles / card titles
-  subheading: {
+  subHeading: {
     fontSize: 18,
     fontWeight: "600",
+    lineHeight: 26,
+  },
+
+  sectionHeading: {
+    fontSize: 16,
+    fontWeight: "500",
     lineHeight: 26,
   },
 
@@ -40,6 +46,7 @@ export const typography = {
     fontSize: 14,
     fontWeight: "500",
     lineHeight: 20,
+    opacity: 0.5,
   },
 
   // Small information

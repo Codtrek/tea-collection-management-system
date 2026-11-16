@@ -1,4 +1,12 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ForeignKey,
+  Index,
+  PrimaryColumn,
+} from 'typeorm';
+import { User } from '../users/user.entity';
 
 /**
  * ADM-04 — one append-only row per mutation, written by `AuditService`. Never
@@ -7,33 +15,37 @@ import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
  * human-facing `userName`/`role` are always stamped regardless.
  */
 @Entity('audit_logs')
+@Index('idx_audit_logs_created', ['createdAt'])
+@Index('idx_audit_logs_module', ['module'])
+@Index('idx_audit_logs_user', ['userName'])
 export class AuditLogEntity {
   /** Business key, e.g. 'AUD-00001'. */
-  @PrimaryColumn()
+  @PrimaryColumn({ type: 'varchar', length: 20 })
   id: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
   @Column({ name: 'user_id', type: 'int', nullable: true })
+  @ForeignKey(() => User, { name: 'audit_logs_user_id_fkey' })
   userId: number | null;
 
-  @Column({ name: 'user_name' })
+  @Column({ name: 'user_name', type: 'varchar', length: 100 })
   userName: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 20 })
   role: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 200 })
   action: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 40 })
   module: string;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', length: 120, nullable: true })
   record: string | null;
 
-  @Column({ name: 'record_href', type: 'varchar', nullable: true })
+  @Column({ name: 'record_href', type: 'varchar', length: 200, nullable: true })
   recordHref: string | null;
 
   @Column({ type: 'text', nullable: true })

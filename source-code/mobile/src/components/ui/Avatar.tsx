@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   },
 
   placeholder: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.ImageBackground,
     justifyContent: "center",
     alignItems: "center",
   },

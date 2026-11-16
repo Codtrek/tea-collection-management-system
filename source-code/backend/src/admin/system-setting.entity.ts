@@ -7,15 +7,20 @@ import { Column, Entity, PrimaryColumn } from 'typeorm';
  */
 @Entity('system_settings')
 export class SystemSettingEntity {
-  @PrimaryColumn()
+  @PrimaryColumn({ type: 'varchar', length: 60 })
   key: string;
 
   @Column({ type: 'jsonb' })
   value: unknown;
 
-  @Column({ name: 'updated_by', type: 'varchar', nullable: true })
+  @Column({ name: 'updated_by', type: 'varchar', length: 100, nullable: true })
   updatedBy: string | null;
 
-  @Column({ name: 'updated_at', type: 'timestamp', nullable: true })
+  @Column({
+    name: 'updated_at',
+    type: 'timestamp',
+    nullable: true,
+    default: () => 'now()',
+  })
   updatedAt: Date | null;
 }

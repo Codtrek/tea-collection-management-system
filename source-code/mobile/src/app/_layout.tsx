@@ -6,7 +6,7 @@ export default function RootLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        animation: 'slide_from_right',
+        animation: 'none',
       }}
     >
       <Stack.Screen 
@@ -22,10 +22,10 @@ export default function RootLayout() {
         }}
       />
       <Stack.Screen 
-        name="auth/signin" 
+        name="auth/login"
       />
       <Stack.Screen 
-        name="auth/signup" 
+        name="auth/register"
       />
       <Stack.Screen 
         name="auth/change-password"
