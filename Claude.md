@@ -1262,6 +1262,8 @@ dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/dat
 - **Never run migrations or seeds against the hosted DB (Azure VM).** The team's pipeline does that.
 - **Local databases: port 5433 is shared.** 127.0.0.1:5433 can be an ssh tunnel to the hosted DB. Use `DATABASE_URL=postgresql://tea@localhost:5433/<db>?host=::1`. `npm run seed` refuses non-local URLs and non-local servers (`src/local-db-guard.ts`).
 - **A fresh local database:** `createdb` → `npm run migration:run` → `npm run seed`.
+- **Login needs Redis** (dev's rate limiting, `REDIS_URL`). This machine has none, so local e2e runs preload an in-memory stand-in (not committed).
+- **The report e2e specs** (Collection, Expense and Leaf Purchase) need the demo seed's Aug–Nov 2026 data.
 
 ## Newcomer's guide (2026-10-18)
 
