@@ -11,6 +11,7 @@
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { Client } from 'pg';
+import { assertLocalDatabaseUrl, assertLocalServer } from './local-db-guard';
 import { AGENT_JOB_ROLE } from './employees/employee-roles';
 
 const DEV_PASSWORD = 'Password123!';
@@ -2409,8 +2410,16 @@ async function seedDispatch(client: Client, ctx: DispatchSeedContext) {
 }
 
 async function seed() {
+  // never the hosted database: the URL must be local, and so must the server (local-db-guard.ts)
+  assertLocalDatabaseUrl(process.env.DATABASE_URL);
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
+  try {
+    await assertLocalServer(client);
+  } catch (err) {
+    await client.end();
+    throw err;
+  }
 
   try {
     // `factories` has no unique constraint, so this can't rely on ON CONFLICT —
