@@ -1,11 +1,12 @@
 
+
 name: Azure Dev Migrations
 
 on:
-    push:
-        branches:
-            -dev
-    workflow_dispatch:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,10 +16,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
-    name: verify-azure-postgres
+  migrate:
+    name: migrate-azure-postgres
+    if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     defaults:
       run:
@@ -29,10 +31,8 @@ jobs:
       # -----------------------------------
       # 1. Checkout and install dependencies
       # -----------------------------------
-      - name: Checkout dev branch
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: dev
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -45,7 +45,7 @@ jobs:
         run: npm ci
 
       # -----------------------------------
-      # 2. Validate GitHub Secrets
+      # 2. Validate required secrets
       # -----------------------------------
       - name: Validate required secrets
         env:
@@ -70,6 +70,8 @@ jobs:
           if [[ "$failed" -ne 0 ]]; then
             exit 1
           fi
+
+          echo "All required secrets are configured"
 
       # -----------------------------------
       # 3. Configure SSH
@@ -127,9 +129,10 @@ jobs:
           fi
 
       # -----------------------------------
-      # 5. SSH tunnel and database checks
+      # 5. Connect to Azure PostgreSQL
+      #    and execute TypeORM migrations
       # -----------------------------------
-      - name: Verify PostgreSQL and inspect migrations
+      - name: Run Azure PostgreSQL migrations
         env:
           SSH_HOST: ${{ secrets.AZURE_VM_HOST }}
           MIGRATION_DB_PASSWORD: ${{ secrets.AZURE_DEV_MIGRATION_PASSWORD }}
@@ -192,7 +195,7 @@ jobs:
           echo "::endgroup::"
 
           # -----------------------------------
-          # 5.2 Build connection URL
+          # 5.2 Build migration connection URL
           # -----------------------------------
           echo "::group::Preparing migration connection"
 
@@ -215,7 +218,7 @@ jobs:
 
           export DATABASE_URL_DIRECT
 
-          echo "Migration connection URL prepared"
+          echo "Migration connection prepared"
           echo "::endgroup::"
 
           # -----------------------------------
@@ -267,7 +270,6 @@ jobs:
           }
 
           main().catch(error => {
-            // Do not expose credentials or connection URLs.
             console.error(
               `PostgreSQL verification failed (${error.code || 'connection error'})`
             );
@@ -282,18 +284,34 @@ jobs:
           # -----------------------------------
           echo "::group::Checking pending TypeORM migrations"
 
-          npx --no-install typeorm-ts-node-commonjs \
-            migration:show \
-            echo "::group::Running TypeORM migrations"
-
-            npm run migration:run
-
-            echo "::endgroup::"
-            -d src/data-source.ts
+          npx --no-install typeorm-ts-node-commonjs migration:show -d src/data-source.ts
 
           echo "::endgroup::"
 
-          echo "Azure PostgreSQL verification completed"
+          # -----------------------------------
+          # 5.5 Execute migrations
+          # -----------------------------------
+          echo "::group::Executing TypeORM migrations"
+
+          if npm run migration:run; then
+            echo "TypeORM migrations completed successfully"
+          else
+            echo "::error::TypeORM migration execution failed"
+            exit 1
+          fi
+
+          echo "::endgroup::"
+
+          # -----------------------------------
+          # 5.6 Verify final migration status
+          # -----------------------------------
+          echo "::group::Final TypeORM migration status"
+
+          npx --no-install typeorm-ts-node-commonjs migration:show -d src/data-source.ts
+
+          echo "::endgroup::"
+
+          echo "Azure Dev database migration job completed"
 
       # -----------------------------------
       # 6. GitHub Actions summary
@@ -302,29 +320,32 @@ jobs:
         if: success()
         run: |
           {
-            echo "## Azure Dev Migration Verification"
+            echo "## Azure Dev Migrations"
             echo ""
             echo "**Status:** PASSED"
             echo ""
-            echo "- SSH credentials validated"
-            echo "- Azure VM authentication succeeded"
-            echo "- PostgreSQL tunnel reachable"
+            echo "- Azure VM SSH authentication succeeded"
+            echo "- PostgreSQL tunnel established"
             echo "- Database identity verified"
             echo "- Effective migration role verified"
-            echo "- TypeORM migration status inspected"
+            echo "- TypeORM migration execution succeeded"
+            echo "- Final migration status inspected"
             echo ""
-            echo "**No migrations executed.**"
+            echo "**Target database:** harboost_dev"
+            echo ""
+            echo "**Commit:** $GITHUB_SHA"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Failure summary
         if: failure()
         run: |
           {
-            echo "## Azure Dev Migration Verification"
+            echo "## Azure Dev Migrations"
             echo ""
             echo "**Status:** FAILED"
             echo ""
-            echo "Review the failed step for diagnostics."
+            echo "Migration pipeline execution failed."
             echo ""
-            echo "No migration command was executed."
+            echo "Review the failing step for diagnostics."
+            echo "Check database migration history before retrying."
           } >> "$GITHUB_STEP_SUMMARY"
