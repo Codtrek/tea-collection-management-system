@@ -943,7 +943,7 @@ ALTER SEQUENCE public.grading_notifications_id_seq OWNED BY public.grading_notif
 -- Name: migrations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.migrations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.migrations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
