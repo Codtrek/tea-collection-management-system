@@ -13,7 +13,7 @@ import type { AppRole } from '../auth/role-map';
 import { UsersService } from '../users/users.service';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { SettlementAdjustmentEntity } from '../collections/settlement-adjustment.entity';
-import { keyToLabel, labelToKey } from '../reports/reports-map';
+import { keyToLabel } from '../reports/reports-map';
 import {
   addMonths,
   monthsForInstallment,
@@ -21,9 +21,7 @@ import {
   planText,
 } from '../advances/installments';
 import { localDate } from '../dispatch/dispatch-map';
-import { dbStatusFor } from './estate-advance-balance';
 import { EstateAdvanceSettingsService } from './estate-advance-settings.service';
-import { allocateStoredAdvanceDeduction } from './settlement-deductions';
 import { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
 import { EstateAdvanceEntity } from './estate-advance.entity';
 import { EstateDocumentEntity } from './estate-document.entity';
@@ -36,6 +34,7 @@ import {
   type PublicAdvance,
   type PublicEstate,
   type PublicSettlement,
+  settlementGross,
 } from './estate-map';
 import { EstateOwnerEntity } from './estate-owner.entity';
 import { EstateEntity } from './estate.entity';
@@ -44,16 +43,27 @@ import { IssueAdvanceDto } from './dto/issue-advance.dto';
 import { UpdateEstateDto } from './dto/update-estate.dto';
 import { RouteEntity } from './route.entity';
 import { SettlementEntity } from './settlement.entity';
-import { payableDeliveries } from './settlement-calc';
 import {
   transportLines,
   type TransportSettlementFacts,
 } from './settlement-transport';
-import {
-  monthLabel,
-  type PublicTransportLine,
-  type TransportVersion,
-} from '../admin/transport-rules';
+import { type PublicTransportLine } from '../admin/transport-rules';
+
+/** The transport line a generated settlement carries in its own columns. */
+function generatedTransportLine(s: SettlementEntity): PublicTransportLine {
+  return {
+    status: s.transportStatus ?? 'not_configured',
+    charge: Number(s.transportCharge ?? 0),
+    carriedIn: Number(s.transportCarriedIn ?? 0),
+    taken: Number(s.transportCost),
+    carriedOut: Number(s.transportCarriedOut ?? 0),
+    versionId: s.transportVersionId,
+    versionMonth:
+      (s.calculation as { transport?: { versionMonth?: string | null } })
+        ?.transport?.versionMonth ?? null,
+    frozen: s.status === 'processed',
+  };
+}
 
 export interface Actor {
   name: string;
@@ -295,14 +305,26 @@ export class EstatesService {
     const missingBank = new Set(
       settlements.filter((s) => s.missingBank).map((s) => s.id),
     );
+    const generated = new Set(
+      settlements.filter((s) => s.calculation != null).map((s) => s.id),
+    );
     const lines = transportLines(
       settlements.map((s) => this.transportFacts(s, adjustmentOf(s))),
       await this.transport.versions(),
       await this.deliveryCounter(),
-      (s) => s.status === 'pending' && !missingBank.has(s.id),
+      (s) =>
+        s.status === 'pending' &&
+        !missingBank.has(s.id) &&
+        !generated.has(s.id),
     );
     return settlements.map((s) => {
       const out = this.toPublicSettlement(s);
+      // a generated settlement carries its own calculation (Settlement-Addendum)
+      if (s.calculation != null) {
+        out.transport = generatedTransportLine(s);
+        return out;
+      }
+      if (s.status === 'legacy') return out;
       const line = lines.get(s.id) ?? null;
       out.transport = line;
       if (s.status === 'pending') {
@@ -324,9 +346,7 @@ export class EstatesService {
       period: s.period,
       status: s.status,
       selfDelivery: s.selfDelivery,
-      gross:
-        Number(s.superKg) * Number(s.superRate) +
-        Number(s.normalKg) * Number(s.normalRate),
+      gross: settlementGross(s),
       adjustment,
       others: Number(s.fertilizerDeduction) + Number(s.advanceDeduction),
       transportStatus: s.transportStatus ?? null,
@@ -352,194 +372,6 @@ export class EstatesService {
       counts.set(k, (counts.get(k) ?? 0) + 1);
     }
     return (estateId, month) => counts.get(`${estateId}|${month}`) ?? 0;
-  }
-
-  /**
-   * EST-08 — processes every currently-Pending settlement of `period` (or of
-   * every period when omitted) in one run (matches the portal's single
-   * "Process N Settlements" action; there's no per-settlement targeting). Missing-bank estates are excluded, not
-   * blocked (UC-054) — flip their bank details and they're picked up next
-   * run. Included estates' pending advances flip to Deducted. No
-   * per-transaction bank charge is applied (resolved 2026-07-26 — see
-   * Claude.md's Payment calculation section).
-   */
-  async processSettlements(
-    actor: Actor,
-    period?: string,
-  ): Promise<PublicSettlement[]> {
-    this.assertCanWrite(actor);
-
-    const all = await this.settlementRepo.find();
-    // Settlement-Period-View-Addendum: the period view processes ITS month only; no period =
-    // every pending row, as before.
-    const eligible = all.filter(
-      (s) =>
-        s.status === 'pending' &&
-        !s.missingBank &&
-        (!period || s.period === period),
-    );
-
-    // oldest period first, so an estate's advance balances recover month by month
-    eligible.sort((a, b) =>
-      labelToKey(a.period).localeCompare(labelToKey(b.period)),
-    );
-
-    if (eligible.length === 0) {
-      throw new ConflictException(
-        'No pending settlements are ready to process.',
-      );
-    }
-
-    const now = new Date();
-    const processed: SettlementEntity[] = [];
-    const allAdvances = await this.advanceRepo.find();
-    const allRecoveries = await this.recoveryRepo.find();
-    const pendingAdjustments = (await this.adjustmentRepo.find()).filter(
-      (a) => a.status === 'pending',
-    );
-    const allDeliveries = await this.collectionRepo.find({
-      where: { status: 'confirmed' },
-    });
-    const adjustmentOf = (s: SettlementEntity) =>
-      Math.round(
-        pendingAdjustments
-          .filter((a) => a.estateId === s.estateId)
-          .reduce((sum, a) => sum + Number(a.amountRs), 0) * 100,
-      ) / 100;
-
-    // Administration-Addendum §4: transport is a fixed monthly charge, worked out here and
-    // frozen on the settlement. A month no version covers is "not configured": the run stops for
-    // estates that pay transport — transport is never deducted as Rs. 0 silently.
-    const versions: TransportVersion[] = await this.transport.versions();
-    const eligibleIds = new Set(eligible.map((s) => s.id));
-    const transportByIds = transportLines(
-      all.map((s) =>
-        this.transportFacts(
-          s,
-          s.status === 'pending'
-            ? adjustmentOf(s)
-            : Number(s.adjustmentAmount ?? 0),
-        ),
-      ),
-      versions,
-      await this.deliveryCounter(allDeliveries),
-      (s) => eligibleIds.has(s.id),
-    );
-    const blocked = eligible.filter(
-      (s) => transportByIds.get(s.id)?.status === 'not_configured',
-    );
-    if (blocked.length > 0) {
-      const p = blocked[0].period;
-      const n = blocked.filter((s) => s.period === p).length;
-      throw new ConflictException(
-        `Transport: not configured. No monthly transport charge covers ${monthLabel(labelToKey(p))} (Factory Setup → Transport Rates). ${n} settlement${n === 1 ? '' : 's'} for ${p} include transport, so they can't be processed yet.`,
-      );
-    }
-    let skippedOpen = 0;
-    let linked = 0;
-    let unallocatedRs = 0;
-
-    for (const settlement of eligible) {
-      // Signed corrections on deliveries paid in EARLIER settlements ride along here — the
-      // earlier payment is never rewritten, the difference is carried forward.
-      const carried = pendingAdjustments.filter(
-        (a) => a.estateId === settlement.estateId,
-      );
-      settlement.adjustmentAmount = String(adjustmentOf(settlement));
-      // freeze transport: a later version never changes a processed settlement
-      const line = transportByIds.get(settlement.id) as PublicTransportLine;
-      settlement.transportStatus =
-        line.status === 'not_configured' ? null : line.status;
-      settlement.transportCharge = String(line.charge);
-      settlement.transportVersionId = line.versionId;
-      settlement.transportCarriedIn = String(line.carriedIn);
-      settlement.transportCarriedOut = String(line.carriedOut);
-      settlement.transportCost = String(line.taken);
-      settlement.status = 'processed';
-      settlement.processedBy = actor.name;
-      settlement.processedOn = now;
-      processed.push(await this.settlementRepo.save(settlement));
-      for (const a of carried) {
-        a.status = 'applied';
-        a.appliedSettlementId = settlement.id;
-        await this.adjustmentRepo.save(a);
-      }
-
-      // Link the deliveries this settlement pays for: same estate, same month, not already
-      // paid — and only those past the correction window. OPEN ones are skipped.
-      const monthKey = labelToKey(settlement.period);
-      const candidates = allDeliveries.filter(
-        (d) =>
-          d.estateId === settlement.estateId &&
-          !d.settlementId &&
-          monthKey !== '' &&
-          d.collectionDate.slice(0, 7) === monthKey,
-      );
-      const payable = payableDeliveries(candidates, now);
-      skippedOpen += candidates.length - payable.length;
-      for (const d of payable) {
-        d.settlementId = settlement.id;
-        await this.collectionRepo.save(d);
-        linked += 1;
-      }
-
-      // Estate-Owner-Advances-Addendum §4: split the advance deduction this settlement actually
-      // took (its stored advance_deduction — there's no generator yet) across the estate's open
-      // advances: due installments first, oldest first; any excess pays down the oldest balances.
-      // One recovery row per advance (planned vs taken — the rest is carried forward). An
-      // advance is Deducted only once its balance reaches Rs. 0. Settlement amounts never change.
-      const open = allAdvances.filter(
-        (a) => a.estateId === settlement.estateId && a.status !== 'deducted',
-      );
-      const { lines, unallocated } = allocateStoredAdvanceDeduction(
-        Number(settlement.advanceDeduction),
-        open,
-        allRecoveries,
-        settlement.period,
-      );
-      unallocatedRs += unallocated;
-      for (const line of lines) {
-        allRecoveries.push(
-          await this.recoveryRepo.save(
-            this.recoveryRepo.create({
-              advanceId: line.advanceId,
-              settlementId: settlement.id,
-              kind: 'settlement',
-              period: settlement.period,
-              plannedAmount: String(line.planned),
-              amount: String(line.amount),
-              status: 'recovered',
-              reference: null,
-              paidOn: null,
-              recordedBy: actor.name,
-              recoveredAt: now,
-            }),
-          ),
-        );
-        const advance = open.find((a) => a.id === line.advanceId)!;
-        const status = dbStatusFor(advance, allRecoveries);
-        if (status !== advance.status) {
-          advance.status = status;
-          await this.advanceRepo.save(advance);
-        }
-      }
-    }
-
-    await this.audit.record(actor, {
-      action: 'Processed settlement run',
-      module: 'Estate Owner',
-      record: `${processed.length} settlement(s)${period ? ` · ${period}` : ''}`,
-      recordHref: '/estates/settlements',
-      details:
-        `${linked} deliver${linked === 1 ? 'y' : 'ies'} linked as paid` +
-        (skippedOpen > 0
-          ? `; ${skippedOpen} still inside the correction window and not included`
-          : '') +
-        (unallocatedRs > 0
-          ? `; Rs. ${Math.round(unallocatedRs).toLocaleString('en-US')} of advance deductions matched no open advance`
-          : ''),
-    });
-    return processed.map((s) => this.toPublicSettlement(s));
   }
 
   private async findEntity(formattedId: string): Promise<EstateEntity> {
@@ -679,6 +511,13 @@ export class EstatesService {
       fertilizerDeduction: Number(entity.fertilizerDeduction),
       advanceDeduction: Number(entity.advanceDeduction),
       adjustment: Number(entity.adjustmentAmount ?? 0),
+      ...(entity.grossAmount != null
+        ? { grossAmount: Number(entity.grossAmount) }
+        : {}),
+      generated: entity.calculation != null || undefined,
+      legacyReason: entity.legacyReason ?? undefined,
+      excludedReason: entity.excludedReason ?? undefined,
+      payoutMethod: entity.payoutMethod ?? undefined,
       status: toAppSettlementStatus(entity.status),
       selfDelivery: entity.selfDelivery,
       missingBank: entity.missingBank || undefined,

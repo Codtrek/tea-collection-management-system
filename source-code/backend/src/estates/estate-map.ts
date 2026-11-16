@@ -11,11 +11,12 @@ export type AppEstateStatus = 'Active' | 'Inactive';
 export type DbAdvanceStatus = 'pending_deduction' | 'recovering' | 'deducted';
 export type AppAdvanceStatus = 'Pending deduction' | 'Recovering' | 'Deducted';
 
-export type DbSettlementStatus = 'pending' | 'processed';
+/** 'legacy' = a seeded snapshot kept read-only and never processed (Settlement-Addendum). */
+export type DbSettlementStatus = 'pending' | 'processed' | 'legacy';
 
 /** How an estate owner is paid (Settlement-Period-View-Addendum). */
 export type OwnerPaymentMethod = 'bank' | 'cash';
-export type AppSettlementStatus = 'Pending' | 'Processed';
+export type AppSettlementStatus = 'Pending' | 'Processed' | 'Legacy';
 
 const DB_TO_APP_ESTATE_STATUS: Record<DbEstateStatus, AppEstateStatus> = {
   active: 'Active',
@@ -39,6 +40,7 @@ const DB_TO_APP_SETTLEMENT_STATUS: Record<
 > = {
   pending: 'Pending',
   processed: 'Processed',
+  legacy: 'Legacy',
 };
 
 export function toAppEstateStatus(status: DbEstateStatus): AppEstateStatus {
@@ -137,6 +139,15 @@ export interface PublicSettlement {
    * pending; null on history processed before the monthly charge existed.
    */
   transport?: PublicTransportLine | null;
+  /** the gross the generator priced (Σ leaf lines by rate period); absent on seeded rows */
+  grossAmount?: number;
+  /** made by the settlement generator: its line-by-line calculation (frozen once processed) */
+  generated?: boolean;
+  /** 'Legacy' rows: why they are kept read-only */
+  legacyReason?: string;
+  /** a generated row the run leaves out, and why (e.g. a bank payout with no account) */
+  excludedReason?: string;
+  payoutMethod?: OwnerPaymentMethod;
 }
 
 /** The numeric parts of a settlement row (entity values arrive as decimal strings). */
@@ -149,6 +160,19 @@ export interface SettlementAmounts {
   fertilizerDeduction: string | number;
   advanceDeduction: string | number;
   adjustmentAmount?: string | number | null;
+  /** set on generated settlements — rate periods make kg × one rate wrong */
+  grossAmount?: string | number | null;
+}
+
+/** Gross leaf value: what the generator priced, or kg × rate on a seeded row. */
+export function settlementGross(s: SettlementAmounts): number {
+  if (s.grossAmount !== undefined && s.grossAmount !== null) {
+    return Number(s.grossAmount);
+  }
+  return (
+    Number(s.superKg) * Number(s.superRate) +
+    Number(s.normalKg) * Number(s.normalRate)
+  );
 }
 
 /**
@@ -157,8 +181,7 @@ export interface SettlementAmounts {
  */
 export function settlementNet(s: SettlementAmounts): number {
   return (
-    Number(s.superKg) * Number(s.superRate) +
-    Number(s.normalKg) * Number(s.normalRate) -
+    settlementGross(s) -
     Number(s.transportCost) -
     Number(s.fertilizerDeduction) -
     Number(s.advanceDeduction) +

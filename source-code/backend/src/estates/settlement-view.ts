@@ -7,6 +7,7 @@ import { labelToKey } from '../reports/reports-map';
 import {
   type OwnerPaymentMethod,
   type PublicSettlement,
+  settlementGross,
   settlementNet,
 } from './estate-map';
 import type { PaginatedResult } from './estate-lifetime-map';
@@ -96,7 +97,7 @@ export function toSettlementRow(
   s: PublicSettlement,
   estate: EstateFacts | undefined,
 ): SettlementRow {
-  const gross = round2(s.superKg * s.superRate + s.normalKg * s.normalRate);
+  const gross = round2(settlementGross(s));
   const deductions = {
     fertilizer: s.fertilizerDeduction,
     advances: s.advanceDeduction,

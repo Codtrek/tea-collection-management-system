@@ -27,6 +27,11 @@ export class TransportStatusService {
     return (await this.rates.find()).map(toTransportVersion);
   }
 
+  /** The status for a 'YYYY-MM' month from versions already read. */
+  statusFrom(versions: TransportVersion[], month: string): TransportStatus {
+    return transportStatus(versions, month);
+  }
+
   /** The status for a settlement period ('July 2026'); no period = this month. */
   async forPeriod(period: string): Promise<TransportStatus> {
     const key = labelToKey(period) || localDate(new Date()).slice(0, 7);

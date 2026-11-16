@@ -241,12 +241,18 @@ interface SeedSettlement {
   transportCost: number;
   fertilizerDeduction: number;
   advanceDeduction: number;
-  status: 'pending' | 'processed';
+  status: 'pending' | 'processed' | 'legacy';
   selfDelivery: boolean;
   missingBank?: boolean;
   processedBy?: string;
   processedOn?: string;
 }
+
+// Settlement-Addendum: the July 2026 snapshots were typed in, not made from the deliveries (their
+// kg and deductions don't match them, and break the advance cap). They stay, read-only, and are
+// never processed; July is generated fresh from the deliveries.
+const LEGACY_SEED_REASON =
+  'Seeded snapshot, not calculated from the deliveries — kept read-only and never processed. July 2026 is generated from the deliveries.';
 
 // Mirrors the portal's former SETTLEMENTS fixture 1:1 (July 2026 run + 2
 // already-processed June 2026 rows). Rates from Factory Setup (ADM-01, not
@@ -263,7 +269,7 @@ const SETTLEMENT_SEEDS: SeedSettlement[] = [
     transportCost: 8400,
     fertilizerDeduction: 22800,
     advanceDeduction: 50000,
-    status: 'pending',
+    status: 'legacy',
     selfDelivery: false,
   },
   {
@@ -277,7 +283,7 @@ const SETTLEMENT_SEEDS: SeedSettlement[] = [
     transportCost: 6100,
     fertilizerDeduction: 11400,
     advanceDeduction: 30000,
-    status: 'pending',
+    status: 'legacy',
     selfDelivery: false,
   },
   {
@@ -291,7 +297,7 @@ const SETTLEMENT_SEEDS: SeedSettlement[] = [
     transportCost: 0,
     fertilizerDeduction: 15200,
     advanceDeduction: 0,
-    status: 'pending',
+    status: 'legacy',
     selfDelivery: true,
   },
   {
@@ -305,7 +311,7 @@ const SETTLEMENT_SEEDS: SeedSettlement[] = [
     transportCost: 3800,
     fertilizerDeduction: 3800,
     advanceDeduction: 0,
-    status: 'pending',
+    status: 'legacy',
     selfDelivery: false,
     missingBank: true,
   },
@@ -2639,8 +2645,8 @@ async function seed() {
         `INSERT INTO settlements
            (id, estate_id, estate_name, period, super_kg, normal_kg, super_rate, normal_rate,
             transport_cost, fertilizer_deduction, advance_deduction, status, self_delivery,
-            missing_bank, processed_by, processed_on)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            missing_bank, processed_by, processed_on, legacy_reason)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
          ON CONFLICT (id) DO UPDATE SET
            estate_id = EXCLUDED.estate_id, estate_name = EXCLUDED.estate_name,
            period = EXCLUDED.period, super_kg = EXCLUDED.super_kg, normal_kg = EXCLUDED.normal_kg,
@@ -2649,7 +2655,8 @@ async function seed() {
            fertilizer_deduction = EXCLUDED.fertilizer_deduction,
            advance_deduction = EXCLUDED.advance_deduction, status = EXCLUDED.status,
            self_delivery = EXCLUDED.self_delivery, missing_bank = EXCLUDED.missing_bank,
-           processed_by = EXCLUDED.processed_by, processed_on = EXCLUDED.processed_on`,
+           processed_by = EXCLUDED.processed_by, processed_on = EXCLUDED.processed_on,
+           legacy_reason = EXCLUDED.legacy_reason`,
         [
           s.id,
           estateIds[s.estateName],
@@ -2667,6 +2674,7 @@ async function seed() {
           s.missingBank ?? false,
           s.processedBy ?? null,
           s.processedOn ?? null,
+          s.status === 'legacy' ? LEGACY_SEED_REASON : null,
         ],
       );
     }
