@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { DashboardContent } from './DashboardPage'
 import type { DashboardSummary } from './types'
+import { MISSING_SECTION, parseSummary } from '@/services/dashboard'
+import { BlockBoundary } from '@/components/data/BlockBoundary'
 
 /*
   The dashboard shows only what GET /dashboard/summary returned. These render the page body to
@@ -41,11 +43,13 @@ const base: DashboardSummary = {
   month: '2026-11',
   role: 'Officer',
   actions: [],
-  quickActions: [],
+  primaryAction: null,
+  toDecide: 0,
   todayView: null,
   monthView: null,
   charts: null,
   activity: [],
+  errors: {},
 }
 
 describe('Dashboard — no invented numbers', () => {
@@ -79,10 +83,29 @@ describe('Dashboard — figures come from the response', () => {
   const data: DashboardSummary = {
     ...base,
     actions: [
-      { key: 'fertilizerToDecide', count: 7, label: '7 fertilizer requests to decide', href: '/fertilizer/requests?status=Requested', urgency: 21 },
-      { key: 'salaryAdvances', count: 3, label: '3 salary advances to decide', href: '/employees/advances', urgency: 20 },
+      {
+        key: 'fertilizerToDecide',
+        count: 7,
+        label: '7 fertilizer requests to decide',
+        reason: 'Oldest requested 03 Nov 2026',
+        href: '/fertilizer/requests?status=Requested',
+        group: 'toDecide',
+        urgency: 31,
+        action: 'Review',
+      },
+      {
+        key: 'salaryAdvances',
+        count: 3,
+        label: '3 salary advances to decide',
+        reason: null,
+        href: '/employees/advances',
+        group: 'toDecide',
+        urgency: 30,
+        action: 'Review',
+      },
     ],
-    quickActions: [{ key: 'markAttendance', label: 'Mark attendance', href: '/employees/attendance/entry' }],
+    primaryAction: { label: 'Review', href: '/fertilizer/requests?status=Requested', key: 'fertilizerToDecide' },
+    toDecide: 2,
     todayView: {
       leaf: { kg: 4321, deliveries: 12, compareKg: 3456, changePct: 25, compareDate: '2026-11-10', href: '/reports/collection?from=2026-11-17&to=2026-11-17' },
       grading: { waiting: 0, waitingHref: '/collections?grade=Ungraded', overTolerance: 0, tolerancePct: 5, mismatchHref: '/x' },
@@ -129,9 +152,58 @@ describe('Dashboard — figures come from the response', () => {
     expect(render({ ...data, todayView: null })).not.toContain('Leaf received so far')
   })
 
-  it('greets by name (not an initial) and lists the role’s quick actions', () => {
+  it('greets by name (not an initial); one primary action and "Review approvals (N)"; reason lines', () => {
     const text = render(data)
     expect(text).toContain('Good morning, Bandara')
-    expect(text).toContain('Mark attendance')
+    expect(text).toContain('Review approvals (2)')
+    expect(text).toContain('Oldest requested 03 Nov 2026')
+    // no primary button with an empty queue
+    expect(render({ ...data, actions: [], primaryAction: null, toDecide: 0 })).not.toContain('Review approvals')
   })
 })
+
+describe('Dashboard — one bad block never takes down the page', () => {
+  it('a summary missing its optional sections still renders the header, the queue and activity', () => {
+    // as an older or newer server might send it: no todayView / monthView / charts keys at all
+    const partial = parseSummary({ ...base, todayView: undefined, monthView: undefined, charts: undefined, actions: [], activity: [] })
+    const text = render(partial)
+    expect(text).toContain('Good morning')
+    expect(text).toContain('Needs your action')
+    expect(text).toContain('Recent activity')
+    // the missing sections are named inline, each in its own block
+    expect(text).toContain("Couldn't show today's figures")
+    expect(text).toContain("Couldn't show the intake charts")
+  })
+
+  it('a missing required list becomes an inline error in its block; the rest renders', () => {
+    const json = { ...base, todayView: null, monthView: null, charts: null } as Record<string, unknown>
+    delete json.actions
+    delete json.activity
+    const text = render(parseSummary(json))
+    expect(text).toContain("Couldn't show the work queue")
+    expect(text).toContain("Couldn't show recent activity")
+    expect(text).toContain(MISSING_SECTION)
+    expect(text).toContain('Good morning')
+  })
+
+  it('a section the server could not load shows its error there, and only there', () => {
+    const text = render({ ...base, errors: { charts: "Couldn't load this section." } })
+    expect(text).toContain("Couldn't show the intake charts")
+    expect(text).not.toContain("Couldn't show the work queue")
+    expect(text).toContain('Needs your action')
+  })
+
+  it('BlockBoundary: after a render error it shows the inline error; Retry and new data render again', () => {
+    // React catches the throw (checked in a real browser by e2e/dashboard.spec.ts); this is the boundary's own part
+    let retried = 0
+    const props = { label: 'the work queue', onRetry: () => retried++, resetKey: 'a', children: <p>queue</p> }
+    const boundary = new BlockBoundary(props)
+    boundary.state = { ...boundary.state, ...BlockBoundary.getDerivedStateFromError() }
+    expect(renderToStaticMarkup(<MemoryRouter>{boundary.render()}</MemoryRouter>)).toContain("Couldn&#x27;t show the work queue")
+    // new data (a refetch landed) renders the block again
+    expect(BlockBoundary.getDerivedStateFromProps({ ...props, resetKey: 'b' }, boundary.state)).toEqual({ failed: false, resetKey: 'b' })
+    expect(BlockBoundary.getDerivedStateFromProps(props, boundary.state)).toBeNull()
+    expect(retried).toBe(0)
+  })
+})
+

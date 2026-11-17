@@ -28,7 +28,8 @@ import { factoryToday } from '@/features/dispatch/status'
 import * as dashboardService from '@/services/dashboard'
 import { formatCurrency, formatDate, formatKg, formatNumber, formatPercent, formatRelative, formatWeight } from '@/lib/format'
 import { agentLine, changeText, colomboTime, greetName, greeting, isRecordId, weekdayOf } from './dashboard-view'
-import type { ActionItem, ActivityEntry, DashboardCharts, DashboardSummary, MonthView, QuickAction, TodayView } from './types'
+import type { ActionItem, ActivityEntry, DashboardCharts, DashboardSummary, MonthView, Section, TodayView } from './types'
+import { BlockBoundary, BlockError } from '@/components/data/BlockBoundary'
 
 /*
   Dashboard (Dashboard-Addendum). Three questions — what needs me, what is happening today, how
@@ -85,7 +86,16 @@ export function DashboardContent({
         description={description}
         actions={
           <>
-            {data?.quickActions.map((a) => <QuickActionButton key={a.key} action={a} />)}
+            {data?.primaryAction && <PrimaryActionButton action={data.primaryAction} />}
+            {data && data.toDecide > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => document.getElementById('needs-action')?.scrollIntoView({ block: 'start' })}
+              >
+                Review approvals ({formatNumber(data.toDecide)})
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={onRefresh} disabled={isFetching} aria-label="Refresh the dashboard">
               <RefreshCw className={isFetching ? 'size-4 animate-spin' : 'size-4'} aria-hidden /> Refresh
             </Button>
@@ -102,25 +112,56 @@ export function DashboardContent({
         <ErrorState title="Couldn't load the dashboard" description="The figures come from the server; nothing is shown until they load." onRetry={onRefresh} />
       ) : (
         <>
-          <NeedsAction items={data.actions} />
-          {data.todayView && <TodaySection view={data.todayView} today={data.today} />}
-          {data.monthView && <MonthSection view={data.monthView} />}
-          {data.charts && <ChartsSection charts={data.charts} />}
-          <ActivitySection entries={data.activity} auditLogLink={auditLogLink} />
+          {/* each block keeps its own failure: a server error for its section, or a render error */}
+          <Block label="the work queue" section="actions" data={data} onRetry={onRefresh}>
+            <NeedsAction items={data.actions} />
+          </Block>
+          <Block label="today's figures" section="today" data={data} onRetry={onRefresh}>
+            {data.todayView && <TodaySection view={data.todayView} today={data.today} />}
+          </Block>
+          <Block label="this month's figures" section="month" data={data} onRetry={onRefresh}>
+            {data.monthView && <MonthSection view={data.monthView} />}
+          </Block>
+          <Block label="the intake charts" section="charts" data={data} onRetry={onRefresh}>
+            {data.charts && <ChartsSection charts={data.charts} />}
+          </Block>
+          <Block label="recent activity" section="activity" data={data} onRetry={onRefresh}>
+            <ActivitySection entries={data.activity} auditLogLink={auditLogLink} />
+          </Block>
         </>
       )}
     </div>
   )
 }
 
-function QuickActionButton({ action }: { action: QuickAction }) {
-  const navigate = useNavigate()
-  const go = () =>
-    action.href.startsWith('#')
-      ? document.getElementById(action.href.slice(1))?.scrollIntoView({ block: 'start' })
-      : navigate(action.href)
+/** One block: its server-side error (errors[section]) or a render error shows inline, here only. */
+function Block({
+  label,
+  section,
+  data,
+  onRetry,
+  children,
+}: {
+  label: string
+  section: Section
+  data: DashboardSummary
+  onRetry: () => void
+  children: ReactNode
+}) {
+  const error = data.errors[section]
+  if (error) return <BlockError label={label} message={error} onRetry={onRetry} />
   return (
-    <Button variant="secondary" size="sm" onClick={go}>
+    <BlockBoundary label={label} onRetry={onRetry} resetKey={data.generatedAt}>
+      {children}
+    </BlockBoundary>
+  )
+}
+
+/** The page's one primary button: the role's most urgent item's action. It only opens that list. */
+function PrimaryActionButton({ action }: { action: NonNullable<DashboardSummary['primaryAction']> }) {
+  const navigate = useNavigate()
+  return (
+    <Button size="sm" onClick={() => navigate(action.href)}>
       {action.label}
     </Button>
   )
@@ -158,7 +199,10 @@ function NeedsAction({ items }: { items: ActionItem[] }) {
                   className="flex items-center gap-4 px-5 py-3 hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
                 >
                   <span className="tabular w-10 shrink-0 text-right text-lg font-semibold text-text-heading">{formatNumber(i.count)}</span>
-                  <span className="min-w-0 flex-1 text-sm text-text">{i.label.replace(/^\d[\d,]*\s/, '')}</span>
+                  <span className="min-w-0 flex-1 text-sm">
+                    <span className="block text-text">{i.label.replace(/^\d[\d,]*\s/, '')}</span>
+                    {i.reason && <span className="block text-xs text-text-muted">{i.reason}</span>}
+                  </span>
                   <ChevronRight className="size-4 shrink-0 text-text-muted" aria-hidden />
                 </Link>
               </li>

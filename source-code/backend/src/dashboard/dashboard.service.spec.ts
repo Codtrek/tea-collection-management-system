@@ -1,4 +1,8 @@
-import { DashboardService, type DashboardActor } from './dashboard.service';
+import {
+  DASHBOARD_SUMMARY_KEYS,
+  DashboardService,
+  type DashboardActor,
+} from './dashboard.service';
 
 /*
   The dashboard only reads other services. These fakes return the shapes those services return;
@@ -566,5 +570,13 @@ describe('DashboardService.summary', () => {
     expect(s.todayView).not.toBeNull();
     expect(s.monthView).not.toBeNull();
     expect(s.actions.length).toBeGreaterThan(0);
+  });
+
+  it('the response has exactly the agreed top-level keys, for every role', async () => {
+    for (const role of ['Officer', 'Manager', 'Administrator'] as const) {
+      const { service, actor } = build(role);
+      const s = await service.summary(actor, NOW);
+      expect(Object.keys(s)).toEqual([...DASHBOARD_SUMMARY_KEYS]);
+    }
   });
 });

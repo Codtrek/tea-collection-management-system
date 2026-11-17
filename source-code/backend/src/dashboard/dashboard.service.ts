@@ -85,6 +85,26 @@ export interface SettlementState {
 
 export type Section = 'actions' | 'today' | 'month' | 'charts' | 'activity';
 
+/**
+ * Every top-level key of the response, in order. The portal keeps the same list
+ * (admin/src/services/dashboard.ts) and both sides test against it, so a field added or
+ * removed on one side fails a test instead of crashing the page.
+ */
+export const DASHBOARD_SUMMARY_KEYS = [
+  'generatedAt',
+  'today',
+  'month',
+  'role',
+  'actions',
+  'primaryAction',
+  'toDecide',
+  'todayView',
+  'monthView',
+  'charts',
+  'activity',
+  'errors',
+] as const satisfies readonly (keyof DashboardSummary)[];
+
 export interface DashboardSummary {
   generatedAt: string;
   /** factory calendar (Asia/Colombo) */

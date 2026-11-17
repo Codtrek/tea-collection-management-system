@@ -18,7 +18,9 @@ const ROLES = {
 interface Summary {
   today: string
   role: string
-  actions: { key: string; count: number; href: string; label: string }[]
+  actions: { key: string; count: number; href: string; label: string; action: string }[]
+  primaryAction: { label: string; href: string; key: string } | null
+  toDecide: number
   todayView: Record<string, unknown> | null
   monthView: Record<string, unknown> | null
   charts: unknown
@@ -127,6 +129,47 @@ for (const [role, phone] of Object.entries(ROLES)) {
       for (const gone of ["Today's Revenue", 'Net profit', 'Monthly Revenue', 'not live GPS', 'Hill Crest', 'Welcome back']) {
         await expect(main.getByText(gone)).toHaveCount(0)
       }
+      // one primary button: the top queue row's action; nothing decides money here
+      if (summary.primaryAction) {
+        expect(summary.primaryAction.label).toBe(summary.actions[0].action)
+        await expect(main.getByRole('button', { name: summary.primaryAction.label }).first()).toBeVisible()
+      }
+      await expect(main.getByRole('button', { name: /^(Approve|Decline)$/ })).toHaveCount(0)
     })
   })
 }
+
+test.describe('one bad block never takes down the page (real browser)', () => {
+  /** Serve the page a doctored copy of the real summary. */
+  async function openWith(page: Page, doctor: (s: Record<string, unknown>) => void) {
+    const token = await login(ROLES.Manager)
+    await page.route('**/dashboard/summary', async (route) => {
+      const res = await route.fetch()
+      const body = (await res.json()) as Record<string, unknown>
+      doctor(body)
+      await route.fulfill({ response: res, json: body })
+    })
+    await openAs(page, token)
+  }
+
+  test('a queue row the page cannot render: only the queue shows an error', async ({ page }) => {
+    await openWith(page, (s) => {
+      s.actions = [{ key: 'broken', count: 1, href: '/x' }] // no label: rendering it throws
+    })
+    const main = page.locator('main')
+    await expect(main.getByText("Couldn't show the work queue")).toBeVisible()
+    await expect(main.getByRole('heading', { name: 'Recent activity' })).toBeVisible()
+    await expect(main.getByRole('heading', { name: 'This month', exact: true })).toBeVisible()
+  })
+
+  test('a response missing a section: that block says so, the rest renders', async ({ page }) => {
+    await openWith(page, (s) => {
+      delete s.charts
+      delete s.quickActions // (never sent; the old field must not matter either way)
+    })
+    const main = page.locator('main')
+    await expect(main.getByText("Couldn't show the intake charts")).toBeVisible()
+    await expect(main.getByRole('heading', { name: 'Needs your action' })).toBeVisible()
+    await expect(main.getByRole('heading', { name: 'Today', exact: true })).toBeVisible()
+  })
+})
