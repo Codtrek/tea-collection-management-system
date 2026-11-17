@@ -1,5 +1,4 @@
 
-
 name: Azure Dev Migrations
 
 on:
@@ -20,7 +19,7 @@ jobs:
     name: migrate-azure-postgres
     if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     defaults:
       run:
@@ -28,9 +27,9 @@ jobs:
         working-directory: source-code/backend
 
     steps:
-      # -----------------------------------
+      # ==========================================
       # 1. Checkout and install dependencies
-      # -----------------------------------
+      # ==========================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -44,9 +43,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # -----------------------------------
-      # 2. Validate required secrets
-      # -----------------------------------
+      # ==========================================
+      # 2. Validate GitHub Secrets
+      # ==========================================
       - name: Validate required secrets
         env:
           SSH_HOST: ${{ secrets.AZURE_VM_HOST }}
@@ -68,20 +67,22 @@ jobs:
           done
 
           if [[ "$failed" -ne 0 ]]; then
+            echo "::error::Required configuration is missing"
             exit 1
           fi
 
           echo "All required secrets are configured"
 
-      # -----------------------------------
+      # ==========================================
       # 3. Configure SSH
-      # -----------------------------------
+      # ==========================================
       - name: Configure SSH
         env:
           SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.AZURE_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
+          umask 077
 
           install -m 700 -d "$HOME/.ssh"
 
@@ -99,16 +100,16 @@ jobs:
           fi
 
           if [[ ! -s "$HOME/.ssh/known_hosts" ]]; then
-            echo "::error::Known hosts file is empty"
+            echo "::error::SSH known_hosts is empty"
             exit 1
           fi
 
           echo "SSH configuration validated"
 
-      # -----------------------------------
+      # ==========================================
       # 4. Verify Azure VM SSH access
-      # -----------------------------------
-      - name: Verify Azure SSH access
+      # ==========================================
+      - name: Verify Azure VM SSH access
         env:
           SSH_HOST: ${{ secrets.AZURE_VM_HOST }}
         run: |
@@ -128,11 +129,10 @@ jobs:
             exit 1
           fi
 
-      # -----------------------------------
-      # 5. Connect to Azure PostgreSQL
-      #    and execute TypeORM migrations
-      # -----------------------------------
-      - name: Run Azure PostgreSQL migrations
+      # ==========================================
+      # 5. Database migration execution
+      # ==========================================
+      - name: Backup and run TypeORM migrations
         env:
           SSH_HOST: ${{ secrets.AZURE_VM_HOST }}
           MIGRATION_DB_PASSWORD: ${{ secrets.AZURE_DEV_MIGRATION_PASSWORD }}
@@ -150,10 +150,10 @@ jobs:
 
           trap cleanup EXIT
 
-          # -----------------------------------
-          # 5.1 Open SSH tunnel
-          # -----------------------------------
-          echo "::group::Opening SSH tunnel"
+          # ------------------------------------------
+          # 5.1 Open private PostgreSQL SSH tunnel
+          # ------------------------------------------
+          echo "::group::Opening PostgreSQL SSH tunnel"
 
           ssh -N \
             -i "$HOME/.ssh/id_migrate" \
@@ -172,7 +172,7 @@ jobs:
 
           for attempt in {1..10}; do
             if ! kill -0 "$SSH_PID" 2>/dev/null; then
-              echo "::error::SSH tunnel process exited"
+              echo "::error::SSH tunnel process exited unexpectedly"
               exit 1
             fi
 
@@ -187,17 +187,17 @@ jobs:
           done
 
           if [[ "$ready" -ne 1 ]]; then
-            echo "::error::PostgreSQL tunnel did not become ready"
+            echo "::error::PostgreSQL SSH tunnel is unavailable"
             exit 1
           fi
 
-          echo "PostgreSQL tunnel is reachable"
+          echo "PostgreSQL tunnel reachable"
           echo "::endgroup::"
 
-          # -----------------------------------
-          # 5.2 Build migration connection URL
-          # -----------------------------------
-          echo "::group::Preparing migration connection"
+          # ------------------------------------------
+          # 5.2 Construct migration connection URL
+          # ------------------------------------------
+          echo "::group::Preparing database connection"
 
           DATABASE_URL_DIRECT="$(node <<'NODE'
           const url = new URL(
@@ -221,9 +221,9 @@ jobs:
           echo "Migration connection prepared"
           echo "::endgroup::"
 
-          # -----------------------------------
-          # 5.3 Verify PostgreSQL identity
-          # -----------------------------------
+          # ------------------------------------------
+          # 5.3 Verify PostgreSQL database and roles
+          # ------------------------------------------
           echo "::group::Verifying PostgreSQL identity"
 
           node <<'NODE'
@@ -259,10 +259,9 @@ jobs:
               }
 
               console.log('PostgreSQL authentication: OK');
-              console.log('Database: harboost_dev');
+              console.log('Target database: harboost_dev');
               console.log('Login role: harboost_dev_migrator');
               console.log('Effective role: harboost_dev_owner');
-              console.log('Database identity verified');
 
             } finally {
               await client.end();
@@ -279,43 +278,66 @@ jobs:
 
           echo "::endgroup::"
 
-          # -----------------------------------
-          # 5.4 Inspect pending migrations
-          # -----------------------------------
-          echo "::group::Checking pending TypeORM migrations"
+          # ------------------------------------------
+          # 5.4 Inspect pending TypeORM migrations
+          # ------------------------------------------
+          echo "::group::Checking pending migrations"
 
           npx --no-install typeorm-ts-node-commonjs migration:show -d src/data-source.ts
 
           echo "::endgroup::"
 
-          # -----------------------------------
-          # 5.5 Execute migrations
-          # -----------------------------------
+          # ------------------------------------------
+          # 5.5 Mandatory pre-migration backup
+          # ------------------------------------------
+          echo "::group::Creating pre-migration backup"
+
+          if ! ssh \
+            -i "$HOME/.ssh/id_migrate" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            "harboostuser@$SSH_HOST" \
+            "/opt/harboost/scripts/pre-migration-backup.sh '$GITHUB_RUN_ID' '$GITHUB_RUN_ATTEMPT' '$GITHUB_SHA'"; then
+
+            echo "::error::Pre-migration backup failed"
+            echo "::error::Migration execution has been blocked"
+            exit 1
+          fi
+
+          echo "Pre-migration backup gate: PASSED"
+          echo "::endgroup::"
+
+          # ------------------------------------------
+          # 5.6 Execute TypeORM migrations
+          # ------------------------------------------
           echo "::group::Executing TypeORM migrations"
 
           if npm run migration:run; then
-            echo "TypeORM migrations completed successfully"
+            echo "TypeORM migration execution succeeded"
           else
             echo "::error::TypeORM migration execution failed"
+            echo "Inspect migration history before retrying"
             exit 1
           fi
 
           echo "::endgroup::"
 
-          # -----------------------------------
-          # 5.6 Verify final migration status
-          # -----------------------------------
-          echo "::group::Final TypeORM migration status"
+          # ------------------------------------------
+          # 5.7 Verify final migration status
+          # ------------------------------------------
+          echo "::group::Final migration status"
 
           npx --no-install typeorm-ts-node-commonjs migration:show -d src/data-source.ts
 
           echo "::endgroup::"
 
-          echo "Azure Dev database migration job completed"
+          echo "Azure Dev migration pipeline completed"
 
-      # -----------------------------------
-      # 6. GitHub Actions summary
-      # -----------------------------------
+      # ==========================================
+      # 6. GitHub Actions report
+      # ==========================================
       - name: Success summary
         if: success()
         run: |
@@ -325,13 +347,14 @@ jobs:
             echo "**Status:** PASSED"
             echo ""
             echo "- Azure VM SSH authentication succeeded"
-            echo "- PostgreSQL tunnel established"
+            echo "- PostgreSQL SSH tunnel established"
             echo "- Database identity verified"
-            echo "- Effective migration role verified"
-            echo "- TypeORM migration execution succeeded"
+            echo "- Migration role verified"
+            echo "- Pre-migration backup created and validated"
+            echo "- TypeORM migration command succeeded"
             echo "- Final migration status inspected"
             echo ""
-            echo "**Target database:** harboost_dev"
+            echo "**Database:** harboost_dev"
             echo ""
             echo "**Commit:** $GITHUB_SHA"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -344,8 +367,11 @@ jobs:
             echo ""
             echo "**Status:** FAILED"
             echo ""
-            echo "Migration pipeline execution failed."
+            echo "The pipeline failed during setup, connection,"
+            echo "backup creation, or migration execution."
             echo ""
-            echo "Review the failing step for diagnostics."
-            echo "Check database migration history before retrying."
+            echo "**Inspect the failing step before retrying.**"
+            echo ""
+            echo "If migrations started, review database migration"
+            echo "history before applying corrective changes."
           } >> "$GITHUB_STEP_SUMMARY"
