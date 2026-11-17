@@ -20,14 +20,16 @@
   /* ---- Brand & primary ---------------------------------------------------
      --brand  #53cf81  : logo, active-nav, accents, chart series, focus ring
      --primary          : darkened Harboost green for buttons/links/text —
-                          #1B8B4E gives ~4.5:1 white-on-green (passes AA). */
+                          #1D6839 gives 6.8:1 white-on-green and 6.3:1 as text
+                          on the soft/hover surfaces (WCAG AA). The earlier
+                          #1B8B4E measured 4.33:1 and failed AA for body text. */
   --color-brand: #53cf81;
   --color-brand-strong: #3bb96b;
   --color-brand-soft: #eafaf0;
 
-  --color-primary: #1b8b4e;
-  --color-primary-hover: #157a43;
-  --color-primary-active: #106138;
+  --color-primary: #1d6839;
+  --color-primary-hover: #185a31;
+  --color-primary-active: #134a28;
   --color-primary-disabled: #b7d8c4;
 
   /* Hero gradient (brand doc §3) — roots-to-growth, dark to bright Harboost
