@@ -73,6 +73,8 @@ export interface SettlementQuery {
   method?: OwnerPaymentMethod;
   /** only rows whose net payable is zero or negative */
   nonPositive?: boolean;
+  /** only rows flagged "no bank details" (Dashboard: estates missing bank details) */
+  noBank?: boolean;
   sort?: SettlementSort;
   dir?: 'asc' | 'desc';
   page?: number;
@@ -145,7 +147,8 @@ export function applyFilters(
       (q.routeId === undefined || r.routeId === q.routeId) &&
       (!q.status || r.status === q.status) &&
       (!q.method || r.paymentMethod === q.method) &&
-      (!q.nonPositive || r.net <= 0),
+      (!q.nonPositive || r.net <= 0) &&
+      (!q.noBank || !!r.missingBank),
   );
 }
 

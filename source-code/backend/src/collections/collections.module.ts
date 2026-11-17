@@ -50,6 +50,6 @@ import { CollectionRequestAssignmentEntity } from './collection-requests/col-req
     GradingNotificationService,
     GradingNotificationTasks,
   ],
-  exports: [CollectionSettingsService],
+  exports: [CollectionSettingsService, CollectionsService, GradingService],
 })
 export class CollectionsModule {}

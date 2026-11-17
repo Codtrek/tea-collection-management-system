@@ -16,6 +16,7 @@ import { PerformanceModule } from './performance/performance.module';
 import { EstatesModule } from './estates/estates.module';
 import { FertilizerModule } from './fertilizer/fertilizer.module';
 import { ReportsModule } from './reports/reports.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { UsersModule } from './users/users.module';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 
@@ -87,6 +88,7 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
     PerformanceModule,
     FertilizerModule,
     ReportsModule,
+    DashboardModule,
     AuditModule,
     AdminModule,
   ],

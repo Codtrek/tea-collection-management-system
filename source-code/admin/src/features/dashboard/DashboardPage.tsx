@@ -1,175 +1,430 @@
-import { Link } from 'react-router-dom'
+import type { ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
+  AlertTriangle,
+  ChevronRight,
+  ClipboardList,
+  Coins,
   Leaf,
-  Wallet,
-  Sprout,
-  Banknote,
+  Loader2,
+  Package,
+  RefreshCw,
+  Scale,
+  Truck,
   Users,
-  Plus,
-  CheckCheck,
-  FileBarChart,
-  UserPlus,
+  Wallet,
 } from 'lucide-react'
-import { StatCard } from '@/components/data/StatCard'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { SummaryCard } from '@/components/data/SummaryCard'
+import { ErrorState } from '@/components/data/ErrorState'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
-import { AreaChartCard, BarChartCard, DonutChartCard } from '@/components/charts/ChartCard'
-import { GRADE_NORMAL, GRADE_SUPER } from '@/components/charts/palette'
-import { NotificationCard } from '@/components/layout/NotificationCard'
+import { HorizontalBarChartCard, TrendChartCard } from '@/components/charts/ChartCard'
 import { useAuth } from '@/context/AuthContext'
-import { NOTIFICATIONS } from '@/data/notifications'
-import { formatCurrency, formatNumber, formatWeight } from '@/lib/format'
+import { cn } from '@/lib/cn'
+import { factoryToday } from '@/features/dispatch/status'
+import * as dashboardService from '@/services/dashboard'
+import { formatCurrency, formatDate, formatKg, formatNumber, formatPercent, formatRelative, formatWeight } from '@/lib/format'
+import { agentLine, changeText, colomboTime, greetName, greeting, isRecordId, weekdayOf } from './dashboard-view'
+import type { ActionItem, ActivityEntry, DashboardCharts, DashboardSummary, MonthView, QuickAction, TodayView } from './types'
 
-const COLLECTION_TREND = [
-  { m: 'Mon', kg: 39800 },
-  { m: 'Tue', kg: 42100 },
-  { m: 'Wed', kg: 41050 },
-  { m: 'Thu', kg: 45780 },
-  { m: 'Fri', kg: 43900 },
-]
-const BY_ESTATE = [
-  { estate: 'Green Valley', kg: 42000 },
-  { estate: 'Hill Crest', kg: 31500 },
-  { estate: 'Maple Ridge', kg: 28900 },
-  { estate: 'Sunfield', kg: 21000 },
-  { estate: 'Rosewood', kg: 18600 },
-]
-const GRADE_SPLIT = [
-  { name: 'Super', value: 58, color: GRADE_SUPER },
-  { name: 'Normal', value: 42, color: GRADE_NORMAL },
-]
-
-const PENDING_TASKS = [
-  { label: 'Approve advance — S. Fernando (Rs. 15,000)', to: '/employees/advances', tone: 'warning' as const, badge: 'Pending' },
-  { label: 'Process July payroll — 31 employees', to: '/employees/payroll', tone: 'warning' as const, badge: 'Due' },
-  { label: 'Review weight mismatch — GV-2026-0714', to: '/collections', tone: 'danger' as const, badge: 'Flagged' },
-]
-
-const ACTIVITY = [
-  { who: 'A. Bandara', what: 'processed payroll for June — Rs. 3.2M across 31 employees', when: '2h ago' },
-  { who: 'S. Fernando', what: 'issued advance Rs. 50,000 to Green Valley Estate', when: '4h ago' },
-  { who: 'System', what: 'confirmed collection GV-2026-0712 with photo evidence', when: '6h ago' },
-]
-
+/*
+  Dashboard (Dashboard-Addendum). Three questions — what needs me, what is happening today, how
+  the month is going — answered only from GET /dashboard/summary. Nothing here is a constant:
+  every figure is another page's own number and opens that page. Which sections and items show
+  is decided by the server from the role's permissions.
+*/
 export function DashboardPage() {
   const { user, can } = useAuth()
-  const firstName = user?.name.split(' ').slice(-1)[0] ?? 'there'
-
+  const { data, isPending, isError, refetch, isFetching } = useQuery({
+    queryKey: ['dashboard', 'summary'],
+    queryFn: dashboardService.getSummary,
+  })
   return (
-    <div className="animate-fade-up flex flex-col gap-6">
-      {/* Hero */}
-      <div className="flex flex-col gap-4 rounded-[var(--radius-xl)] bg-gradient-to-br from-[#0f3d24] via-[#1b8b4e] to-[#53cf81] p-6 text-white sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-[30px] font-semibold leading-tight tracking-tight">Welcome back, {firstName}</h1>
-          <p className="mt-1 text-sm text-white/80">Here's your factory performance today · 17/07/2026</p>
+    <DashboardContent
+      userName={user?.name ?? ''}
+      auditLogLink={can('administration', 'view')}
+      data={data}
+      isPending={isPending}
+      isError={isError}
+      isFetching={isFetching}
+      onRefresh={() => void refetch()}
+    />
+  )
+}
+
+/** The page body, from the query's state — rendered on its own in tests. */
+export function DashboardContent({
+  userName,
+  auditLogLink = false,
+  data,
+  isPending,
+  isError,
+  isFetching,
+  onRefresh,
+  now = new Date(),
+}: {
+  userName: string
+  /** the "Audit log" link beside Recent activity (Administration view) */
+  auditLogLink?: boolean
+  data: DashboardSummary | undefined
+  isPending: boolean
+  isError: boolean
+  isFetching: boolean
+  onRefresh: () => void
+  now?: Date
+}) {
+  const today = data?.today ?? factoryToday(now)
+  const description = `${weekdayOf(today)}, ${formatDate(today)}${data ? ` · Updated ${colomboTime(data.generatedAt)}` : ''}`
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title={`${greeting(now)}${userName ? `, ${greetName(userName)}` : ''}`}
+        description={description}
+        actions={
+          <>
+            {data?.quickActions.map((a) => <QuickActionButton key={a.key} action={a} />)}
+            <Button variant="ghost" size="sm" onClick={onRefresh} disabled={isFetching} aria-label="Refresh the dashboard">
+              <RefreshCw className={isFetching ? 'size-4 animate-spin' : 'size-4'} aria-hidden /> Refresh
+            </Button>
+          </>
+        }
+      />
+
+      {isPending ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
+          <span className="sr-only">Loading the dashboard</span>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {can('collection', 'edit') && (
-            <QuickAction to="/collections" icon={<Plus className="size-4" />}>New Collection</QuickAction>
-          )}
-          {can('employees', 'edit') && (
-            <QuickAction to="/employees/new" icon={<UserPlus className="size-4" />}>New Employee</QuickAction>
-          )}
-          {can('advances', 'approve') && (
-            <QuickAction to="/employees/advances" icon={<CheckCheck className="size-4" />}>Approve Advances</QuickAction>
-          )}
-          <QuickAction to="/reports/collection" icon={<FileBarChart className="size-4" />}>Generate Report</QuickAction>
-        </div>
-      </div>
-
-      {/* Tier 1 */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <StatCard label="Today's Tea Collection" value={45780} format={formatWeight} icon={<Leaf className="size-4" strokeWidth={1.5} />} deltaPercent={4.3} note="vs yesterday" />
-        <StatCard label="Pending Estate Payments" value={1245600} format={formatCurrency} icon={<Wallet className="size-4" strokeWidth={1.5} />} note="12 pending" />
-        <StatCard label="Expiring Fertilizer Stock" value={3} format={(v) => `${Math.round(v)} batches`} icon={<Sprout className="size-4" strokeWidth={1.5} />} note="within 7 days" tone="warning" />
-      </div>
-
-      {/* Tier 2 */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <StatCard label="Today's Revenue" value={342900} format={formatCurrency} icon={<Banknote className="size-4" strokeWidth={1.5} />} deltaPercent={6.2} note="Monthly Rs. 8.41M" />
-        <StatCard label="Monthly Expenses" value={3210500} format={formatCurrency} icon={<Wallet className="size-4" strokeWidth={1.5} />} deltaPercent={-2.1} note="Net profit Rs. 5.2M" />
-        <StatCard label="Employees Present" value={27} format={(v) => `${Math.round(v)} / 31`} icon={<Users className="size-4" strokeWidth={1.5} />} note="today" />
-      </div>
-
-      {/* Charts */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <AreaChartCard title="Collection Trend (kg)" data={COLLECTION_TREND} xKey="m" yKey="kg" valueFmt={formatWeight} />
-        <DonutChartCard title="Tea Collection by Grade (%)" data={GRADE_SPLIT} valueFmt={(v) => `${v}%`} />
-        <BarChartCard title="Top Estates by Volume (kg)" data={BY_ESTATE} xKey="estate" yKey="kg" valueFmt={formatWeight} />
-      </div>
-
-      {/* Route/agent panel */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Route &amp; Agent Overview</CardTitle>
-          <StatusBadge tone="approved">5 routes active</StatusBadge>
-        </CardHeader>
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {['Route 1', 'Route 2', 'Route 3', 'Route 4', 'Route 5'].map((r, i) => (
-            <div key={r} className="rounded-[var(--radius-md)] border border-border p-3">
-              <p className="text-sm font-medium text-text">{r}</p>
-              <p className="tabular mt-1 text-xs text-text-muted">{formatNumber(4 + i)} agents · {formatWeight(8000 + i * 900)}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 text-xs text-text-muted">Static route + agent-proximity view — not live GPS (matches project scope).</p>
-      </Card>
-
-      {/* Tier 3 */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card>
-          <CardHeader><CardTitle>Recent Activity</CardTitle></CardHeader>
-          <ul className="flex flex-col gap-3">
-            {ACTIVITY.map((a, i) => (
-              <li key={i} className="flex gap-3 text-sm">
-                <span className="mt-1.5 size-2 shrink-0 rounded-full bg-brand" />
-                <span className="text-text">
-                  <span className="font-medium">{a.who}</span> {a.what}
-                  <span className="mt-0.5 block text-xs text-text-muted">{a.when}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>Pending Tasks</CardTitle></CardHeader>
-          <ul className="flex flex-col gap-2">
-            {PENDING_TASKS.map((t, i) => (
-              <li key={i}>
-                <Link to={t.to} className="flex items-center justify-between gap-2 rounded-[var(--radius-md)] border border-border p-3 hover:bg-surface-hover">
-                  <span className="text-sm text-text">{t.label}</span>
-                  <StatusBadge tone={t.tone}>{t.badge}</StatusBadge>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card className="p-0">
-          <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <CardTitle>Notifications</CardTitle>
-            <Link to="/notifications" className="text-[13px] font-medium text-primary hover:underline">View all</Link>
-          </div>
-          <div className="divide-y divide-border">
-            {NOTIFICATIONS.slice(0, 4).map((n) => (
-              <NotificationCard key={n.id} n={n} />
-            ))}
-          </div>
-        </Card>
-      </div>
+      ) : isError || !data ? (
+        <ErrorState title="Couldn't load the dashboard" description="The figures come from the server; nothing is shown until they load." onRetry={onRefresh} />
+      ) : (
+        <>
+          <NeedsAction items={data.actions} />
+          {data.todayView && <TodaySection view={data.todayView} today={data.today} />}
+          {data.monthView && <MonthSection view={data.monthView} />}
+          {data.charts && <ChartsSection charts={data.charts} />}
+          <ActivitySection entries={data.activity} auditLogLink={auditLogLink} />
+        </>
+      )}
     </div>
   )
 }
 
-function QuickAction({ to, icon, children }: { to: string; icon: React.ReactNode; children: React.ReactNode }) {
+function QuickActionButton({ action }: { action: QuickAction }) {
+  const navigate = useNavigate()
+  const go = () =>
+    action.href.startsWith('#')
+      ? document.getElementById(action.href.slice(1))?.scrollIntoView({ block: 'start' })
+      : navigate(action.href)
   return (
-    <Link
-      to={to}
-      className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] bg-white/15 px-3 py-2 text-sm font-medium text-white backdrop-blur transition-colors hover:bg-white/25"
-    >
-      {icon}
-      {children}
-    </Link>
+    <Button variant="secondary" size="sm" onClick={go}>
+      {action.label}
+    </Button>
+  )
+}
+
+function SectionTitle({ children, note }: { children: ReactNode; note?: ReactNode }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <h2 className="text-base font-semibold text-text-heading">{children}</h2>
+      {note && <p className="text-xs text-text-muted">{note}</p>}
+    </div>
+  )
+}
+
+/* ── Needs your action ── */
+
+function NeedsAction({ items }: { items: ActionItem[] }) {
+  return (
+    <section id="needs-action" aria-labelledby="needs-action-title" className="scroll-mt-20">
+      <Card className="p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+          <h2 id="needs-action-title" className="text-base font-semibold text-text-heading">
+            Needs your action
+          </h2>
+          {items.length > 0 && <StatusBadge tone="warning">{items.length === 1 ? '1 item' : `${items.length} items`}</StatusBadge>}
+        </div>
+        {items.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-text-muted">Nothing is waiting for you. Items appear here when a request, approval or fix needs your role.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {items.map((i) => (
+              <li key={i.key}>
+                <Link
+                  to={i.href}
+                  className="flex items-center gap-4 px-5 py-3 hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+                >
+                  <span className="tabular w-10 shrink-0 text-right text-lg font-semibold text-text-heading">{formatNumber(i.count)}</span>
+                  <span className="min-w-0 flex-1 text-sm text-text">{i.label.replace(/^\d[\d,]*\s/, '')}</span>
+                  <ChevronRight className="size-4 shrink-0 text-text-muted" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </section>
+  )
+}
+
+/* ── Today ── */
+
+function TodaySection({ view, today }: { view: TodayView; today: string }) {
+  const navigate = useNavigate()
+  const { leaf, grading, agents, fertilizer } = view
+  if (!leaf && !grading && !agents && !fertilizer) return null
+  return (
+    <section aria-labelledby="today-title">
+      <SectionTitle note={`${weekdayOf(today)} ${formatDate(today)}, so far`}>
+        <span id="today-title">Today</span>
+      </SectionTitle>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {leaf && (
+          <SummaryCard
+            icon={<Leaf className="size-4" aria-hidden />}
+            label="Leaf received so far"
+            value={formatWeight(leaf.kg)}
+            note={
+              leaf.deliveries === 0 ? (
+                'No graded deliveries yet today'
+              ) : (
+                <>
+                  {leaf.deliveries === 1 ? '1 delivery' : `${formatNumber(leaf.deliveries)} deliveries`} ·{' '}
+                  {changeText(leaf.changePct, `vs ${weekdayOf(leaf.compareDate).slice(0, 3)} ${formatDate(leaf.compareDate)} (whole day)`, leaf.compareKg)}
+                </>
+              )
+            }
+            rule="Factory weight of today's graded deliveries (the Collection Report for today), against the same weekday last week. Deliveries waiting for grading are not in it yet."
+            onOpen={() => navigate(leaf.href)}
+            openLabel="Open today's Collection Report"
+          />
+        )}
+        {grading && (
+          <SummaryCard
+            icon={<Scale className="size-4" aria-hidden />}
+            label="Waiting for grading"
+            value={formatNumber(grading.waiting)}
+            note={
+              grading.waiting === 0
+                ? 'No deliveries waiting today'
+                : grading.overTolerance > 0
+                  ? `${grading.overTolerance} over the ${grading.tolerancePct}% weight tolerance today`
+                  : `Delivered today, not yet graded`
+            }
+            rule={`Deliveries dated today with status Collected and no grade lines (the Collections list, filtered). Weight mismatches are graded deliveries whose factory weight differs from the estate's by more than ${grading.tolerancePct}%.`}
+            onOpen={() => navigate(grading.waitingHref)}
+            openLabel="Open these deliveries"
+          />
+        )}
+        {agents && (
+          <SummaryCard
+            icon={<Truck className="size-4" aria-hidden />}
+            label="Collection agents"
+            value={agents.scheduled === 0 ? '0' : `${formatNumber(agents.onRoute)} on route`}
+            note={agents.scheduled === 0 ? 'No routes scheduled today' : (agentLine(agents) ?? '')}
+            rule="Each agent's status on today's Agent Dispatch board: on route, not started, absent, covering another route, or completed."
+            onOpen={() => navigate(agents.href)}
+            openLabel="Open Agent Dispatch"
+          />
+        )}
+        {fertilizer && (
+          <SummaryCard
+            icon={<Package className="size-4" aria-hidden />}
+            label="Fertilizer deliveries"
+            value={formatNumber(fertilizer.total)}
+            tone={fertilizer.failed > 0 ? 'danger' : 'default'}
+            note={
+              fertilizer.total === 0
+                ? 'No deliveries scheduled today'
+                : `${fertilizer.done} done · ${fertilizer.failed} failed · ${fertilizer.pending} pending`
+            }
+            rule="Fertilizer requests whose latest delivery attempt is scheduled today (not cancelled). Done = delivered or partly delivered."
+            onOpen={() => navigate(fertilizer.href)}
+            openLabel="Open these requests"
+          />
+        )}
+        {grading && grading.overTolerance > 0 && (
+          <SummaryCard
+            icon={<AlertTriangle className="size-4" aria-hidden />}
+            label="Weight mismatches today"
+            value={formatNumber(grading.overTolerance)}
+            tone="danger"
+            note={`Factory and estate weight differ by more than ${grading.tolerancePct}%`}
+            rule={`Today's graded deliveries whose factory weight differs from the estate's weight by more than the ${grading.tolerancePct}% tolerance (Collection Report, weight differences).`}
+            onOpen={() => navigate(grading.mismatchHref)}
+            openLabel="Open the weight differences"
+          />
+        )}
+      </div>
+    </section>
+  )
+}
+
+/* ── This month ── */
+
+function MonthSection({ view }: { view: MonthView }) {
+  const navigate = useNavigate()
+  const { intake, leafPurchase, expenses, payroll } = view
+  if (!intake && !leafPurchase && !expenses && !payroll) return null
+  return (
+    <section aria-labelledby="month-title">
+      <SectionTitle note={view.label}>
+        <span id="month-title">This month</span>
+      </SectionTitle>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {intake && (
+          <SummaryCard
+            icon={<Leaf className="size-4" aria-hidden />}
+            label="Leaf intake"
+            value={formatWeight(intake.kg)}
+            note={
+              intake.deliveries === 0 ? (
+                'No graded deliveries this month yet'
+              ) : (
+                <>
+                  {changeText(intake.changePct, 'vs last month (same days)', intake.compareKg)}
+                  <br />
+                  {intake.lastYearKg === null ? 'No deliveries this time last year' : changeText(intake.yoyPct, 'vs last year', intake.lastYearKg)}
+                  {intake.superShare !== null && ` · Super ${formatPercent(intake.superShare)}`}
+                </>
+              )
+            }
+            rule="Factory weight of this month's graded deliveries so far (the Collection Report, this month), compared like for like: the same days of last month and of the same month last year. Super share is Super kg of all graded kg."
+            onOpen={() => navigate(intake.href)}
+            openLabel="Open this month's Collection Report"
+          />
+        )}
+        {leafPurchase && (
+          <SummaryCard
+            icon={<Coins className="size-4" aria-hidden />}
+            label="Leaf purchase value"
+            value={formatCurrency(leafPurchase.valueRs)}
+            note={
+              leafPurchase.rsPerKg === null
+                ? 'No priced deliveries yet'
+                : `Average ${formatCurrency(leafPurchase.rsPerKg)}/kg${leafPurchase.changePct === null ? '' : ` · ${formatPercent(leafPurchase.changePct, true)} vs last month (same days)`}`
+            }
+            rule="What this month's graded leaf is worth at the grade rate in force on each delivery date (the Leaf Purchase Report). Average Rs./kg is value ÷ priced factory kg."
+            onOpen={() => navigate(leafPurchase.href)}
+            openLabel="Open the Leaf Purchase Report"
+          />
+        )}
+        {expenses && (
+          <SummaryCard
+            icon={<Wallet className="size-4" aria-hidden />}
+            label="Expenses to date"
+            value={formatCurrency(expenses.totalRs)}
+            note={expenses.changePct === null ? 'Nothing to compare with last month' : `${formatPercent(expenses.changePct, true)} vs last month (same days)`}
+            rule="This month's expenses so far from the Expense Report: leaf purchases, processed wages, fertilizer stock bought and daily expense entries."
+            onOpen={() => navigate(expenses.href)}
+            openLabel="Open the Expense Report"
+          />
+        )}
+        {payroll && (
+          <SummaryCard
+            icon={<Users className="size-4" aria-hidden />}
+            label="Payroll"
+            value={payroll.lastMonthStatus}
+            tone={payroll.lastMonthStatus === 'Processed' ? 'success' : payroll.lastMonthStatus === 'Issues to fix' ? 'danger' : 'default'}
+            note={`Last month's payroll · this month ${payroll.status.toLowerCase()}`}
+            rule="The payroll page's status for last month: No payroll, Issues to fix, Ready to process or Processed. The current month stays In progress until it ends."
+            onOpen={() => navigate(payroll.href)}
+            openLabel="Open last month's payroll"
+          />
+        )}
+      </div>
+    </section>
+  )
+}
+
+/* ── Charts ── */
+
+function ChartsSection({ charts }: { charts: DashboardCharts }) {
+  return (
+    <section aria-label="Intake charts" className="grid gap-4 xl:grid-cols-[3fr_2fr]">
+      <TrendChartCard
+        title="Daily intake this month (kg)"
+        data={charts.daily.map((d) => ({
+          label: d.label,
+          value: d.kg,
+          count: d.deliveries,
+          partial: d.partial,
+          compare: d.lastMonthKg,
+        }))}
+        valueFmt={formatKg}
+        yTickFormat={formatNumber}
+        showCompare
+        compareLabel={charts.lastMonthLabel}
+        partialNote="Day in progress"
+      />
+      <HorizontalBarChartCard
+        title="Intake by route this month (kg)"
+        data={[...charts.byRoute]
+          .sort((a, b) => b.kg - a.kg)
+          .map((r) => ({ name: r.name, value: r.kg, meta: r.deliveries === 1 ? '1 delivery' : `${r.deliveries} deliveries` }))}
+        valueFmt={formatKg}
+        tickFormat={formatNumber}
+        footer={
+          <Link to={charts.href} className="font-medium text-primary hover:underline">
+            Open the Collection Report →
+          </Link>
+        }
+      />
+    </section>
+  )
+}
+
+/* ── Recent activity ── */
+
+function ActivitySection({ entries, auditLogLink }: { entries: ActivityEntry[]; auditLogLink: boolean }) {
+  return (
+    <section aria-labelledby="activity-title">
+      <Card>
+        <CardHeader>
+          <CardTitle id="activity-title" className="text-base">
+            Recent activity
+          </CardTitle>
+          {auditLogLink && (
+            <Link to="/admin/audit-logs" className="text-sm font-medium text-primary hover:underline">
+              Audit log
+            </Link>
+          )}
+        </CardHeader>
+        {entries.length === 0 ? (
+          <p className="text-sm text-text-muted">No recorded activity in the modules your role can see yet.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {entries.map((e) => (
+              <li key={e.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+                <ClipboardList className="mt-0.5 size-4 shrink-0 text-text-muted" aria-hidden />
+                <div className="min-w-0 flex-1 text-sm">
+                  <p className="text-text">
+                    <span className="font-medium">{e.user}</span> · {e.action}
+                    {e.record &&
+                      (e.recordHref ? (
+                        <>
+                          {' '}
+                          <Link to={e.recordHref} className={cn('text-primary hover:underline', isRecordId(e.record) && 'id')}>
+                            {e.record}
+                          </Link>
+                        </>
+                      ) : (
+                        <span className={cn(isRecordId(e.record) && 'id')}> {e.record}</span>
+                      ))}
+                  </p>
+                  {e.details && <p className="truncate text-xs text-text-muted">{e.details}</p>}
+                </div>
+                <time dateTime={e.timestamp} className="shrink-0 text-xs text-text-muted" title={formatDate(e.timestamp)}>
+                  {formatRelative(e.timestamp)}
+                </time>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </section>
   )
 }
