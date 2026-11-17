@@ -1,4 +1,4 @@
-/** The big list pages that share the PageHeader layout (Page-Layout-Addendum). */
+/** The big list pages that share the PageHeader layout (Page-Layout-Addendum), and the Dashboard. */
 export const PAGES = [
   { name: 'dispatch', path: '/collections/dispatch' },
   { name: 'fertilizer-inventory', path: '/fertilizer' },
@@ -7,6 +7,8 @@ export const PAGES = [
   { name: 'payroll', path: '/employees/payroll' },
   { name: 'attendance', path: '/employees/attendance' },
   { name: 'holidays', path: '/holidays' },
+  // no breadcrumb on the home page (Dashboard-Addendum)
+  { name: 'dashboard', path: '/dashboard' },
 ] as const
 
 export const WIDTHS = [1920, 1440, 1366, 1280, 1024, 768] as const
