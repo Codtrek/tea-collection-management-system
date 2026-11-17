@@ -41,7 +41,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           aria-invalid={!!error}
           aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
           className={cn(
-            'h-10 w-full rounded-[var(--radius-sm)] border bg-surface px-3 text-sm text-text placeholder:text-text-disabled transition-colors',
+            'h-10 w-full rounded-[var(--radius-sm)] border bg-surface px-3 text-sm text-text placeholder:text-text-muted transition-colors',
             'focus:border-primary focus:outline-none',
             leadingIcon && 'pl-9',
             revealable && 'pr-10',

@@ -128,7 +128,7 @@ export function Combobox<T>({
             }
           }}
           className={cn(
-            'h-10 w-full rounded-[var(--radius-sm)] border bg-surface pl-9 pr-16 text-sm text-text placeholder:text-text-disabled transition-colors',
+            'h-10 w-full rounded-[var(--radius-sm)] border bg-surface pl-9 pr-16 text-sm text-text placeholder:text-text-muted transition-colors',
             'focus:border-primary focus:outline-none disabled:bg-surface-sunken',
             error ? 'border-danger' : 'border-border',
           )}

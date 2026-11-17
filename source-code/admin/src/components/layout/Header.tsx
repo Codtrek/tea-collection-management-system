@@ -29,7 +29,7 @@ export function Header() {
   if (!user) return null
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 print:hidden items-center gap-4 border-b border-border bg-surface/90 px-6 backdrop-blur">
+    <header className="sticky top-0 z-30 flex h-16 print:hidden items-center gap-4 border-b border-border bg-surface px-6">
       <form onSubmit={submitSearch} className="relative max-w-md flex-1">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
         <input
@@ -37,7 +37,7 @@ export function Header() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search employees, estates, collections…"
           aria-label="Global search"
-          className="h-10 w-full rounded-[var(--radius-sm)] border border-border bg-surface-sunken pl-9 pr-3 text-sm text-text placeholder:text-text-disabled focus:border-primary focus:bg-surface focus:outline-none"
+          className="h-10 w-full rounded-[var(--radius-sm)] border border-border bg-surface-sunken pl-9 pr-3 text-sm text-text placeholder:text-text-muted focus:border-primary focus:bg-surface focus:outline-none"
         />
       </form>
 

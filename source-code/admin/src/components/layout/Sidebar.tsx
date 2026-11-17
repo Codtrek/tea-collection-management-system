@@ -36,7 +36,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         {groups.map((group, gi) => (
           <div key={group.label ?? gi} className="mb-4">
             {group.label && !collapsed && (
-              <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              <p className="mb-1 px-2 text-xs font-semibold text-text-muted">
                 {group.label}
               </p>
             )}
