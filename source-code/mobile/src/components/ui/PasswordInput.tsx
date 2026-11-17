@@ -1,18 +1,15 @@
 import {useState} from "react";
-import {MaterialCommunityIcons, MaterialIcons} from "@expo/vector-icons";
+import {MaterialCommunityIcons} from "@expo/vector-icons";
 import {
 	Pressable,
 	StyleProp,
 	StyleSheet,
-	View,
-	Text,
 	TextInputProps,
 	ViewStyle,
 	TextStyle
 } from "react-native";
 
 import { colors } from "@/theme/colors";
-import { typography } from "@/theme/typography";
 import AppInput from "./AppInput";
 
 
@@ -47,6 +44,7 @@ export default function PasswordInput({
 		<AppInput
 			{...props}
 			label={label}
+			leftIcon="lock-outline"
 			secureTextEntry={!isPasswordVisible}
 			helperText={helperText}
 			error={error}
@@ -55,11 +53,20 @@ export default function PasswordInput({
 			helperTextStyle={helperTextStyle}
 			errorStyle={errorStyle}
 			rightAccessory={
-				<Pressable onPress={togglePasswordVisibility}>
+				<Pressable
+					onPress={togglePasswordVisibility}
+					accessibilityRole="button"
+					accessibilityLabel={isPasswordVisible ? "Hide password" : "Show password"}
+					hitSlop={4}
+					style={({ pressed }) => [
+						styles.visibilityButton,
+						pressed && styles.visibilityButtonPressed,
+					]}
+				>
 					<MaterialCommunityIcons
 						name={isPasswordVisible ? "eye-off" : "eye"}
-						size={24}
-						color="gray"
+						size={22}
+						color={colors.text.secondary}
 					/>
 				</Pressable>
 			}
@@ -70,5 +77,15 @@ export default function PasswordInput({
 }
 
 const styles = StyleSheet.create({
-	
+	visibilityButton: {
+		width: 40,
+		height: 40,
+		borderRadius: 20,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+
+	visibilityButtonPressed: {
+		backgroundColor: colors.brandBorder,
+	},
 })

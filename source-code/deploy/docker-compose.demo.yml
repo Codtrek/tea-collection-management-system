@@ -8,6 +8,7 @@ services:
       - NODE_ENV=demo
     networks:
       - tea-cms-net
+      - database
     restart: unless-stopped
 
   frontend-demo:
@@ -33,3 +34,6 @@ volumes:
 networks:
   tea-cms-net:
     driver: bridge
+  database:
+    external: true
+    name: harboost-db-net
