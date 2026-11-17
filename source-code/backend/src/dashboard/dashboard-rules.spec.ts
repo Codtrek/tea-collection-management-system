@@ -3,15 +3,20 @@ import type { PublicCollection } from '../collections/collection-map';
 import type { PublicBoard } from '../dispatch/dispatch-map';
 import type { PublicRequest } from '../fertilizer/fertilizer-map';
 import {
+  type ActionCandidate,
   type Perms,
   addDays,
   agentCounts,
   canAct,
   fertilizerToday,
+  formatDay,
+  formatRs,
   monthName,
   needsAction,
+  oldest,
   previousMonth,
-  quickActions,
+  primaryAction,
+  toDecideCount,
   showsFigure,
   showsSection,
   ungradedOlderThan,
@@ -77,22 +82,60 @@ describe('sections by role', () => {
   });
 });
 
-describe('needs your action', () => {
+describe('needs your action: the work queue', () => {
   const all = [
-    { key: 'payrollDue', count: 12, label: 'p', href: '/p' },
-    { key: 'salaryAdvances', count: 2, label: 'a', href: '/a' },
-    { key: 'fertilizerToDecide', count: 3, label: 'f', href: '/f' },
-    { key: 'fertilizerManager', count: 1, label: 'm', href: '/m' },
-    { key: 'gradingCorrections', count: 4, label: 'g', href: '/g' },
-    { key: 'payChanges', count: 1, label: 'c', href: '/c' },
-    { key: 'ungradedOld', count: 0, label: 'u', href: '/u' },
-  ] as const;
+    { key: 'payrollDue', count: 12, label: 'p', reason: null, href: '/p' },
+    { key: 'salaryAdvances', count: 2, label: 'a', reason: null, href: '/a' },
+    {
+      key: 'fertilizerToDecide',
+      count: 3,
+      label: 'f',
+      reason: null,
+      href: '/f',
+    },
+    {
+      key: 'fertilizerManager',
+      count: 1,
+      label: 'm',
+      reason: null,
+      href: '/m',
+    },
+    {
+      key: 'gradingCorrections',
+      count: 4,
+      label: 'g',
+      reason: null,
+      href: '/g',
+    },
+    { key: 'payChanges', count: 1, label: 'c', reason: null, href: '/c' },
+    { key: 'ungradedOld', count: 0, label: 'u', reason: null, href: '/u' },
+    { key: 'expiredStock', count: 6, label: 'x', reason: null, href: '/x' },
+    {
+      key: 'settlementsToProcess',
+      count: 38,
+      label: 's',
+      reason: null,
+      href: '/s',
+    },
+    {
+      key: 'estatesNoBank',
+      count: 36,
+      label: 'b',
+      reason: null,
+      href: '/b',
+      blocks: 'settlementsToProcess',
+    },
+  ] satisfies ActionCandidate[];
 
-  it('only items the role may act on, never a zero, most urgent first', () => {
-    expect(needsAction([...all], OFFICER).map((i) => i.key)).toEqual([
-      'payrollDue',
-      'salaryAdvances',
-      'fertilizerToDecide',
+  it('only what the role may act on, never a zero; urgent, due soon, to decide; a blocker first', () => {
+    const officer = needsAction([...all], OFFICER);
+    expect(officer.map((i) => [i.group, i.key])).toEqual([
+      ['urgent', 'estatesNoBank'],
+      ['urgent', 'payrollDue'],
+      ['dueSoon', 'settlementsToProcess'],
+      ['dueSoon', 'expiredStock'],
+      ['toDecide', 'salaryAdvances'],
+      ['toDecide', 'fertilizerToDecide'],
     ]);
     expect(needsAction([...all], MANAGER).map((i) => i.key)).toEqual([
       'fertilizerManager',
@@ -108,13 +151,14 @@ describe('needs your action', () => {
     expect(canAct(MANAGER, 'payChanges')).toBe(false);
   });
 
-  it('keeps count, label and href exactly as given', () => {
+  it('every action only opens a list — its word comes from the rule unless given', () => {
     const [item] = needsAction(
       [
         {
           key: 'expiredStock',
           count: 2,
           label: 'x',
+          reason: 'r',
           href: '/fertilizer/alerts#expired',
         },
       ],
@@ -124,40 +168,52 @@ describe('needs your action', () => {
       key: 'expiredStock',
       count: 2,
       label: 'x',
+      reason: 'r',
       href: '/fertilizer/alerts#expired',
-      urgency: 31,
+      group: 'dueSoon',
+      urgency: 22,
+      action: 'Write off',
     });
+    const [pay] = needsAction(
+      [
+        {
+          key: 'payrollDue',
+          count: 1,
+          label: 'p',
+          reason: null,
+          href: '/p',
+          action: 'Generate payroll',
+        },
+      ],
+      OFFICER,
+    );
+    expect(pay.action).toBe('Generate payroll');
+    // nothing decides money on the dashboard: advances only open their list
+    expect(needsAction([all[1]], OFFICER)[0].action).toBe('Review');
+  });
+
+  it('one primary button: the top item’s action; none with an empty queue', () => {
+    const officer = needsAction([...all], OFFICER);
+    expect(primaryAction(officer)).toEqual({
+      label: 'Fix bank details',
+      href: '/b',
+      key: 'estatesNoBank',
+    });
+    expect(primaryAction([])).toBeNull();
+    expect(toDecideCount(officer)).toBe(2);
   });
 });
 
-describe('quick actions', () => {
-  it('at most three, by role, each needing its page’s permission', () => {
-    expect(
-      quickActions('Officer', { ...OFFICER, attendance: 'edit' }, 0).map(
-        (a) => a.label,
-      ),
-    ).toEqual([
-      'Log collection exception',
-      'Log phoned-in fertilizer request',
-      'Mark attendance',
-    ]);
-    // Manager: Review approvals only while there is something to review; settlements need estateOwners edit
-    expect(quickActions('Manager', MANAGER, 2).map((a) => a.href)).toEqual([
-      '#needs-action',
-    ]);
-    expect(quickActions('Manager', MANAGER, 0)).toEqual([]);
-    expect(
-      quickActions('Manager', { ...MANAGER, estateOwners: 'edit' }, 0).map(
-        (a) => a.key,
-      ),
-    ).toEqual(['prepareSettlements']);
-    expect(
-      quickActions(
-        'Officer',
-        { ...OFFICER, collection: 'view', attendance: 'none' },
-        0,
-      ),
-    ).toHaveLength(1);
+describe('formatting shared with the portal', () => {
+  it('dates as 01 Jul 2026, money as Rs. 1,245,600 (cents only when present), the oldest date', () => {
+    expect(formatDay('2026-07-01')).toBe('01 Jul 2026');
+    expect(formatDay('2026-11-16T22:04:17.634Z')).toBe('16 Nov 2026');
+    expect(formatRs(50000)).toBe('Rs. 50,000');
+    expect(formatRs(7887.5)).toBe('Rs. 7,887.50');
+    expect(oldest(['2026-11-03', null, '2026-10-30', undefined])).toBe(
+      '2026-10-30',
+    );
+    expect(oldest([])).toBeNull();
   });
 });
 

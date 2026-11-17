@@ -62,7 +62,11 @@ const DEFAULTS: Record<string, Record<string, string>> = {
 
 function collectionReport(kg: number, deliveries: number) {
   return {
-    period: { label: 'November 2026 so far (1–17 Nov)' },
+    period: {
+      label: 'November 2026 so far (1–17 Nov)',
+      previous: { from: '2026-10-01', to: '2026-10-17' },
+    },
+    gradeSplit: { superKg: 600, normalKg: 400, superShare: 60 },
     tolerancePct: 5,
     cards: {
       factoryKg: {
@@ -98,7 +102,18 @@ function collectionReport(kg: number, deliveries: number) {
   };
 }
 
-function build(role: DashboardActor['role'], perms = DEFAULTS[role]) {
+interface Opts {
+  /** every pending settlement month has a transport version */
+  transport?: boolean;
+  /** this service throws */
+  failAudit?: boolean;
+}
+
+function build(
+  role: DashboardActor['role'],
+  perms = DEFAULTS[role],
+  opts: Opts = {},
+) {
   const calls: string[] = [];
   const spy =
     <T>(name: string, value: T) =>
@@ -145,12 +160,23 @@ function build(role: DashboardActor['role'], perms = DEFAULTS[role]) {
     },
     fertilizerView: {
       list: spy('fertilizerList', [
-        { status: 'Requested', staleCommittedKg: 0, attempt: null },
-        { status: 'Requested', staleCommittedKg: 5, attempt: null },
+        {
+          status: 'Requested',
+          staleCommittedKg: 0,
+          attempt: null,
+          requestedDate: '2026-11-12',
+        },
+        {
+          status: 'Requested',
+          staleCommittedKg: 5,
+          attempt: null,
+          requestedDate: '2026-11-03',
+        },
         {
           status: 'Awaiting manager approval',
           staleCommittedKg: 0,
           attempt: null,
+          requestedDate: '2026-11-15',
         },
         {
           status: 'Out for delivery',
@@ -164,7 +190,9 @@ function build(role: DashboardActor['role'], perms = DEFAULTS[role]) {
       ]),
     },
     fertilizer: {
-      expiryAlerts: spy('expiry', { summary: { expired: { count: 2 } } }),
+      expiryAlerts: spy('expiry', {
+        summary: { expired: { count: 2, kg: 1250 } },
+      }),
     },
     fertilizerDeliveries: { reconcile: spy('reconcile', undefined) },
     collections: {
@@ -180,7 +208,18 @@ function build(role: DashboardActor['role'], perms = DEFAULTS[role]) {
         'MR-3',
       ]),
     },
-    advances: { list: spy('advances', { tabCounts: { decide: 4 } }) },
+    advances: {
+      list: spy('advances', {
+        tabCounts: { decide: 4 },
+        rows: [
+          {
+            amount: 15000,
+            employeeName: 'S. Fernando',
+            dateRequested: '2026-11-02',
+          },
+        ],
+      }),
+    },
     payroll: {
       month: jest.fn(
         (q: { month: string; status?: string; issues?: string[] }) => {
@@ -190,6 +229,7 @@ function build(role: DashboardActor['role'], perms = DEFAULTS[role]) {
             readiness: {
               status:
                 q.month === '2026-10' ? 'Ready to process' : 'In progress',
+              blocking: 0,
             },
           });
         },
@@ -197,24 +237,51 @@ function build(role: DashboardActor['role'], perms = DEFAULTS[role]) {
     },
     payChanges: {
       list: spy('payChanges', [
-        { status: 'pending', approval: { canDecide: true } },
-        { status: 'pending', approval: { canDecide: false } },
-        { status: 'approved', approval: { canDecide: false } },
+        {
+          status: 'pending',
+          approval: { canDecide: true },
+          requestedAt: '2026-11-10T03:00:00.000Z',
+        },
+        {
+          status: 'pending',
+          approval: { canDecide: false },
+          requestedAt: '2026-11-01T03:00:00.000Z',
+        },
+        {
+          status: 'approved',
+          approval: { canDecide: false },
+          requestedAt: '2026-10-01T03:00:00.000Z',
+        },
       ]),
     },
-    holidays: { year: spy('holidays', { pending: [{}, {}] }) },
-    settlements: {
-      list: jest.fn((q: { noBank?: boolean }) => {
-        calls.push(`settlements(${JSON.stringify(q)})`);
-        return Promise.resolve({ total: q.noBank ? 1 : 3 });
+    holidays: {
+      year: spy('holidays', {
+        pending: [{ dateFrom: '2026-12-25' }, { dateFrom: '2026-12-01' }],
       }),
     },
+    settlements: {
+      // every pending row (limit 0): the same list the settlements page shows
+      list: jest.fn((q: object) => {
+        calls.push(`settlements(${JSON.stringify(q)})`);
+        const rows = [
+          { period: 'July 2026', missingBank: true },
+          { period: 'July 2026', missingBank: false },
+          { period: 'July 2026', missingBank: false },
+        ];
+        return Promise.resolve({ rows, total: rows.length });
+      }),
+    },
+    transport: {
+      forPeriod: spy('transport', { configured: opts.transport ?? true }),
+    },
     audit: {
-      list: spy('audit', [
-        { id: '1', module: 'Administration' },
-        { id: '2', module: 'Collection' },
-        { id: '3', module: 'Employee' },
-      ]),
+      list: opts.failAudit
+        ? () => Promise.reject(new Error('audit down'))
+        : spy('audit', [
+            { id: '1', module: 'Administration' },
+            { id: '2', module: 'Collection' },
+            { id: '3', module: 'Employee' },
+          ]),
     },
   };
   const s = services as unknown as Record<string, never>;
@@ -234,6 +301,7 @@ function build(role: DashboardActor['role'], perms = DEFAULTS[role]) {
     s.payChanges,
     s.holidays,
     s.settlements,
+    s.transport,
     s.audit,
   );
   const actor: DashboardActor = { name: 'T', role, sub: 1 };
@@ -287,28 +355,73 @@ describe('DashboardService.summary', () => {
   it('Officer: the actions an Officer can take, with counts from the linked lists', async () => {
     const { service, actor, calls } = build('Officer');
     const s = await service.summary(actor, NOW);
-    expect(s.actions.map((a) => [a.key, a.count, a.href])).toEqual([
-      ['payrollDue', 9, '/employees/payroll?month=2026-10&status=Pending'],
+    expect(s.actions.map((a) => [a.group, a.key, a.count, a.href])).toEqual([
       [
-        'settlementsToProcess',
-        3,
-        '/estates/settlements?month=all&status=Pending',
+        'urgent',
+        'estatesNoBank',
+        1,
+        '/estates/settlements?month=all&status=Pending&bank=missing',
       ],
-      ['salaryAdvances', 4, '/employees/advances'],
-      ['fertilizerToDecide', 2, '/fertilizer/requests?status=Requested'],
-      ['staleAllocations', 1, '/fertilizer/requests?tab=all&scope=stale'],
-      ['expiredStock', 2, '/fertilizer/alerts#expired'],
       [
+        'urgent',
+        'payrollDue',
+        9,
+        '/employees/payroll?month=2026-10&status=Pending',
+      ],
+      [
+        'urgent',
         'ungradedOld',
         1,
         '/collections?grade=Ungraded&status=Collected&olderThan=7',
       ],
       [
-        'estatesNoBank',
+        'dueSoon',
+        'settlementsToProcess',
+        3,
+        '/estates/settlements?month=all&status=Pending',
+      ],
+      [
+        'dueSoon',
+        'staleAllocations',
         1,
-        '/estates/settlements?month=all&status=Pending&bank=missing',
+        '/fertilizer/requests?tab=all&scope=stale',
+      ],
+      ['dueSoon', 'expiredStock', 2, '/fertilizer/alerts#expired'],
+      ['toDecide', 'salaryAdvances', 4, '/employees/advances'],
+      [
+        'toDecide',
+        'fertilizerToDecide',
+        2,
+        '/fertilizer/requests?status=Requested',
       ],
     ]);
+    const reason = (k: string) => s.actions.find((a) => a.key === k)?.reason;
+    expect(reason('estatesNoBank')).toBe('Blocks 1 of 3 pending settlements');
+    expect(reason('settlementsToProcess')).toBe('1 blocked: no bank details');
+    expect(reason('ungradedOld')).toBe(
+      "Oldest delivered 01 Nov 2026; ungraded leaf can't be settled",
+    );
+    expect(reason('fertilizerToDecide')).toBe('Oldest requested 03 Nov 2026');
+    expect(reason('salaryAdvances')).toBe('Oldest requested 02 Nov 2026');
+    expect(reason('expiredStock')).toBe(
+      '1,250 kg; written off on Expiry Alerts',
+    );
+    // one primary button: the top row's action; "Review approvals" counts To decide
+    expect(s.primaryAction).toEqual({
+      label: 'Fix bank details',
+      href: '/estates/settlements?month=all&status=Pending&bank=missing',
+      key: 'estatesNoBank',
+    });
+    expect(s.toDecide).toBe(2);
+    // nothing decides money on the dashboard
+    expect(s.actions.find((a) => a.key === 'salaryAdvances')?.action).toBe(
+      'Review',
+    );
+    // every pending row is read, and each pending month's transport is checked
+    expect(calls).toContain(
+      'settlements({"month":"all","status":"Pending","limit":0})',
+    );
+    expect(calls).toContain('transport(["July 2026"])');
     // the queue's own read path: reconcile, then list
     expect(calls.indexOf('reconcile([])')).toBeLessThan(
       calls.indexOf('fertilizerList([])'),
@@ -343,7 +456,9 @@ describe('DashboardService.summary', () => {
       ['fertilizerManager', 1],
       ['gradingCorrections', 3],
     ]);
-    expect(s.quickActions.map((a) => a.label)).toEqual(['Review approvals']);
+    expect(s.primaryAction?.key).toBe('fertilizerManager');
+    expect(s.toDecide).toBe(2);
+    expect(s.actions[0].reason).toBe('Oldest requested 15 Nov 2026');
   });
 
   it('Administrator: This month without Today; pay changes it can decide, holidays', async () => {
@@ -376,6 +491,8 @@ describe('DashboardService.summary', () => {
       { id: 1, name: 'Route A', kg: 30, deliveries: 3 },
     ]);
     expect(s.charts?.lastMonthLabel).toBe('October 2026');
+    expect(s.charts?.changePct).toBe(11.1);
+    expect(s.charts?.compare).toEqual({ from: '2026-10-01', to: '2026-10-17' });
   });
 
   it('activity: only modules the role can view', async () => {
@@ -403,5 +520,51 @@ describe('DashboardService.summary', () => {
     const { service, actor } = build('Manager', { ...DEFAULTS.Manager });
     const s = await service.summary(actor, NOW);
     expect(s.actions.every((a) => a.count > 0)).toBe(true);
+  });
+
+  it('settlements while a month has no transport amount: blocked, no ready count', async () => {
+    const { service, actor } = build('Officer', DEFAULTS.Officer, {
+      transport: false,
+    });
+    const s = await service.summary(actor, NOW);
+    const row = s.actions.find((a) => a.key === 'settlementsToProcess');
+    expect(row).toMatchObject({
+      count: 3,
+      reason: 'Blocked: monthly transport amount not set',
+      blocked: true,
+    });
+  });
+
+  it('a single salary advance names the amount and who asked', async () => {
+    const { service, actor } = build('Officer');
+    const advances = (service as unknown as { advances: { list: unknown } })
+      .advances;
+    advances.list = () =>
+      Promise.resolve({
+        tabCounts: { decide: 1 },
+        rows: [
+          {
+            amount: 15000,
+            employeeName: 'S. Fernando',
+            dateRequested: '2026-11-02',
+          },
+        ],
+      });
+    const s = await service.summary(actor, NOW);
+    expect(s.actions.find((a) => a.key === 'salaryAdvances')?.reason).toBe(
+      'Rs. 15,000 requested by S. Fernando',
+    );
+  });
+
+  it('one failing source only empties its own section', async () => {
+    const { service, actor } = build('Manager', DEFAULTS.Manager, {
+      failAudit: true,
+    });
+    const s = await service.summary(actor, NOW);
+    expect(s.errors).toEqual({ activity: "Couldn't load this section." });
+    expect(s.activity).toEqual([]);
+    expect(s.todayView).not.toBeNull();
+    expect(s.monthView).not.toBeNull();
+    expect(s.actions.length).toBeGreaterThan(0);
   });
 });

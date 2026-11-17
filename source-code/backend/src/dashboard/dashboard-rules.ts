@@ -60,7 +60,7 @@ export function showsFigure(perms: Perms, figure: Figure): boolean {
   return meets(perms, FIGURE_MODULE[figure], 'view');
 }
 
-/* ── Needs your action ── */
+/* ── Needs your action: the work queue ── */
 
 export type ActionKey =
   | 'payrollDue'
@@ -78,43 +78,118 @@ export type ActionKey =
   | 'estatesNoBank';
 
 /**
- * Who may ACT on each item — the permission the action's own page checks — and its urgency
- * (lower first): money that is blocked or due, then decisions people wait on, then stock,
- * then data fixes.
+ * urgent: blocks money moving, or is overdue · dueSoon: due this cycle · toDecide: someone is
+ * waiting on a decision. Empty groups are never shown.
+ */
+export type ActionGroup = 'urgent' | 'dueSoon' | 'toDecide';
+export const GROUP_ORDER: ActionGroup[] = ['urgent', 'dueSoon', 'toDecide'];
+
+/**
+ * Who may ACT on each item — the permission the action's own page checks — its group, its order
+ * inside the group (lower first; a blocker before what it blocks) and the button's word. Every
+ * action only opens the filtered list: nothing is decided or run from the dashboard.
  */
 export const ACTION_RULES: Record<
   ActionKey,
   {
     module: ModuleKey;
     level: Exclude<PermissionLevel, 'none'>;
+    group: ActionGroup;
     urgency: number;
+    action: string;
   }
 > = {
-  payrollDue: { module: 'payroll', level: 'edit', urgency: 10 },
-  settlementsToProcess: { module: 'estateOwners', level: 'edit', urgency: 11 },
-  salaryAdvances: { module: 'advances', level: 'approve', urgency: 20 },
+  estatesNoBank: {
+    module: 'estateOwners',
+    level: 'edit',
+    group: 'urgent',
+    urgency: 10,
+    action: 'Fix bank details',
+  },
+  payrollDue: {
+    module: 'payroll',
+    level: 'edit',
+    group: 'urgent',
+    urgency: 11,
+    action: 'Review payroll',
+  },
+  employeesNoBank: {
+    module: 'employees',
+    level: 'approve',
+    group: 'urgent',
+    urgency: 12,
+    action: 'Fix bank details',
+  },
+  ungradedOld: {
+    module: 'grading',
+    level: 'edit',
+    group: 'urgent',
+    urgency: 13,
+    action: 'Grade deliveries',
+  },
+  settlementsToProcess: {
+    module: 'estateOwners',
+    level: 'edit',
+    group: 'dueSoon',
+    urgency: 20,
+    action: 'Review settlements',
+  },
+  staleAllocations: {
+    module: 'fertilizer',
+    level: 'edit',
+    group: 'dueSoon',
+    urgency: 21,
+    action: 'Review requests',
+  },
+  expiredStock: {
+    module: 'fertilizer',
+    level: 'edit',
+    group: 'dueSoon',
+    urgency: 22,
+    action: 'Write off',
+  },
+  salaryAdvances: {
+    module: 'advances',
+    level: 'approve',
+    group: 'toDecide',
+    urgency: 30,
+    action: 'Review',
+  },
   fertilizerToDecide: {
     module: 'fertilizerApproval',
     level: 'approve',
-    urgency: 21,
+    group: 'toDecide',
+    urgency: 31,
+    action: 'Review',
   },
   fertilizerManager: {
     module: 'fertilizerManagerApproval',
     level: 'approve',
-    urgency: 22,
+    group: 'toDecide',
+    urgency: 32,
+    action: 'Review',
   },
   gradingCorrections: {
     module: 'gradingApproval',
     level: 'approve',
-    urgency: 23,
+    group: 'toDecide',
+    urgency: 33,
+    action: 'Review',
   },
-  payChanges: { module: 'payRates', level: 'approve', urgency: 24 },
-  holidayRequests: { module: 'holidayCalendar', level: 'approve', urgency: 25 },
-  staleAllocations: { module: 'fertilizer', level: 'edit', urgency: 30 },
-  expiredStock: { module: 'fertilizer', level: 'edit', urgency: 31 },
-  ungradedOld: { module: 'grading', level: 'edit', urgency: 40 },
-  employeesNoBank: { module: 'employees', level: 'approve', urgency: 50 },
-  estatesNoBank: { module: 'estateOwners', level: 'edit', urgency: 51 },
+  payChanges: {
+    module: 'payRates',
+    level: 'approve',
+    group: 'toDecide',
+    urgency: 34,
+    action: 'Review',
+  },
+  holidayRequests: {
+    module: 'holidayCalendar',
+    level: 'approve',
+    group: 'toDecide',
+    urgency: 35,
+    action: 'Review',
+  },
 };
 
 export function canAct(perms: Perms, key: ActionKey): boolean {
@@ -126,101 +201,96 @@ export interface ActionItem {
   key: ActionKey;
   count: number;
   label: string;
+  /** why it matters or what is holding it, from the same list; null when the label says it all */
+  reason: string | null;
   /** the page listing exactly these `count` records */
   href: string;
+  group: ActionGroup;
   urgency: number;
+  /** the button's word — it only opens `href` */
+  action: string;
+  /** this item holds up another one (e.g. missing bank details → settlements) */
+  blocks?: ActionKey;
+  /** the item can't move until something else is fixed (e.g. no transport amount) */
+  blocked?: boolean;
 }
 
-/** Only items the user may act on, never a zero, most urgent first. */
+export type ActionCandidate = Omit<ActionItem, 'urgency' | 'group' | 'action'> &
+  Partial<Pick<ActionItem, 'action'>>;
+
+/** Only items the user may act on, never a zero, grouped, most urgent first. */
 export function needsAction(
-  candidates: Omit<ActionItem, 'urgency'>[],
+  candidates: ActionCandidate[],
   perms: Perms,
 ): ActionItem[] {
   return candidates
     .filter((c) => c.count > 0 && canAct(perms, c.key))
-    .map((c) => ({ ...c, urgency: ACTION_RULES[c.key].urgency }))
-    .sort((a, b) => a.urgency - b.urgency || b.count - a.count);
+    .map((c) => {
+      const r = ACTION_RULES[c.key];
+      return {
+        ...c,
+        group: r.group,
+        urgency: r.urgency,
+        action: c.action ?? r.action,
+      };
+    })
+    .sort(
+      (a, b) =>
+        GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group) ||
+        a.urgency - b.urgency ||
+        b.count - a.count,
+    );
 }
 
 export const plural = (n: number, one: string, many = `${one}s`) =>
   `${n} ${n === 1 ? one : many}`;
 
-/* ── Quick actions ── */
-
-export interface QuickAction {
-  key: string;
-  label: string;
-  /** a page, or `#needs-action` (the list at the top of the dashboard) */
-  href: string;
+/**
+ * The page's one primary button: the role's most urgent item's action (it opens that item's
+ * list). No queue, no primary button. "Review approvals" counts the To decide items.
+ */
+export function primaryAction(
+  items: ActionItem[],
+): { label: string; href: string; key: ActionKey } | null {
+  const top = items[0];
+  return top ? { label: top.action, href: top.href, key: top.key } : null;
 }
 
-/**
- * At most three, the ones each role's day starts with. Each still needs the permission its page
- * checks, so a narrowed role loses the button with the page.
- */
-const QUICK_ACTIONS: (QuickAction & {
-  roles: readonly string[];
-  module: ModuleKey;
-  level: Exclude<PermissionLevel, 'none'>;
-  /** only while "Needs your action" has something in it */
-  needsItems?: boolean;
-})[] = [
-  {
-    key: 'logException',
-    label: 'Log collection exception',
-    href: '/collections/new',
-    roles: ['Officer'],
-    module: 'collection',
-    level: 'edit',
-  },
-  {
-    key: 'logFertilizerRequest',
-    label: 'Log phoned-in fertilizer request',
-    href: '/fertilizer/requests/new',
-    roles: ['Officer'],
-    module: 'fertilizer',
-    level: 'edit',
-  },
-  {
-    key: 'markAttendance',
-    label: 'Mark attendance',
-    href: '/employees/attendance/entry',
-    roles: ['Officer'],
-    module: 'attendance',
-    level: 'edit',
-  },
-  {
-    key: 'reviewApprovals',
-    label: 'Review approvals',
-    href: '#needs-action',
-    roles: ['Manager', 'Administrator'],
-    module: 'dashboard',
-    level: 'view',
-    needsItems: true,
-  },
-  {
-    key: 'prepareSettlements',
-    label: 'Prepare settlements',
-    href: '/estates/settlements/process',
-    roles: ['Manager', 'Administrator'],
-    module: 'estateOwners',
-    level: 'edit',
-  },
+export function toDecideCount(items: ActionItem[]): number {
+  return items.filter((i) => i.group === 'toDecide').length;
+}
+
+const MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
-export function quickActions(
-  role: string,
-  perms: Perms,
-  actionCount: number,
-): QuickAction[] {
-  return QUICK_ACTIONS.filter(
-    (a) =>
-      a.roles.includes(role) &&
-      meets(perms, a.module, a.level) &&
-      (!a.needsItems || actionCount > 0),
-  )
-    .slice(0, 3)
-    .map(({ key, label, href }) => ({ key, label, href }));
+/** `01 Jul 2026` — the portal's one date format (admin/src/lib/format.ts formatDate). */
+export function formatDay(date: string): string {
+  const [y, m, d] = date.slice(0, 10).split('-');
+  return `${d} ${MONTHS_SHORT[Number(m) - 1]} ${y}`;
+}
+
+/** `Rs. 1,245,600`, cents only when there are any — the portal's formatCurrency. */
+export function formatRs(n: number): string {
+  const cents = Math.round(n * 100) % 100 !== 0;
+  return `Rs. ${n.toLocaleString('en-US', { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: 2 })}`;
+}
+
+/** The earliest of some dates (YYYY-MM-DD…), or null. */
+export function oldest(dates: (string | null | undefined)[]): string | null {
+  const ds = dates.filter((d): d is string => !!d).sort();
+  return ds[0] ?? null;
 }
 
 /* ── Counts read off existing lists (each mirrors its page's own filter) ── */

@@ -71,6 +71,6 @@ import { SettlementViewService } from './settlement-view.service';
     EstateAdvanceSettingsService,
   ],
   // the Dashboard's settlement counts (Dashboard-Addendum)
-  exports: [SettlementViewService],
+  exports: [SettlementViewService, TransportStatusService],
 })
 export class EstatesModule {}

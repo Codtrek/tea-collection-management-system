@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { MODULE_KEYS } from '../admin/admin-map';
 import type { PublicAuditEntry } from '../audit/audit-map';
 import { AuditService } from '../audit/audit.service';
+import type { PublicCollection } from '../collections/collection-map';
 import { CollectionsService } from '../collections/collections.service';
 import { GradingService } from '../collections/grading.service';
 import { DispatchAccessService } from '../dispatch/dispatch-access.service';
@@ -11,19 +12,20 @@ import { AdvanceViewService } from '../employees/advance-view.service';
 import { PayAdjustmentService } from '../employees/pay-adjustment.service';
 import type { MonthReadiness } from '../employees/payroll-view';
 import { PayrollViewService } from '../employees/payroll-view.service';
-import { SettlementViewService } from '../estates/settlement-view.service';
 import { ALL_PERIODS } from '../estates/settlement-view';
+import { SettlementViewService } from '../estates/settlement-view.service';
+import { TransportStatusService } from '../estates/transport-status.service';
 import { FertilizerDeliveryService } from '../fertilizer/fertilizer-delivery.service';
 import type { PublicRequest } from '../fertilizer/fertilizer-map';
 import { FertilizerViewService } from '../fertilizer/fertilizer-view.service';
 import { FertilizerService } from '../fertilizer/fertilizer.service';
 import { HolidayService } from '../holidays/holiday.service';
-import { CollectionReportService } from '../reports/collection-report.service';
 import type { CollectionReport } from '../reports/collection-report-rules';
+import { CollectionReportService } from '../reports/collection-report.service';
 import { FinanceService } from '../reports/finance.service';
 import { LeafPurchaseService } from '../reports/leaf-purchase.service';
-import type { PublicCollection } from '../collections/collection-map';
 import {
+  type ActionCandidate,
   type ActionItem,
   type AgentCounts,
   type FertilizerToday,
@@ -32,17 +34,21 @@ import {
   agentCounts,
   canAct,
   fertilizerToday,
+  formatDay,
+  formatRs,
   monthName,
   needsAction,
+  oldest,
   plural,
   previousMonth,
-  type QuickAction,
-  quickActions,
+  primaryAction,
   showsFigure,
   showsSection,
+  toDecideCount,
   ungradedOlderThan,
   ungradedOn,
   visibleActivity,
+  waitingForGrading,
 } from './dashboard-rules';
 
 export interface DashboardActor {
@@ -62,6 +68,23 @@ export interface IntakeFigure {
   changePct: number | null;
 }
 
+/** The report's own comparison window, e.g. 1–17 Oct for 1–17 Nov. */
+export interface CompareWindow {
+  from: string;
+  to: string;
+}
+
+/** Pending settlements, and what holds them (the queue row and the month panel read the same). */
+export interface SettlementState {
+  pending: number;
+  noBank: number;
+  /** a pending month has no transport version: nothing can be processed */
+  transportMissing: boolean;
+  href: string;
+}
+
+export type Section = 'actions' | 'today' | 'month' | 'charts' | 'activity';
+
 export interface DashboardSummary {
   generatedAt: string;
   /** factory calendar (Asia/Colombo) */
@@ -69,7 +92,10 @@ export interface DashboardSummary {
   month: string;
   role: DashboardActor['role'];
   actions: ActionItem[];
-  quickActions: QuickAction[];
+  /** the page's one primary button: the top queue item's action; null with an empty queue */
+  primaryAction: { label: string; href: string; key: string } | null;
+  /** "Review approvals (N)": the To decide items */
+  toDecide: number;
   todayView: {
     leaf?: IntakeFigure & {
       /** the same weekday last week, whole day */
@@ -89,9 +115,12 @@ export interface DashboardSummary {
   monthView: {
     label: string;
     intake?: IntakeFigure & {
+      compare: CompareWindow;
       lastYearKg: number | null;
       yoyPct: number | null;
       superShare: number | null;
+      superKg: number;
+      normalKg: number;
       href: string;
     };
     leafPurchase?: {
@@ -108,6 +137,7 @@ export interface DashboardSummary {
       lastMonthStatus: MonthReadiness;
       href: string;
     };
+    settlements?: SettlementState;
   } | null;
   charts: {
     daily: {
@@ -119,6 +149,9 @@ export interface DashboardSummary {
       lastMonthKg: number | null;
     }[];
     lastMonthLabel: string;
+    /** the report's change against the same days last month (the takeaway) */
+    changePct: number | null;
+    compare: CompareWindow;
     byRoute: {
       id: number | null;
       name: string;
@@ -128,10 +161,27 @@ export interface DashboardSummary {
     href: string;
   } | null;
   activity: PublicAuditEntry[];
+  /** a section whose source failed: shown as an inline error in that block only */
+  errors: Partial<Record<Section, string>>;
 }
 
 const q = (params: Record<string, string>) =>
   new URLSearchParams(params).toString();
+
+/** One section's failure stays in that section. */
+async function guard<T>(
+  section: Section,
+  errors: DashboardSummary['errors'],
+  work: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await work();
+  } catch {
+    errors[section] = `Couldn't load this section.`;
+    return fallback;
+  }
+}
 
 /**
  * GET /dashboard/summary (Dashboard-Addendum). Built only from the services the linked pages
@@ -156,6 +206,7 @@ export class DashboardService {
     private readonly payChanges: PayAdjustmentService,
     private readonly holidays: HolidayService,
     private readonly settlements: SettlementViewService,
+    private readonly transport: TransportStatusService,
     private readonly audit: AuditService,
   ) {}
 
@@ -175,6 +226,15 @@ export class DashboardService {
     const month = today.slice(0, 7);
     const lastMonth = previousMonth(month);
     const has = (f: Parameters<typeof showsFigure>[1]) => showsFigure(perms, f);
+    const errors: DashboardSummary['errors'] = {};
+    // a shared load is awaited inside each section that uses it, so its failure marks those
+    // sections (and only those) as errored; the no-op catch only stops an unhandled rejection
+    const shared = <T>(load: () => Promise<T>): Promise<T> => {
+      const p = load();
+      p.catch(() => undefined);
+      return p;
+    };
+    const none = Promise.resolve(null);
 
     // shared lists, loaded once, only when something on the page needs them
     const needCollections =
@@ -186,35 +246,89 @@ export class DashboardService {
       canAct(perms, 'fertilizerToDecide') ||
       canAct(perms, 'fertilizerManager') ||
       canAct(perms, 'staleAllocations');
-    const [collections, requests, thisMonthReport] = await Promise.all([
-      needCollections ? this.collections.findAll() : null,
-      needRequests ? this.fertilizerRequests() : null,
+    const needSettlements =
+      canAct(perms, 'settlementsToProcess') ||
+      canAct(perms, 'estatesNoBank') ||
+      (showsSection(actor.role, 'month') &&
+        (perms.estateOwners ?? 'none') !== 'none');
+    const collectionsP = needCollections
+      ? shared(() => this.collections.findAll())
+      : none;
+    const requestsP = needRequests
+      ? shared(() => this.fertilizerRequests())
+      : none;
+    const reportP =
       (showsSection(actor.role, 'month') && has('intake')) || has('charts')
-        ? this.collectionReport.report({ thisMonth: true }, now)
-        : null,
-    ]);
+        ? shared(() => this.collectionReport.report({ thisMonth: true }, now))
+        : none;
+    const settlementsP = needSettlements
+      ? shared(() => this.settlementState())
+      : none;
 
     const [todayView, monthView, charts, actions, activity] = await Promise.all(
       [
         showsSection(actor.role, 'today')
-          ? this.todayView(perms, today, now, collections, requests)
+          ? guard(
+              'today',
+              errors,
+              async () =>
+                this.todayView(
+                  perms,
+                  today,
+                  now,
+                  await collectionsP,
+                  await requestsP,
+                ),
+              null,
+            )
           : null,
         showsSection(actor.role, 'month')
-          ? this.monthView(perms, month, lastMonth, now, thisMonthReport)
+          ? guard(
+              'month',
+              errors,
+              async () =>
+                this.monthView(
+                  perms,
+                  month,
+                  lastMonth,
+                  now,
+                  await reportP,
+                  await settlementsP,
+                ),
+              null,
+            )
           : null,
-        has('charts') && thisMonthReport
-          ? this.charts(thisMonthReport, lastMonth, now)
+        has('charts')
+          ? guard(
+              'charts',
+              errors,
+              async () => this.charts(await reportP, lastMonth, now),
+              null,
+            )
           : null,
-        this.actions(
-          perms,
-          actor,
-          today,
-          lastMonth,
-          now,
-          collections,
-          requests,
+        guard(
+          'actions',
+          errors,
+          async () =>
+            this.actions(
+              perms,
+              actor,
+              today,
+              lastMonth,
+              now,
+              await collectionsP,
+              await requestsP,
+              await settlementsP,
+            ),
+          [],
         ),
-        this.audit.list().then((all) => visibleActivity(all, perms, 10)),
+        guard(
+          'activity',
+          errors,
+          () =>
+            this.audit.list().then((all) => visibleActivity(all, perms, 10)),
+          [],
+        ),
       ],
     );
 
@@ -224,11 +338,13 @@ export class DashboardService {
       month,
       role: actor.role,
       actions,
-      quickActions: quickActions(actor.role, perms, actions.length),
+      primaryAction: primaryAction(actions),
+      toDecide: toDecideCount(actions),
       todayView,
       monthView,
       charts,
       activity,
+      errors,
     };
   }
 
@@ -236,6 +352,28 @@ export class DashboardService {
   private async fertilizerRequests(): Promise<PublicRequest[]> {
     await this.fertilizerDeliveries.reconcile();
     return this.fertilizerView.list();
+  }
+
+  /**
+   * Every pending settlement (the list's own rows), how many have no bank details, and whether any
+   * pending month has no transport version — the settlement page refuses those.
+   */
+  private async settlementState(): Promise<SettlementState> {
+    const pending = await this.settlements.list({
+      month: ALL_PERIODS,
+      status: 'Pending',
+      limit: 0,
+    });
+    const periods = [...new Set(pending.rows.map((r) => r.period))];
+    const statuses = await Promise.all(
+      periods.map((p) => this.transport.forPeriod(p)),
+    );
+    return {
+      pending: pending.total,
+      noBank: pending.rows.filter((r) => r.missingBank).length,
+      transportMissing: statuses.some((s) => !s.configured),
+      href: `/estates/settlements?${q({ month: ALL_PERIODS, status: 'Pending' })}`,
+    };
   }
 
   private async todayView(
@@ -301,6 +439,7 @@ export class DashboardService {
     lastMonth: string,
     now: Date,
     report: CollectionReport | null,
+    settlementState: SettlementState | null,
   ): Promise<NonNullable<DashboardSummary['monthView']>> {
     const view: NonNullable<DashboardSummary['monthView']> = {
       label: report?.period.label ?? `${monthName(month)} so far`,
@@ -326,9 +465,12 @@ export class DashboardService {
         deliveries: report.cards.deliveries.value,
         compareKg: c.previous,
         changePct: c.changePct,
+        compare: report.period.previous,
         lastYearKg: c.lastYear,
         yoyPct: c.yoyPct,
         superShare: report.cards.superShare.value,
+        superKg: report.gradeSplit.superKg,
+        normalKg: report.gradeSplit.normalKg,
         href: `/reports/collection?${q({ thisMonth: '1' })}`,
       };
     }
@@ -356,14 +498,16 @@ export class DashboardService {
         href: `/employees/payroll?${q({ month: lastMonth })}`,
       };
     }
+    if (settlementState) view.settlements = settlementState;
     return view;
   }
 
   private async charts(
-    report: CollectionReport,
+    report: CollectionReport | null,
     lastMonth: string,
     now: Date,
   ): Promise<NonNullable<DashboardSummary['charts']>> {
+    if (!report) throw new Error('no collection report');
     const prev = await this.collectionReport.report({ month: lastMonth }, now);
     return {
       // last month aligned by day of the month (1st with 1st)
@@ -372,6 +516,8 @@ export class DashboardService {
         lastMonthKg: prev.trend.points[i]?.kg ?? null,
       })),
       lastMonthLabel: monthName(lastMonth),
+      changePct: report.cards.factoryKg.changePct,
+      compare: report.period.previous,
       byRoute: report.byRoute,
       href: `/reports/collection?${q({ thisMonth: '1' })}`,
     };
@@ -386,17 +532,16 @@ export class DashboardService {
     now: Date,
     collections: PublicCollection[] | null,
     requests: PublicRequest[] | null,
+    settlementState: SettlementState | null,
   ): Promise<ActionItem[]> {
     const can = (k: Parameters<typeof canAct>[1]) => canAct(perms, k);
-    const out: Omit<ActionItem, 'urgency'>[] = [];
+    const out: ActionCandidate[] = [];
     const lastMonthName = monthName(lastMonth);
 
     const [
       payrollLast,
       payrollPending,
       payrollNoBank,
-      settlementsPending,
-      settlementsNoBank,
       advances,
       payChanges,
       holidays,
@@ -418,23 +563,8 @@ export class DashboardService {
             now,
           )
         : null,
-      can('settlementsToProcess')
-        ? this.settlements.list({
-            month: ALL_PERIODS,
-            status: 'Pending',
-            limit: 1,
-          })
-        : null,
-      can('estatesNoBank')
-        ? this.settlements.list({
-            month: ALL_PERIODS,
-            status: 'Pending',
-            noBank: true,
-            limit: 1,
-          })
-        : null,
       can('salaryAdvances')
-        ? this.advances.list({ tab: 'decide', limit: 1 })
+        ? this.advances.list({ tab: 'decide', sort: 'date', dir: 'asc' })
         : null,
       can('payChanges') ? this.payChanges.list(actor) : null,
       can('holidayRequests')
@@ -453,53 +583,93 @@ export class DashboardService {
           key: 'payrollDue',
           count: 1,
           label: `payroll month not generated (${lastMonthName})`,
+          reason: `${lastMonthName} has ended; generate its payroll from attendance`,
           href: `/employees/payroll?${q({ month: lastMonth })}`,
+          action: 'Generate payroll',
         });
       } else if (
         (status === 'Ready to process' || status === 'Issues to fix') &&
         payrollPending
       ) {
+        const blocking = payrollLast.readiness.blocking;
         out.push({
           key: 'payrollDue',
           count: payrollPending.total,
           label: `${plural(payrollPending.total, 'employee')} to pay for ${lastMonthName}`,
+          reason:
+            status === 'Issues to fix'
+              ? `${blocking} blocked: no bank details`
+              : 'Ready to process',
           href: `/employees/payroll?${q({ month: lastMonth, status: 'Pending' })}`,
+          action: 'Review payroll',
         });
       }
     }
-    if (settlementsPending) {
-      const n = settlementsPending.total;
+    if (settlementState && can('settlementsToProcess')) {
+      const s = settlementState;
       out.push({
         key: 'settlementsToProcess',
-        count: n,
-        label: `${plural(n, 'estate settlement')} to process`,
-        href: `/estates/settlements?${q({ month: ALL_PERIODS, status: 'Pending' })}`,
+        count: s.pending,
+        label: `${plural(s.pending, 'estate settlement')} to process`,
+        // never a "ready" count while transport isn't set: nothing can be processed
+        reason: s.transportMissing
+          ? 'Blocked: monthly transport amount not set'
+          : s.noBank > 0
+            ? `${s.noBank} blocked: no bank details`
+            : null,
+        blocked: s.transportMissing || undefined,
+        href: s.href,
+      });
+    }
+    if (settlementState && can('estatesNoBank')) {
+      const s = settlementState;
+      out.push({
+        key: 'estatesNoBank',
+        count: s.noBank,
+        label: `${plural(s.noBank, 'estate')} missing bank details`,
+        reason: `Blocks ${s.noBank} of ${plural(s.pending, 'pending settlement')}`,
+        blocks: 'settlementsToProcess',
+        href: `/estates/settlements?${q({ month: ALL_PERIODS, status: 'Pending', bank: 'missing' })}`,
       });
     }
     if (advances) {
       const n = advances.tabCounts.decide;
+      const first = advances.rows[0];
       out.push({
         key: 'salaryAdvances',
         count: n,
         label: `${plural(n, 'salary advance')} to decide`,
+        reason:
+          n === 1 && first
+            ? `${formatRs(first.amount)} requested by ${first.employeeName}`
+            : first
+              ? `Oldest requested ${formatDay(first.dateRequested)}`
+              : null,
         href: '/employees/advances',
       });
     }
     if (requests) {
-      const by = (s: string) => requests.filter((r) => r.status === s).length;
-      const decide = by('Requested');
-      const manager = by('Awaiting manager approval');
+      const decide = requests.filter((r) => r.status === 'Requested');
+      const manager = requests.filter(
+        (r) => r.status === 'Awaiting manager approval',
+      );
+      const since = (rows: PublicRequest[]) => {
+        const d = oldest(rows.map((r) => r.requestedDate));
+        return d ? `Oldest requested ${formatDay(d)}` : null;
+      };
       out.push(
         {
           key: 'fertilizerToDecide',
-          count: decide,
-          label: `${plural(decide, 'fertilizer request')} to decide`,
+          count: decide.length,
+          label: `${plural(decide.length, 'fertilizer request')} to decide`,
+          reason: since(decide),
           href: `/fertilizer/requests?${q({ status: 'Requested' })}`,
         },
         {
           key: 'fertilizerManager',
-          count: manager,
-          label: `${plural(manager, 'fertilizer request')} awaiting manager approval`,
+          count: manager.length,
+          label: `${plural(manager.length, 'fertilizer request')} awaiting manager approval`,
+          reason: since(manager),
           href: `/fertilizer/requests?${q({ status: 'Awaiting manager approval' })}`,
         },
       );
@@ -508,6 +678,7 @@ export class DashboardService {
         key: 'staleAllocations',
         count: stale,
         label: `${plural(stale, 'request')} holding expired stock`,
+        reason: 'Move the allocation to live stock before dispatch',
         href: `/fertilizer/requests?${q({ tab: 'all', scope: 'stale' })}`,
       });
     }
@@ -517,26 +688,31 @@ export class DashboardService {
         key: 'gradingCorrections',
         count: n,
         label: `${plural(n, 'grading correction')} to approve`,
+        reason: 'Each one is decided on its delivery',
         href: `/collections?${q({ corrections: 'pending' })}`,
       });
     }
     if (payChanges) {
-      const n = payChanges.filter(
+      const mine = payChanges.filter(
         (a) => a.status === 'pending' && a.approval.canDecide,
-      ).length;
+      );
+      const d = oldest(mine.map((a) => a.requestedAt));
       out.push({
         key: 'payChanges',
-        count: n,
-        label: `${plural(n, 'pay change')} awaiting approval`,
+        count: mine.length,
+        label: `${plural(mine.length, 'pay change')} awaiting approval`,
+        reason: d ? `Oldest prepared ${formatDay(d)}` : null,
         href: `/employees/pay-rates?${q({ changes: 'decide' })}`,
       });
     }
     if (holidays) {
       const n = holidays.pending.length;
+      const d = oldest(holidays.pending.map((h) => h.dateFrom));
       out.push({
         key: 'holidayRequests',
         count: n,
         label: `${plural(n, 'holiday request')} to decide`,
+        reason: d ? `Earliest starts ${formatDay(d)}` : null,
         href: '/holidays',
       });
     }
@@ -546,15 +722,24 @@ export class DashboardService {
         key: 'expiredStock',
         count: n,
         label: `${plural(n, 'expired fertilizer batch', 'expired fertilizer batches')} to write off`,
+        reason: `${alerts.summary.expired.kg.toLocaleString('en-US')} kg; written off on Expiry Alerts`,
         href: '/fertilizer/alerts#expired',
       });
     }
     if (collections && can('ungradedOld')) {
+      const cutoff = addDays(today, -OLD_UNGRADED_DAYS);
+      const old = collections.filter(
+        (c) => waitingForGrading(c) && c.date <= cutoff,
+      );
       const n = ungradedOlderThan(collections, today, OLD_UNGRADED_DAYS);
+      const d = oldest(old.map((c) => c.date));
       out.push({
         key: 'ungradedOld',
         count: n,
         label: `${plural(n, 'delivery', 'deliveries')} ungraded for more than ${OLD_UNGRADED_DAYS} days`,
+        reason: d
+          ? `Oldest delivered ${formatDay(d)}; ungraded leaf can't be settled`
+          : null,
         href: `/collections?${q({ grade: 'Ungraded', status: 'Collected', olderThan: String(OLD_UNGRADED_DAYS) })}`,
       });
     }
@@ -563,17 +748,10 @@ export class DashboardService {
       out.push({
         key: 'employeesNoBank',
         count: n,
-        label: `${plural(n, 'employee')} missing bank details (${lastMonthName} payroll)`,
+        label: `${plural(n, 'employee')} missing bank details`,
+        reason: `Blocks ${lastMonthName} payroll`,
+        blocks: 'payrollDue',
         href: `/employees/payroll?${q({ month: lastMonth, issues: 'noBank' })}`,
-      });
-    }
-    if (settlementsNoBank) {
-      const n = settlementsNoBank.total;
-      out.push({
-        key: 'estatesNoBank',
-        count: n,
-        label: `${plural(n, 'estate')} missing bank details (pending settlements)`,
-        href: `/estates/settlements?${q({ month: ALL_PERIODS, status: 'Pending', bank: 'missing' })}`,
       });
     }
     return needsAction(out, perms);
