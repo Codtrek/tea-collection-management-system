@@ -39,6 +39,8 @@ export interface PublicUser {
   permissions?: Record<ModuleKey, PermissionLevel>;
   /** Estate-side roles only. */
   estate?: string;
+  /** Portal: a temporary password is in use — every route but /auth/me and change-password is refused. */
+  mustChangePassword?: boolean;
 }
 
 export interface LoginResult {
@@ -180,7 +182,10 @@ export class AuthService {
         };
         return {
           accessToken: this.jwtService.sign(payload),
-          user: publicUser,
+          user: {
+            ...publicUser,
+            mustChangePassword: user.must_change_password,
+          },
           mustChangePassword: user.must_change_password,
         };
       }
@@ -340,7 +345,7 @@ export class AuthService {
     };
     return {
       accessToken: this.jwtService.sign(payload),
-      user: publicUser,
+      user: { ...publicUser, mustChangePassword: false },
       mustChangePassword: false,
     };
   }
@@ -355,7 +360,10 @@ export class AuthService {
     } else if (user.role === 'estate_manager') {
       return this.buildEstateManagerPublicUser(user.id, user.phone, user.role);
     }
-    return this.buildPublicUser(user.id, user.phone, user.role);
+    return {
+      ...(await this.buildPublicUser(user.id, user.phone, user.role)),
+      mustChangePassword: user.must_change_password,
+    };
   }
   private async buildEstateManagerPublicUser(
     id: number,
