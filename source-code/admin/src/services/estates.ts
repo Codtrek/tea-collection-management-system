@@ -152,6 +152,7 @@ export interface SettlementQuery {
   status?: string
   method?: string
   nonPositive?: boolean
+  noBank?: boolean
   sort?: string
   dir?: 'asc' | 'desc'
   page?: number

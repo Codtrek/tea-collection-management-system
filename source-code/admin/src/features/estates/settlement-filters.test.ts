@@ -29,6 +29,14 @@ describe('EST-07 period view — month and filters in the URL', () => {
     expect(settlementQuery(f, 0)).toMatchObject({ limit: 0, page: undefined })
   })
 
+  it('bank=missing (the Dashboard’s "estates missing bank details") round-trips and reaches the API', () => {
+    const f = read('month=all&status=Pending&bank=missing')
+    expect(f.noBank).toBe(true)
+    expect(settlementParams(f, NOW).toString()).toBe('month=all&status=Pending&bank=missing')
+    expect(settlementQuery(f)).toMatchObject({ month: 'all', status: 'Pending', noBank: true })
+    expect(hasActiveFilters(f)).toBe(true)
+  })
+
   it('only filters beyond the month count as "active"', () => {
     expect(hasActiveFilters(read('month=2026-07'))).toBe(false)
     expect(hasActiveFilters(read('month=2026-07&status=Pending'))).toBe(true)

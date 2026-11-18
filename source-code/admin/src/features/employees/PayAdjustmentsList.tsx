@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -34,6 +35,14 @@ export function PayAdjustmentsList() {
   const [rejecting, setRejecting] = useState<PayAdjustment | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const { data, isPending, isError, refetch } = useQuery({ queryKey: ['employees', 'pay-adjustments'], queryFn: employeesService.listPayAdjustments })
+  // `?changes=decide` (the Dashboard's "pay changes awaiting approval"): only the ones you can decide
+  const [searchParams, setSearchParams] = useSearchParams()
+  const onlyToDecide = searchParams.get('changes') === 'decide'
+  const clearToDecide = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('changes')
+    setSearchParams(next, { replace: true })
+  }
 
   const decide = useMutation({
     mutationFn: ({ id, decision, reason }: { id: number; decision: 'approve' | 'reject'; reason?: string }) =>
@@ -55,12 +64,22 @@ export function PayAdjustmentsList() {
   if (isError || !data) return <ErrorState title="Couldn't load pay changes" onRetry={() => void refetch()} />
   if (data.length === 0) return null
 
-  const sorted = [...data].sort((a, b) => Number(b.status === 'pending') - Number(a.status === 'pending'))
+  const shown = onlyToDecide ? data.filter((a) => a.status === 'pending' && a.approval.canDecide) : data
+  const sorted = [...shown].sort((a, b) => Number(b.status === 'pending') - Number(a.status === 'pending'))
   return (
     <Card className="p-0">
       <div className="border-b border-border px-5 py-4">
         <h3 className="text-sm font-semibold text-text-heading">Pay changes</h3>
         <p className="mt-0.5 text-sm text-text-muted">Prepared by the Factory Manager, approved by an Administrator. Nothing applies before approval.</p>
+        {onlyToDecide && (
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <StatusBadge tone="neutral">Awaiting your approval</StatusBadge>
+            <span className="tabular text-text-muted">· {shown.length} shown</span>
+            <Button size="sm" variant="ghost" onClick={clearToDecide}>
+              Show all
+            </Button>
+          </p>
+        )}
       </div>
       <ul className="divide-y divide-border">
         {sorted.map((a) => {

@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { RouteError } from './components/data/RouteError'
 import { AppShell } from './components/layout/AppShell'
 import { DesignFoundationsPage } from './pages/design-foundations/DesignFoundationsPage'
 import { LoginPage } from './features/auth/LoginPage'
@@ -67,7 +68,8 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
-      { path: 'dashboard', element: <DashboardPage /> },
+      // a render error shows a friendly message with Retry, inside the shell (Dashboard-Addendum)
+      { path: 'dashboard', element: <DashboardPage />, errorElement: <RouteError title="The dashboard couldn't be shown" /> },
 
       // Operations — Tea Leaf Collection (COL-01..04)
       { path: 'collections', element: <CollectionListPage /> },

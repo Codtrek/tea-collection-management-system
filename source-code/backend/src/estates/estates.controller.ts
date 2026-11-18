@@ -199,6 +199,7 @@ export class EstatesController {
     @Query('status') status?: string,
     @Query('method') method?: string,
     @Query('nonPositive') nonPositive?: string,
+    @Query('noBank') noBank?: string,
     @Query('sort') sort?: string,
     @Query('dir') dir?: string,
     @Query('page') page?: string,
@@ -213,6 +214,7 @@ export class EstatesController {
         status === 'Pending' || status === 'Processed' ? status : undefined,
       method: method === 'bank' || method === 'cash' ? method : undefined,
       nonPositive: nonPositive === 'true' || nonPositive === '1',
+      noBank: noBank === 'true' || noBank === '1',
       sort: SETTLEMENT_SORTS.includes(sort as SettlementSort)
         ? (sort as SettlementSort)
         : undefined,

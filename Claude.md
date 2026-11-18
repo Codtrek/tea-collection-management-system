@@ -265,7 +265,7 @@ Notable fields worth preserving in any implementation:
 
 **Web portal (`source-code/admin/`) — ALL SIX MODULES UI-COMPLETE as of 2026-07-18.** React 19 +
 Vite 8 + Tailwind v4. Design-token foundation (hybrid Harboost palette: brand green `#53cf81`
-for accent/logo/charts, darkened `#1b8b4e` for AA-safe interactive primary) validated at
+for accent/logo/charts, darkened `#1b8b4e` for AA-safe interactive primary — now `#1d6839`, see the Dashboard section) validated at
 `/design-foundations` (FND-01). Built 2026-07-17: Global screens (Login, Dashboard, Notification
 Center, Search, Profile) + Employee Management (EMP-01..14). Built 2026-07-18: Fertilizer
 Inventory (FERT-01..04, new `AlertList` pattern), Tea Estate Owner (EST-01..09, two
@@ -1264,6 +1264,38 @@ dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/dat
 - **A fresh local database:** `createdb` → `npm run migration:run` → `npm run seed`.
 - **Login needs Redis** (dev's rate limiting, `REDIS_URL`). This machine has none, so local e2e runs preload an in-memory stand-in (not committed).
 - **The report e2e specs** (Collection, Expense and Leaf Purchase) need the demo seed's Aug–Nov 2026 data.
+
+## Dashboard on real data, by role (2026-11-17, `feat/dashboard`)
+
+`docs/specs/Dashboard-Addendum.md`. The old `/dashboard` was all mock: revenue, net profit, invented estates and activity, and a hardcoded date. It is now fed by `GET /dashboard/summary` (`backend/src/dashboard/`).
+
+- **No new calculations.** The summary only reads services the linked pages already use: the Collection / Leaf Purchase / Expense reports, the dispatch board, the fertilizer queue and expiry alerts, payroll month, advances, pay changes, holidays, settlements and audit. It calls them with the same inputs, so every count equals the list its link opens. `e2e/dashboard.spec.ts` checks this per role. Those modules now export these services.
+- **Role-aware, data-driven.**
+  - The role comes from the JWT (`?role=` is ignored).
+  - Section audiences: Today for Officer and Manager, This month for Manager and Administrator.
+  - Every figure needs `view` on its module, and every "Needs your action" item needs the permission its page checks (`role_permissions` via `DispatchAccessService.levelFor`).
+  - Items at 0 are hidden. The portal never checks a role itself.
+- **Links that pre-filter.**
+  - Collections filters are in the URL (`grade`, `status`, `date`, `olderThan`, `corrections=pending`; `collection-filters.ts`).
+  - Fertilizer queue scopes `stale` and `today`; Expiry Alerts anchors such as `#expired`.
+  - Settlements `bank=missing` (backend `noBank`).
+  - Pay changes `changes=decide`.
+- **The page** (`DashboardPage.tsx`):
+  - `DashboardContent` renders from the query state (tested with `renderToStaticMarkup`: before the API answers, the only digits are today's date).
+  - Values are never coloured for a fall, only for real problems.
+  - The Notifications box is gone; the bell and the Notifications page are still mock (follow-up).
+- **`--color-primary` is `#1D6839`.** `#1B8B4E` measured 4.33:1 white-on-primary and failed AA.
+- **Gaps** (addendum §2.2): no leave requests yet; estate advances have no approval step; settlement items move to the generator's `run()` after PR5.
+- **v2, 2026-11-18 (addendum §8).**
+  - **Checkpoint decisions:** the queues are OK, and Expenses is option (c). Don't ask either again.
+  - **Header:** one primary button (the top queue row's action) and "Review approvals (N)". The quick actions are gone.
+  - **The queue** is grouped Urgent / Due soon / To decide. Each row is one link with its own action button, and a Blocked badge where it applies.
+  - **Today and This month** are panels of labelled rows, with the change shown as a drawn arrow plus a word. **Expenses** (Manager and Administrator only) always says what it includes.
+  - **No doubling:** settlements and payroll appear as panel rows only for roles that don't have them in the queue.
+  - **Charts:** intake by day uses `ComboChartCard`'s opt-in `compareLine` / `yTicks` / `ariaLabel` / `caption` / `variant="panel"`, with `niceTicks` in `components/charts/ticks.ts`. By route is a ranked list.
+  - **Activity** is grouped by Colombo date.
+  - The e2e finds the panels by `#today-title` / `#month-title`, because activity has its own "Today" heading.
+  - `source-code/admin/PRODUCT.md` + `DESIGN.md` ("The Factory Ledger") are the design record. Read them before UI work in the portal.
 
 ## Newcomer's guide (2026-10-18)
 

@@ -70,5 +70,7 @@ import { ReportsService } from './reports.service';
     FinanceService,
     LeafPurchaseService,
   ],
+  // the Dashboard reads these reports as they are (Dashboard-Addendum)
+  exports: [CollectionReportService, FinanceService, LeafPurchaseService],
 })
 export class ReportsModule {}

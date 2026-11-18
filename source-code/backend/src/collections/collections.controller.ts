@@ -39,9 +39,16 @@ export class CollectionsController {
     private readonly usersService: UsersService,
   ) {}
 
+  /** Every record; `pendingCorrectionId` marks the ones a Manager has a correction to decide on. */
   @Get()
-  findAll(): Promise<PublicCollection[]> {
-    return this.collectionsService.findAll();
+  async findAll(): Promise<PublicCollection[]> {
+    const [rows, pending] = await Promise.all([
+      this.collectionsService.findAll(),
+      this.grading.pendingCorrections(),
+    ]);
+    return rows.map((r) =>
+      pending.has(r.id) ? { ...r, pendingCorrectionId: pending.get(r.id) } : r,
+    );
   }
 
   @Get(':id')

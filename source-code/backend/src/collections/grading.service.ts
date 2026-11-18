@@ -494,6 +494,17 @@ export class GradingService {
 
   /* ── Reads ───────────────────────────────────────────────────── */
 
+  /** Correction requests waiting for a Manager: delivery id → request id (at most one each). */
+  async pendingCorrections(): Promise<Map<string, number>> {
+    const rows = await this.requests.find({ where: { status: 'pending' } });
+    return new Map(rows.map((r) => [r.deliveryId, r.id]));
+  }
+
+  /** Deliveries with a pending correction — the Collections list's `?corrections=pending`. */
+  async pendingCorrectionDeliveryIds(): Promise<string[]> {
+    return [...(await this.pendingCorrections()).keys()];
+  }
+
   /** Adds the detail-page extras to a PublicCollection. */
   async decorate(pub: PublicCollection): Promise<PublicCollection> {
     const [revs, pending, status] = await Promise.all([
