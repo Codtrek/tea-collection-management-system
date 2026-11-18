@@ -1,7 +1,7 @@
 # Dashboard — Addendum
 
 **Decided:** 2026-11-17
-**Status:** built on `feat/dashboard` (from `merge/pr4-reports-admin`), local only.
+**Status:** built on `feat/dashboard` (from `merge/pr4-reports-admin`), local only. **v2 (2026-11-18)** is in §8: work queue first, figure panels, and the Expenses decision.
 **Amends:** the Global Dashboard screen (FND-01 / Global) and the portal's primary colour token.
 
 ## 1. Why
@@ -97,7 +97,7 @@ The dispatch board expires stale cover requests, and the fertilizer queue reconc
 | Charts | Anyone with `reports: view` | Daily intake (linear, the day in progress drawn dashed, last month as the faint compare line); intake by route (horizontal bars) |
 | Recent activity | All | The newest 10 audit events from modules the role can view |
 
-**Quick actions** are chosen in `dashboard-rules.ts`. Each also needs its page's permission:
+**Quick actions (v1; replaced in v2, §8.1)** were chosen in `dashboard-rules.ts`. Each also needs its page's permission:
 
 - **Officer:** Log collection exception, Log phoned-in fertilizer request, Mark attendance.
 - **Manager and Administrator:** Review approvals (only while there is something to review), Prepare settlements.
@@ -164,3 +164,81 @@ Hover is `#185A31` and active is `#134A28`. Chart series colours are unchanged.
 - **Leave requests:** an item once leave requests exist.
 - **After PR5:** the settlement items switch to `SettlementGeneratorService.run()` ("to prepare" and "to process").
 - **Reschedules:** advance reschedules need a list-all before they can be an item.
+
+## 8. Version 2: the work queue first (2026-11-18)
+
+**Decided at the checkpoint:**
+- The per-role queues are right as designed.
+- Expenses is **option (c)**: it shows in "This month" for Manager and Administrator only, with a visible note on what it includes.
+
+### 8.1 Header
+- **The greeting and date**, then "Updated HH:MM" (Colombo). The data is old after **15 minutes**, and the text then turns warning: "Updated 47 min ago".
+- **Refresh** is an icon button (`aria-label` "Refresh data") that spins while loading and confirms with a "Data refreshed" toast.
+- **One primary button:** the action of the top queue row (`primaryAction`), or none when the queue is empty. Beside it is "Review approvals (N)", where N is the To decide rows; it scrolls to the queue.
+- **The v1 quick-action row is gone.** The API no longer sends `quickActions`, and a contract test checks for it.
+
+### 8.2 Needs your action
+- **Groups**, in order; an empty group is hidden:
+  - **Urgent:** blocks money, or overdue;
+  - **Due soon:** due this cycle;
+  - **To decide:** someone is waiting on a decision.
+- **Each row:**
+  - a 32 px icon tile tinted by its group (danger / warning / neutral);
+  - the count and label;
+  - the reason line from the same list (e.g. "Blocks 1 of 4 pending settlements", "Oldest requested 03 Nov 2026");
+  - one action button that only opens the filtered list.
+- **Links and focus:** the whole row is a link, and the action is its own focus stop. On phones the action wraps under the text.
+- **A blocked row** (settlements while a month has no transport amount) carries a **Blocked** badge, and its reason says only what blocks it.
+- **Nothing is decided on the dashboard.** There are no Approve or Decline buttons; the e2e checks this.
+
+### 8.3 Figure panels
+"Today" and "This month" are panels of labelled rows, not hero cards:
+- each row has the label and its (i) rule, the tabular value, and a caption;
+- the whole row opens its records.
+
+A change is shown as a drawn arrow, a word and a colour together ("↓ down 69.4% vs 1–18 Oct"), never colour alone. The window is the report's own `compare`.
+
+| Row | Who | Notes |
+|---|---|---|
+| Leaf intake | Manager, Administrator | Against the same days last month and last year |
+| Super share | Manager, Administrator | With a two-part bar (Super on `chart-1` over the `chart-track`) |
+| Leaf purchase value | Manager, Administrator | Average Rs./kg |
+| **Expenses to date** | **Manager, Administrator only** | **Decision (c).** The caption always reads "Includes leaf purchases, processed wages, fertilizer stock and daily entries", so it is never added to Leaf purchase value. Officers never get "This month", even with `expenses` access; a service test locks this in. |
+| Settlements | Roles **without** the settlements queue item | Pending count. "Blocked: transport amount not set", or N without bank details. |
+| Payroll | Roles **without** the payroll queue item | Last month's status |
+
+Why Expenses equalled Leaf purchase value on the seed data: no wages had been processed for Oct or Nov, and there was no incoming stock and no daily entries. The two are different figures and will differ once any of those exist.
+
+### 8.4 Charts and activity
+- **Leaf intake by day:**
+  - a written takeaway from the report's own days and change, e.g. "No deliveries recorded since 5 Nov. Intake is 69.4% below the same days in October.";
+  - bars for this month, with the day in progress lighter;
+  - last month as a dashed line on the **same** axis, with no right axis;
+  - round ticks (`niceTicks`), `role="img"` with the takeaway as its label, and a tooltip that adds the difference;
+  - days after today are never drawn.
+  - `ComboChartCard` gained the opt-in props `compareLine`, `yTicks`, `ariaLabel`, `caption` and `variant="panel"`. Report pages are unchanged.
+- **By route:** a ranked list (name, kg, share) with bars on `chart-track`. It includes the demo routes, so it matches the Collection Report.
+- **Recent activity:**
+  - grouped Today / Yesterday / Earlier (Colombo date), with an icon per event;
+  - the actor named once in the heading when one person did everything;
+  - times as HH:MM inside Today and Yesterday, and `10 Jul 2026` under Earlier;
+  - amounts in stored audit text shown through `formatCurrency`;
+  - record IDs in mono;
+  - "View audit log →" for Administrators.
+
+### 8.5 Layout and states
+- **≥1280 px:** the queue, then the intake chart, take 8 of 12 columns. The panels and By route take 4 and span both rows, so a short queue leaves no gap. Recent activity runs full width.
+- **1024–1279 px:** stacked, with the two panels side by side.
+- **Below 1024 px:** one column, in the order queue, figures, routes, chart, activity. There is no horizontal scroll at 390 px, and nothing has a fixed width (Sinhala and Tamil are planned).
+- **Loading** shows block-sized skeletons. **Errors** are per block, inline, with Retry. **Empty states** say what will appear and when.
+
+### 8.6 Design record
+`source-code/admin/PRODUCT.md` and `DESIGN.md` ("The Factory Ledger", plus the `.impeccable/design.json` sidecar) document the portal's users and its existing tokens. **No new tokens were added in v2.** `chart-track` and `chart-compare` came with v1.
+
+### 8.7 Follow-ups
+- Sidebar badges.
+- Ctrl K.
+- i18n (Sinhala and Tamil).
+- Notifications off mock.
+- Keyboard shortcuts for the top queue action.
+

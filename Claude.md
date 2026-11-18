@@ -1272,7 +1272,7 @@ dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/dat
 - **No new calculations.** The summary only reads services the linked pages already use: the Collection / Leaf Purchase / Expense reports, the dispatch board, the fertilizer queue and expiry alerts, payroll month, advances, pay changes, holidays, settlements and audit. It calls them with the same inputs, so every count equals the list its link opens. `e2e/dashboard.spec.ts` checks this per role. Those modules now export these services.
 - **Role-aware, data-driven.**
   - The role comes from the JWT (`?role=` is ignored).
-  - Section audiences: Today for Officer and Manager, This month for Manager and Administrator. Quick actions (at most 3) are also chosen in `dashboard-rules.ts`.
+  - Section audiences: Today for Officer and Manager, This month for Manager and Administrator.
   - Every figure needs `view` on its module, and every "Needs your action" item needs the permission its page checks (`role_permissions` via `DispatchAccessService.levelFor`).
   - Items at 0 are hidden. The portal never checks a role itself.
 - **Links that pre-filter.**
@@ -1286,6 +1286,16 @@ dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/dat
   - The Notifications box is gone; the bell and the Notifications page are still mock (follow-up).
 - **`--color-primary` is `#1D6839`.** `#1B8B4E` measured 4.33:1 white-on-primary and failed AA.
 - **Gaps** (addendum §2.2): no leave requests yet; estate advances have no approval step; settlement items move to the generator's `run()` after PR5.
+- **v2, 2026-11-18 (addendum §8).**
+  - **Checkpoint decisions:** the queues are OK, and Expenses is option (c). Don't ask either again.
+  - **Header:** one primary button (the top queue row's action) and "Review approvals (N)". The quick actions are gone.
+  - **The queue** is grouped Urgent / Due soon / To decide. Each row is one link with its own action button, and a Blocked badge where it applies.
+  - **Today and This month** are panels of labelled rows, with the change shown as a drawn arrow plus a word. **Expenses** (Manager and Administrator only) always says what it includes.
+  - **No doubling:** settlements and payroll appear as panel rows only for roles that don't have them in the queue.
+  - **Charts:** intake by day uses `ComboChartCard`'s opt-in `compareLine` / `yTicks` / `ariaLabel` / `caption` / `variant="panel"`, with `niceTicks` in `components/charts/ticks.ts`. By route is a ranked list.
+  - **Activity** is grouped by Colombo date.
+  - The e2e finds the panels by `#today-title` / `#month-title`, because activity has its own "Today" heading.
+  - `source-code/admin/PRODUCT.md` + `DESIGN.md` ("The Factory Ledger") are the design record. Read them before UI work in the portal.
 
 ## Newcomer's guide (2026-10-18)
 
