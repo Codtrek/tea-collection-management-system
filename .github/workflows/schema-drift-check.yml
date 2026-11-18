@@ -1,0 +1,149 @@
+
+name: TypeORM Schema Drift Check
+
+on:
+  pull_request:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  schema-drift:
+    name: Validate database migrations and schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: source-code/backend
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: harboost_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: harboost_schema_check
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U harboost_test -d harboost_schema_check"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL_DIRECT: postgresql://harboost_test:test_password@127.0.0.1:5432/harboost_schema_check
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: source-code/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply TypeORM migrations
+        run: npm run migration:run
+
+      - name: Verify migrations are up to date
+        run: |
+          node -r ts-node/register <<'NODE'
+          const dataSource = require('./src/data-source').default;
+
+          async function main() {
+            try {
+              await dataSource.initialize();
+
+              if (await dataSource.showMigrations()) {
+                throw new Error('Unapplied migrations remain');
+              }
+
+              console.log('All migrations are applied');
+            } finally {
+              if (dataSource.isInitialized) {
+                await dataSource.destroy();
+              }
+            }
+          }
+
+          main().catch(error => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Detect TypeORM schema drift
+        run: |
+          node -r ts-node/register <<'NODE'
+          const dataSource = require('./src/data-source').default;
+
+          async function main() {
+            try {
+              await dataSource.initialize();
+
+              const schemaBuilder = dataSource.driver.createSchemaBuilder();
+              const changes = await schemaBuilder.log();
+
+              if (changes.upQueries.length > 0) {
+                console.error('Schema drift detected:');
+
+                for (const query of changes.upQueries) {
+                  console.error(query.query);
+                }
+
+                throw new Error(
+                  `${changes.upQueries.length} schema differences detected`
+                );
+              }
+
+              console.log(
+                'PASS: TypeORM entities match the migrated database schema'
+              );
+            } finally {
+              if (dataSource.isInitialized) {
+                await dataSource.destroy();
+              }
+            }
+          }
+
+          main().catch(error => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Success summary
+        if: success()
+        run: |
+          {
+            echo "## TypeORM Schema Drift Check"
+            echo ""
+            echo "**Result:** PASSED"
+            echo ""
+            echo "- PostgreSQL 18 test database created"
+            echo "- TypeORM migrations executed successfully"
+            echo "- No pending migrations"
+            echo "- No TypeORM schema drift detected"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Failure summary
+        if: failure()
+        run: |
+          {
+            echo "## TypeORM Schema Drift Check"
+            echo ""
+            echo "**Result:** FAILED"
+            echo ""
+            echo "Inspect the failing step for migration errors or schema differences."
+          } >> "$GITHUB_STEP_SUMMARY"

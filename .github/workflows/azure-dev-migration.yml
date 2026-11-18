@@ -1,0 +1,478 @@
+
+name: Azure Dev Migrations
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: azure-dev-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: migrate-azure-postgres
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: source-code/backend
+
+    steps:
+      # ==========================================
+      # 1. Checkout and install dependencies
+      # ==========================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: source-code/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ==========================================
+      # 2. Validate GitHub Secrets
+      # ==========================================
+      - name: Validate required secrets
+        env:
+          SSH_HOST: ${{ secrets.AZURE_VM_HOST }}
+          SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.AZURE_VM_KNOWN_HOSTS }}
+          DB_PASSWORD: ${{ secrets.AZURE_DEV_MIGRATION_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          failed=0
+
+          for name in SSH_HOST SSH_KEY KNOWN_HOSTS DB_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing or empty secret: $name"
+              failed=1
+            else
+              echo "OK: $name is configured"
+            fi
+          done
+
+          if [[ "$failed" -ne 0 ]]; then
+            echo "::error::Required configuration is missing"
+            exit 1
+          fi
+
+          echo "All required secrets are configured"
+
+      # ==========================================
+      # 3. Configure SSH
+      # ==========================================
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.AZURE_VM_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.AZURE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          install -m 700 -d "$HOME/.ssh"
+
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/id_migrate"
+          chmod 600 "$HOME/.ssh/id_migrate"
+
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+          if ! ssh-keygen -y \
+            -f "$HOME/.ssh/id_migrate" \
+            > /dev/null 2>&1; then
+            echo "::error::Invalid SSH private key"
+            exit 1
+          fi
+
+          if [[ ! -s "$HOME/.ssh/known_hosts" ]]; then
+            echo "::error::SSH known_hosts is empty"
+            exit 1
+          fi
+
+          echo "SSH configuration validated"
+
+      # ==========================================
+      # 4. Verify Azure VM SSH access
+      # ==========================================
+      - name: Verify Azure VM SSH access
+        env:
+          SSH_HOST: ${{ secrets.AZURE_VM_HOST }}
+        run: |
+          set -euo pipefail
+
+          if ! ssh \
+            -i "$HOME/.ssh/id_migrate" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -T \
+            "harboostuser@$SSH_HOST" \
+            'echo "Azure VM SSH authentication succeeded"'; then
+
+            echo "::error::Azure VM SSH verification failed"
+            exit 1
+          fi
+
+      # ==========================================
+      # 5. Database migration execution
+      # ==========================================
+      - name: Backup and run TypeORM migrations
+        env:
+          SSH_HOST: ${{ secrets.AZURE_VM_HOST }}
+          MIGRATION_DB_PASSWORD: ${{ secrets.AZURE_DEV_MIGRATION_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          SSH_PID=""
+
+          cleanup() {
+            if [[ -n "$SSH_PID" ]]; then
+              kill "$SSH_PID" 2>/dev/null || true
+              wait "$SSH_PID" 2>/dev/null || true
+            fi
+          }
+
+          trap cleanup EXIT
+
+          # ------------------------------------------
+          # 5.1 Open private PostgreSQL SSH tunnel
+          # ------------------------------------------
+          echo "::group::Opening PostgreSQL SSH tunnel"
+
+          ssh -N \
+            -i "$HOME/.ssh/id_migrate" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ExitOnForwardFailure=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=30 \
+            -L 127.0.0.1:15433:172.16.0.4:5432 \
+            "harboostuser@$SSH_HOST" &
+
+          SSH_PID=$!
+
+          ready=0
+
+          for attempt in {1..10}; do
+            if ! kill -0 "$SSH_PID" 2>/dev/null; then
+              echo "::error::SSH tunnel process exited unexpectedly"
+              exit 1
+            fi
+
+            if timeout 2 bash -c \
+              'echo > /dev/tcp/127.0.0.1/15433' \
+              2>/dev/null; then
+              ready=1
+              break
+            fi
+
+            sleep 1
+          done
+
+          if [[ "$ready" -ne 1 ]]; then
+            echo "::error::PostgreSQL SSH tunnel is unavailable"
+            exit 1
+          fi
+
+          echo "PostgreSQL tunnel reachable"
+          echo "::endgroup::"
+
+          # ------------------------------------------
+          # 5.2 Construct migration connection URL
+          # ------------------------------------------
+          echo "::group::Preparing database connection"
+
+          DATABASE_URL_DIRECT="$(node <<'NODE'
+          const url = new URL(
+            'postgresql://127.0.0.1:15433/harboost_dev'
+          );
+
+          url.username = 'harboost_dev_migrator';
+          url.password = process.env.MIGRATION_DB_PASSWORD;
+
+          url.searchParams.set(
+            'options',
+            '-c role=harboost_dev_owner'
+          );
+
+          process.stdout.write(url.toString());
+          NODE
+          )"
+
+          export DATABASE_URL_DIRECT
+
+          echo "Migration connection prepared"
+          echo "::endgroup::"
+
+          # ------------------------------------------
+          # 5.3 Verify PostgreSQL database and roles
+          # ------------------------------------------
+          echo "::group::Verifying PostgreSQL identity"
+
+          node <<'NODE'
+          const { Client } = require('pg');
+
+          async function main() {
+            const client = new Client({
+              connectionString: process.env.DATABASE_URL_DIRECT,
+              connectionTimeoutMillis: 10000,
+              ssl: false,
+            });
+
+            try {
+              await client.connect();
+
+              const result = await client.query(`
+                SELECT
+                  session_user,
+                  current_user,
+                  current_database()
+              `);
+
+              const row = result.rows[0];
+
+              if (
+                row.session_user !== 'harboost_dev_migrator' ||
+                row.current_user !== 'harboost_dev_owner' ||
+                row.current_database !== 'harboost_dev'
+              ) {
+                throw new Error(
+                  'Unexpected PostgreSQL database or role'
+                );
+              }
+
+              console.log('PostgreSQL authentication: OK');
+              console.log('Target database: harboost_dev');
+              console.log('Login role: harboost_dev_migrator');
+              console.log('Effective role: harboost_dev_owner');
+
+            } finally {
+              await client.end();
+            }
+          }
+
+          main().catch(error => {
+            console.error(
+              `PostgreSQL verification failed (${error.code || 'connection error'})`
+            );
+            process.exitCode = 1;
+          });
+          NODE
+
+          echo "::endgroup::"
+
+          # ------------------------------------------
+          # 5.4 Check for pending migrations
+          # FIX 1: Detect pending migrations programmatically
+          # ------------------------------------------
+          echo "::group::Checking pending migrations"
+
+          if node -r ts-node/register <<'NODE'
+          const dataSource = require('./src/data-source').default;
+
+          async function main() {
+            try {
+              await dataSource.initialize();
+
+              const hasPending = await dataSource.showMigrations();
+
+              if (hasPending) {
+                console.log('Pending TypeORM migrations detected');
+                process.exitCode = 10;
+              } else {
+                console.log('No pending TypeORM migrations');
+                process.exitCode = 0;
+              }
+            } finally {
+              if (dataSource.isInitialized) {
+                await dataSource.destroy();
+              }
+            }
+          }
+
+          main().catch(error => {
+            console.error('Migration inspection failed:', error.message);
+            process.exitCode = 1;
+          });
+          NODE
+          then
+            PENDING=false
+          else
+            STATUS=$?
+
+            if [[ "$STATUS" -eq 10 ]]; then
+              PENDING=true
+            else
+              echo "::error::Could not inspect pending migrations"
+              exit 1
+            fi
+          fi
+
+          npx --no-install typeorm-ts-node-commonjs \
+            migration:show -d src/data-source.ts
+
+          echo "::endgroup::"
+
+          # ------------------------------------------
+          # 5.5 Skip if no migrations are pending
+          # FIX 1: Do not create unnecessary backups
+          # ------------------------------------------
+          if [[ "$PENDING" == "false" ]]; then
+            echo "Database schema is already up to date"
+            echo "Skipping backup and migration execution"
+
+            echo "MIGRATIONS_APPLIED=false" >> "$GITHUB_ENV"
+
+            exit 0
+          fi
+
+          # ------------------------------------------
+          # 5.6 Mandatory pre-migration backup
+          # ------------------------------------------
+          echo "::group::Creating pre-migration backup"
+
+          if ! ssh \
+            -i "$HOME/.ssh/id_migrate" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            "harboostuser@$SSH_HOST" \
+            "/opt/harboost/scripts/pre-migration-backup.sh '$GITHUB_RUN_ID' '$GITHUB_RUN_ATTEMPT' '$GITHUB_SHA'"; then
+
+            echo "::error::Pre-migration backup failed"
+            echo "::error::Migration execution has been blocked"
+            exit 1
+          fi
+
+          echo "Pre-migration backup gate: PASSED"
+          echo "::endgroup::"
+
+          # ------------------------------------------
+          # 5.7 Execute TypeORM migrations
+          # ------------------------------------------
+          echo "::group::Executing TypeORM migrations"
+
+          if npm run migration:run; then
+            echo "TypeORM migration execution succeeded"
+          else
+            echo "::error::TypeORM migration execution failed"
+            echo "Inspect migration history before retrying"
+            exit 1
+          fi
+
+          echo "::endgroup::"
+
+          # ------------------------------------------
+          # 5.8 Verify final migration status
+          # FIX 2: Fail if pending migrations remain
+          # ------------------------------------------
+          echo "::group::Final migration verification"
+
+          npx --no-install typeorm-ts-node-commonjs \
+            migration:show -d src/data-source.ts
+
+          node -r ts-node/register <<'NODE'
+          const dataSource = require('./src/data-source').default;
+
+          async function main() {
+            try {
+              await dataSource.initialize();
+
+              const hasPending = await dataSource.showMigrations();
+
+              if (hasPending) {
+                throw new Error(
+                  'Pending migrations remain after execution'
+                );
+              }
+
+              console.log('All TypeORM migrations are applied');
+              console.log('Final migration verification: PASSED');
+            } finally {
+              if (dataSource.isInitialized) {
+                await dataSource.destroy();
+              }
+            }
+          }
+
+          main().catch(error => {
+            console.error('Final migration verification failed:', error.message);
+            process.exitCode = 1;
+          });
+          NODE
+
+          echo "::endgroup::"
+
+          echo "MIGRATIONS_APPLIED=true" >> "$GITHUB_ENV"
+
+          echo "Azure Dev migration pipeline completed"
+
+      # ==========================================
+      # 6. GitHub Actions report
+      # ==========================================
+      - name: Success summary
+        if: success()
+        run: |
+          {
+            echo "## Azure Dev Migrations"
+            echo ""
+            echo "**Status:** PASSED"
+            echo ""
+            echo "**Database:** harboost_dev"
+            echo ""
+
+            if [[ "${MIGRATIONS_APPLIED:-false}" == "true" ]]; then
+              echo "**Result:** Migrations applied successfully"
+              echo ""
+              echo "- Database identity verified"
+              echo "- Pre-migration backup created and validated"
+              echo "- TypeORM migrations executed"
+              echo "- Final pending migration check passed"
+            else
+              echo "**Result:** No pending migrations"
+              echo ""
+              echo "- Database identity verified"
+              echo "- Database already up to date"
+              echo "- Backup skipped"
+              echo "- Migration execution skipped"
+            fi
+
+            echo ""
+            echo "**Commit:** $GITHUB_SHA"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Failure summary
+        if: failure()
+        run: |
+          {
+            echo "## Azure Dev Migrations"
+            echo ""
+            echo "**Status:** FAILED"
+            echo ""
+            echo "The pipeline failed during setup, connection,"
+            echo "backup creation, migration execution,"
+            echo "or final migration verification."
+            echo ""
+            echo "**Inspect the failing step before retrying.**"
+            echo ""
+            echo "If migrations started, review database migration"
+            echo "history before applying corrective changes."
+          } >> "$GITHUB_STEP_SUMMARY"
