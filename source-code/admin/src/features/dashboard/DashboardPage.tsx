@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
@@ -10,6 +12,7 @@ import {
   Coins,
   Info,
   Landmark,
+  Minus,
   Package,
   RefreshCw,
   Scale,
@@ -118,7 +121,7 @@ export function DashboardContent({
   const today = data?.today ?? factoryToday(now)
   const updated = data ? updatedText(data.generatedAt, now) : null
   return (
-    <div className="flex flex-col gap-6">
+    <div>
       <PageHeader
         title={`${greeting(now)}${userName ? `, ${greetName(userName)}` : ''}`}
         description={
@@ -153,49 +156,52 @@ export function DashboardContent({
         }
       />
 
-      {isPending ? (
-        <DashboardSkeleton />
-      ) : isError || !data ? (
-        <ErrorState title="Couldn't load the dashboard" description="The figures come from the server; nothing is shown until they load." onRetry={onRefresh} />
-      ) : (
-        <>
-          {/*
-            ≥1280: queue then the intake chart on the left (8 columns); the figure panels and By
-            route stacked on the right (4), spanning both rows so a short queue leaves no gap.
-            Narrower: one column in reading order — queue, figures, routes, chart.
-          */}
-          <div className="grid gap-6 xl:grid-cols-12 xl:grid-rows-[auto_1fr] xl:items-start">
-            <div className="min-w-0 xl:col-span-8">
-              {/* each block keeps its own failure: a server error for its section, or a render error */}
-              <Block label="the work queue" section="actions" data={data} onRetry={onRefresh}>
-                <NeedsAction items={data.actions} />
-              </Block>
-            </div>
-            <div className="grid min-w-0 gap-6 lg:grid-cols-2 xl:col-span-4 xl:row-span-2 xl:grid-cols-1">
-              <Block label="today's figures" section="today" data={data} onRetry={onRefresh}>
-                {data.todayView && <TodayPanel view={data.todayView} today={data.today} />}
-              </Block>
-              <Block label="this month's figures" section="month" data={data} onRetry={onRefresh}>
-                {data.monthView && <MonthPanel view={data.monthView} payrollInQueue={data.actions.some((a) => a.key === 'payrollDue')} />}
-              </Block>
-              {/* 1024–1279 with both panels above it: a full row, not half of one */}
-              <div className={cn('min-w-0', data.todayView && data.monthView && 'lg:col-span-2 xl:col-span-1')}>
-                <Block label="intake by route" section="charts" data={data} onRetry={onRefresh}>
-                  {data.charts && <RoutesCard charts={data.charts} />}
+      {/* PageHeader brings its own bottom margin: the blocks' 24px rhythm starts after it */}
+      <div className="flex flex-col gap-6">
+        {isPending ? (
+          <DashboardSkeleton />
+        ) : isError || !data ? (
+          <ErrorState title="Couldn't load the dashboard" description="The figures come from the server; nothing is shown until they load." onRetry={onRefresh} />
+        ) : (
+          <>
+            {/*
+              ≥1280: queue then the intake chart on the left (8 columns); the figure panels and By
+              route stacked on the right (4), spanning both rows so a short queue leaves no gap.
+              Narrower: one column in reading order — queue, figures, routes, chart.
+            */}
+            <div className="grid gap-6 xl:grid-cols-12 xl:grid-rows-[auto_1fr] xl:items-start">
+              <div className="min-w-0 xl:col-span-8">
+                {/* each block keeps its own failure: a server error for its section, or a render error */}
+                <Block label="the work queue" section="actions" data={data} onRetry={onRefresh}>
+                  <NeedsAction items={data.actions} />
+                </Block>
+              </div>
+              <div className="grid min-w-0 gap-6 lg:grid-cols-2 xl:col-span-4 xl:row-span-2 xl:grid-cols-1">
+                <Block label="today's figures" section="today" data={data} onRetry={onRefresh}>
+                  {data.todayView && <TodayPanel view={data.todayView} today={data.today} />}
+                </Block>
+                <Block label="this month's figures" section="month" data={data} onRetry={onRefresh}>
+                  {data.monthView && <MonthPanel view={data.monthView} payrollInQueue={data.actions.some((a) => a.key === 'payrollDue')} />}
+                </Block>
+                {/* 1024–1279 with both panels above it: a full row, not half of one */}
+                <div className={cn('min-w-0', data.todayView && data.monthView && 'lg:col-span-2 xl:col-span-1')}>
+                  <Block label="intake by route" section="charts" data={data} onRetry={onRefresh}>
+                    {data.charts && <RoutesCard charts={data.charts} />}
+                  </Block>
+                </div>
+              </div>
+              <div className="min-w-0 xl:col-span-8">
+                <Block label="the intake charts" section="charts" data={data} onRetry={onRefresh}>
+                  {data.charts && <DailyIntakeChart charts={data.charts} today={data.today} />}
                 </Block>
               </div>
             </div>
-            <div className="min-w-0 xl:col-span-8">
-              <Block label="the intake charts" section="charts" data={data} onRetry={onRefresh}>
-                {data.charts && <DailyIntakeChart charts={data.charts} today={data.today} />}
-              </Block>
-            </div>
-          </div>
-          <Block label="recent activity" section="activity" data={data} onRetry={onRefresh}>
-            <ActivitySection entries={data.activity} today={data.today} auditLogLink={auditLogLink} />
-          </Block>
-        </>
-      )}
+            <Block label="recent activity" section="activity" data={data} onRetry={onRefresh}>
+              <ActivitySection entries={data.activity} today={data.today} auditLogLink={auditLogLink} />
+            </Block>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -459,14 +465,21 @@ function FigureRow({
   )
 }
 
-/** "▼ down 69.4% vs 1–18 Oct": arrow, word and colour together — never colour alone. */
+/** "↓ down 69.4% vs 1–18 Oct": a drawn arrow, the word and the colour together — never colour alone. */
 function Trend({ changePct, against }: { changePct: number | null; against: string }) {
   const t = trend(changePct)
   if (!t) return <>Nothing to compare {against.replace(/^vs /, 'with ')}</>
+  const TrendIcon = t.word === 'up' ? ArrowUp : t.word === 'down' ? ArrowDown : Minus
   return (
     <>
-      <span className={cn('font-medium', t.word === 'up' ? 'text-success-fg' : t.word === 'down' ? 'text-warning-fg' : 'text-text')}>
-        <span aria-hidden>{t.arrow}</span> {t.word === 'level' ? 'level' : `${t.word} ${t.pct}`}
+      <span
+        className={cn(
+          'inline-flex items-center gap-0.5 font-medium',
+          t.word === 'up' ? 'text-success-fg' : t.word === 'down' ? 'text-warning-fg' : 'text-text',
+        )}
+      >
+        <TrendIcon className="size-3 shrink-0" strokeWidth={2.5} aria-hidden />
+        {t.word === 'level' ? 'level' : `${t.word} ${t.pct}`}
       </span>{' '}
       {against}
     </>
@@ -555,18 +568,8 @@ function MonthPanel({ view, payrollInQueue }: { view: MonthView; payrollInQueue:
   if (!intake && !leafPurchase && !expenses && !payrollRow && !settlements) return null
   const vsWindow = intake ? `vs ${windowLabel(intake.compare)}` : 'vs last month (same days)'
   return (
-    <Panel
-      id="month-title"
-      title="This month"
-      note={view.label}
-      footer={
-        intake && (
-          <Link to={intake.href} className="font-medium text-primary hover:underline">
-            Open the Collection Report →
-          </Link>
-        )
-      }
-    >
+    // no footer link: the Leaf intake row already opens this month's Collection Report, and By route ends with it
+    <Panel id="month-title" title="This month" note={view.label}>
       {intake && (
         <FigureRow
           label="Leaf intake"
@@ -684,11 +687,11 @@ function DailyIntakeChart({ charts, today }: { charts: DashboardCharts; today: s
   return (
     <section aria-label="Leaf intake by day">
       <ComboChartCard
-        title="Leaf intake by day (kg)"
+        title="Leaf intake by day"
         caption={takeaway}
         ariaLabel={`Leaf intake by day this month, with ${lastMonth} on the same days. ${takeaway}`}
         data={days.map((d) => ({ label: d.label, bar: d.kg, line: d.lastMonthKg, partial: d.partial }))}
-        barLabel="This month"
+        barLabel="This month (kg)"
         lineLabel={`${lastMonth}, same day`}
         barFmt={formatKg}
         barTick={formatNumber}
@@ -697,6 +700,7 @@ function DailyIntakeChart({ charts, today }: { charts: DashboardCharts; today: s
         compareLine
         yTicks={niceTicks(max)}
         partialNote="Day in progress"
+        variant="panel"
       />
     </section>
   )
@@ -808,7 +812,11 @@ function ActivitySection({ entries, today, auditLogLink }: { entries: ActivityEn
                               <span className={cn(isRecordId(e.record) && 'id')}> {e.record}</span>
                             ))}
                         </p>
-                        {e.details && <p className="truncate text-xs text-text-muted">{amountsInText(e.details)}</p>}
+                        {e.details && (
+                          <p className="truncate text-xs text-text-muted" title={amountsInText(e.details)}>
+                            {amountsInText(e.details)}
+                          </p>
+                        )}
                         <time dateTime={e.timestamp} className="tabular text-xs text-text-muted sm:hidden" title={formatDateTime(e.timestamp)}>
                           {activityTime(e.timestamp, g.key)}
                         </time>

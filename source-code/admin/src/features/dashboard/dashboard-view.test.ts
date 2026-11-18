@@ -63,10 +63,10 @@ describe('dashboard display helpers', () => {
     expect(updatedText(at, new Date('2026-11-18T18:30:00Z'))).toEqual({ text: 'Updated 2 h ago', stale: true })
   })
 
-  it('a change has an arrow and a word, never only a colour', () => {
-    expect(trend(-69.4)).toEqual({ arrow: '▼', word: 'down', pct: '69.4%' })
-    expect(trend(12)).toEqual({ arrow: '▲', word: 'up', pct: '12.0%' })
-    expect(trend(0)).toEqual({ arrow: '■', word: 'level', pct: '0.0%' })
+  it('a change says its direction in words, never only a colour', () => {
+    expect(trend(-69.4)).toEqual({ word: 'down', pct: '69.4%' })
+    expect(trend(12)).toEqual({ word: 'up', pct: '12.0%' })
+    expect(trend(0)).toEqual({ word: 'level', pct: '0.0%' })
     expect(trend(null)).toBeNull()
   })
 

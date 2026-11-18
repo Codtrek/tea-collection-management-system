@@ -83,13 +83,13 @@ export function updatedText(generatedAt: string, now: Date): { text: string; sta
 }
 
 /**
- * A change shown with its direction three ways — arrow, word and (by the caller) colour — so it is
- * never colour-only. null when there is nothing to compare.
+ * A change shown with its direction in words — the caller adds a drawn arrow and the colour — so it
+ * is never colour-only. null when there is nothing to compare.
  */
-export function trend(changePct: number | null): { arrow: '▲' | '▼' | '■'; word: 'up' | 'down' | 'level'; pct: string } | null {
+export function trend(changePct: number | null): { word: 'up' | 'down' | 'level'; pct: string } | null {
   if (changePct === null) return null
-  if (Math.abs(changePct) < 0.05) return { arrow: '■', word: 'level', pct: '0.0%' }
-  return { arrow: changePct > 0 ? '▲' : '▼', word: changePct > 0 ? 'up' : 'down', pct: formatPercent(Math.abs(changePct)) }
+  if (Math.abs(changePct) < 0.05) return { word: 'level', pct: '0.0%' }
+  return { word: changePct > 0 ? 'up' : 'down', pct: formatPercent(Math.abs(changePct)) }
 }
 
 const SHORT_MONTH = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })

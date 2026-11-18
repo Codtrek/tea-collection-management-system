@@ -162,7 +162,7 @@ describe('Dashboard — figures come from the response', () => {
     expect(text).toContain('Expenses to date')
     expect(text).toContain('Includes leaf purchases, processed wages, fertilizer stock and daily entries')
     // the change carries an arrow and a word, not only a colour
-    expect(text).toContain('▼ down 69.4% vs last month (same days)')
+    expect(text).toContain('down 69.4% vs last month (same days)')
     // an Officer's summary has no monthView: neither the section nor the note appears
     const officer = render({ ...data, monthView: null })
     expect(officer).not.toContain('Expenses to date')

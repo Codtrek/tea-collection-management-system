@@ -23,15 +23,33 @@ import { cn } from '@/lib/cn'
 function ChartShell({
   title,
   caption,
+  variant = 'report',
   children,
   className,
 }: {
   title?: string
   /** a written takeaway under the title (opt-in) */
   caption?: ReactNode
+  /** `panel`: a dashboard block — a card with a section heading and a ruled header, like its neighbours */
+  variant?: 'report' | 'panel'
   children: ReactNode
   className?: string
 }) {
+  if (variant === 'panel') {
+    return (
+      <div className={cn('rounded-[var(--radius-lg)] bg-surface shadow-[var(--shadow-1)]', className)}>
+        {title && (
+          <div className="border-b border-border px-5 py-3">
+            <h2 className="text-base font-semibold text-balance text-text-heading">{title}</h2>
+          </div>
+        )}
+        <div className="p-5">
+          {caption && <p className="mb-4 max-w-[75ch] text-sm text-pretty text-text">{caption}</p>}
+          {children}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className={cn('rounded-[var(--radius-md)] border border-border bg-surface p-5', className)}>
       {title && <h3 className={cn('text-[13px] font-semibold text-text-heading', caption ? 'mb-1' : 'mb-3')}>{title}</h3>}
@@ -652,10 +670,12 @@ export function ComboChartCard({
   compareLine = false,
   yTicks,
   ariaLabel,
+  variant,
   className,
 }: {
   title?: string
   caption?: ReactNode
+  variant?: 'report' | 'panel'
   data: ComboDatum[]
   barLabel: string
   lineLabel: string
@@ -752,7 +772,7 @@ export function ComboChartCard({
     </ResponsiveContainer>
   )
   return (
-    <ChartShell title={title} caption={caption} className={className}>
+    <ChartShell title={title} caption={caption} variant={variant} className={className}>
       {ariaLabel ? (
         <div role="img" aria-label={ariaLabel}>
           {chart}
