@@ -66,5 +66,7 @@ import { SystemSettingEntity } from '../admin/system-setting.entity';
     PayRatesService,
     PayAdjustmentService,
   ],
+  // the Dashboard's payroll, advance and pay-change counts (Dashboard-Addendum)
+  exports: [PayrollViewService, AdvanceViewService, PayAdjustmentService],
 })
 export class EmployeesModule {}

@@ -1,0 +1,358 @@
+{
+  "Officer": {
+    "generatedAt": "2026-11-17T18:41:49.624Z",
+    "today": "2026-11-18",
+    "month": "2026-11",
+    "role": "Officer",
+    "actions": [
+      {
+        "key": "estatesNoBank",
+        "count": 1,
+        "label": "1 estate missing bank details",
+        "reason": "Blocks 1 of 4 pending settlements",
+        "blocks": "settlementsToProcess",
+        "href": "/estates/settlements?month=all&status=Pending&bank=missing",
+        "group": "urgent",
+        "urgency": 10,
+        "action": "Fix bank details"
+      },
+      {
+        "key": "payrollDue",
+        "count": 1,
+        "label": "payroll month not generated (October 2026)",
+        "reason": "October 2026 has ended; generate its payroll from attendance",
+        "href": "/employees/payroll?month=2026-10",
+        "action": "Generate payroll",
+        "group": "urgent",
+        "urgency": 11
+      },
+      {
+        "key": "ungradedOld",
+        "count": 4,
+        "label": "4 deliveries ungraded for more than 7 days",
+        "reason": "Oldest delivered 09 Nov 2026; ungraded leaf can't be settled",
+        "href": "/collections?grade=Ungraded&status=Collected&olderThan=7",
+        "group": "urgent",
+        "urgency": 13,
+        "action": "Grade deliveries"
+      },
+      {
+        "key": "settlementsToProcess",
+        "count": 4,
+        "label": "4 estate settlements to process",
+        "reason": "Blocked: monthly transport amount not set",
+        "blocked": true,
+        "href": "/estates/settlements?month=all&status=Pending",
+        "group": "dueSoon",
+        "urgency": 20,
+        "action": "Review settlements"
+      },
+      {
+        "key": "expiredStock",
+        "count": 6,
+        "label": "6 expired fertilizer batches to write off",
+        "reason": "2,220 kg; written off on Expiry Alerts",
+        "href": "/fertilizer/alerts#expired",
+        "group": "dueSoon",
+        "urgency": 22,
+        "action": "Write off"
+      },
+      {
+        "key": "salaryAdvances",
+        "count": 1,
+        "label": "1 salary advance to decide",
+        "reason": "Rs. 15,000 requested by S. Fernando",
+        "href": "/employees/advances",
+        "group": "toDecide",
+        "urgency": 30,
+        "action": "Review"
+      },
+      {
+        "key": "fertilizerToDecide",
+        "count": 4,
+        "label": "4 fertilizer requests to decide",
+        "reason": "Oldest requested 17 Nov 2026",
+        "href": "/fertilizer/requests?status=Requested",
+        "group": "toDecide",
+        "urgency": 31,
+        "action": "Review"
+      }
+    ],
+    "primaryAction": {
+      "label": "Fix bank details",
+      "href": "/estates/settlements?month=all&status=Pending&bank=missing",
+      "key": "estatesNoBank"
+    },
+    "toDecide": 2,
+    "todayView": {
+      "leaf": {
+        "kg": 0,
+        "deliveries": 0,
+        "compareKg": null,
+        "changePct": null,
+        "compareDate": "2026-11-11",
+        "href": "/reports/collection?from=2026-11-18&to=2026-11-18"
+      },
+      "grading": {
+        "waiting": 1,
+        "waitingHref": "/collections?grade=Ungraded&status=Collected&date=2026-11-18",
+        "overTolerance": 0,
+        "tolerancePct": 5,
+        "mismatchHref": "/reports/collection?from=2026-11-18&to=2026-11-18#weight-differences"
+      },
+      "agents": {
+        "onRoute": 1,
+        "notStarted": 1,
+        "absent": 0,
+        "covering": 0,
+        "completed": 0,
+        "scheduled": 2,
+        "href": "/collections/dispatch"
+      },
+      "fertilizer": {
+        "done": 0,
+        "failed": 0,
+        "pending": 0,
+        "total": 0,
+        "href": "/fertilizer/requests?tab=all&scope=today"
+      }
+    },
+    "monthView": null,
+    "charts": null,
+    "activity": [
+      {
+        "id": "AUD-00004",
+        "timestamp": "2026-07-15T06:00:00.000Z",
+        "user": "A. Bandara",
+        "role": "Administrator",
+        "action": "Processed payroll run",
+        "module": "Employee",
+        "record": "July 2026",
+        "recordHref": "/employees/payroll",
+        "details": "27 employees"
+      },
+      {
+        "id": "AUD-00003",
+        "timestamp": "2026-07-12T08:48:00.000Z",
+        "user": "S. Fernando",
+        "role": "Officer",
+        "action": "Logged outgoing stock movement",
+        "module": "Fertilizer",
+        "record": "FB-2291",
+        "recordHref": "/fertilizer",
+        "details": "60 kg Urea"
+      }
+    ],
+    "errors": {}
+  },
+  "Manager": {
+    "generatedAt": "2026-11-17T18:41:51.978Z",
+    "today": "2026-11-18",
+    "month": "2026-11",
+    "role": "Manager",
+    "actions": [],
+    "primaryAction": null,
+    "toDecide": 0,
+    "todayView": {
+      "leaf": {
+        "kg": 0,
+        "deliveries": 0,
+        "compareKg": null,
+        "changePct": null,
+        "compareDate": "2026-11-11",
+        "href": "/reports/collection?from=2026-11-18&to=2026-11-18"
+      },
+      "grading": {
+        "waiting": 1,
+        "waitingHref": "/collections?grade=Ungraded&status=Collected&date=2026-11-18",
+        "overTolerance": 0,
+        "tolerancePct": 5,
+        "mismatchHref": "/reports/collection?from=2026-11-18&to=2026-11-18#weight-differences"
+      },
+      "agents": {
+        "onRoute": 1,
+        "notStarted": 1,
+        "absent": 0,
+        "covering": 0,
+        "completed": 0,
+        "scheduled": 2,
+        "href": "/collections/dispatch"
+      },
+      "fertilizer": {
+        "done": 0,
+        "failed": 0,
+        "pending": 0,
+        "total": 0,
+        "href": "/fertilizer/requests?tab=all&scope=today"
+      }
+    },
+    "monthView": {
+      "label": "November 2026 so far (1\u201318 Nov)",
+      "intake": {
+        "kg": 876.6,
+        "deliveries": 15,
+        "compareKg": 2861.3,
+        "changePct": -69.4,
+        "compare": {
+          "from": "2026-10-01",
+          "to": "2026-10-18"
+        },
+        "lastYearKg": null,
+        "yoyPct": null,
+        "superShare": 48.2,
+        "superKg": 422.7,
+        "normalKg": 453.9,
+        "href": "/reports/collection?thisMonth=1"
+      },
+      "leafPurchase": {
+        "valueRs": 121320,
+        "rsPerKg": 138.4,
+        "changePct": -69.4,
+        "href": "/reports/leaf-purchases?thisMonth=1"
+      },
+      "expenses": {
+        "totalRs": 121320,
+        "changePct": -69.4,
+        "href": "/reports/expenses?thisMonth=1"
+      },
+      "payroll": {
+        "month": "2026-11",
+        "status": "In progress",
+        "lastMonth": "2026-10",
+        "lastMonthStatus": "No payroll",
+        "href": "/employees/payroll?month=2026-10"
+      },
+      "settlements": {
+        "pending": 4,
+        "noBank": 1,
+        "transportMissing": true,
+        "href": "/estates/settlements?month=all&status=Pending"
+      }
+    },
+    "charts": {
+      "daily": [
+        {
+          "key": "2026-11-01",
+          "label": "1 Nov",
+          "kg": 0,
+          "deliveries": 0,
+          "partial": false,
+          "lastMonthKg": 115.5
+        },
+        {
+          "key": "2026-11-02",
+          "label": "2 Nov",
+          "kg": 314.2,
+          "deliveries": 5,
+          "partial": false,
+          "lastMonthKg": 238.4
+        },
+        {
+          "key": "2026-11-03",
+          "label": "3 Nov",
+          "kg": 263.2,
+          "deliveries": 4,
+          "partial": false,
+          "lastMonthKg": 116.5
+        },
+        {
+          "key": "2026-11-04",
+          "label": "4 Nov",
+          "kg": 108.8,
+          "deliveries": 2,
+          "partial": false,
+          "lastMonthKg": 0
+        },
+        {
+          "key": "2026-11-05",
+          "label": "5 Nov",
+          "kg": 190.4,
+          "deliveries": 4,
+          "partial": false,
+          "lastMonthKg": 165.1
+        }
+      ],
+      "lastMonthLabel": "October 2026",
+      "changePct": -69.4,
+      "compare": {
+        "from": "2026-10-01",
+        "to": "2026-10-18"
+      },
+      "byRoute": [
+        {
+          "id": 2,
+          "name": "Route 3",
+          "kg": 289.2,
+          "deliveries": 5
+        },
+        {
+          "id": 1,
+          "name": "Route 2",
+          "kg": 141.6,
+          "deliveries": 3
+        },
+        {
+          "id": 9,
+          "name": "Route 6 (demo)",
+          "kg": 141.1,
+          "deliveries": 2
+        },
+        {
+          "id": 3,
+          "name": "Route 4",
+          "kg": 122.1,
+          "deliveries": 2
+        },
+        {
+          "id": 10,
+          "name": "Route 7 (demo)",
+          "kg": 108.8,
+          "deliveries": 2
+        },
+        {
+          "id": 4,
+          "name": "Route 5",
+          "kg": 73.8,
+          "deliveries": 1
+        }
+      ],
+      "href": "/reports/collection?thisMonth=1"
+    },
+    "activity": [
+      {
+        "id": "AUD-00004",
+        "timestamp": "2026-07-15T06:00:00.000Z",
+        "user": "A. Bandara",
+        "role": "Administrator",
+        "action": "Processed payroll run",
+        "module": "Employee",
+        "record": "July 2026",
+        "recordHref": "/employees/payroll",
+        "details": "27 employees"
+      },
+      {
+        "id": "AUD-00003",
+        "timestamp": "2026-07-12T08:48:00.000Z",
+        "user": "S. Fernando",
+        "role": "Officer",
+        "action": "Logged outgoing stock movement",
+        "module": "Fertilizer",
+        "record": "FB-2291",
+        "recordHref": "/fertilizer",
+        "details": "60 kg Urea"
+      },
+      {
+        "id": "AUD-00002",
+        "timestamp": "2026-07-05T04:32:00.000Z",
+        "user": "S. Fernando",
+        "role": "Officer",
+        "action": "Issued advance Rs. 50000",
+        "module": "Estate Owner",
+        "record": "EADV-2026-0031",
+        "recordHref": "/estates/EST-0001",
+        "details": "Green Valley Estate \u2014 pre-season labour"
+      }
+    ],
+    "errors": {}
+  }
+}

@@ -16,6 +16,8 @@ export interface SettlementFilters {
   method: string
   /** net payable zero or negative only */
   nonPositive: boolean
+  /** "no bank details" rows only (`?bank=missing`, the Dashboard's estates item) */
+  noBank: boolean
   sort: string
   dir: '' | 'asc' | 'desc'
   page: number
@@ -39,6 +41,7 @@ export function readSettlementFilters(p: URLSearchParams, current: string): Sett
     status: p.get('status') ?? '',
     method: p.get('method') ?? '',
     nonPositive: p.get('net') === 'nonpositive',
+    noBank: p.get('bank') === 'missing',
     sort: p.get('sort') ?? '',
     dir: dir === 'asc' || dir === 'desc' ? dir : '',
     page: Math.max(0, Number(p.get('page')) || 0),
@@ -54,6 +57,7 @@ export function settlementParams(f: SettlementFilters, current: string): URLSear
   if (f.status) p.set('status', f.status)
   if (f.method) p.set('method', f.method)
   if (f.nonPositive) p.set('net', 'nonpositive')
+  if (f.noBank) p.set('bank', 'missing')
   if (f.sort && f.dir) {
     p.set('sort', f.sort)
     p.set('dir', f.dir)
@@ -73,6 +77,7 @@ export function settlementQuery(f: SettlementFilters, limit = SETTLEMENT_PAGE_SI
     status: f.status || undefined,
     method: f.method || undefined,
     nonPositive: f.nonPositive || undefined,
+    noBank: f.noBank || undefined,
     sort: f.sort && f.dir ? f.sort : undefined,
     dir: f.sort && f.dir ? f.dir : undefined,
     page: limit === 0 ? undefined : f.page,
@@ -82,5 +87,5 @@ export function settlementQuery(f: SettlementFilters, limit = SETTLEMENT_PAGE_SI
 
 /** Any filter beyond the month — the summary then says "Showing X of Y". */
 export function hasActiveFilters(f: SettlementFilters): boolean {
-  return !!(f.search || f.route || f.status || f.method || f.nonPositive)
+  return !!(f.search || f.route || f.status || f.method || f.nonPositive || f.noBank)
 }

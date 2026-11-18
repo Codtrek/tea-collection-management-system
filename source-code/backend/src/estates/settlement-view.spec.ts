@@ -123,6 +123,19 @@ describe('settlement period view', () => {
     ).toEqual(['SET-2026-07-002']);
   });
 
+  it('noBank keeps only rows flagged "no bank details" (the Dashboard’s estates item)', () => {
+    const flagged = rows.map((r) =>
+      r.id === 'SET-2026-07-001' ? { ...r, missingBank: true } : r,
+    );
+    expect(
+      applyFilters(flagged, {
+        month: 'all',
+        status: 'Pending',
+        noBank: true,
+      }).map((r) => r.id),
+    ).toEqual(['SET-2026-07-001']);
+  });
+
   it('the summary is the whole period — filters never change it', () => {
     const july = rowsInPeriod(rows, '2026-07');
     const s = summarize(

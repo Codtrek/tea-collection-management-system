@@ -262,11 +262,16 @@ export function SettlementListPage() {
             { value: 'cash', label: 'Cash' },
           ]}
         />
-        <div className="flex items-center">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <Checkbox
             label="Net zero or negative"
             checked={filters.nonPositive}
             onChange={(e) => setFilters({ nonPositive: e.target.checked })}
+          />
+          <Checkbox
+            label="No bank details"
+            checked={filters.noBank}
+            onChange={(e) => setFilters({ noBank: e.target.checked })}
           />
         </div>
       </div>
@@ -275,7 +280,7 @@ export function SettlementListPage() {
         <p className="mb-2 text-xs text-text-muted">
           Showing {data.total} of {summary.prepared + summary.legacy} settlements for{' '}
           {periodLabel} ·{' '}
-          <button className="text-primary hover:underline" onClick={() => setSearchParams(settlementParams({ ...filters, search: '', route: '', status: '', method: '', nonPositive: false, page: 0 }, thisMonth), { replace: true })}>
+          <button className="text-primary hover:underline" onClick={() => setSearchParams(settlementParams({ ...filters, search: '', route: '', status: '', method: '', nonPositive: false, noBank: false, page: 0 }, thisMonth), { replace: true })}>
             Clear filters
           </button>
         </p>

@@ -26,7 +26,8 @@ async function expectHeaderIntact(page: Page) {
   expect(height, 'title wraps').toBeLessThanOrEqual(lineHeight * 1.6)
   const crumbs = page.locator('main nav[aria-label="Breadcrumb"] li')
   const tops = await crumbs.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)))
-  expect(new Set(tops).size, 'breadcrumb stacks').toBe(1)
+  // a page without a breadcrumb (the Dashboard) has nothing to stack
+  if (tops.length > 0) expect(new Set(tops).size, 'breadcrumb stacks').toBe(1)
 }
 
 async function expectNoSidewaysScroll(page: Page) {

@@ -76,5 +76,7 @@ import { GradeRateEntity } from '../admin/grade-rate.entity';
     EstateAdvancePlanService,
     EstateAdvanceSettingsService,
   ],
+  // the Dashboard's settlement counts (Dashboard-Addendum)
+  exports: [SettlementViewService, TransportStatusService],
 })
 export class EstatesModule {}
