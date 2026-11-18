@@ -309,6 +309,9 @@ function TodaySection({ view, today }: { view: TodayView; today: string }) {
 
 /* ── This month ── */
 
+/** Expenses is shown with what it is made of, so nobody adds it to Leaf purchase value (decision (c)). */
+const EXPENSES_INCLUDE = 'Includes leaf purchases, processed wages, fertilizer stock and daily entries'
+
 function MonthSection({ view }: { view: MonthView }) {
   const navigate = useNavigate()
   const { intake, leafPurchase, expenses, payroll } = view
@@ -361,8 +364,14 @@ function MonthSection({ view }: { view: MonthView }) {
             icon={<Wallet className="size-4" aria-hidden />}
             label="Expenses to date"
             value={formatCurrency(expenses.totalRs)}
-            note={expenses.changePct === null ? 'Nothing to compare with last month' : `${formatPercent(expenses.changePct, true)} vs last month (same days)`}
-            rule="This month's expenses so far from the Expense Report: leaf purchases, processed wages, fertilizer stock bought and daily expense entries."
+            note={
+              <>
+                {EXPENSES_INCLUDE}
+                <br />
+                {expenses.changePct === null ? 'Nothing to compare with last month' : `${formatPercent(expenses.changePct, true)} vs last month (same days)`}
+              </>
+            }
+            rule="This month's expenses so far from the Expense Report: leaf purchases, processed wages, fertilizer stock bought and daily expense entries. Leaf purchases are already in it, so don't add it to Leaf purchase value."
             onOpen={() => navigate(expenses.href)}
             openLabel="Open the Expense Report"
           />

@@ -152,6 +152,22 @@ describe('Dashboard — figures come from the response', () => {
     expect(render({ ...data, todayView: null })).not.toContain('Leaf received so far')
   })
 
+  it('Expenses (Manager/Administrator "This month") says what it includes; no This month, no Expenses', () => {
+    const month: DashboardSummary['monthView'] = {
+      label: 'November so far',
+      leafPurchase: { valueRs: 121320, rsPerKg: 185, changePct: -69.4, href: '/reports/leaf-purchases?thisMonth=1' },
+      expenses: { totalRs: 121320, changePct: -69.4, href: '/reports/expenses?thisMonth=1' },
+    }
+    const text = render({ ...data, role: 'Manager', monthView: month })
+    expect(text).toContain('Expenses to date')
+    expect(text).toContain('Includes leaf purchases, processed wages, fertilizer stock and daily entries')
+    expect(text).toContain('-69.4% vs last month (same days)')
+    // an Officer's summary has no monthView: neither the section nor the note appears
+    const officer = render({ ...data, monthView: null })
+    expect(officer).not.toContain('Expenses to date')
+    expect(officer).not.toContain('Includes leaf purchases')
+  })
+
   it('greets by name (not an initial); one primary action and "Review approvals (N)"; reason lines', () => {
     const text = render(data)
     expect(text).toContain('Good morning, Bandara')

@@ -510,6 +510,21 @@ describe('DashboardService.summary', () => {
     ).toEqual(['1', '2', '3']);
   });
 
+  it('Expenses is Manager and Administrator only: an Officer with expenses access never gets or loads it', async () => {
+    const { service, actor, calls } = build('Officer', {
+      ...DEFAULTS.Officer,
+      expenses: 'approve',
+    });
+    const s = await service.summary(actor, NOW);
+    expect(s.monthView).toBeNull();
+    expect(calls.some((c) => c.startsWith('expenses('))).toBe(false);
+    for (const role of ['Manager', 'Administrator'] as const) {
+      const r = build(role);
+      const m = await r.service.summary(r.actor, NOW);
+      expect(m.monthView?.expenses).toMatchObject({ totalRs: 420000 });
+    }
+  });
+
   it('a role narrowed in the matrix loses the figure and never loads it', async () => {
     const { service, actor, calls } = build('Officer', {
       ...DEFAULTS.Officer,
