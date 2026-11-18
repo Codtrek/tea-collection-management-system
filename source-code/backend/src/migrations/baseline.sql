@@ -939,17 +939,8 @@ CREATE SEQUENCE public.grading_notifications_id_seq
 ALTER SEQUENCE public.grading_notifications_id_seq OWNED BY public.grading_notifications.id;
 
 
---
--- Name: migrations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE IF NOT EXISTS public.migrations_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
+-- TypeORM creates its migration history table and sequence before this
+-- baseline runs. Do not include those bookkeeping objects in the baseline.
 
 
 --
