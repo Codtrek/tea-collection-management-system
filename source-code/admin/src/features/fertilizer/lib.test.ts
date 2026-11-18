@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { availabilityLabel, coverageDisplay, fefoPrefix, itemsBelowDemand, nextInQueue, positionLabel, queueParams, queueRows, readQueueFilters } from './lib'
+import {
+  availabilityLabel,
+  committedSummary,
+  coverageDisplay,
+  coverLabel,
+  fefoPrefix,
+  holdsStock,
+  isOpenDemand,
+  itemsBelowDemand,
+  nextInQueue,
+  positionLabel,
+  queueHref,
+  queueParams,
+  queueRows,
+  readQueueFilters,
+  readStockFilters,
+  requestsToDecide,
+  CANT_MEET,
+  stockParams,
+  stockRows,
+} from './lib'
 import type { FertilizerRequest, ItemPosition } from './types'
 
 const req = (id: string, status: FertilizerRequest['status'], requestedDate: string, extra: Partial<FertilizerRequest> = {}) =>
@@ -7,9 +27,10 @@ const req = (id: string, status: FertilizerRequest['status'], requestedDate: str
 
 describe('FERT-05 filters live in the URL', () => {
   it('round-trips, with "To decide" as the default tab and unknown tabs ignored', () => {
-    const f = { tab: 'closed', search: 'urea', status: 'Rejected', origin: 'web' }
+    const f = { tab: 'closed', search: 'urea', status: 'Rejected', origin: 'web', item: 'Urea', scope: 'holding' }
     expect(readQueueFilters(queueParams(f))).toEqual(f)
-    expect(readQueueFilters(new URLSearchParams())).toEqual({ tab: 'decide', search: '', status: '', origin: '' })
+    expect(readQueueFilters(new URLSearchParams())).toEqual({ tab: 'decide', search: '', status: '', origin: '', item: '', scope: '' })
+    expect(readQueueFilters(new URLSearchParams('scope=nope')).scope).toBe('')
     expect(readQueueFilters(new URLSearchParams('tab=nope')).tab).toBe('decide')
     expect(queueParams({ tab: 'decide', search: '', status: '', origin: '' }).toString()).toBe('')
   })
@@ -89,5 +110,91 @@ describe('FERT-01 reads the server status — never recomputes it', () => {
       ['FB-0002', 20],
       ['FB-0001', 10],
     ])
+  })
+})
+
+describe('deep-link scopes — the list a card or alert opens', () => {
+  const all = [
+    req('FR-1', 'Approved', '2026-10-01', { committedKg: 100 }),
+    req('FR-2', 'Needs review', '2026-10-02', { committedKg: 200, item: 'TSP' }),
+    req('FR-3', 'Requested', '2026-10-03', { committedKg: 0 }),
+    req('FR-4', 'Awaiting manager approval', '2026-10-04', { committedKg: 600 }),
+    req('FR-5', 'Delivered', '2026-10-05', { committedKg: 0 }),
+    req('FR-6', 'Approved', '2026-10-06', { committedKg: 0, item: 'TSP' }), // fully picked
+  ]
+  const base = { tab: 'all', search: '', status: '', origin: '' }
+
+  it('"holding stock" lists exactly the requests the committed card counts', () => {
+    const rows = queueRows(all, { ...base, scope: 'holding' })
+    expect(rows.map((r) => r.id).sort()).toEqual(['FR-1', 'FR-2', 'FR-4'])
+    expect(rows).toHaveLength(committedSummary([], all).count)
+    expect(rows.every(holdsStock)).toBe(true)
+  })
+
+  it('"open" + item lists what a usable batch could serve', () => {
+    const rows = queueRows(all, { ...base, scope: 'open', item: 'Urea' })
+    expect(rows.map((r) => r.id).sort()).toEqual(['FR-1', 'FR-3', 'FR-4'])
+    expect(rows.every(isOpenDemand)).toBe(true)
+  })
+
+  it('builds the link from the same filters', () => {
+    expect(queueHref({ tab: 'all', item: 'Muriate of Potash', scope: 'open' })).toBe(
+      '/fertilizer/requests?tab=all&item=Muriate+of+Potash&scope=open',
+    )
+    expect(queueHref({})).toBe('/fertilizer/requests')
+  })
+})
+
+describe('coverLabel — Expiry Alerts', () => {
+  it('says what fits whole, and nothing for an expired batch', () => {
+    expect(coverLabel({ count: 2, coveredKg: 130, requestedKg: 730 })).toBe(
+      'can fully cover 2 requests (130 kg of 730 kg requested)',
+    )
+    expect(coverLabel({ count: 0, coveredKg: 0, requestedKg: 400 })).toMatch(/can't fully cover any/)
+    expect(coverLabel({ count: 0, coveredKg: 0, requestedKg: 0 })).toBe('no open requests for this item')
+    expect(coverLabel(null)).toBeNull()
+  })
+})
+
+describe('FERT-01 cards — each count equals the list it opens', () => {
+  const pos = (item: string, status: ItemPosition['status'], extra: Partial<ItemPosition> = {}) =>
+    ({ item, status, category: 'Fertilizer', committed: 0, committedValueRs: 0, available: 0, ...extra }) as ItemPosition
+  const positions = [
+    pos('Urea', 'Healthy', { committed: 700 }),
+    pos('Muriate of Potash', 'Out of stock', { committed: 500 }),
+    pos('TSP', 'Short', { committed: 200 }),
+    pos('Dolomite', 'Expiring soon', { committed: 100 }),
+    pos('Rice', 'Fully committed', { committed: 350 }),
+  ]
+  const requests = [
+    req('FR-1', 'Ready for dispatch', '2026-10-01', { committedKg: 400 }),
+    req('FR-3', 'Needs review', '2026-10-03', { committedKg: 200 }),
+    req('FR-6', 'Approved', '2026-10-06', { committedKg: 300 }),
+    req('FR-12', 'Approved', '2026-10-12', { committedKg: 100, staleCommittedKg: 100 }),
+    req('FR-13', 'Requested', '2026-10-13', { committedKg: 0, quantityKg: 77 }),
+    req('FR-14', 'Awaiting manager approval', '2026-10-14', { committedKg: 600 }),
+    req('FR-15', 'Requested', '2026-10-15', { committedKg: 0, quantityKg: 100 }),
+    req('FR-16', 'Delivered', '2026-10-16', { committedKg: 0 }),
+  ]
+  /** the rows the queue shows for a card's link */
+  const opened = (href: string) => queueRows(requests, readQueueFilters(new URLSearchParams(href.split('?')[1] ?? '')))
+
+  it("card 1: items that can't meet pending = the filtered stock table", () => {
+    const table = stockRows(positions, readStockFilters(stockParams({ search: '', category: '', coverage: CANT_MEET })))
+    expect(table.map((p) => p.item)).toEqual(['Muriate of Potash', 'TSP'])
+    expect(table).toHaveLength(itemsBelowDemand(positions).length)
+  })
+
+  it('card 2: requests pending approval = the To decide tab', () => {
+    const card = requestsToDecide(requests)
+    expect(card.map((r) => r.id)).toEqual(['FR-13', 'FR-14', 'FR-15'])
+    expect(opened(queueHref({ tab: 'decide' }))).toEqual(card)
+  })
+
+  it('card 3: committed requests = the holding-stock list, whatever their status', () => {
+    const count = committedSummary(positions, requests).count
+    expect(count).toBe(5)
+    expect(opened(queueHref({ tab: 'all', scope: 'holding' }))).toHaveLength(count)
+    expect(committedSummary(positions, requests).kg).toBe(1850)
   })
 })

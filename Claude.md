@@ -1100,6 +1100,48 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Portal:** `features/performance/` (team overview, `EmployeePerformanceTab`, `HowMeasuredPage`). `MEASURE_DEFINITIONS` is the one copy of each measure's wording.
 - **Permission** `performance`: Manager edit, Administrator approve, Officer none.
 
+### Demo data (local only)
+
+- **Commands:** `npm run seed:demo` / `npm run seed:demo:reset` (backend) seed realistic data for 1 May – 5 Nov 2026 (collections from May for route history; attendance, covers and fertilizer from Aug) so Performance can be tested.
+- **Safety:** it refuses any non-local `DATABASE_URL`. Every row is recorded in `demo_seed_rows` (created by the script, outside migrations), and reset deletes exactly those rows.
+  - Reset refuses if a non-demo row points at demo data (made by using the app on demo data).
+- **How it inserts:** no services are called, so no notifications, payroll, settlements, stock movements or audit rows. The plan (`src/demo/demo-plan.ts`) is checked with `dayInfo`, `isScheduledOn` and `pickResponsible`.
+- **Checking:** `docs/demo-seed-expected.md` holds the independent expected figures (`demo-expected.ts`).
+- **While seeded:** don't run payroll "Recalculate from Attendance" or a settlement run for Aug–Nov — they would pick up demo data.
+
+## Expiry alerts, clickable fertilizer cards, page layout (2026-11-08, `feat/fertilizer-alerts-cards-layout`)
+
+### Expiry Alerts and write-off (`Fertilizer-Delivery-Addendum.md` §5, §5.2)
+
+- **Endpoint:** `GET /fertilizer/alerts` (`FertilizerService.expiryAlerts` over the position service).
+  - Three non-overlapping buckets (expired / ≤7 days / 8–N days), `quantity > 0` only, on the Colombo calendar.
+  - "Can fully cover N requests" walks open demand oldest first and counts only those that fit whole (`batchCover`).
+  - The page computes nothing and has **no dispatch action**.
+- **Write-off replaces discard.** `POST /fertilizer/batches/:id/write-off` writes a `Write-off` movement with a required `write_off_reason`.
+  - Migration `2026-11-08-fertilizer-write-off.sql`; force-add it past the `.gitignore` "database" rule.
+  - `PATCH …/discard` is gone. `fertilizer_batches.discarded` is legacy only.
+  - It is refused (409, naming the requests) while an expired batch is still allocated.
+- **Expired allocations:** `staleCommittedKg` on every request, plus the chip "Allocated stock expired: move to live stock".
+  - `POST requests/:id/move-to-live` uses `ensureCommitted`.
+  - Handover re-takes stale stock from live batches or refuses.
+  - Ad-hoc Outgoing refuses expired or discarded batches.
+- **RPT-03** lists write-offs as "Stock lost" (kg), information only, never in totals.
+
+### FERT-01 cards
+
+- Each card opens exactly what it counts. The number and the list share a `lib.ts` predicate (`itemsBelowDemand` / `requestsToDecide` / `holdsStock`), and a test parses each card's link.
+- `SummaryCard.tsx`: a stretched button, an (i) rule popover and a hover/focus/tap preview, with no nested buttons.
+- The stock-table filters and FERT-05's new `item=` / `scope=holding|open` filters live in the URL.
+
+### Page layout (`docs/specs/Page-Layout-Addendum.md`)
+
+- **The Dispatch header bug was `PageHeader`.** Its actions were `shrink-0`. It now wraps: the title is `flex-[1_1_22rem]` and the actions wrap under it. This fixes every page.
+- **Dispatch:** a `wide:` breakpoint (1,440 px) for table + map side by side; below that the map stacks with Show/Hide; under 768 px the agents show as cards (`AgentCardList`).
+- **`DataTable`'s scroll box is now `relative`.** Absolutely positioned `sr-only` text was escaping it and widening the page.
+- **Sidebar:** collapsed to icons below 1,280 px by default. The choice is remembered per user and per narrow/wide mode (`sidebar-pref.ts`).
+- **Playwright** (`admin/e2e/`, Chromium only) checks 7 pages × 6 widths plus zoom against a running backend: `E2E_API_URL`, `E2E_USER`, `E2E_PASS`.
+  - Screenshots are git-ignored, except the Dispatch before/after pair in `docs/screenshots/`.
+
 ## Schema changes are TypeORM migrations now (2026-11-16, stack merge into dev)
 
 dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/data-source.ts`). The stack's hand-applied `database/migrations/*.sql` files are being converted PR by PR (`docs/specs/Stack-Merge-Addendum.md`).

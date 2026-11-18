@@ -14,6 +14,9 @@
 */
 
 @theme {
+  /* Page-Layout-Addendum: `wide:` (1440px) — Dispatch's table + map side by side */
+  --breakpoint-wide: 90rem;
+
   /* ---- Brand & primary ---------------------------------------------------
      --brand  #53cf81  : logo, active-nav, accents, chart series, focus ring
      --primary          : darkened Harboost green for buttons/links/text —

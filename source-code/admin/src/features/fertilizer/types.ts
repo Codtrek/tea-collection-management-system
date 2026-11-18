@@ -28,7 +28,10 @@ export interface FertilizerBatch {
   freeKg: number
 }
 
-export type MovementType = 'Incoming' | 'Outgoing'
+export type MovementType = 'Incoming' | 'Outgoing' | 'Write-off'
+
+/** Why stock left the books without going to anyone (Expiry Alerts / FERT-03 "Write off"). */
+export type WriteOffReason = 'expired' | 'damaged' | 'other'
 
 export interface StockMovement {
   id: string
@@ -42,8 +45,31 @@ export interface StockMovement {
   linkedRequest?: string
   /** Incoming */
   supplier?: string
+  /** Write-off only */
+  writeOffReason?: WriteOffReason
   notes?: string
   recordedBy: string
+}
+
+/** Expiry Alerts sections — never overlapping (server-computed on the factory calendar). */
+export type ExpiryBucket = 'expired' | 'soon' | 'later'
+
+export interface ExpiryAlertBatch extends FertilizerBatch {
+  bucket: ExpiryBucket
+  /** active allocations still sitting on this batch */
+  allocatedTo: { requestId: string; kg: number }[]
+  /** open requests (oldest first) that fit whole in what's left of the batch; null once expired */
+  cover: { count: number; coveredKg: number; requestedKg: number } | null
+}
+
+export interface ExpiryAlerts {
+  today: string
+  /** the "use first" bucket's upper bound (days) */
+  soonDays: number
+  /** the expiring-soon window — the last bucket's upper bound */
+  windowDays: number
+  summary: Record<ExpiryBucket, { count: number; kg: number }>
+  batches: ExpiryAlertBatch[]
 }
 
 /*
@@ -162,6 +188,8 @@ export interface FertilizerRequest {
   ratePerKg: number | null
   /** stock currently promised to this request (server-computed) */
   committedKg: number
+  /** the part of `committedKg` on a batch that has since expired or been discarded — move it to live stock */
+  staleCommittedKg: number
   payment: PaymentSummary
   attempt: DeliveryAttempt | null
   /** "Attempt 2 of 3" while a delivery is in play */

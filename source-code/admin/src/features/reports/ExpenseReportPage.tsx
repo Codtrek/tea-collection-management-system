@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import * as reportsService from '@/services/reports'
 import { REPORT_PERIODS, type ExpenseRow } from './types'
-import { formatCurrency, formatDate } from '@/lib/format'
+import { formatCurrency, formatDate, formatWeight } from '@/lib/format'
 
 function periodLabel(period: string): string {
   return REPORT_PERIODS.find((p) => p.value === period)?.label ?? period
@@ -160,13 +160,41 @@ export function ExpenseReportPage() {
           </div>
         }
         table={
-          rows.length === 0 ? (
-            <EmptyState title="No expenses" description="No expenses matched this period and filter combination." />
-          ) : (
-            <DataTable columns={columns} rows={rows} rowKey={(e) => e.id} />
-          )
+          <>
+            {rows.length === 0 ? (
+              <EmptyState title="No expenses" description="No expenses matched this period and filter combination." />
+            ) : (
+              <DataTable columns={columns} rows={rows} rowKey={(e) => e.id} />
+            )}
+            {report.stockLost.length > 0 && <StockLostPanel period={periodLabel(report.period)} lines={report.stockLost} />}
+          </>
         }
       />
     </div>
+  )
+}
+
+/**
+ * Fertilizer written off in the period. Shown for information only: the stock's cost was counted
+ * when it was bought, so a write-off is never a second expense (and never in the total above).
+ */
+function StockLostPanel({ period, lines }: { period: string; lines: { item: string; reason: string; kg: number }[] }) {
+  return (
+    <section className="mt-4 rounded-[var(--radius-lg)] border border-border bg-surface p-4">
+      <h3 className="text-sm font-semibold text-text-heading">Stock lost ({period}): information only</h3>
+      <p className="mt-0.5 text-xs text-text-muted">
+        Fertilizer written off. Not an expense and not in the totals above; its cost was counted when it was bought.
+      </p>
+      <ul className="mt-3 divide-y divide-border text-sm">
+        {lines.map((l) => (
+          <li key={`${l.item}-${l.reason}`} className="flex justify-between gap-4 py-1.5">
+            <span className="text-text">
+              {l.item} <span className="text-text-muted">· {l.reason}</span>
+            </span>
+            <span className="tabular text-text">{formatWeight(l.kg)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

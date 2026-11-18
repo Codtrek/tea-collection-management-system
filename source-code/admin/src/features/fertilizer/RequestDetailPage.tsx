@@ -217,6 +217,7 @@ export function RequestDetailPage() {
           }}
         />
       )}
+      {r.staleCommittedKg > 0 && <StaleStockBanner r={r} canEdit={canEdit} />}
       <ActionBar r={r} canEdit={canEdit} preDispatch={preDispatch} onAction={setAction} />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -1117,6 +1118,57 @@ function Snapshot({ label, value, danger }: { label: string; value: string; dang
     <div className="rounded-[var(--radius-md)] bg-surface-sunken p-3">
       <p className="text-xs text-text-muted">{label}</p>
       <p className={`tabular mt-1 text-lg font-semibold ${danger ? 'text-danger-fg' : 'text-text-heading'}`}>{value}</p>
+    </div>
+  )
+}
+
+/**
+ * Part of this request's commitment sits on a batch that has expired since approval. Expired stock
+ * is never handed over, so the officer moves it to live stock (FEFO) — or handover does it then,
+ * refusing if live stock can't cover it.
+ */
+function StaleStockBanner({ r, canEdit }: { r: FertilizerRequest; canEdit: boolean }) {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  const move = useMutation({
+    mutationFn: () => fertilizerService.moveToLive(r.id),
+    onSuccess: () => {
+      toast(`${formatWeight(r.staleCommittedKg)} moved to live stock`, 'success')
+      setConfirming(false)
+      void queryClient.invalidateQueries({ queryKey: ['fertilizer'] })
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not move this commitment', 'danger'),
+  })
+  return (
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-md)] border border-danger-fg/25 bg-danger-bg px-4 py-3">
+      <p className="flex items-center gap-2 text-sm text-danger-fg">
+        <AlertTriangle className="size-4 shrink-0" aria-hidden />
+        <span>
+          <strong>Allocated stock expired: move to live stock.</strong> {formatWeight(r.staleCommittedKg)} of the{' '}
+          {formatWeight(r.committedKg)} committed here is on a batch that has expired. It can't be handed over or written
+          off until it moves.
+        </span>
+      </p>
+      {canEdit && (
+        <Button size="sm" onClick={() => setConfirming(true)}>
+          <RotateCcw className="size-4" /> Move to live stock
+        </Button>
+      )}
+      <LightConfirmModal
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onConfirm={() => move.mutate()}
+        loading={move.isPending}
+        title="Move to live stock"
+        confirmLabel="Move"
+        message={
+          <>
+            {formatWeight(r.staleCommittedKg)} of {r.item} is released from the expired batch and taken again from live
+            stock, earliest expiry first (FEFO). If live stock can't cover it, nothing changes.
+          </>
+        }
+      />
     </div>
   )
 }

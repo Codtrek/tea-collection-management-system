@@ -74,6 +74,24 @@ export class FertilizerStockLedger {
     return round2(rows.reduce((s, r) => s + Number(r.qtyKg), 0));
   }
 
+  /** kg of the request's ACTIVE commitment sitting on a batch that has expired or been discarded. */
+  async staleFor(
+    em: EntityManager,
+    requestId: number,
+    today: string,
+  ): Promise<number> {
+    const rows = await em
+      .getRepository(FertilizerAllocationEntity)
+      .find({ where: { requestId, state: 'active' } });
+    const batchRepo = em.getRepository(FertilizerBatchEntity);
+    let stale = 0;
+    for (const a of rows) {
+      const batch = await batchRepo.findOne({ where: { id: a.batchId } });
+      if (!batch || !isLive(batch, today)) stale += Number(a.qtyKg);
+    }
+    return round2(stale);
+  }
+
   /** Commit `qty` of the request's item, FEFO. Throws when Available can't cover it. */
   async allocate(
     em: EntityManager,

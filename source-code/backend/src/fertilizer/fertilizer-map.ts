@@ -6,7 +6,14 @@
 
 export type DbItemCategory = 'Fertilizer' | 'Beneficiary';
 export type DbUnit = 'kg' | 'bags';
-export type DbMovementType = 'Incoming' | 'Outgoing';
+export type DbMovementType = 'Incoming' | 'Outgoing' | 'Write-off';
+/** Why stock left the books without going to anyone (Expiry Alerts / FERT-03 "Write off"). */
+export type WriteOffReason = 'expired' | 'damaged' | 'other';
+export const WRITE_OFF_REASONS: readonly WriteOffReason[] = [
+  'expired',
+  'damaged',
+  'other',
+];
 export type DbRequestOrigin = 'mobile' | 'web';
 
 /**
@@ -168,6 +175,8 @@ export interface PublicMovement {
   destination?: string;
   linkedRequest?: string;
   supplier?: string;
+  /** set only on a Write-off */
+  writeOffReason?: WriteOffReason;
   notes?: string;
   recordedBy: string;
 }
@@ -255,6 +264,8 @@ export interface PublicRequest {
   ratePerKg: number | null;
   /** stock currently promised to this request (active FEFO allocations) */
   committedKg: number;
+  /** the part of `committedKg` sitting on a batch that has since expired or been discarded */
+  staleCommittedKg: number;
   payment: PublicPaymentSummary;
   /** the latest delivery attempt, if any */
   attempt: PublicAttempt | null;
@@ -266,6 +277,30 @@ export interface PublicRequest {
   noticeStatus: NoticeStatus | null;
   /** only while Requested: whether stock covers it now (FertilizerPositionService) */
   availability: PublicRequestAvailability | null;
+}
+
+/** Expiry Alerts buckets — never overlapping (Fertilizer-Delivery-Addendum §5.2). */
+export type ExpiryBucket = 'expired' | 'soon' | 'later';
+
+export interface PublicExpiryAlertBatch extends PublicBatch {
+  bucket: ExpiryBucket;
+  /** active allocations still sitting on this batch */
+  allocatedTo: { requestId: string; kg: number }[];
+  /**
+   * Open requests for the item (oldest first) that fit fully in this batch's remaining
+   * quantity. Null for an expired batch: it can't be used.
+   */
+  cover: { count: number; coveredKg: number; requestedKg: number } | null;
+}
+
+export interface PublicExpiryAlerts {
+  today: string;
+  /** the "use first" bucket's upper bound (days) */
+  soonDays: number;
+  /** the expiring-soon window (`expiringSoonDays`) — the "later" bucket's upper bound */
+  windowDays: number;
+  summary: Record<ExpiryBucket, { count: number; kg: number }>;
+  batches: PublicExpiryAlertBatch[];
 }
 
 export interface PublicAllocation {

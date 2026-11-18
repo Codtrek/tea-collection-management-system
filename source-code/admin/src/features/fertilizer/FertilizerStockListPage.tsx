@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useRef, type ReactNode } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, PhoneCall, BellRing, TrendingDown, ClipboardList, Truck, AlertTriangle, ShoppingCart, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -11,10 +11,23 @@ import { Select } from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
 import * as fertilizerService from '@/services/fertilizer'
 import { StockPositionTable } from './StockPositionTable'
-import { itemsBelowDemand, committedSummary, shortfalls } from './lib'
-import type { CoverageStatus, ItemCategory } from './types'
-import { formatCurrency, formatWeight } from '@/lib/format'
-import { cn } from '@/lib/cn'
+import { SummaryCard } from './SummaryCard'
+import {
+  CANT_MEET,
+  committedSummary,
+  hasStaleCommitment,
+  holdsStock,
+  itemsBelowDemand,
+  queueHref,
+  readStockFilters,
+  requestsToDecide,
+  shortfalls,
+  stockParams,
+  stockRows,
+  type StockFilters,
+} from './lib'
+import type { CoverageStatus } from './types'
+import { formatCurrency, formatDate, formatWeight } from '@/lib/format'
 
 const COVERAGE_STATUSES: CoverageStatus[] = ['Out of stock', 'Short', 'Fully committed', 'Expiring soon', 'Healthy']
 
@@ -28,9 +41,12 @@ export function FertilizerStockListPage() {
   const { can } = useAuth()
   const canLog = can('fertilizer', 'edit')
 
-  const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('')
-  const [coverage, setCoverage] = useState('')
+  // the table's filters live in the URL, so card 1 can open them and Back keeps them
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filters = readStockFilters(searchParams)
+  const setFilters = (patch: Partial<StockFilters>) =>
+    setSearchParams(stockParams({ ...filters, ...patch }), { replace: true })
+  const tableRef = useRef<HTMLDivElement>(null)
 
   const {
     data: positions,
@@ -45,18 +61,8 @@ export function FertilizerStockListPage() {
     refetch: refetchRequests,
   } = useQuery({ queryKey: ['fertilizer', 'requests'], queryFn: fertilizerService.listRequests })
 
-  const rows = useMemo(
-    () =>
-      (positions ?? []).filter((p) => {
-        const q = search.trim().toLowerCase()
-        return (
-          p.item.toLowerCase().includes(q) &&
-          (!category || p.category === (category as ItemCategory)) &&
-          (!coverage || p.status === (coverage as CoverageStatus))
-        )
-      }),
-    [positions, search, category, coverage],
-  )
+  const { search, category, coverage } = filters
+  const rows = useMemo(() => stockRows(positions ?? [], { search, category, coverage }), [positions, search, category, coverage])
 
   if (positionsPending || requestsPending) {
     return (
@@ -79,13 +85,22 @@ export function FertilizerStockListPage() {
     )
   }
 
-  // every card reads the server's positions (the one stock-position service)
+  // Every card counts with the same lib.ts function the list it opens filters with, so the number
+  // and the list can't disagree. Stock figures themselves come from the server's positions.
   const below = itemsBelowDemand(positions)
-  const pendingCount = positions.reduce((s, p) => s + p.pendingCount, 0)
-  const pendingKg = positions.reduce((s, p) => s + p.pendingDemand, 0)
+  const toDecide = requestsToDecide(requests)
+  const toDecideKg = toDecide.reduce((s, r) => s + r.quantityKg, 0)
   const committed = committedSummary(positions, requests)
+  const committedByItem = positions.filter((p) => p.committed > 0)
+  const stale = requests.filter(hasStaleCommitment)
+  const staleKg = stale.reduce((s, r) => s + r.staleCommittedKg, 0)
   const shortfallList = shortfalls(positions)
   const shortfallKg = shortfallList.reduce((s, r) => s + r.shortfallKg, 0)
+
+  const showCantMeet = () => {
+    setSearchParams(stockParams({ search: '', category: '', coverage: CANT_MEET }), { replace: true })
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
     <div>
@@ -111,27 +126,75 @@ export function FertilizerStockListPage() {
         }
       />
 
-      {/* Position summary — each card is a decision, not a statistic (§5.1) */}
+      {/* Position summary — each card is a decision, not a statistic (§5.1); each opens what it counts */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           icon={<TrendingDown className="size-4" />}
-          label="Items below demand"
+          label="Items that can't meet pending requests"
           value={`${below.length} of ${positions.length}`}
           note={below.length ? below.map((p) => p.item).join(', ') : 'All items covered'}
           tone={below.length ? 'danger' : 'success'}
+          rule="Items whose status is Out of stock or Short: pending requests ask for more than is Available (or Available is below zero)."
+          onOpen={showCantMeet}
+          openLabel="Show these items in the stock table"
         />
         <SummaryCard
           icon={<ClipboardList className="size-4" />}
           label="Requests pending approval"
-          value={String(pendingCount)}
-          note={`${formatWeight(pendingKg)} total`}
-          onClick={() => navigate('/fertilizer/requests')}
+          value={String(toDecide.length)}
+          note={`${formatWeight(toDecideKg)} total`}
+          rule="Requests in Requested or Awaiting manager approval status: the “To decide” tab."
+          onOpen={() => navigate(queueHref({ tab: 'decide' }))}
+          openLabel="Open the To decide tab"
+          preview={
+            <PreviewList
+              empty="Nothing waiting for a decision."
+              rows={toDecide.slice(0, 5).map((r) => ({
+                key: r.id,
+                to: `/fertilizer/requests/${r.id}`,
+                left: (
+                  <>
+                    <span className="font-medium text-text">{r.estateName}</span> · {r.item}
+                  </>
+                ),
+                right: `${formatWeight(r.quantityKg)} · ${formatDate(r.requestedDate)}`,
+              }))}
+              viewAll={toDecide.length ? { to: queueHref({ tab: 'decide' }), label: `View all ${toDecide.length}` } : undefined}
+            />
+          }
         />
         <SummaryCard
           icon={<Truck className="size-4" />}
           label="Committed, awaiting dispatch"
           value={formatWeight(committed.kg)}
           note={`${formatCurrency(committed.valueRs)} · ${committed.count} requests`}
+          rule="Stock held by active allocations for requests not yet handed over, in any status (Approved, Ready for dispatch, Rescheduled, Needs review, Awaiting manager approval). Valued at each request's approval-time price."
+          onOpen={() => navigate(queueHref({ tab: 'all', scope: 'holding' }))}
+          openLabel="Open the requests holding this stock"
+          preview={
+            <PreviewList
+              empty="Nothing committed."
+              rows={committedByItem.map((p) => ({ key: p.item, left: p.item, right: formatWeight(p.committed) }))}
+              total={committedByItem.length ? formatWeight(committed.kg) : undefined}
+              warning={
+                stale.length ? (
+                  <>
+                    {formatWeight(staleKg)} on an expired batch ({stale.length} {stale.length === 1 ? 'request' : 'requests'}:{' '}
+                    {stale.map((r, n) => (
+                      <span key={r.id}>
+                        {n > 0 && ', '}
+                        <Link to={`/fertilizer/requests/${r.id}`} className="id underline underline-offset-2">
+                          {r.id}
+                        </Link>
+                      </span>
+                    ))}
+                    ): move to live stock
+                  </>
+                ) : undefined
+              }
+              viewAll={committed.count ? { to: queueHref({ tab: 'all', scope: 'holding' }), label: `View all ${committed.count}` } : undefined}
+            />
+          }
         />
         <SummaryCard
           icon={<AlertTriangle className="size-4" />}
@@ -143,6 +206,29 @@ export function FertilizerStockListPage() {
               : 'All approved requests can be met'
           }
           tone={shortfallKg ? 'danger' : 'success'}
+          rule={
+            shortfallKg
+              ? 'Items where stock committed to requests is more than live On Hand (Available below zero), usually because a committed batch has expired.'
+              : 'All approved requests can be met from live stock.'
+          }
+          preview={
+            shortfallKg ? (
+              <PreviewList
+                empty=""
+                rows={shortfallList.flatMap((s) => [
+                  { key: s.item, left: <span className="font-medium text-text">{s.item}</span>, right: `${formatWeight(s.shortfallKg)} missing` },
+                  ...requests
+                    .filter((r) => r.item === s.item && hasStaleCommitment(r) && holdsStock(r))
+                    .map((r) => ({
+                      key: r.id,
+                      to: `/fertilizer/requests/${r.id}`,
+                      left: <span className="pl-3">{r.id} · {r.estateName}</span>,
+                      right: `${formatWeight(r.staleCommittedKg)} on expired stock`,
+                    })),
+                ])}
+              />
+            ) : undefined
+          }
         />
       </div>
 
@@ -172,19 +258,22 @@ export function FertilizerStockListPage() {
         </div>
       )}
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px_180px]">
-        <Input placeholder="Search item…" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div ref={tableRef} className="mb-4 grid scroll-mt-20 gap-3 sm:grid-cols-[1fr_180px_220px]">
+        <Input placeholder="Search item…" value={search} onChange={(e) => setFilters({ search: e.target.value })} />
         <Select
           placeholder="All categories"
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={(e) => setFilters({ category: e.target.value })}
           options={['Fertilizer', 'Beneficiary'].map((c) => ({ value: c, label: c }))}
         />
         <Select
           placeholder="All coverage"
           value={coverage}
-          onChange={(e) => setCoverage(e.target.value)}
-          options={COVERAGE_STATUSES.map((c) => ({ value: c, label: c }))}
+          onChange={(e) => setFilters({ coverage: e.target.value })}
+          options={[
+            { value: CANT_MEET, label: "Can't meet pending (Out of stock + Short)" },
+            ...COVERAGE_STATUSES.map((c) => ({ value: c, label: c })),
+          ]}
         />
       </div>
 
@@ -201,46 +290,54 @@ export function FertilizerStockListPage() {
   )
 }
 
-type CardTone = 'default' | 'danger' | 'success'
-
-function SummaryCard({
-  icon,
-  label,
-  value,
-  note,
-  tone = 'default',
-  onClick,
+/** The rows inside a card's preview: a short list, an optional total / warning, and "View all". */
+function PreviewList({
+  rows,
+  empty,
+  total,
+  warning,
+  viewAll,
 }: {
-  icon: ReactNode
-  label: string
-  value: string
-  note: string
-  tone?: CardTone
-  onClick?: () => void
+  rows: { key: string; left: ReactNode; right: string; to?: string }[]
+  empty: string
+  total?: string
+  warning?: ReactNode
+  viewAll?: { to: string; label: string }
 }) {
-  const valueColor = tone === 'danger' ? 'text-danger-fg' : tone === 'success' ? 'text-success-fg' : 'text-text-heading'
-  const iconWrap =
-    tone === 'danger'
-      ? 'bg-danger-bg text-danger-fg'
-      : tone === 'success'
-        ? 'bg-success-bg text-success-fg'
-        : 'bg-brand-soft text-primary'
-
-  const Wrapper = onClick ? 'button' : 'div'
   return (
-    <Wrapper
-      onClick={onClick}
-      className={cn(
-        'rounded-[var(--radius-lg)] bg-surface p-5 text-left shadow-[var(--shadow-1)] transition-shadow',
-        onClick && 'hover:shadow-[var(--shadow-2)]',
+    <div className="flex flex-col gap-2">
+      {rows.length === 0 ? (
+        <p className="text-text-muted">{empty}</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {rows.map((r) => (
+            <li key={r.key} className="flex items-baseline justify-between gap-3 py-1">
+              <span className="min-w-0 truncate text-text-muted">
+                {r.to ? (
+                  <Link to={r.to} className="hover:text-primary hover:underline">
+                    {r.left}
+                  </Link>
+                ) : (
+                  r.left
+                )}
+              </span>
+              <span className="tabular shrink-0 text-text">{r.right}</span>
+            </li>
+          ))}
+          {total && (
+            <li className="flex justify-between gap-3 py-1 font-semibold text-text-heading">
+              <span>Total</span>
+              <span className="tabular">{total}</span>
+            </li>
+          )}
+        </ul>
       )}
-    >
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-[13px] font-medium text-text-muted">{label}</span>
-        <span className={cn('flex size-8 items-center justify-center rounded-[var(--radius-sm)]', iconWrap)}>{icon}</span>
-      </div>
-      <p className={cn('tabular text-[28px] font-semibold leading-none tracking-tight', valueColor)}>{value}</p>
-      <p className="mt-2 text-xs text-text-muted">{note}</p>
-    </Wrapper>
+      {warning && <p className="rounded-[var(--radius-sm)] bg-danger-bg px-2 py-1.5 text-danger-fg">{warning}</p>}
+      {viewAll && (
+        <Link to={viewAll.to} className="self-end font-medium text-primary hover:underline">
+          {viewAll.label} →
+        </Link>
+      )}
+    </div>
   )
 }

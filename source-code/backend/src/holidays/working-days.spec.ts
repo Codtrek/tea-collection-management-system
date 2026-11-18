@@ -79,6 +79,50 @@ describe('working days', () => {
     });
   });
 
+  it('two changes on the same effective date: the newest one wins, in any order', () => {
+    // 5 Nov: Sunday + Monday saved first (id 5), then corrected to Sunday only (id 6)
+    const rules = [
+      {
+        id: 2,
+        category: 'factory' as const,
+        weekdays: [0],
+        halfDayWeekday: null,
+        effectiveFrom: '2000-01-01',
+      },
+      {
+        id: 6,
+        category: 'factory' as const,
+        weekdays: [0],
+        halfDayWeekday: null,
+        effectiveFrom: '2026-11-05',
+      },
+      {
+        id: 5,
+        category: 'factory' as const,
+        weekdays: [0, 1],
+        halfDayWeekday: null,
+        effectiveFrom: '2026-11-05',
+      },
+    ];
+    for (const weekly of [rules, [...rules].reverse()]) {
+      // Monday 9 Nov is a working day — the later change (id 6) replaced the first
+      expect(dayInfo('2026-11-09', worker, facts({ weekly })).type).toBe(
+        'working',
+      );
+    }
+    // the same for two rest-day changes on one date
+    const restDays = [
+      { id: 8, employeeId: 1, weekday: 3, effectiveFrom: '2026-11-05' },
+      { id: 7, employeeId: 1, weekday: 2, effectiveFrom: '2026-11-05' },
+    ];
+    expect(dayInfo('2026-11-11', worker, facts({ restDays })).type).toBe(
+      'rest',
+    ); // Wednesday
+    expect(dayInfo('2026-11-10', worker, facts({ restDays })).type).toBe(
+      'working',
+    );
+  });
+
   it('Poya and a closure for one category only', () => {
     const f = facts({
       holidays: [

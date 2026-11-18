@@ -1,3 +1,4 @@
+import { configDefaults } from 'vitest/config'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -19,4 +20,6 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  // e2e/ is Playwright's (layout checks against a running backend), not Vitest's
+  test: { exclude: [...configDefaults.exclude, 'e2e/**'] },
 })

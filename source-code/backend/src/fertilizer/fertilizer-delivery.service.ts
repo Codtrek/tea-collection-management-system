@@ -160,6 +160,65 @@ export class FertilizerDeliveryService implements OnModuleInit {
     return this.view.detail(request.id);
   }
 
+  /**
+   * FERT-06 "Move to live stock": a commitment on a batch that has expired (or been discarded)
+   * since approval is released and the same kg re-taken from live stock, FEFO. Refused when
+   * live stock can't cover it; nothing changes then.
+   */
+  async moveToLive(
+    formattedId: string,
+    actor: FlowActor,
+    now: Date = new Date(),
+  ): Promise<PublicRequestDetail> {
+    await this.access.require(
+      actor.role,
+      'edit',
+      'move a commitment to live stock',
+      'fertilizer',
+    );
+    const request = await this.view.find(formattedId);
+    let moved = 0;
+    await this.requests.manager.transaction(async (em) => {
+      moved = await this.ledger.staleFor(em, request.id, localDate(now));
+      if (moved <= 0) {
+        throw new ConflictException(
+          'Nothing committed to this request sits on expired stock.',
+        );
+      }
+      const committed = await this.ledger.committedFor(em, request.id);
+      await this.recommitLive(em, request, committed, moved, now);
+      await logEvent(em, request.id, actor, now, {
+        action: 'Moved to live stock',
+        note: `${moved} kg moved off an expired batch`,
+      });
+    });
+    await this.auditAction(
+      actor,
+      request,
+      'Moved fertilizer commitment to live stock',
+      `${moved} kg`,
+    );
+    return this.view.detail(request.id);
+  }
+
+  /** `ensureCommitted` with a refusal that says what expired. */
+  private async recommitLive(
+    em: EntityManager,
+    request: FertilizerRequestEntity,
+    committed: number,
+    stale: number,
+    now: Date,
+  ): Promise<void> {
+    try {
+      await this.ledger.ensureCommitted(em, request, committed, now);
+    } catch (e) {
+      if (!(e instanceof ConflictException)) throw e;
+      throw new ConflictException(
+        `${stale} kg committed to this request is on an expired batch and live stock can't replace it. ${e.message}`,
+      );
+    }
+  }
+
   /** An officer moves the delivery to another SCHEDULED date of the route (today allowed). */
   async changeDate(
     formattedId: string,
@@ -279,6 +338,16 @@ export class FertilizerDeliveryService implements OnModuleInit {
         throw new ConflictException(
           `${committed} kg is committed to this request — hand over exactly that.`,
         );
+      }
+      // Expired stock never leaves the factory: re-take anything sitting on a batch that has
+      // expired since approval from live stock (FEFO), or refuse the handover.
+      const stale = await this.ledger.staleFor(em, request.id, today);
+      if (stale > 0) {
+        await this.recommitLive(em, request, committed, stale, now);
+        await logEvent(em, request.id, actor, now, {
+          action: 'Moved to live stock',
+          note: `${stale} kg moved off an expired batch before handover`,
+        });
       }
       await this.ledger.pick(
         em,
