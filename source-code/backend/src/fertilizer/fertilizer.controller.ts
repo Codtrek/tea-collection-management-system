@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Req,
@@ -23,6 +24,7 @@ import {
   ReasonDto,
   RecordPaymentDto,
   RetryDto,
+  CancelPriceDto,
   SetPriceDto,
 } from './dto/fertilizer-flow.dto';
 import { RecordMovementDto } from './dto/record-movement.dto';
@@ -33,12 +35,17 @@ import type {
   PublicExpiryAlerts,
   PublicItemPosition,
   PublicMovement,
-  PublicPrice,
   PublicRequest,
   PublicRequestDetail,
 } from './fertilizer-map';
 import { FertilizerRequestService } from './fertilizer-request.service';
 import { FertilizerViewService } from './fertilizer-view.service';
+import {
+  ItemPriceService,
+  type PublicPrice,
+  type PurchaseCost,
+} from './item-price.service';
+import { DispatchAccessService } from '../dispatch/dispatch-access.service';
 import { type Actor, FertilizerService } from './fertilizer.service';
 
 type AuthedRequest = Request & { user: JwtPayload };
@@ -52,6 +59,8 @@ export class FertilizerController {
     private readonly requests: FertilizerRequestService,
     private readonly deliveries: FertilizerDeliveryService,
     private readonly view: FertilizerViewService,
+    private readonly itemPrices: ItemPriceService,
+    private readonly access: DispatchAccessService,
   ) {}
 
   @Get('positions')
@@ -256,9 +265,30 @@ export class FertilizerController {
 
   /* ── Prices (Administrator) ─────────────────────────────────────── */
 
+  /** Item Prices (Administration-Addendum §5) — every version; `itemPrices: view` to read. */
   @Get('prices')
-  listPrices(): Promise<PublicPrice[]> {
-    return this.requests.listPrices();
+  async listPrices(@Req() req: AuthedRequest): Promise<PublicPrice[]> {
+    const actor = await this.resolveActor(req);
+    await this.access.require(
+      actor.role,
+      'view',
+      'view item prices',
+      'itemPrices',
+    );
+    return this.itemPrices.list();
+  }
+
+  /** What recent stock-ins cost per kg — for the selling-below-cost warning. */
+  @Get('prices/costs')
+  async purchaseCosts(@Req() req: AuthedRequest): Promise<PurchaseCost[]> {
+    const actor = await this.resolveActor(req);
+    await this.access.require(
+      actor.role,
+      'view',
+      'view item prices',
+      'itemPrices',
+    );
+    return this.itemPrices.purchaseCosts();
   }
 
   @Post('prices')
@@ -266,7 +296,16 @@ export class FertilizerController {
     @Body() dto: SetPriceDto,
     @Req() req: AuthedRequest,
   ): Promise<PublicPrice[]> {
-    return this.requests.setPrice(dto, await this.resolveActor(req));
+    return this.itemPrices.set(dto, await this.resolveActor(req));
+  }
+
+  @Post('prices/:id/cancel')
+  async cancelPrice(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelPriceDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicPrice[]> {
+    return this.itemPrices.cancel(id, dto.reason, await this.resolveActor(req));
   }
 
   @Get('movements')

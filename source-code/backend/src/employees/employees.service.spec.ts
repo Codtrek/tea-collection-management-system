@@ -8,6 +8,7 @@ import type { Repository } from 'typeorm';
 import type { EmployeeAttendanceEntity } from './employee-attendance.entity';
 import type { EmployeeEntity } from './employee.entity';
 import { type Actor, EmployeesService } from './employees.service';
+import type { PayRatesService } from './pay-rates.service';
 import type { CreateEmployeeDto } from './dto/create-employee.dto';
 import type { MarkAttendanceDto } from './dto/mark-attendance.dto';
 import type { PayrollRunEntity } from './payroll-run.entity';
@@ -206,6 +207,7 @@ describe('EmployeesService', () => {
   let recoveryRepo: FakeRepository<AdvanceRecoveryEntity>;
   let service: EmployeesService;
   let auditRecord: jest.Mock;
+  let recordRegistration: jest.Mock;
   let provisioning: {
     assertContactFree: jest.Mock;
     provision: jest.Mock;
@@ -233,6 +235,7 @@ describe('EmployeesService', () => {
     };
 
     auditRecord = jest.fn().mockResolvedValue(undefined);
+    recordRegistration = jest.fn().mockResolvedValue(undefined);
     service = new EmployeesService(
       employeeRepo as unknown as Repository<EmployeeEntity>,
       attendanceRepo as unknown as Repository<EmployeeAttendanceEntity>,
@@ -246,6 +249,27 @@ describe('EmployeesService', () => {
       {
         get: () => Promise.resolve({ ...DEFAULT_PAYROLL_SETTINGS }),
       } as unknown as PayrollSettingsService,
+      // pay history: each employee's own rates as an override from 2000 — the same pay these
+      // tests always used; pay-resolution.spec covers role rates and dates
+      {
+        versions: async () =>
+          (await employeeRepo.find()).map((e) => ({
+            id: e.id,
+            scope: 'employee',
+            role: null,
+            employeeId: e.id,
+            effectiveDate: '2000-01-01',
+            dayRate: Number(e.dayRate),
+            dayOtRate: Number(e.dayOtRate),
+            nightRate: Number(e.nightRate),
+            nightOtRate: Number(e.nightOtRate),
+            reason: 'test',
+            setBy: 'test',
+            source: 'migration',
+            adjustmentId: null,
+          })),
+        recordRegistration: recordRegistration,
+      } as unknown as PayRatesService,
     );
   });
 
@@ -396,6 +420,43 @@ describe('EmployeesService', () => {
       employeeRepo.seed(makeEmployee());
       const result = await service.deactivate('EMP-0001', admin);
       expect(result.status).toBe('Inactive');
+    });
+
+    it('registering an employee starts their pay history (Administration-Addendum §6)', async () => {
+      await service.create(
+        {
+          ...validEmployeeDto,
+          dayRate: 450,
+          dayOtRate: 675,
+          nightRate: 540,
+          nightOtRate: 810,
+        },
+        admin,
+      );
+      expect(recordRegistration).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'N. Silva' }),
+        { dayRate: 450, dayOtRate: 675, nightRate: 540, nightOtRate: 810 },
+        'A. Bandara',
+      );
+    });
+
+    it('pay can’t be overwritten on the edit form — only through a dated, approved pay change', async () => {
+      employeeRepo.seed(makeEmployee());
+      await expect(
+        service.update(
+          'EMP-0001',
+          { ...validEmployeeDto, dayRate: 999 },
+          admin,
+        ),
+      ).rejects.toThrow(/Change pay/);
+      // the same rates (or none) save as before
+      await expect(
+        service.update(
+          'EMP-0001',
+          { ...validEmployeeDto, dayRate: 500 },
+          admin,
+        ),
+      ).resolves.toMatchObject({ name: 'N. Silva' });
     });
 
     it('rejects a hire date in the future', async () => {

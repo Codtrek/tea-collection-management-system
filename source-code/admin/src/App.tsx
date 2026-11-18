@@ -16,6 +16,8 @@ import { AttendanceEntryPage } from './features/employees/AttendanceEntryPage'
 import { AdvanceListPage } from './features/employees/AdvanceListPage'
 import { AdvanceDetailPage } from './features/employees/AdvanceDetailPage'
 import { AdvanceRequestPage } from './features/employees/AdvanceRequestPage'
+import { PayRatesPage } from './features/employees/PayRatesPage'
+import { PayChangePage } from './features/employees/PayChangePage'
 import { PayrollListPage } from './features/employees/PayrollListPage'
 import { PayrollProcessingPage } from './features/employees/PayrollProcessingPage'
 import { PayslipPage } from './features/employees/PayslipPage'
@@ -27,6 +29,7 @@ import { DispatchBoardPage } from './features/dispatch/DispatchBoardPage'
 import { CollectionDetailPage } from './features/collections/CollectionDetailPage'
 import { CollectionEditPage } from './features/collections/CollectionEditPage'
 import { FertilizerStockListPage } from './features/fertilizer/FertilizerStockListPage'
+import { ItemPricesPage } from './features/fertilizer/ItemPricesPage'
 import { StockMovementEntryPage } from './features/fertilizer/StockMovementEntryPage'
 import { BatchDetailPage } from './features/fertilizer/BatchDetailPage'
 import { FertilizerAlertsPage } from './features/fertilizer/FertilizerAlertsPage'
@@ -46,7 +49,8 @@ import { SettlementDetailPage } from './features/estates/SettlementDetailPage'
 import { UnsettledOwnersPage } from './features/estates/UnsettledOwnersPage'
 import { EstateAnalyticsPage } from './features/estates/EstateAnalyticsPage'
 import { CollectionReportPage } from './features/reports/CollectionReportPage'
-import { RevenueReportPage } from './features/reports/RevenueReportPage'
+import { LeafPurchaseReportPage } from './features/reports/LeafPurchaseReportPage'
+import { RedirectWithQuery } from './components/layout/RedirectWithQuery'
 import { ExpenseReportPage } from './features/reports/ExpenseReportPage'
 import { ExpenseEntryPage } from './features/reports/ExpenseEntryPage'
 import { FactorySetupPage } from './features/admin/FactorySetupPage'
@@ -77,6 +81,7 @@ export const router = createBrowserRouter([
       { path: 'fertilizer', element: <FertilizerStockListPage /> },
       { path: 'fertilizer/movement/new', element: <StockMovementEntryPage /> },
       { path: 'fertilizer/alerts', element: <FertilizerAlertsPage /> },
+      { path: 'fertilizer/prices', element: <ItemPricesPage /> },
       // Request workflow — static paths must precede fertilizer/:batchId
       { path: 'fertilizer/requests', element: <RequestQueuePage /> },
       { path: 'fertilizer/requests/new', element: <LogRequestPage /> },
@@ -107,6 +112,8 @@ export const router = createBrowserRouter([
       { path: 'employees/advances/new', element: <AdvanceRequestPage /> },
       { path: 'employees/advances/:id', element: <AdvanceDetailPage /> },
       { path: 'employees/payroll', element: <PayrollListPage /> },
+      { path: 'employees/pay-rates', element: <PayRatesPage /> },
+      { path: 'employees/pay-rates/change', element: <PayChangePage /> },
       { path: 'employees/payroll/process', element: <PayrollProcessingPage /> },
       { path: 'employees/payroll/:id/payslip', element: <PayslipPage /> },
       { path: 'employees/performance', element: <PerformancePage /> },
@@ -116,9 +123,12 @@ export const router = createBrowserRouter([
 
       // Reports (RPT-01..04)
       { path: 'reports/collection', element: <CollectionReportPage /> },
-      { path: 'reports/revenue', element: <RevenueReportPage /> },
+      { path: 'reports/leaf-purchases', element: <LeafPurchaseReportPage /> },
+      // renamed 2026-11-15: what it shows is a cost (leaf bought from estate owners), not revenue
+      { path: 'reports/revenue', element: <RedirectWithQuery to="/reports/leaf-purchases" /> },
       { path: 'reports/expenses', element: <ExpenseReportPage /> },
       { path: 'reports/expenses/new', element: <ExpenseEntryPage /> },
+      { path: 'reports/expenses/:id', element: <ExpenseEntryPage /> },
       { path: 'reports', element: <Navigate to="/reports/collection" replace /> },
 
       // Administration (ADM-01..04) — Administrator-only via AdminGuard

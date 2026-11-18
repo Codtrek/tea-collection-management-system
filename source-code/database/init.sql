@@ -421,6 +421,8 @@ CREATE TABLE stock_movements (
     estate_id          INTEGER REFERENCES estates(id),
     linked_request_id  INTEGER REFERENCES fertilizer_requests(id),
     supplier           VARCHAR(100), -- Incoming
+    -- Incoming: Rs per kg paid (Finance-Reports-Addendum §5, 2026-11-15); NULL before costs were recorded
+    unit_cost          DECIMAL(10,2) CHECK (unit_cost IS NULL OR unit_cost > 0),
     -- Write-off only (Fertilizer-Delivery-Addendum §5.2, 2026-11-08)
     write_off_reason   VARCHAR(10)
         CHECK (write_off_reason IN ('expired', 'damaged', 'other')),
@@ -761,15 +763,56 @@ CREATE TABLE advance_reschedules (
 -- other workflow generates — the §8.1.6 gap the reports doc flagged. The
 -- Payroll/Fertilizer/Transport expense lines RPT-03 also shows are DERIVED
 -- at query time from `payroll_runs`/`settlements`, never duplicated here.
+-- Finance-Reports-Addendum §6 (2026-11-15): the category list is data, editable by the
+-- Administrator; an inactive category stays on the entries that used it.
+CREATE TABLE expense_categories (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(60) NOT NULL UNIQUE,
+    active      BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    updated_by  VARCHAR(100),
+    updated_at  TIMESTAMP,
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO expense_categories (name, sort_order, active) VALUES
+    ('Firewood / dryer fuel', 1, TRUE),
+    ('Electricity',           2, TRUE),
+    ('Water',                 3, TRUE),
+    ('Vehicle fuel',          4, TRUE),
+    ('Vehicle repairs',       5, TRUE),
+    ('Machinery maintenance', 6, TRUE),
+    ('Packaging',             7, TRUE),
+    ('Office & admin',        8, TRUE),
+    ('Miscellaneous',         9, TRUE),
+    ('Utilities',            99, FALSE);
+
 CREATE TABLE expense_entries (
-    id           VARCHAR(20) PRIMARY KEY, -- business key, e.g. 'EXP-2026-0001'
-    category     VARCHAR(20) NOT NULL
-        CHECK (category IN ('Utilities', 'Maintenance', 'Miscellaneous', 'Other')),
-    description  VARCHAR(200) NOT NULL,
-    amount       DECIMAL(12,2) NOT NULL,
-    entry_date   DATE NOT NULL,
-    entered_by   VARCHAR(100) NOT NULL,
-    created_at   TIMESTAMP DEFAULT NOW()
+    id                 VARCHAR(20) PRIMARY KEY, -- business key, e.g. 'EXP-2026-0001' (expense_entry_seq)
+    category_id        INTEGER NOT NULL REFERENCES expense_categories(id),
+    description        VARCHAR(200) NOT NULL,
+    amount             DECIMAL(12,2) NOT NULL,
+    entry_date         DATE NOT NULL,
+    paid_via           VARCHAR(4) CHECK (paid_via IN ('cash', 'bank')), -- NULL on entries made before 2026-11-15
+    entered_by         VARCHAR(100) NOT NULL,
+    created_by_user_id INTEGER REFERENCES users(id),
+    updated_by         VARCHAR(100),
+    updated_at         TIMESTAMP,
+    edit_reason        TEXT, -- the reason given for the latest change made after the edit window
+    created_at         TIMESTAMP DEFAULT NOW()
+);
+
+CREATE SEQUENCE expense_entry_seq;
+
+-- one receipt per entry, stored in the database until file storage (Cloudinary) lands
+CREATE TABLE expense_receipts (
+    entry_id     VARCHAR(20) PRIMARY KEY REFERENCES expense_entries(id) ON DELETE CASCADE,
+    file_name    VARCHAR(200) NOT NULL,
+    mime_type    VARCHAR(100) NOT NULL,
+    size_bytes   INTEGER NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 2097152),
+    data         BYTEA NOT NULL,
+    uploaded_by  VARCHAR(100) NOT NULL,
+    uploaded_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- ─── ADMINISTRATION ───────────────────────────────────────────────
@@ -788,8 +831,41 @@ CREATE TABLE grade_rates (
     normal_rate    DECIMAL(8,2) NOT NULL,
     effective_date DATE NOT NULL,
     set_by         VARCHAR(100) NOT NULL,
-    created_at     TIMESTAMP DEFAULT NOW()
+    created_at     TIMESTAMP DEFAULT NOW(),
+    -- Administration-Addendum §3: why the rates changed; a scheduled version can be cancelled
+    -- before it starts (kept, never deleted)
+    reason         TEXT,
+    cancelled_at   TIMESTAMP,
+    cancelled_by   VARCHAR(100),
+    cancel_reason  TEXT
 );
+-- one LIVE version per date; versions are never edited (Grade-Rates-Addendum)
+CREATE UNIQUE INDEX grade_rates_live_effective_key ON grade_rates (effective_date) WHERE cancelled_at IS NULL;
+
+-- Administration-Addendum §4 (2026-11-15): transport rates, effective-dated like grade rates.
+-- Nothing calculates with them until the factory confirms the basis (per km / per kg).
+CREATE TABLE transport_rates (
+    id               SERIAL PRIMARY KEY,
+    effective_date   DATE NOT NULL,
+    basis            VARCHAR(11) NOT NULL CHECK (basis IN ('per_km', 'per_kg', 'fixed_month')),
+    rate             DECIMAL(10,2) NOT NULL CHECK (rate >= 0),
+    minimum_charge   DECIMAL(10,2) NOT NULL DEFAULT 0 CHECK (minimum_charge >= 0),
+    basis_confirmed  BOOLEAN NOT NULL DEFAULT FALSE,
+    -- the seeded 42/km row: kept in history, never applied (basis never confirmed)
+    never_applied    BOOLEAN NOT NULL DEFAULT FALSE,
+    reason           TEXT,
+    set_by           VARCHAR(100) NOT NULL,
+    created_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+    cancelled_at     TIMESTAMP,
+    cancelled_by     VARCHAR(100),
+    cancel_reason    TEXT
+);
+CREATE UNIQUE INDEX transport_rates_live_effective_key ON transport_rates (effective_date) WHERE cancelled_at IS NULL;
+INSERT INTO transport_rates (effective_date, basis, rate, minimum_charge, basis_confirmed, never_applied,
+                             reason, set_by, cancelled_at, cancelled_by, cancel_reason)
+VALUES (DATE '2019-01-01', 'per_km', 42, 500, FALSE, TRUE,
+        'Values the Transport tab showed before rates were versioned (never saved); basis not confirmed',
+        'migration', NOW(), 'migration', 'Never applied — the basis was never confirmed');
 
 -- ADM-02 — the data-driven permission matrix. One row per (role, module).
 -- Seeded from the portal's DEFAULT_PERMISSIONS; the backend is now the source
@@ -872,6 +948,7 @@ CREATE INDEX idx_advance_reschedules_advance ON advance_reschedules(advance_id);
 CREATE INDEX idx_payroll_runs_employee ON payroll_runs(employee_id);
 CREATE INDEX idx_payroll_runs_status ON payroll_runs(status);
 CREATE INDEX idx_expense_entries_date ON expense_entries(entry_date);
+CREATE INDEX idx_expense_entries_category ON expense_entries(category_id);
 CREATE INDEX idx_fertilizer_requests_status ON fertilizer_requests(status);
 CREATE INDEX idx_fertilizer_batches_item ON fertilizer_batches(item);
 CREATE INDEX idx_stock_movements_batch ON stock_movements(batch_id);
@@ -1051,12 +1128,21 @@ CREATE INDEX IF NOT EXISTS idx_fertilizer_requests_order ON fertilizer_requests(
 CREATE TABLE IF NOT EXISTS fertilizer_item_prices (
     id             SERIAL PRIMARY KEY,
     item           VARCHAR(100) NOT NULL,
-    rate_per_kg    DECIMAL(8,2) NOT NULL CHECK (rate_per_kg >= 0),
+    rate_per_kg    DECIMAL(8,2) NOT NULL CHECK (rate_per_kg >= 0), -- the per-kg price a request snapshots
     effective_date DATE NOT NULL,
     set_by         VARCHAR(100) NOT NULL,
     created_at     TIMESTAMP DEFAULT NOW(),
-    UNIQUE (item, effective_date)
+    -- Administration-Addendum §5 (2026-11-15): priced per kg or per bag of bag_size_kg
+    unit           VARCHAR(3) NOT NULL DEFAULT 'kg' CHECK (unit IN ('kg', 'bag')),
+    bag_size_kg    DECIMAL(8,2) CHECK (bag_size_kg IS NULL OR bag_size_kg > 0),
+    price_per_unit DECIMAL(10,2) NOT NULL,
+    reason         TEXT,
+    cancelled_at   TIMESTAMP,
+    cancelled_by   VARCHAR(100),
+    cancel_reason  TEXT
 );
+CREATE UNIQUE INDEX IF NOT EXISTS fertilizer_item_prices_live_key
+    ON fertilizer_item_prices (item, effective_date) WHERE cancelled_at IS NULL;
 
 -- ─── FEFO allocations: which batch's stock is promised to which request ─────
 -- Committed = Σ qty_kg of ACTIVE rows. 'picked' = handed to an agent (left on-hand);
@@ -1349,3 +1435,118 @@ INSERT INTO role_permissions (role, module, level) VALUES
     ('Manager',          'estateAdvances',            'view'),
     ('ReceivingOfficer', 'estateAdvances',            'none')
 ON CONFLICT (role, module) DO NOTHING;
+
+-- Finance-Reports-Addendum §7 (2026-11-15): daily expense entries. edit = log and change your own
+-- within the window; approve = change any (after the window, with a reason); Administrator views.
+INSERT INTO role_permissions (role, module, level) VALUES
+    ('Administrator',    'expenses', 'view'),
+    ('Officer',          'expenses', 'edit'),
+    ('Manager',          'expenses', 'approve'),
+    ('ReceivingOfficer', 'expenses', 'none')
+ON CONFLICT (role, module) DO NOTHING;
+
+INSERT INTO system_settings (key, value, updated_by)
+VALUES ('expenses', '{"editWindowDays": 7}'::jsonb, 'migration')
+ON CONFLICT (key) DO NOTHING;
+
+-- Administration-Addendum §2 (2026-11-15): the factory's details and bank account.
+INSERT INTO system_settings (key, value, updated_by)
+VALUES ('factoryProfile',
+        '{"name": "Nuwara Eliya Tea Factory", "registrationNo": "REG-TF-1998-0042", "address": "Kandapola Rd, Nuwara Eliya", "contact": "0522223344", "email": "info@harboost.lk", "bank": {"bank": "", "branch": "", "accountName": "", "accountNumber": ""}}'::jsonb,
+        'migration')
+ON CONFLICT (key) DO NOTHING;
+
+-- Administration-Addendum §5: Item Prices — the Administrator sets them; Officers and the Manager view.
+INSERT INTO role_permissions (role, module, level) VALUES
+    ('Administrator',    'itemPrices', 'approve'),
+    ('Officer',          'itemPrices', 'view'),
+    ('Manager',          'itemPrices', 'view'),
+    ('ReceivingOfficer', 'itemPrices', 'none')
+ON CONFLICT (role, module) DO NOTHING;
+
+-- Administration-Addendum §6 (2026-11-15): pay history — the 4 hourly rates, effective-dated per
+-- role (default) with a per-employee override. Inserted, never edited. The seed fills it from the
+-- employees' rates (same backfill as migration 2026-11-15-pay-rates.sql).
+CREATE TABLE IF NOT EXISTS pay_rates (
+    id             SERIAL PRIMARY KEY,
+    scope          VARCHAR(8) NOT NULL CHECK (scope IN ('role', 'employee')),
+    role           VARCHAR(100),
+    employee_id    INTEGER REFERENCES employees(id),
+    effective_date DATE NOT NULL,
+    day_rate       DECIMAL(8,2) NOT NULL CHECK (day_rate >= 0),
+    day_ot_rate    DECIMAL(8,2) NOT NULL CHECK (day_ot_rate >= 0),
+    night_rate     DECIMAL(8,2) NOT NULL CHECK (night_rate >= 0),
+    night_ot_rate  DECIMAL(8,2) NOT NULL CHECK (night_ot_rate >= 0),
+    reason         TEXT NOT NULL,
+    set_by         VARCHAR(100) NOT NULL,
+    source         VARCHAR(12) NOT NULL CHECK (source IN ('migration', 'registration', 'adjustment')),
+    adjustment_id  INTEGER,
+    created_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+    CHECK ((scope = 'role' AND role IS NOT NULL AND employee_id IS NULL)
+        OR (scope = 'employee' AND employee_id IS NOT NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS pay_rates_role_date_key ON pay_rates (role, effective_date) WHERE scope = 'role';
+CREATE UNIQUE INDEX IF NOT EXISTS pay_rates_employee_date_key ON pay_rates (employee_id, effective_date) WHERE scope = 'employee';
+
+INSERT INTO role_permissions (role, module, level) VALUES
+    ('Administrator',    'payRates', 'approve'),
+    ('Officer',          'payRates', 'none'),
+    ('Manager',          'payRates', 'edit'),
+    ('ReceivingOfficer', 'payRates', 'none')
+ON CONFLICT (role, module) DO NOTHING;
+
+-- Administration-Addendum §8 (2026-11-15): pay adjustments — prepared by the Manager, approved by
+-- the Administrator; written to pay_rates only on approval.
+CREATE TABLE IF NOT EXISTS pay_adjustments (
+    id                    SERIAL PRIMARY KEY,
+    status                VARCHAR(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    scope                 VARCHAR(10) NOT NULL CHECK (scope IN ('all', 'role', 'employees')),
+    role                  VARCHAR(100),
+    direction             VARCHAR(8) NOT NULL CHECK (direction IN ('increase', 'decrease')),
+    kind                  VARCHAR(7) NOT NULL CHECK (kind IN ('percent', 'amount')),
+    amount                DECIMAL(10,2) NOT NULL CHECK (amount > 0),
+    rounding              INTEGER NOT NULL DEFAULT 0 CHECK (rounding IN (0, 10, 50)),
+    effective_date        DATE NOT NULL,
+    reason                TEXT NOT NULL,
+    decrease_agreement    BOOLEAN NOT NULL DEFAULT FALSE,
+    total_monthly_change  DECIMAL(12,2) NOT NULL,
+    requested_by          VARCHAR(100) NOT NULL,
+    requested_by_user_id  INTEGER REFERENCES users(id),
+    requested_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+    decided_by            VARCHAR(100),
+    decided_by_user_id    INTEGER REFERENCES users(id),
+    decided_at            TIMESTAMP,
+    decision_reason       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS pay_adjustment_lines (
+    id              SERIAL PRIMARY KEY,
+    adjustment_id   INTEGER NOT NULL REFERENCES pay_adjustments(id) ON DELETE CASCADE,
+    employee_id     INTEGER NOT NULL REFERENCES employees(id),
+    employee_name   VARCHAR(100) NOT NULL,
+    category        VARCHAR(10) NOT NULL,
+    role            VARCHAR(100) NOT NULL,
+    on_override     BOOLEAN NOT NULL,
+    old_day_rate    DECIMAL(8,2) NOT NULL,
+    old_day_ot_rate DECIMAL(8,2) NOT NULL,
+    old_night_rate  DECIMAL(8,2) NOT NULL,
+    old_night_ot_rate DECIMAL(8,2) NOT NULL,
+    new_day_rate    DECIMAL(8,2) NOT NULL,
+    new_day_ot_rate DECIMAL(8,2) NOT NULL,
+    new_night_rate  DECIMAL(8,2) NOT NULL,
+    new_night_ot_rate DECIMAL(8,2) NOT NULL,
+    hours_basis     DECIMAL(8,2) NOT NULL,
+    monthly_change  DECIMAL(12,2) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pay_adjustment_lines_adjustment ON pay_adjustment_lines(adjustment_id);
+
+ALTER TABLE pay_rates ADD CONSTRAINT pay_rates_adjustment_fk FOREIGN KEY (adjustment_id) REFERENCES pay_adjustments(id);
+
+-- Administration-Addendum §4 (2026-11-15): what a settlement was charged for transport (fixed
+-- monthly), frozen when it is processed. NULL status = settled before transport was configured.
+ALTER TABLE settlements
+    ADD COLUMN transport_status       VARCHAR(14) CHECK (transport_status IN ('charged', 'exempt', 'no_deliveries')),
+    ADD COLUMN transport_charge       DECIMAL(10,2),
+    ADD COLUMN transport_version_id   INTEGER REFERENCES transport_rates(id),
+    ADD COLUMN transport_carried_in   DECIMAL(10,2) NOT NULL DEFAULT 0,
+    ADD COLUMN transport_carried_out  DECIMAL(10,2) NOT NULL DEFAULT 0;

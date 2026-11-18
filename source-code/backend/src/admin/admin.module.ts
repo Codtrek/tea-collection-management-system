@@ -7,13 +7,19 @@ import { UsersModule } from '../users/users.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { GradeRateEntity } from './grade-rate.entity';
+import { TransportRateEntity } from './transport-rate.entity';
 import { RolePermissionEntity } from './role-permission.entity';
 import { SystemSettingEntity } from './system-setting.entity';
+import { TransportRatesService } from './transport-rates.service';
+import { SettlementEntity } from '../estates/settlement.entity';
+import { CollectionRecordEntity } from '../collections/collection-record.entity';
+import { EstateEntity } from '../estates/estate.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       GradeRateEntity,
+      TransportRateEntity,
       RolePermissionEntity,
       SystemSettingEntity,
       // Read/write of the user's status + read of their profile name for the
@@ -21,11 +27,15 @@ import { SystemSettingEntity } from './system-setting.entity';
       // Reports uses for its read-only lookups).
       User,
       FactoryEmployee,
+      // transport (Administration-Addendum §4): the first version's earliest month and the preview
+      SettlementEntity,
+      CollectionRecordEntity,
+      EstateEntity,
     ]),
     UsersModule,
     AuditModule,
   ],
   controllers: [AdminController],
-  providers: [AdminService],
+  providers: [AdminService, TransportRatesService],
 })
 export class AdminModule {}

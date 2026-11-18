@@ -33,6 +33,10 @@ import type { DbMovementType, WriteOffReason } from './fertilizer-map';
   'stock_movements_write_off_reason_required',
   `(((type)::text <> 'Write-off'::text) OR (write_off_reason IS NOT NULL))`,
 )
+@Check(
+  'stock_movements_unit_cost_check',
+  `((unit_cost IS NULL) OR (unit_cost > (0)::numeric))`,
+)
 export class StockMovementEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -77,6 +81,20 @@ export class StockMovementEntity {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   supplier: string | null;
+
+  /**
+   * Incoming only: Rs per kg the factory paid (Finance-Reports-Addendum §5). Quantity × unit cost
+   * is the Expense report's "Fertilizer stock purchases". Null on stock received before costs were
+   * recorded, and on Outgoing / Write-off.
+   */
+  @Column({
+    name: 'unit_cost',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  unitCost: string | null;
 
   /** Write-off only (expired / damaged / other); null on Incoming and Outgoing. */
   @Column({

@@ -147,18 +147,40 @@ export class RecordPaymentDto {
   reference?: string;
 }
 
+/** Item Prices — a new price version (Administration-Addendum §5). */
 export class SetPriceDto {
   @IsString()
   @MinLength(1)
   @MaxLength(100)
   item: string;
 
-  @IsNumber()
+  @IsIn(['kg', 'bag'])
+  unit: 'kg' | 'bag';
+
+  /** required when the unit is a bag */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  bagSizeKg?: number;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  ratePerKg: number;
+  pricePerUnit: number;
 
   @Matches(ISO_DATE, { message: 'effectiveDate must be YYYY-MM-DD.' })
   effectiveDate: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  reason: string;
+}
+
+export class CancelPriceDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  reason: string;
 }
 
 /* ── Agent (mobile, own tasks only) ── */

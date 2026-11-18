@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -282,9 +283,7 @@ export class FertilizerService {
       module: 'Fertilizer',
       record: movement.id,
       recordHref: '/fertilizer',
-      details: dto.item
-        ? `${dto.item} — ${dto.quantityKg} kg`
-        : `${dto.quantityKg} kg`,
+      details: `${dto.item ? `${dto.item} — ` : ''}${dto.quantityKg} kg${dto.type === 'Incoming' && dto.unitCost ? ` × Rs. ${dto.unitCost}/kg` : ''}`,
     });
     return movement;
   }
@@ -294,6 +293,13 @@ export class FertilizerService {
     actor: Actor,
   ): Promise<PublicMovement> {
     let batch: FertilizerBatchEntity;
+    // What the factory paid — the Expense report's fertilizer stock purchases. Required from
+    // 2026-11-15 on; older stock-ins have no cost and are reported as such.
+    if (!dto.unitCost || dto.unitCost <= 0) {
+      throw new BadRequestException(
+        'Enter the unit cost (Rs per kg) paid for this stock.',
+      );
+    }
 
     if (dto.batchId) {
       batch = await this.findBatch(dto.batchId);
@@ -335,6 +341,7 @@ export class FertilizerService {
       destination: null,
       linkedRequestId: null,
       supplier: dto.supplier ?? null,
+      unitCost: String(dto.unitCost),
       notes: dto.notes ?? null,
       recordedBy: actor.name,
     });
@@ -517,6 +524,10 @@ export class FertilizerService {
         ? formatRequestId(linkedRequest.id, linkedRequest.createdAt)
         : undefined,
       supplier: entity.supplier ?? undefined,
+      unitCost:
+        entity.unitCost === null || entity.unitCost === undefined
+          ? undefined
+          : Number(entity.unitCost),
       writeOffReason: entity.writeOffReason ?? undefined,
       notes: entity.notes ?? undefined,
       recordedBy: entity.recordedBy ?? 'Unknown',

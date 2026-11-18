@@ -16,7 +16,8 @@ export interface PricedLine {
 
 /**
  * The rate version in force on `date`: the newest one whose effective date is on or
- * before it. Past deliveries therefore keep pricing at the rate that applied then — a
+ * before it. The ONE "rate on a date" rule — Factory Setup's "current", the Leaf Purchase
+ * report and (when built) the settlement generator all go through it. Past deliveries therefore keep pricing at the rate that applied then — a
  * newer version never reprices them (ADM-01's snapshot principle).
  */
 export function rateVersionFor<T extends { effectiveDate: string }>(

@@ -131,7 +131,7 @@ export function EstateRegistrationPage() {
                 <Select label="Branch" placeholder="Select branch" error={errors.branch?.message} options={BRANCHES.map((b) => ({ value: b, label: b }))} {...register('branch')} />
                 <Input
                   label="Account number"
-                  hint="Masked on the profile; revealed on click (§13)."
+                  hint="Masked on the profile; revealed on click."
                   error={errors.account?.message}
                   {...register('account')}
                 />

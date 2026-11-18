@@ -477,3 +477,101 @@ export interface DeclarePreview {
   attendance: { employeeId: string; name: string; date: string; status: string }[]
   routeDays: { routeId: number; routeName: string; date: string }[]
 }
+
+/* ── Pay history (Administration-Addendum §6) — the 4 hourly rates, effective-dated ── */
+
+export interface HourRates {
+  dayRate: number
+  dayOtRate: number
+  nightRate: number
+  nightOtRate: number
+}
+
+export interface PayVersion extends HourRates {
+  id: number
+  scope: 'role' | 'employee'
+  role: string | null
+  employeeId: string | null
+  effectiveDate: string
+  reason: string
+  setBy: string
+  source: 'migration' | 'registration' | 'adjustment'
+  adjustmentId: number | null
+  status: 'current' | 'scheduled' | 'past'
+}
+
+export interface RolePay {
+  role: string
+  current: HourRates | null
+  next: PayVersion | null
+  employees: { id: string; name: string; category: 'factory' | 'office'; status: string; onOverride: boolean; current: HourRates | null }[]
+  history: PayVersion[]
+}
+
+export interface EmployeePay {
+  employeeId: string
+  role: string
+  current: (HourRates & { source: 'override' | 'role' }) | null
+  next: PayVersion | null
+  history: PayVersion[]
+}
+
+/* ── Pay adjustments (Administration-Addendum §8) ── */
+
+export interface PayChangeInput {
+  scope: 'all' | 'role' | 'employees'
+  role?: string
+  employeeIds?: string[]
+  direction: 'increase' | 'decrease'
+  kind: 'percent' | 'amount'
+  amount: number
+  rounding: 0 | 10 | 50
+  effectiveDate: string
+  reason?: string
+  decreaseAgreement?: boolean
+}
+
+export interface PayPreviewLine {
+  employeeId: string
+  name: string
+  category: 'factory' | 'office'
+  role: string
+  onOverride: boolean
+  old: HourRates
+  new: HourRates
+  dayPayOld: number
+  dayPayNew: number
+  hoursBasis: number
+  monthlyChange: number
+  blocked: string | null
+}
+
+export interface PayPreview {
+  lines: PayPreviewLine[]
+  totalMonthlyChange: number
+  isDecrease: boolean
+  minimumNotSet: ('factory' | 'office')[]
+  errors: string[]
+  blockers: string[]
+  /** 'YYYY-MM' whose hours are the cost basis */
+  hoursMonth: string
+}
+
+export interface PayAdjustment {
+  id: number
+  status: 'pending' | 'approved' | 'rejected'
+  scope: 'all' | 'role' | 'employees'
+  role: string | null
+  changeLabel: string
+  effectiveDate: string
+  reason: string
+  decreaseAgreement: boolean
+  totalMonthlyChange: number
+  requestedBy: string
+  requestedAt: string
+  decidedBy: string | null
+  decidedAt: string | null
+  decisionReason: string | null
+  lines: { employeeId: string; name: string; category: 'factory' | 'office'; role: string; onOverride: boolean; old: HourRates; new: HourRates; hoursBasis: number; monthlyChange: number }[]
+  approval: { canDecide: boolean; blockedReason: string | null }
+}

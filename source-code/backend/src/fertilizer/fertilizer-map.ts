@@ -175,6 +175,8 @@ export interface PublicMovement {
   destination?: string;
   linkedRequest?: string;
   supplier?: string;
+  /** Incoming: Rs per kg paid; absent on stock received before costs were recorded */
+  unitCost?: number;
   /** set only on a Write-off */
   writeOffReason?: WriteOffReason;
   notes?: string;
@@ -361,16 +363,6 @@ export interface PublicRequestDetail extends PublicRequest {
   maxAttempts: number;
   /** Officer-approval threshold from settings, so the UI can say when a Manager is needed */
   managerApprovalAboveKg: number;
-}
-
-export interface PublicPrice {
-  id: number;
-  item: string;
-  ratePerKg: number;
-  effectiveDate: string;
-  setBy: string;
-  /** the version in force today */
-  current: boolean;
 }
 
 /** A fertilizer task on the agent's phone (`GET /dispatch/me/fertilizer`). */

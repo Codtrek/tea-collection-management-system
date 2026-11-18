@@ -23,6 +23,8 @@ import { EstateEntity } from './estate.entity';
 import { EstateLifetimeService } from './estate-lifetime.service';
 import { EstatesController } from './estates.controller';
 import { EstatesService } from './estates.service';
+import { TransportStatusService } from './transport-status.service';
+import { TransportRateEntity } from '../admin/transport-rate.entity';
 import { RouteEntity } from './route.entity';
 import { SettlementEntity } from './settlement.entity';
 import { SettlementViewService } from './settlement-view.service';
@@ -38,6 +40,8 @@ import { SettlementViewService } from './settlement-view.service';
       EstateAdvanceRescheduleEntity,
       SystemSettingEntity,
       SettlementEntity,
+      // transport rates (Administration-Addendum §4) — read to decide whether transport can be charged
+      TransportRateEntity,
       RouteEntity,
       // Read-only lookups for the Estate Owner Lifetime History slice
       // (EST-03 amended + EST-10, EST-01 directory) — same cross-module
@@ -59,6 +63,7 @@ import { SettlementViewService } from './settlement-view.service';
   controllers: [EstatesController],
   providers: [
     EstatesService,
+    TransportStatusService,
     EstateLifetimeService,
     SettlementViewService,
     EstateAdvanceViewService,

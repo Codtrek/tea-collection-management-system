@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import * as estatesService from '@/services/estates'
+import { transportLineText } from './transport-line'
 import { formatCurrency, formatDate, formatWeight } from '@/lib/format'
 
 /*
@@ -37,6 +38,7 @@ export function SettlementDetailPage() {
   const back = `/estates/settlements?month=${s.month}`
   const chargesTotal = fertilizerCharges.reduce((sum, c) => sum + c.totalCharge, 0)
   const advancesTotal = advances.reduce((sum, a) => sum + a.amount, 0)
+  const transport = transportLineText(s)
   const linesDiffer =
     Math.abs(chargesTotal - s.deductions.fertilizer) > 0.5 || Math.abs(advancesTotal - s.deductions.advances) > 0.5
 
@@ -169,8 +171,13 @@ export function SettlementDetailPage() {
             <dd className="text-right">{formatCurrency(s.deductions.fertilizer)}</dd>
             <dt className="text-text-muted">− Advances</dt>
             <dd className="text-right">{formatCurrency(s.deductions.advances)}</dd>
-            <dt className="text-text-muted">− Other (transport{s.selfDelivery ? ', self-delivery' : ''})</dt>
-            <dd className="text-right">{formatCurrency(s.deductions.other)}</dd>
+            <dt className="text-text-muted">− {transport.label.replace(/^Less: /, '')}</dt>
+            <dd className="text-right">{transport.notConfigured ? 'Not configured' : formatCurrency(s.deductions.other)}</dd>
+            {transport.notes.map((n) => (
+              <p key={n} className="col-span-2 text-xs text-text-muted">
+                {n}
+              </p>
+            ))}
             {s.adjustment !== 0 && (
               <>
                 <dt className="text-text-muted">± Grading adjustment</dt>

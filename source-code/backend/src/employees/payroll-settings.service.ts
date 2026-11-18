@@ -11,11 +11,20 @@ export interface PayrollSettings {
   advanceDeductionCapPct: number;
   /** the longest an advance repayment plan may run, in months */
   maxInstallmentMonths: number;
+  /** Administration-Addendum §7: hours in a standard working day (day rate × this = a day's pay) */
+  standardHoursPerDay: number;
+  /**
+   * The statutory minimum DAILY pay per category (Wages Board / Shop & Office Act). null = not
+   * entered yet: pay changes are then not checked against a minimum, and say so. Never guessed.
+   */
+  minimumDailyPay: { factory: number | null; office: number | null };
 }
 
 export const DEFAULT_PAYROLL_SETTINGS: PayrollSettings = {
   advanceDeductionCapPct: 50,
   maxInstallmentMonths: 6,
+  standardHoursPerDay: 8,
+  minimumDailyPay: { factory: null, office: null },
 };
 
 /** Reads `system_settings.payroll`, falling back per field — same pattern as FertilizerSettingsService. */
@@ -45,6 +54,21 @@ export class PayrollSettingsService {
         (n) => Number.isInteger(n) && n >= 1 && n <= 60,
         d.maxInstallmentMonths,
       ),
+      standardHoursPerDay: num(
+        v.standardHoursPerDay,
+        (n) => n > 0 && n <= 24,
+        d.standardHoursPerDay,
+      ),
+      minimumDailyPay: {
+        factory: minimum(v.minimumDailyPay, 'factory'),
+        office: minimum(v.minimumDailyPay, 'office'),
+      },
     };
   }
+}
+
+/** A positive minimum, or null when it hasn't been entered. */
+function minimum(m: unknown, key: 'factory' | 'office'): number | null {
+  const x = (m as Record<string, unknown> | undefined)?.[key];
+  return typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : null;
 }

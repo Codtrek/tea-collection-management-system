@@ -51,6 +51,8 @@ import type {
 } from './estate-lifetime-map';
 import { EstateLifetimeService } from './estate-lifetime.service';
 import { type Actor, EstatesService } from './estates.service';
+import { TransportStatusService } from './transport-status.service';
+import type { TransportStatus } from '../admin/transport-rules';
 import {
   ALL_PERIODS,
   type SettlementListResult,
@@ -88,6 +90,7 @@ export class EstatesController {
     private readonly advanceView: EstateAdvanceViewService,
     private readonly advancePlans: EstateAdvancePlanService,
     private readonly usersService: UsersService,
+    private readonly transport: TransportStatusService,
   ) {}
 
   // Static segments (advances/settlements) are registered before the `:id`
@@ -223,6 +226,14 @@ export class EstatesController {
   @Get('settlements/unsettled')
   unsettledOwners(@Query('month') month: string): Promise<UnsettledOwner[]> {
     return this.settlementView.unsettled(month);
+  }
+
+  /** Whether transport can be charged for a settlement period (Administration-Addendum §4). */
+  @Get('settlements/transport-status')
+  transportStatus(
+    @Query('period') period: string | undefined,
+  ): Promise<TransportStatus> {
+    return this.transport.forPeriod(period ?? '');
   }
 
   /** One settlement: deliveries + grade lines, each deduction line, net. */

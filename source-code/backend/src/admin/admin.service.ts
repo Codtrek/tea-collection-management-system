@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -6,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
+import { localDate } from '../dispatch/dispatch-map';
 import type { AppRole } from '../auth/role-map';
 import { toPortalRole } from '../auth/role-map';
 import { FactoryEmployee } from '../users/factory-employee.entity';
@@ -13,6 +16,9 @@ import { User } from '../users/user.entity';
 import {
   ADMIN_EDITABLE_MODULES,
   formatGradeRateId,
+  maskAccount,
+  type FactoryProfile,
+  type PublicFactoryProfile,
   formatUserId,
   parseUserId,
   rowsToMatrix,
@@ -22,7 +28,17 @@ import {
   type PublicGradeRate,
   type PublicSystemUser,
 } from './admin-map';
-import { CreateGradeRateDto } from './dto/create-grade-rate.dto';
+import {
+  CreateGradeRateDto,
+  UpdateFactoryProfileDto,
+} from './dto/create-grade-rate.dto';
+import {
+  cancelError,
+  newVersionError,
+  versionBefore,
+  versionStatus,
+  type VersionRefusal,
+} from './versioning';
 import { UpdatePermissionsDto } from './dto/update-permissions.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { GradeRateEntity } from './grade-rate.entity';
@@ -37,7 +53,11 @@ export interface Actor {
 }
 
 /** DB roles that own a factory-portal login, in display order. */
-const FACTORY_DB_ROLES = ['factory_admin', 'factory_officer', 'factory_manager'];
+const FACTORY_DB_ROLES = [
+  'factory_admin',
+  'factory_officer',
+  'factory_manager',
+];
 
 @Injectable()
 export class AdminService {
@@ -57,51 +77,215 @@ export class AdminService {
 
   // ── ADM-01 — grade rates ────────────────────────────────────────
 
-  async listGradeRates(): Promise<PublicGradeRate[]> {
+  /**
+   * Versions newest first. "Current" is the live version in force TODAY (Colombo calendar); a
+   * later one is "scheduled"; a cancelled one is kept and shown as such (Administration-Addendum §3).
+   */
+  async listGradeRates(now: Date = new Date()): Promise<PublicGradeRate[]> {
     const rows = await this.gradeRateRepo.find({
       order: { effectiveDate: 'DESC' },
     });
-    // Newest effective date is "current"; rows are already DESC-ordered.
-    const currentId = rows[0]?.id;
-    return rows.map((r) => ({
-      id: r.id,
-      superRate: Number(r.superRate),
-      normalRate: Number(r.normalRate),
-      effectiveDate: r.effectiveDate,
-      setBy: r.setBy,
-      current: r.id === currentId,
-    }));
+    const today = localDate(now);
+    return rows.map((r) => {
+      const status = versionStatus(r, rows, today);
+      return {
+        id: r.id,
+        superRate: Number(r.superRate),
+        normalRate: Number(r.normalRate),
+        effectiveDate: r.effectiveDate,
+        setBy: r.setBy,
+        reason: r.reason,
+        status,
+        current: status === 'current',
+        scheduled: status === 'scheduled',
+        cancelled: cancelledOf(r),
+      };
+    });
   }
 
+  /**
+   * Publishes a new rate version (versioning.ts): a reason, today or later, one live version per
+   * date, never identical to the version it follows. Rates apply by DELIVERY date, so a version
+   * starting today also prices deliveries already recorded today (the portal warns about this).
+   */
   async createGradeRate(
     dto: CreateGradeRateDto,
     actor: Actor,
+    now: Date = new Date(),
   ): Promise<PublicGradeRate> {
     this.assertIsAdmin(actor);
+    const rows = await this.gradeRateRepo.find();
+    const before = versionBefore(rows, dto.effectiveDate);
+    refuse(
+      newVersionError(
+        rows,
+        dto.effectiveDate,
+        localDate(now),
+        (v) =>
+          Number(v.superRate) === dto.superRate &&
+          Number(v.normalRate) === dto.normalRate,
+        'grade rate',
+        dto.reason,
+      ),
+    );
     const year = new Date(dto.effectiveDate).getFullYear();
-    const seq = (await this.gradeRateRepo.count()) + 1;
+    const seq = rows.length + 1;
     const entity = this.gradeRateRepo.create({
       id: formatGradeRateId(year, seq),
       superRate: String(dto.superRate),
       normalRate: String(dto.normalRate),
       effectiveDate: dto.effectiveDate,
       setBy: actor.name,
+      reason: dto.reason.trim(),
+      cancelledAt: null,
+      cancelledBy: null,
+      cancelReason: null,
     });
     await this.gradeRateRepo.save(entity);
 
+    const was = before
+      ? `Super Rs. ${Number(before.superRate)} → ${dto.superRate}/kg · Normal Rs. ${Number(before.normalRate)} → ${dto.normalRate}/kg`
+      : `Super Rs. ${dto.superRate}/kg · Normal Rs. ${dto.normalRate}/kg`;
     await this.audit.record(
       { name: actor.name, role: actor.role, sub: actor.sub },
       {
         action: 'Updated grade rates',
         module: 'Administration',
         record: `Rates effective ${dto.effectiveDate}`,
-        details: `Super Rs. ${dto.superRate}/kg · Normal Rs. ${dto.normalRate}/kg`,
+        recordHref: SETUP_HREF,
+        details: `${was} — ${dto.reason.trim()}`,
       },
     );
 
-    // The just-added version is current iff it has the latest effective date.
-    const list = await this.listGradeRates();
+    const list = await this.listGradeRates(now);
     return list.find((r) => r.id === entity.id)!;
+  }
+
+  /** Cancels a scheduled version before it starts. Kept and audited, never deleted. */
+  async cancelGradeRate(
+    id: string,
+    reason: string,
+    actor: Actor,
+    now: Date = new Date(),
+  ): Promise<PublicGradeRate[]> {
+    this.assertIsAdmin(actor);
+    const row = await this.gradeRateRepo.findOne({ where: { id } });
+    if (!row)
+      throw new NotFoundException(`Grade-rate version ${id} not found.`);
+    const why = cancelError(row, localDate(now), reason);
+    if (why) throw new BadRequestException(why);
+    row.cancelledAt = now;
+    row.cancelledBy = actor.name;
+    row.cancelReason = reason.trim();
+    await this.gradeRateRepo.save(row);
+    await this.audit.record(
+      { name: actor.name, role: actor.role, sub: actor.sub },
+      {
+        action: 'Cancelled scheduled grade rates',
+        module: 'Administration',
+        record: `Rates effective ${row.effectiveDate}`,
+        recordHref: SETUP_HREF,
+        details: `Super Rs. ${Number(row.superRate)}/kg · Normal Rs. ${Number(row.normalRate)}/kg — ${reason.trim()}`,
+      },
+    );
+    return this.listGradeRates(now);
+  }
+
+  // ── ADM-01 — factory profile (Administration-Addendum §2) ─────────
+
+  async getFactoryProfile(actor: Actor): Promise<PublicFactoryProfile> {
+    this.assertIsAdmin(actor);
+    return toPublicProfile(await this.readProfile());
+  }
+
+  async updateFactoryProfile(
+    dto: UpdateFactoryProfileDto,
+    actor: Actor,
+  ): Promise<PublicFactoryProfile> {
+    this.assertIsAdmin(actor);
+    const before = await this.readProfile();
+    const accountNumber =
+      dto.accountNumber === undefined
+        ? before.bank.accountNumber
+        : dto.accountNumber.replace(/\s/g, '');
+    if (accountNumber && !/^\d{6,20}$/.test(accountNumber)) {
+      throw new BadRequestException(
+        'The account number should be 6 to 20 digits.',
+      );
+    }
+    const after: FactoryProfile = {
+      name: dto.name.trim(),
+      registrationNo: dto.registrationNo.trim(),
+      address: dto.address.trim(),
+      contact: dto.contact.trim(),
+      email: dto.email.trim(),
+      bank: {
+        bank: dto.bank.trim(),
+        branch: dto.branch.trim(),
+        accountName: dto.accountName.trim(),
+        accountNumber,
+      },
+    };
+    const flat = (p: FactoryProfile) => ({
+      name: p.name,
+      registrationNo: p.registrationNo,
+      address: p.address,
+      contact: p.contact,
+      email: p.email,
+      bank: p.bank.bank,
+      branch: p.bank.branch,
+      accountName: p.bank.accountName,
+      // never the full number in the audit log
+      accountNumber: maskAccount(p.bank.accountNumber),
+    });
+    const a = flat(before);
+    const b = flat(after);
+    const changed = (Object.keys(b) as (keyof typeof b)[]).filter(
+      (k) => a[k] !== b[k],
+    );
+    if (changed.length === 0) return toPublicProfile(before);
+    await this.settingRepo.save(
+      this.settingRepo.create({
+        key: FACTORY_PROFILE_KEY,
+        value: after,
+        updatedBy: actor.name,
+        updatedAt: new Date(),
+      }),
+    );
+    await this.audit.record(
+      { name: actor.name, role: actor.role, sub: actor.sub },
+      {
+        action: 'Updated factory details',
+        module: 'Administration',
+        record: 'Factory profile',
+        recordHref: SETUP_HREF,
+        details: changed
+          .map((k) => `${k}: ${a[k] || '—'} → ${b[k] || '—'}`)
+          .join(' · '),
+      },
+    );
+    return toPublicProfile(after);
+  }
+
+  private async readProfile(): Promise<FactoryProfile> {
+    const row = await this.settingRepo.findOne({
+      where: { key: FACTORY_PROFILE_KEY },
+    });
+    const v = (row?.value ?? {}) as Partial<FactoryProfile>;
+    const s = (x: unknown) => (typeof x === 'string' ? x : '');
+    return {
+      name: s(v.name),
+      registrationNo: s(v.registrationNo),
+      address: s(v.address),
+      contact: s(v.contact),
+      email: s(v.email),
+      bank: {
+        bank: s(v.bank?.bank),
+        branch: s(v.bank?.branch),
+        accountName: s(v.bank?.accountName),
+        accountNumber: s(v.bank?.accountNumber),
+      },
+    };
   }
 
   // ── ADM-02 — permission matrix ──────────────────────────────────
@@ -165,7 +349,12 @@ export class AdminService {
 
   async getSettings(): Promise<Record<string, unknown>> {
     const rows = await this.settingRepo.find();
-    return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    // the factory profile (bank account) has its own masked, audited endpoint
+    return Object.fromEntries(
+      rows
+        .filter((r) => r.key !== FACTORY_PROFILE_KEY)
+        .map((r) => [r.key, r.value]),
+    );
   }
 
   async updateSettings(
@@ -173,6 +362,11 @@ export class AdminService {
     actor: Actor,
   ): Promise<Record<string, unknown>> {
     this.assertIsAdmin(actor);
+    if (FACTORY_PROFILE_KEY in dto.settings) {
+      throw new BadRequestException(
+        'Factory details are changed in Factory Setup → General Info.',
+      );
+    }
     const now = new Date();
     for (const [key, value] of Object.entries(dto.settings)) {
       await this.settingRepo.save(
@@ -202,9 +396,7 @@ export class AdminService {
 
   async listUsers(): Promise<PublicSystemUser[]> {
     const users = await this.userRepo.find();
-    const factoryUsers = users.filter((u) =>
-      FACTORY_DB_ROLES.includes(u.role),
-    );
+    const factoryUsers = users.filter((u) => FACTORY_DB_ROLES.includes(u.role));
     const profiles = await this.factoryEmployeeRepo.find();
     const nameByUserId = new Map(profiles.map((p) => [p.user_id, p.name]));
 
@@ -222,7 +414,10 @@ export class AdminService {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  async suspendUser(formattedId: string, actor: Actor): Promise<PublicSystemUser> {
+  async suspendUser(
+    formattedId: string,
+    actor: Actor,
+  ): Promise<PublicSystemUser> {
     this.assertIsAdmin(actor);
     const id = parseUserId(formattedId);
     if (id === actor.sub) {
@@ -302,4 +497,45 @@ export class AdminService {
       );
     }
   }
+}
+
+export const SETUP_HREF = '/admin/factory-setup';
+const FACTORY_PROFILE_KEY = 'factoryProfile';
+
+/** past / identical / missing reason → 400; a date clash → 409. */
+export function refuse(r: VersionRefusal | null): void {
+  if (!r) return;
+  throw r.kind === 'clash'
+    ? new ConflictException(r.message)
+    : new BadRequestException(r.message);
+}
+
+export function cancelledOf(r: {
+  cancelledAt: Date | null;
+  cancelledBy: string | null;
+  cancelReason: string | null;
+}) {
+  return r.cancelledAt
+    ? {
+        at: new Date(r.cancelledAt).toISOString(),
+        by: r.cancelledBy,
+        reason: r.cancelReason,
+      }
+    : null;
+}
+
+function toPublicProfile(p: FactoryProfile): PublicFactoryProfile {
+  return {
+    name: p.name,
+    registrationNo: p.registrationNo,
+    address: p.address,
+    contact: p.contact,
+    email: p.email,
+    bank: {
+      bank: p.bank.bank,
+      branch: p.bank.branch,
+      accountName: p.bank.accountName,
+      accountNumberMasked: maskAccount(p.bank.accountNumber),
+    },
+  };
 }

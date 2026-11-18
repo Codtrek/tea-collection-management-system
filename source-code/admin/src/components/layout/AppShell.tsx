@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { useAuth } from '@/context/AuthContext'
@@ -11,6 +11,10 @@ import { NARROW_QUERY, readSidebarPref, sidebarCollapsed, sidebarKey, writeSideb
    Redirects to /login when unauthenticated (auth guard). */
 export function AppShell() {
   const { user, loading } = useAuth()
+  // A new page starts at the top. Without this, a page rendered from the query cache opened at the
+  // previous page's scroll position, with its title hidden under the sticky top bar.
+  const { pathname } = useLocation()
+  useEffect(() => window.scrollTo(0, 0), [pathname])
   // collapsed to icons by default below 1280px; the user's choice is remembered per user and mode
   const mode = useMediaQuery(NARROW_QUERY) ? 'narrow' : 'wide'
   const key = sidebarKey(user?.id ?? 'anonymous', mode)
@@ -39,7 +43,7 @@ export function AppShell() {
       <Sidebar collapsed={collapsed} onToggle={toggle} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header />
-        <main className="mx-auto w-full min-w-0 max-w-[var(--content-max)] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="mx-auto w-full min-w-0 max-w-[var(--content-max)] flex-1 px-4 py-6 sm:px-6 lg:px-8 print:max-w-none print:p-0">
           <Outlet />
         </main>
       </div>

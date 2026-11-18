@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
+import { TransportStatusService } from './transport-status.service';
 import type { AppRole } from '../auth/role-map';
 import { UsersService } from '../users/users.service';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
@@ -44,6 +45,15 @@ import { UpdateEstateDto } from './dto/update-estate.dto';
 import { RouteEntity } from './route.entity';
 import { SettlementEntity } from './settlement.entity';
 import { payableDeliveries } from './settlement-calc';
+import {
+  transportLines,
+  type TransportSettlementFacts,
+} from './settlement-transport';
+import {
+  monthLabel,
+  type PublicTransportLine,
+  type TransportVersion,
+} from '../admin/transport-rules';
 
 export interface Actor {
   name: string;
@@ -76,6 +86,7 @@ export class EstatesService {
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
     private readonly advanceSettings: EstateAdvanceSettingsService,
+    private readonly transport: TransportStatusService,
   ) {}
 
   async findAll(): Promise<PublicEstate[]> {
@@ -273,15 +284,74 @@ export class EstatesService {
     const pending = (await this.adjustmentRepo.find()).filter(
       (a) => a.status === 'pending',
     );
+    const adjustmentOf = (s: SettlementEntity) =>
+      s.status === 'pending'
+        ? pending
+            .filter((a) => a.estateId === s.estateId)
+            .reduce((sum, a) => sum + Number(a.amountRs), 0)
+        : Number(s.adjustmentAmount ?? 0);
+    // Administration-Addendum §4: a pending settlement's transport is worked out live from the
+    // version covering its month; a processed one shows what was frozen.
+    const missingBank = new Set(
+      settlements.filter((s) => s.missingBank).map((s) => s.id),
+    );
+    const lines = transportLines(
+      settlements.map((s) => this.transportFacts(s, adjustmentOf(s))),
+      await this.transport.versions(),
+      await this.deliveryCounter(),
+      (s) => s.status === 'pending' && !missingBank.has(s.id),
+    );
     return settlements.map((s) => {
       const out = this.toPublicSettlement(s);
+      const line = lines.get(s.id) ?? null;
+      out.transport = line;
       if (s.status === 'pending') {
-        out.adjustment = pending
-          .filter((a) => a.estateId === s.estateId)
-          .reduce((sum, a) => sum + Number(a.amountRs), 0);
+        out.adjustment = adjustmentOf(s);
+        if (line) out.transportCost = line.taken;
       }
       return out;
     });
+  }
+
+  /** The settlement facts the transport walk needs. */
+  private transportFacts(
+    s: SettlementEntity,
+    adjustment: number,
+  ): TransportSettlementFacts {
+    return {
+      id: s.id,
+      estateId: s.estateId,
+      period: s.period,
+      status: s.status,
+      selfDelivery: s.selfDelivery,
+      gross:
+        Number(s.superKg) * Number(s.superRate) +
+        Number(s.normalKg) * Number(s.normalRate),
+      adjustment,
+      others: Number(s.fertilizerDeduction) + Number(s.advanceDeduction),
+      transportStatus: s.transportStatus ?? null,
+      transportCharge: s.transportCharge ?? null,
+      transportVersionId: s.transportVersionId ?? null,
+      transportCarriedIn: s.transportCarriedIn ?? 0,
+      transportCarriedOut: s.transportCarriedOut ?? 0,
+      transportCost: s.transportCost,
+    };
+  }
+
+  /** Confirmed deliveries per (estate, 'YYYY-MM') — the ones a settlement pays for. */
+  private async deliveryCounter(
+    deliveries?: CollectionRecordEntity[],
+  ): Promise<(estateId: number, month: string) => number> {
+    const rows =
+      deliveries ??
+      (await this.collectionRepo.find({ where: { status: 'confirmed' } }));
+    const counts = new Map<string, number>();
+    for (const d of rows) {
+      if (d.estateId == null) continue;
+      const k = `${d.estateId}|${String(d.collectionDate).slice(0, 7)}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return (estateId, month) => counts.get(`${estateId}|${month}`) ?? 0;
   }
 
   /**
@@ -330,6 +400,41 @@ export class EstatesService {
     const allDeliveries = await this.collectionRepo.find({
       where: { status: 'confirmed' },
     });
+    const adjustmentOf = (s: SettlementEntity) =>
+      Math.round(
+        pendingAdjustments
+          .filter((a) => a.estateId === s.estateId)
+          .reduce((sum, a) => sum + Number(a.amountRs), 0) * 100,
+      ) / 100;
+
+    // Administration-Addendum §4: transport is a fixed monthly charge, worked out here and
+    // frozen on the settlement. A month no version covers is "not configured": the run stops for
+    // estates that pay transport — transport is never deducted as Rs. 0 silently.
+    const versions: TransportVersion[] = await this.transport.versions();
+    const eligibleIds = new Set(eligible.map((s) => s.id));
+    const transportByIds = transportLines(
+      all.map((s) =>
+        this.transportFacts(
+          s,
+          s.status === 'pending'
+            ? adjustmentOf(s)
+            : Number(s.adjustmentAmount ?? 0),
+        ),
+      ),
+      versions,
+      await this.deliveryCounter(allDeliveries),
+      (s) => eligibleIds.has(s.id),
+    );
+    const blocked = eligible.filter(
+      (s) => transportByIds.get(s.id)?.status === 'not_configured',
+    );
+    if (blocked.length > 0) {
+      const p = blocked[0].period;
+      const n = blocked.filter((s) => s.period === p).length;
+      throw new ConflictException(
+        `Transport: not configured. No monthly transport charge covers ${monthLabel(labelToKey(p))} (Factory Setup → Transport Rates). ${n} settlement${n === 1 ? '' : 's'} for ${p} include transport, so they can't be processed yet.`,
+      );
+    }
     let skippedOpen = 0;
     let linked = 0;
     let unallocatedRs = 0;
@@ -340,10 +445,16 @@ export class EstatesService {
       const carried = pendingAdjustments.filter(
         (a) => a.estateId === settlement.estateId,
       );
-      settlement.adjustmentAmount = String(
-        Math.round(carried.reduce((s, a) => s + Number(a.amountRs), 0) * 100) /
-          100,
-      );
+      settlement.adjustmentAmount = String(adjustmentOf(settlement));
+      // freeze transport: a later version never changes a processed settlement
+      const line = transportByIds.get(settlement.id) as PublicTransportLine;
+      settlement.transportStatus =
+        line.status === 'not_configured' ? null : line.status;
+      settlement.transportCharge = String(line.charge);
+      settlement.transportVersionId = line.versionId;
+      settlement.transportCarriedIn = String(line.carriedIn);
+      settlement.transportCarriedOut = String(line.carriedOut);
+      settlement.transportCost = String(line.taken);
       settlement.status = 'processed';
       settlement.processedBy = actor.name;
       settlement.processedOn = now;
@@ -575,6 +686,7 @@ export class EstatesService {
       processedOn: entity.processedOn
         ? entity.processedOn.toISOString()
         : undefined,
+      transport: null,
     };
   }
 

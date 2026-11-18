@@ -40,6 +40,13 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     attendance: 'approve',
     performance: 'approve',
     reports: 'approve',
+    // Daily expense entries (Finance-Reports-Addendum §7): the Administrator views them and
+    // manages the category list (Administration); entries are the Officer's and Manager's.
+    expenses: 'view',
+    // Item Prices (Administration-Addendum §5): the Administrator sets selling prices
+    itemPrices: 'approve',
+    // Pay Rates (Administration-Addendum §6–7): the Administrator approves pay changes
+    payRates: 'approve',
     dispatch: 'approve',
     // Grading is a separation-of-duties control: an Officer grades, a Manager approves corrections,
     // the Administrator audits (view). `gradingApproval` is its own module because the `approve`
@@ -65,10 +72,12 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     employees: 'view',
     attendance: 'edit',
     performance: 'none',  // Performance-Addendum: Manager + Administrator only, for now
-    // RPT-04 (log a daily expense) is a real write path once Reports is
-    // backend-wired — Officer edits like every other module's `edit` tier,
-    // Manager stays read-only (§4 three-role model).
     reports: 'edit',
+    // edit = log a daily expense and change your own within the edit window
+    expenses: 'edit',
+    // reads the selling prices requests are approved at
+    itemPrices: 'view',
+    payRates: 'none',
     // Agent Dispatch: view the board · edit = mark absent / send cover · approve = permanent reassignment.
     dispatch: 'edit',
     grading: 'edit',
@@ -93,6 +102,11 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     attendance: 'approve',
     performance: 'edit',  // view the measures + private notes
     reports: 'view',
+    // approve = change any entry; after the creator's window, with a reason
+    expenses: 'approve',
+    itemPrices: 'view',
+    // prepares pay changes; the Administrator approves
+    payRates: 'edit',
     dispatch: 'approve',
     grading: 'view',
     gradingApproval: 'approve',

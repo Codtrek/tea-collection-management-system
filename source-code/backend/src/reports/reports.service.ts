@@ -1,433 +1,369 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { SystemSettingEntity } from '../admin/system-setting.entity';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
-import { gradeKg, weightSummary } from '../collections/collection-map';
-import { CollectionRecordEntity } from '../collections/collection-record.entity';
-import { PayrollRunEntity } from '../employees/payroll-run.entity';
-import { SettlementEntity } from '../estates/settlement.entity';
-import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
-import { StockMovementEntity } from '../fertilizer/stock-movement.entity';
-import { CreateExpenseDto } from './dto/create-expense.dto';
+import { DispatchAccessService } from '../dispatch/dispatch-access.service';
+import { localDate } from '../dispatch/dispatch-map';
+import type {
+  CreateExpenseDto,
+  ExpenseCategoryDto,
+  UpdateExpenseDto,
+} from './dto/create-expense.dto';
+import { ExpenseCategoryEntity } from './expense-category.entity';
+import {
+  changeSummary,
+  createError,
+  editAccess,
+  editError,
+  type EditContext,
+} from './expense-entry-rules';
 import { ExpenseEntryEntity } from './expense-entry.entity';
 import {
   formatExpenseId,
-  keyToLabel,
-  labelToKey,
-  monthKeyOfDate,
-  prevMonthKey,
-  shortMonth,
-  type CollectionReport,
-  type ExpenseReport,
-  type ExpenseRow,
+  type PublicExpenseCategory,
   type PublicExpenseEntry,
-  type RevenueReport,
-  type TrendPoint,
 } from './reports-map';
 
 export interface Actor {
   name: string;
   role: AppRole;
+  /** users.id */
+  sub: number | null;
 }
 
-function groupBy<T>(
-  items: T[],
-  keyOf: (item: T) => string,
-): Record<string, T[]> {
-  const out: Record<string, T[]> = {};
-  for (const item of items) {
-    const key = keyOf(item);
-    (out[key] ??= []).push(item);
-  }
-  return out;
-}
+const DEFAULT_EDIT_WINDOW_DAYS = 7;
+const SETUP_HREF = '/admin/factory-setup';
+const rs = (n: number | string) => {
+  const v = Number(n);
+  const d = Number.isInteger(v) ? 0 : 2;
+  return `Rs. ${v.toLocaleString('en-LK', { minimumFractionDigits: d, maximumFractionDigits: 2 })}`;
+};
 
-function sumBy<T>(items: T[], valueOf: (item: T) => number): number {
-  return items.reduce((sum, item) => sum + valueOf(item), 0);
-}
-
-/** Lexicographic max works directly on 'YYYY-MM' keys. */
-function latestKey(keys: string[]): string | null {
-  return keys.length ? keys.sort().at(-1)! : null;
-}
-
-function round1(n: number): number {
-  return Math.round(n * 10) / 10;
-}
-
+/**
+ * RPT-04 — daily expense entries and their categories (Finance-Reports-Addendum §6–7).
+ * RPT-01 lives in CollectionReportService, RPT-02 in LeafPurchaseService and the Expense report
+ * (RPT-03) in FinanceService. Permissions are data-driven: the `expenses` module (edit = log and
+ * change your own entry within the window, approve = change any, with a reason) and
+ * `administration` for the category list — never role names.
+ */
 @Injectable()
 export class ReportsService {
   constructor(
     @InjectRepository(ExpenseEntryEntity)
     private readonly expenseRepo: Repository<ExpenseEntryEntity>,
-    @InjectRepository(CollectionRecordEntity)
-    private readonly collectionRepo: Repository<CollectionRecordEntity>,
-    @InjectRepository(SettlementEntity)
-    private readonly settlementRepo: Repository<SettlementEntity>,
-    @InjectRepository(PayrollRunEntity)
-    private readonly payrollRepo: Repository<PayrollRunEntity>,
-    @InjectRepository(StockMovementEntity)
-    private readonly movementRepo: Repository<StockMovementEntity>,
-    @InjectRepository(FertilizerBatchEntity)
-    private readonly batchRepo: Repository<FertilizerBatchEntity>,
+    @InjectRepository(ExpenseCategoryEntity)
+    private readonly categoryRepo: Repository<ExpenseCategoryEntity>,
+    @InjectRepository(SystemSettingEntity)
+    private readonly settingsRepo: Repository<SystemSettingEntity>,
+    private readonly access: DispatchAccessService,
     private readonly audit: AuditService,
   ) {}
 
-  // ── RPT-01 — Collection ─────────────────────────────────────────
-  // Confirmed records only (§ reports doc) — provisional entries never
-  // inflate the numbers.
+  /** `system_settings.expenses.editWindowDays` — how long the creator may change an entry. */
+  async editWindowDays(): Promise<number> {
+    const row = await this.settingsRepo.findOne({ where: { key: 'expenses' } });
+    const n = (row?.value as { editWindowDays?: unknown } | undefined)
+      ?.editWindowDays;
+    return typeof n === 'number' && Number.isInteger(n) && n >= 0
+      ? n
+      : DEFAULT_EDIT_WINDOW_DAYS;
+  }
 
-  async collectionReport(period?: string): Promise<CollectionReport> {
-    const confirmed = await this.collectionRepo.find({
-      where: { status: 'confirmed' },
+  /* ── Categories (ADM-01, Administrator) ── */
+
+  async listCategories(): Promise<PublicExpenseCategory[]> {
+    const rows = await this.categoryRepo.find({
+      order: { sortOrder: 'ASC', name: 'ASC' },
     });
-    const byMonth = groupBy(confirmed, (r) => monthKeyOfDate(r.collectionDate));
-    const resolvedPeriod =
-      period ?? latestKey(Object.keys(byMonth)) ?? monthKeyOfDate(new Date());
-    const periodRecords = byMonth[resolvedPeriod] ?? [];
+    return rows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      active: c.active,
+      sortOrder: c.sortOrder,
+    }));
+  }
 
-    const totalKg = sumBy(periodRecords, (r) => weightSummary(r).weightKg);
-    const estatesInPeriod = new Set(periodRecords.map((r) => r.estateName));
-    const avgPerEstate = estatesInPeriod.size
-      ? totalKg / estatesInPeriod.size
-      : 0;
+  async createCategory(
+    dto: ExpenseCategoryDto,
+    actor: Actor,
+  ): Promise<PublicExpenseCategory[]> {
+    await this.access.require(
+      actor.role,
+      'edit',
+      'manage expense categories',
+      'administration',
+    );
+    const name = dto.name?.trim();
+    if (!name) throw new BadRequestException('Give the category a name.');
+    const all = await this.categoryRepo.find();
+    this.assertUniqueName(all, name);
+    const saved = await this.categoryRepo.save(
+      this.categoryRepo.create({
+        name,
+        active: dto.active ?? true,
+        sortOrder:
+          dto.sortOrder ??
+          all.reduce((m, c) => Math.max(m, c.active ? c.sortOrder : 0), 0) + 1,
+        updatedBy: actor.name,
+        updatedAt: new Date(),
+      }),
+    );
+    await this.audit.record(actor, {
+      action: 'Added expense category',
+      module: 'Administration',
+      record: saved.name,
+      recordHref: SETUP_HREF,
+      details: saved.name,
+    });
+    return this.listCategories();
+  }
 
-    // YTD, across every confirmed record — not scoped to `period`.
-    const byEstateMap = new Map<string, number>();
-    for (const r of confirmed) {
-      byEstateMap.set(
-        r.estateName,
-        (byEstateMap.get(r.estateName) ?? 0) + weightSummary(r).weightKg,
+  async updateCategory(
+    id: number,
+    dto: ExpenseCategoryDto,
+    actor: Actor,
+  ): Promise<PublicExpenseCategory[]> {
+    await this.access.require(
+      actor.role,
+      'edit',
+      'manage expense categories',
+      'administration',
+    );
+    const cat = await this.categoryRepo.findOne({ where: { id } });
+    if (!cat) throw new NotFoundException(`Expense category ${id} not found.`);
+    const shape = (c: ExpenseCategoryEntity) => ({
+      name: c.name,
+      active: c.active ? 'yes' : 'no',
+      sortOrder: c.sortOrder,
+    });
+    const before = shape(cat);
+    const name = dto.name?.trim();
+    if (name && name.toLowerCase() !== cat.name.toLowerCase()) {
+      this.assertUniqueName(await this.categoryRepo.find(), name);
+    }
+    if (name) cat.name = name;
+    if (dto.active !== undefined) cat.active = dto.active;
+    if (dto.sortOrder !== undefined) cat.sortOrder = dto.sortOrder;
+    const details = changeSummary(before, shape(cat), {
+      name: 'Name',
+      active: 'In use',
+      sortOrder: 'Order',
+    });
+    if (!details) return this.listCategories();
+    cat.updatedBy = actor.name;
+    cat.updatedAt = new Date();
+    await this.categoryRepo.save(cat);
+    await this.audit.record(actor, {
+      action: 'Changed expense category',
+      module: 'Administration',
+      record: cat.name,
+      recordHref: SETUP_HREF,
+      details,
+    });
+    return this.listCategories();
+  }
+
+  private assertUniqueName(all: ExpenseCategoryEntity[], name: string): void {
+    if (all.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+      throw new ConflictException(
+        `A category called "${name}" already exists.`,
       );
     }
-    const byEstate = [...byEstateMap.entries()]
-      .map(([estate, kg]) => ({ estate, kg }))
-      .sort((a, b) => b.kg - a.kg);
-    const topEstate = byEstate[0] ?? null;
-
-    const superKg = sumBy(periodRecords, (r) => gradeKg(r, 'super'));
-    const normalKg = sumBy(periodRecords, (r) => gradeKg(r, 'normal'));
-    const gradedTotal = superKg + normalKg;
-    const gradeSplit = {
-      superPct: gradedTotal ? Math.round((superKg / gradedTotal) * 100) : 0,
-      normalPct: gradedTotal ? Math.round((normalKg / gradedTotal) * 100) : 0,
-    };
-
-    const trend: TrendPoint[] = Object.keys(byMonth)
-      .sort()
-      .map((key) => ({
-        month: shortMonth(key),
-        value: sumBy(byMonth[key], (r) => weightSummary(r).weightKg),
-      }));
-
-    const rowAcc = new Map<
-      string,
-      { deliveries: number; kg: number; superKg: number }
-    >();
-    for (const r of periodRecords) {
-      const cur = rowAcc.get(r.estateName) ?? {
-        deliveries: 0,
-        kg: 0,
-        superKg: 0,
-      };
-      cur.deliveries += 1;
-      cur.kg += weightSummary(r).weightKg;
-      cur.superKg += gradeKg(r, 'super');
-      rowAcc.set(r.estateName, cur);
-    }
-    const rows = [...rowAcc.entries()]
-      .map(([estate, v]) => ({
-        estate,
-        deliveries: v.deliveries,
-        kg: v.kg,
-        superPct: v.kg ? Math.round((v.superKg / v.kg) * 100) : 0,
-      }))
-      .sort((a, b) => b.kg - a.kg);
-
-    return {
-      period: resolvedPeriod,
-      totalKg,
-      avgPerEstate,
-      topEstate,
-      gradeSplit,
-      trend,
-      byEstate,
-      rows,
-    };
   }
 
-  // ── RPT-02 — Revenue ─────────────────────────────────────────────
-  // Processed settlements only — a pending settlement isn't realized revenue
-  // yet.
+  /* ── Entries ── */
 
-  async revenueReport(period?: string): Promise<RevenueReport> {
-    const processed = await this.settlementRepo.find({
-      where: { status: 'processed' },
-    });
-    const byPeriod = groupBy(processed, (s) => labelToKey(s.period));
-    const resolvedPeriod =
-      period ?? latestKey(Object.keys(byPeriod)) ?? monthKeyOfDate(new Date());
-    const periodRows = byPeriod[resolvedPeriod] ?? [];
-
-    const grossOf = (s: SettlementEntity) =>
-      Number(s.superKg) * Number(s.superRate) +
-      Number(s.normalKg) * Number(s.normalRate);
-
-    const totalRevenue = sumBy(periodRows, grossOf);
-    const estates = new Set(periodRows.map((s) => s.estateName));
-    const avgPerEstate = estates.size ? totalRevenue / estates.size : 0;
-
-    const prevKey = prevMonthKey(resolvedPeriod);
-    const prevRevenue = byPeriod[prevKey]
-      ? sumBy(byPeriod[prevKey], grossOf)
-      : null;
-    const deltaPercent =
-      prevRevenue !== null && prevRevenue > 0
-        ? round1(((totalRevenue - prevRevenue) / prevRevenue) * 100)
-        : null;
-
-    const trend: TrendPoint[] = Object.keys(byPeriod)
-      .sort()
-      .map((key) => ({
-        month: shortMonth(key),
-        value: sumBy(byPeriod[key], grossOf),
-      }));
-
-    const byEstate = periodRows
-      .map((s) => ({ estate: s.estateName, revenue: grossOf(s) }))
-      .sort((a, b) => b.revenue - a.revenue);
-
-    const rows = periodRows
-      .map((s) => ({
-        estate: s.estateName,
-        superRs: Number(s.superKg) * Number(s.superRate),
-        normalRs: Number(s.normalKg) * Number(s.normalRate),
-        gross: grossOf(s),
-      }))
-      .sort((a, b) => b.gross - a.gross);
-
-    return {
-      period: resolvedPeriod,
-      totalRevenue,
-      avgPerEstate,
-      prevRevenue,
-      deltaPercent,
-      trend,
-      byEstate,
-      rows,
-    };
+  async getExpense(
+    id: string,
+    actor: Actor,
+    now: Date = new Date(),
+  ): Promise<PublicExpenseEntry> {
+    await this.access.require(
+      actor.role,
+      'view',
+      'view daily expenses',
+      'expenses',
+    );
+    return this.toPublic(await this.findEntry(id), actor, now);
   }
 
-  // ── RPT-03/04 — Expenses ─────────────────────────────────────────
-  // Payroll + Fertilizer + Transport are DERIVED from payroll_runs/
-  // settlements; only manual (Utilities/Maintenance/Miscellaneous/Other)
-  // entries live in expense_entries.
-
-  async expenseReport(period?: string): Promise<ExpenseReport> {
-    const [payrollRuns, settlements, manual] = await Promise.all([
-      this.payrollRepo.find(),
-      this.settlementRepo.find(),
-      this.expenseRepo.find(),
-    ]);
-
-    const payrollByPeriod = groupBy(payrollRuns, (p) => labelToKey(p.period));
-    const settlementByPeriod = groupBy(settlements, (s) =>
-      labelToKey(s.period),
-    );
-    const manualByPeriod = groupBy(manual, (e) => monthKeyOfDate(e.entryDate));
-
-    const allKeys = new Set([
-      ...Object.keys(payrollByPeriod),
-      ...Object.keys(settlementByPeriod),
-      ...Object.keys(manualByPeriod),
-    ]);
-    const resolvedPeriod =
-      period ?? latestKey([...allKeys]) ?? monthKeyOfDate(new Date());
-
-    const payrollSum = sumBy(payrollByPeriod[resolvedPeriod] ?? [], (p) =>
-      Number(p.gross),
-    );
-    const transportSum = sumBy(settlementByPeriod[resolvedPeriod] ?? [], (s) =>
-      Number(s.transportCost),
-    );
-    const fertilizerSum = sumBy(settlementByPeriod[resolvedPeriod] ?? [], (s) =>
-      Number(s.fertilizerDeduction),
-    );
-    const manualRows = manualByPeriod[resolvedPeriod] ?? [];
-    const manualByCategory = new Map<string, number>();
-    for (const e of manualRows) {
-      manualByCategory.set(
-        e.category,
-        (manualByCategory.get(e.category) ?? 0) + Number(e.amount),
-      );
-    }
-
-    const split = [
-      { category: 'Payroll', amount: payrollSum },
-      { category: 'Fertilizer', amount: fertilizerSum },
-      { category: 'Transport', amount: transportSum },
-      ...[...manualByCategory.entries()].map(([category, amount]) => ({
-        category,
-        amount,
-      })),
-    ].filter((s) => s.amount > 0);
-
-    const total = split.reduce((s, c) => s + c.amount, 0);
-    const manualTotal = sumBy(manualRows, (e) => Number(e.amount));
-    const largest = split.length
-      ? split.reduce((a, b) => (b.amount > a.amount ? b : a))
-      : null;
-
-    const trendTotalFor = (key: string) =>
-      sumBy(payrollByPeriod[key] ?? [], (p) => Number(p.gross)) +
-      sumBy(
-        settlementByPeriod[key] ?? [],
-        (s) => Number(s.transportCost) + Number(s.fertilizerDeduction),
-      ) +
-      sumBy(manualByPeriod[key] ?? [], (e) => Number(e.amount));
-
-    const trend: TrendPoint[] = [...allKeys]
-      .sort()
-      .map((key) => ({ month: shortMonth(key), value: trendTotalFor(key) }));
-
-    const prevKey = prevMonthKey(resolvedPeriod);
-    const prevTotal = allKeys.has(prevKey) ? trendTotalFor(prevKey) : null;
-    const deltaPercent =
-      prevTotal !== null && prevTotal > 0
-        ? round1(((total - prevTotal) / prevTotal) * 100)
-        : null;
-
-    const rows: ExpenseRow[] = [];
-    if (payrollSum > 0) {
-      rows.push({
-        id: `PR-${resolvedPeriod}`,
-        category: 'Payroll',
-        description: `${keyToLabel(resolvedPeriod)} payroll run`,
-        amount: payrollSum,
-        date: `${resolvedPeriod}-15`,
-        enteredBy: 'System',
-        source: 'Payroll run',
-      });
-    }
-    if (fertilizerSum > 0) {
-      rows.push({
-        id: `SET-FERT-${resolvedPeriod}`,
-        category: 'Fertilizer',
-        description: `Fertilizer deductions offset — ${keyToLabel(resolvedPeriod)} settlements`,
-        amount: fertilizerSum,
-        date: `${resolvedPeriod}-14`,
-        enteredBy: 'System',
-        source: 'Settlement run',
-      });
-    }
-    if (transportSum > 0) {
-      rows.push({
-        id: `SET-TRANS-${resolvedPeriod}`,
-        category: 'Transport',
-        description: `Route transport costs — ${keyToLabel(resolvedPeriod)} settlements`,
-        amount: transportSum,
-        date: `${resolvedPeriod}-14`,
-        enteredBy: 'System',
-        source: 'Settlement run',
-      });
-    }
-    for (const e of manualRows) {
-      rows.push({
-        id: e.id,
-        category: e.category,
-        description: e.description,
-        amount: Number(e.amount),
-        date: e.entryDate,
-        enteredBy: e.enteredBy,
-        source: 'Manual',
-      });
-    }
-    rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-
-    return {
-      period: resolvedPeriod,
-      total,
-      manualTotal,
-      largest,
-      deltaPercent,
-      split,
-      trend,
-      rows,
-      stockLost: await this.stockLost(resolvedPeriod),
-    };
-  }
-
-  /** Fertilizer written off in the month, per item and reason (kg). Never an expense. */
-  private async stockLost(period: string): Promise<ExpenseReport['stockLost']> {
-    const [writeOffs, batches] = await Promise.all([
-      this.movementRepo.find({ where: { type: 'Write-off' } }),
-      this.batchRepo.find(),
-    ]);
-    const itemOf = new Map(batches.map((b) => [b.id, b.item]));
-    const byKey = new Map<
-      string,
-      { item: string; reason: string; kg: number }
-    >();
-    for (const m of writeOffs) {
-      if (monthKeyOfDate(m.movementDate) !== period) continue;
-      const item = itemOf.get(m.batchId) ?? 'Unknown item';
-      const reason = m.writeOffReason ?? 'other';
-      const key = `${item}|${reason}`;
-      const row = byKey.get(key) ?? { item, reason, kg: 0 };
-      row.kg = Math.round((row.kg + Number(m.quantityKg)) * 100) / 100;
-      byKey.set(key, row);
-    }
-    return [...byKey.values()].sort(
-      (a, b) =>
-        a.item.localeCompare(b.item) || a.reason.localeCompare(b.reason),
-    );
-  }
-
-  /** RPT-04 — Officer+ (Manager is read-only, same tier as every other module). */
   async createExpense(
     dto: CreateExpenseDto,
     actor: Actor,
+    now: Date = new Date(),
   ): Promise<PublicExpenseEntry> {
-    this.assertCanWrite(actor);
-    const year = new Date(dto.date).getFullYear();
-    const seq = (await this.expenseRepo.count()) + 1;
-    const entry = this.expenseRepo.create({
-      id: formatExpenseId(year, seq),
-      category: dto.category,
-      description: dto.description,
-      amount: String(dto.amount),
-      entryDate: dto.date,
-      enteredBy: actor.name,
-    });
-    const saved = await this.expenseRepo.save(entry);
+    const why = createError(
+      await this.access.levelFor(actor.role, 'expenses'),
+      dto.date,
+      localDate(now),
+    );
+    if (why) {
+      throw why.includes('future')
+        ? new BadRequestException(why)
+        : new ForbiddenException(why);
+    }
+    const category = await this.activeCategory(dto.categoryId);
+    const [{ seq }] = await this.expenseRepo.query<{ seq: string }[]>(
+      `SELECT nextval('expense_entry_seq') AS seq`,
+    );
+    const description = dto.description.trim();
+    const saved = await this.expenseRepo.save(
+      this.expenseRepo.create({
+        id: formatExpenseId(Number(dto.date.slice(0, 4)), Number(seq)),
+        categoryId: category.id,
+        description,
+        amount: String(dto.amount),
+        entryDate: dto.date,
+        paidVia: dto.paidVia,
+        enteredBy: actor.name,
+        createdByUserId: actor.sub,
+        createdAt: now,
+      }),
+    );
     await this.audit.record(actor, {
       action: 'Logged daily expense',
       module: 'Reports',
       record: saved.id,
-      recordHref: '/reports/expenses',
-      details: `${dto.category} · Rs. ${dto.amount} — ${dto.description}`,
+      recordHref: `/reports/expenses/${saved.id}`,
+      details: `${category.name} · ${rs(dto.amount)} · ${dto.date} · paid by ${dto.paidVia} — ${description}`,
     });
-    return this.toPublicExpense(saved);
+    return this.toPublic(saved, actor, now);
   }
 
-  private assertCanWrite(actor: Actor): void {
-    if (actor.role === 'Manager') {
-      throw new ForbiddenException(
-        'Managers have read-only access to this resource.',
+  async updateExpense(
+    id: string,
+    dto: UpdateExpenseDto,
+    actor: Actor,
+    now: Date = new Date(),
+  ): Promise<PublicExpenseEntry> {
+    const entry = await this.findEntry(id);
+    const ctx = await this.editContext(entry, actor, now);
+    const why = editError(ctx, dto.date, dto.reason);
+    if (why) throw this.refusal(ctx, why);
+    if (dto.categoryId !== undefined && dto.categoryId !== entry.categoryId) {
+      await this.activeCategory(dto.categoryId);
+    }
+    const names = new Map(
+      (await this.categoryRepo.find()).map((c) => [c.id, c.name]),
+    );
+    const shape = (e: ExpenseEntryEntity) => ({
+      category: names.get(e.categoryId) ?? '—',
+      amount: rs(e.amount),
+      date: e.entryDate,
+      description: e.description,
+      paidVia: e.paidVia,
+    });
+    const before = shape(entry);
+    if (dto.categoryId !== undefined) entry.categoryId = dto.categoryId;
+    if (dto.amount !== undefined) entry.amount = String(dto.amount);
+    if (dto.date !== undefined) entry.entryDate = dto.date;
+    if (dto.description !== undefined)
+      entry.description = dto.description.trim();
+    if (dto.paidVia !== undefined) entry.paidVia = dto.paidVia;
+    const changes = changeSummary(before, shape(entry), {
+      category: 'Category',
+      amount: 'Amount',
+      date: 'Date',
+      description: 'Description',
+      paidVia: 'Paid via',
+    });
+    if (!changes) return this.toPublic(entry, actor, now);
+
+    const reason = editAccess(ctx).needsReason ? dto.reason!.trim() : null;
+    entry.updatedBy = actor.name;
+    entry.updatedAt = now;
+    if (reason) entry.editReason = reason;
+    const saved = await this.expenseRepo.save(entry);
+    await this.audit.record(actor, {
+      action: 'Changed daily expense',
+      module: 'Reports',
+      record: saved.id,
+      recordHref: `/reports/expenses/${saved.id}`,
+      details: reason ? `${changes} — reason: ${reason}` : changes,
+    });
+    return this.toPublic(saved, actor, now);
+  }
+
+  /* ── helpers ── */
+
+  /** Not allowed at all → 403; allowed but the change is invalid (future date, no reason) → 400. */
+  private refusal(ctx: EditContext, why: string) {
+    return editAccess(ctx).allowed
+      ? new BadRequestException(why)
+      : new ForbiddenException(why);
+  }
+
+  private async findEntry(id: string): Promise<ExpenseEntryEntity> {
+    const entry = await this.expenseRepo.findOne({ where: { id } });
+    if (!entry) throw new NotFoundException(`Expense ${id} not found.`);
+    return entry;
+  }
+
+  private async activeCategory(id: number): Promise<ExpenseCategoryEntity> {
+    const c = await this.categoryRepo.findOne({ where: { id } });
+    if (!c) throw new BadRequestException('Pick an expense category.');
+    if (!c.active) {
+      throw new BadRequestException(
+        `"${c.name}" is no longer in use — pick another category.`,
       );
     }
+    return c;
   }
 
-  private toPublicExpense(entity: ExpenseEntryEntity): PublicExpenseEntry {
+  private async editContext(
+    entry: ExpenseEntryEntity,
+    actor: Actor,
+    now: Date,
+  ): Promise<EditContext> {
+    const [level, windowDays] = await Promise.all([
+      this.access.levelFor(actor.role, 'expenses'),
+      this.editWindowDays(),
+    ]);
     return {
-      id: entity.id,
-      category: entity.category,
-      description: entity.description,
-      amount: Number(entity.amount),
-      date: entity.entryDate,
-      enteredBy: entity.enteredBy,
-      source: 'Manual',
+      level,
+      isCreator:
+        entry.createdByUserId !== null &&
+        actor.sub !== null &&
+        entry.createdByUserId === actor.sub,
+      loggedOn: localDate(entry.createdAt ?? now),
+      today: localDate(now),
+      windowDays,
+    };
+  }
+
+  private async toPublic(
+    e: ExpenseEntryEntity,
+    actor: Actor,
+    now: Date,
+  ): Promise<PublicExpenseEntry> {
+    const [category, ctx] = await Promise.all([
+      this.categoryRepo.findOne({ where: { id: e.categoryId } }),
+      this.editContext(e, actor, now),
+    ]);
+    const a = editAccess(ctx);
+    return {
+      id: e.id,
+      categoryId: e.categoryId,
+      category: category?.name ?? '—',
+      description: e.description,
+      amount: Number(e.amount),
+      date: e.entryDate,
+      paidVia: e.paidVia,
+      enteredBy: e.enteredBy,
+      loggedOn: ctx.loggedOn,
+      updatedBy: e.updatedBy,
+      updatedAt: e.updatedAt ? new Date(e.updatedAt).toISOString() : null,
+      editReason: e.editReason,
+      access: { canEdit: a.allowed, needsReason: a.needsReason, note: a.note },
+      editWindowDays: ctx.windowDays,
     };
   }
 }

@@ -1,3 +1,4 @@
+import type { PublicTransportLine } from '../admin/transport-rules';
 /**
  * DB ↔ portal mapping for estate/advance/settlement status, plus the
  * `PublicEstate`/`PublicAdvance`/`PublicSettlement` shapes returned to the
@@ -131,6 +132,11 @@ export interface PublicSettlement {
   missingBank?: boolean;
   processedBy?: string;
   processedOn?: string;
+  /**
+   * Administration-Addendum §4 — the transport line: frozen when processed, live while
+   * pending; null on history processed before the monthly charge existed.
+   */
+  transport?: PublicTransportLine | null;
 }
 
 /** The numeric parts of a settlement row (entity values arrive as decimal strings). */

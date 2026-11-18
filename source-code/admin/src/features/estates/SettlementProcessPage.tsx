@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext'
 import * as estatesService from '@/services/estates'
 import { currentMonth, periodOf, readMonth, shiftMonth } from '@/lib/month'
 import { grossRevenue, netPayable } from './calc'
+import { transportLineText } from './transport-line'
 import { formatCurrency, formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
@@ -41,10 +42,19 @@ export function SettlementProcessPage() {
     queryFn: () => estatesService.listSettlements({ month, status: 'Pending', limit: 0 }),
   })
 
+  const { data: transport } = useQuery({
+    queryKey: ['estates', 'transport-status', period],
+    queryFn: () => estatesService.getTransportStatus(period),
+  })
+
   const pending = data?.rows ?? []
   const included = pending.filter((s) => !s.missingBank)
   const excluded = pending.filter((s) => s.missingBank)
   const total = included.reduce((sum, s) => sum + netPayable(s), 0)
+  // Administration-Addendum §4: transport is never deducted as Rs. 0 by default — while no monthly
+  // charge covers the month, a run with estates that pay transport can't be processed
+  const payingTransport = included.filter((s) => s.transport?.status === 'not_configured')
+  const blockedByTransport = payingTransport.length > 0
 
   const processMutation = useMutation({
     mutationFn: () => estatesService.processSettlements(period),
@@ -92,6 +102,17 @@ export function SettlementProcessPage() {
         <SummaryTile label="Total payable" value={formatCurrency(total)} highlight={total > 0} />
       </div>
 
+      {blockedByTransport && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-[var(--radius-md)] border border-warning-fg/25 bg-warning-bg p-4">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning-fg" />
+          <p className="text-sm text-warning-fg">
+            <span className="font-medium">{transport?.reason}</span> {payingTransport.length} estate
+            {payingTransport.length === 1 ? ' pays' : 's pay'} transport, so this run can’t be processed yet. Transport is
+            never deducted as Rs. 0 by default.
+          </p>
+        </div>
+      )}
+
       {excluded.length > 0 && (
         <div className="mb-4 flex items-start gap-2.5 rounded-[var(--radius-md)] border border-danger-fg/20 bg-danger-bg/60 p-4">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger-fg" />
@@ -135,10 +156,7 @@ export function SettlementProcessPage() {
                       value={formatCurrency(s.normalKg * s.normalRate)}
                     />
                     <Row label="Gross revenue" value={formatCurrency(grossRevenue(s))} strong />
-                    <Row
-                      label={s.selfDelivery ? 'Less: Transport cost (exempt — self-delivery)' : 'Less: Transport cost'}
-                      value={s.selfDelivery ? '—' : `- ${formatCurrency(s.transportCost)}`}
-                    />
+                    <TransportRow s={s} />
                     <Row
                       label="Less: Fertilizer deduction (linked dispatches)"
                       value={s.fertilizerDeduction ? `- ${formatCurrency(s.fertilizerDeduction)}` : '—'}
@@ -177,7 +195,7 @@ export function SettlementProcessPage() {
         <Button variant="secondary" onClick={() => navigate(backHref)}>
           Cancel
         </Button>
-        <Button size="lg" onClick={() => setConfirming(true)}>
+        <Button size="lg" onClick={() => setConfirming(true)} disabled={blockedByTransport || included.length === 0}>
           Process {included.length} Settlements
         </Button>
       </div>
@@ -227,5 +245,19 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
       <dt className={cn(strong ? 'font-medium text-text' : 'text-text-muted')}>{label}</dt>
       <dd className={cn('tabular shrink-0', strong ? 'font-semibold text-text-heading' : 'text-text')}>{value}</dd>
     </div>
+  )
+}
+
+function TransportRow({ s }: { s: Parameters<typeof transportLineText>[0] }) {
+  const t = transportLineText(s)
+  return (
+    <>
+      <Row label={t.label} value={t.value} />
+      {t.notes.map((n) => (
+        <p key={n} className="text-xs text-text-muted">
+          {n}
+        </p>
+      ))}
+    </>
   )
 }

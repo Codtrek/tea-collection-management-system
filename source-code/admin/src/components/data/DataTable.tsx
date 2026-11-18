@@ -58,6 +58,11 @@ export interface DataTableProps<T> {
    * pager and never slices. Opt-in; every other screen keeps client paging.
    */
   serverPage?: { page: number; pageSize: number; total: number; onPageChange: (page: number) => void }
+  /**
+   * opt-in totals row, rendered with the same column renderers under every page (never sorted or
+   * paged); the first column's cell should say what it is ("Total")
+   */
+  footer?: T
   /** server mode: the sort lives in the page's URL/query — header clicks report, never sort rows */
   serverSort?: { key: string; direction: 'asc' | 'desc' | null; onSortChange: (key: string, direction: 'asc' | 'desc' | null) => void }
 }
@@ -85,6 +90,7 @@ export function DataTable<T>({
   stickyFirstColumn,
   serverPage,
   serverSort,
+  footer,
 }: DataTableProps<T>) {
   const [localPage, setLocalPage] = useState(0)
   const [compact, setCompact] = useState(() => localStorage.getItem('harboost.table.compact') === '1')
@@ -128,7 +134,9 @@ export function DataTable<T>({
   const size = serverPage ? serverPage.pageSize : pageSize
   const total = serverPage ? serverPage.total : sortedRows.length
   const pageCount = Math.max(1, Math.ceil(total / size))
-  const start = page * size
+  // rows can shrink under a page (a filter changed): show the last page that exists
+  const shownPage = serverPage ? page : Math.min(page, pageCount - 1)
+  const start = shownPage * size
   const pageRows = serverPage ? rows : sortedRows.slice(start, start + size)
 
   const toggleDensity = () => {
@@ -252,6 +260,7 @@ export function DataTable<T>({
                       'px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-text-muted',
                       c.align === 'right' ? 'text-right' : 'text-left',
                       c.key === stickyKey && 'sticky left-0 z-[1] bg-surface-sunken',
+                      c.className,
                     )}
                   >
                     {c.sortable ? (
@@ -333,6 +342,28 @@ export function DataTable<T>({
               )
             })}
           </tbody>
+          {footer && (
+            <tfoot>
+              <tr className="border-t-2 border-border bg-surface-sunken font-semibold">
+                {selectable && <td className={cn('px-4', rowPad)} />}
+                {visibleColumns.map((c) => (
+                  <td
+                    key={c.key}
+                    className={cn(
+                      'px-4 text-sm text-text-heading',
+                      rowPad,
+                      c.align === 'right' && 'tabular text-right',
+                      c.key === stickyKey && 'sticky left-0 z-[1] bg-surface-sunken',
+                      c.className,
+                    )}
+                  >
+                    {c.render ? c.render(footer) : String((footer as Record<string, unknown>)[c.key] ?? '')}
+                  </td>
+                ))}
+                {actions && <td className={cn('px-4', rowPad)} />}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
@@ -343,19 +374,19 @@ export function DataTable<T>({
           </span>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
+              onClick={() => setPage(Math.max(0, shownPage - 1))}
+              disabled={shownPage === 0}
               aria-label="Previous page"
               className="flex size-8 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-surface-hover disabled:opacity-40"
             >
               <ChevronLeft className="size-4" />
             </button>
             <span className="tabular px-2 text-xs text-text-muted">
-              {page + 1} / {pageCount}
+              {shownPage + 1} / {pageCount}
             </span>
             <button
-              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-              disabled={page === pageCount - 1}
+              onClick={() => setPage(Math.min(pageCount - 1, shownPage + 1))}
+              disabled={shownPage === pageCount - 1}
               aria-label="Next page"
               className="flex size-8 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-surface-hover disabled:opacity-40"
             >
