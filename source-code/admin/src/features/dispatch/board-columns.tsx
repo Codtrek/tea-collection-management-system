@@ -2,7 +2,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import type { Column } from '@/components/data/DataTable'
 import { formatWeight } from '@/lib/format'
 import { FreshnessCell } from './FreshnessCell'
-import { BOARD_STATUS_TONE } from './status'
+import { BOARD_STATUS_TONE, otherRoutesNote } from './status'
 import type { BoardAgent } from './types'
 
 /*
@@ -17,21 +17,43 @@ export function agentColumns(): Column<BoardAgent>[] {
       header: 'Agent',
       sortable: true,
       sortValue: (a) => a.name,
+      minWidth: 160,
       render: (a) => <span className="font-medium text-text">{a.name}</span>,
     },
     {
       key: 'route',
       header: 'Route',
-      render: (a) => (
-        <div className="flex flex-col items-start gap-1">
-          <span>{a.routeName ?? <span className="text-text-muted">Unassigned</span>}</span>
-          {a.coveringRouteName && <StatusBadge tone="warning">Covering {a.coveringRouteName}</StatusBadge>}
-        </div>
-      ),
+      minWidth: 190,
+      // Line 1: what the agent runs on the board's date. Line 2: the routes he holds that don't
+      // run that day (Route-Schedule-Addendum §5). "Not scheduled" itself lives only in Status.
+      render: (a) => {
+        const note = otherRoutesNote(a)
+        return (
+          <div className="flex flex-col items-start gap-1">
+            {a.scheduledRoutes.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {a.scheduledRoutes.map((r) =>
+                  r.covering ? (
+                    <StatusBadge key={r.routeId} tone="warning">
+                      Covering {r.name}
+                    </StatusBadge>
+                  ) : (
+                    <StatusBadge key={r.routeId} tone="approved">
+                      {r.name}
+                    </StatusBadge>
+                  ),
+                )}
+              </div>
+            )}
+            {note && <span className="text-xs text-text-muted">{note}</span>}
+          </div>
+        )
+      },
     },
     {
       key: 'status',
       header: 'Status',
+      minWidth: 130,
       render: (a) => <StatusBadge tone={BOARD_STATUS_TONE[a.status]}>{a.status}</StatusBadge>,
     },
     {
@@ -40,8 +62,9 @@ export function agentColumns(): Column<BoardAgent>[] {
       align: 'right',
       sortable: true,
       sortValue: (a) => a.kgCollected,
+      minWidth: 120,
       render: (a) => (
-        <div>
+        <div className="whitespace-nowrap">
           <p className="tabular">{formatWeight(a.kgCollected)}</p>
           <p className="tabular text-xs text-text-muted">
             {a.stopsDone}/{a.stopsTotal} stops
@@ -52,6 +75,7 @@ export function agentColumns(): Column<BoardAgent>[] {
     {
       key: 'lastSeen',
       header: 'Last seen',
+      minWidth: 130,
       render: (a) => <FreshnessCell agent={a} />,
     },
   ]

@@ -27,6 +27,13 @@ export function localTime(now: Date, tz: string = FACTORY_TZ): string {
   }).format(now);
 }
 
+/** 'YYYY-MM-DD' shifted by `days` (negative = earlier). Pure date-string arithmetic in UTC. */
+export function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Does an assignment's [validFrom, validTo] window include `date`? (validTo null = open-ended) */
 export function windowIncludes(
   w: { validFrom: string; validTo: string | null },
@@ -67,10 +74,13 @@ export type BoardStatus =
   | 'On route'
   | 'Completed'
   | 'Absent'
-  | 'Covering';
+  | 'Covering'
+  | 'Not scheduled';
 
 export interface BoardStatusInput {
   absent: boolean;
+  /** has at least one route of his own scheduled that date (Route-Schedule-Addendum §5); default true */
+  scheduled?: boolean;
   covering: boolean;
   shiftStarted: boolean;
   shiftEnded: boolean;
@@ -78,9 +88,10 @@ export interface BoardStatusInput {
   stopsTotal: number;
 }
 
-/** Absent > Completed > Covering > On route > Not started. */
+/** Absent > Not scheduled > Completed > Covering > On route > Not started. */
 export function boardStatusOf(i: BoardStatusInput): BoardStatus {
   if (i.absent) return 'Absent';
+  if (i.scheduled === false && !i.covering) return 'Not scheduled';
   if (i.shiftEnded || (i.stopsTotal > 0 && i.stopsDone >= i.stopsTotal)) {
     return 'Completed';
   }
@@ -132,8 +143,13 @@ export interface PublicBoardAgent {
   /** 'EMP-0012' — the agent's employee record (their history lives on /employees/:id) */
   employeeId: string;
   name: string;
+  /** his own (permanent) route scheduled on the board's date — at most one (one route per agent per date) */
   routeId: number | null;
   routeName: string | null;
+  /** every route he holds permanently, whatever the date */
+  ownRoutes: { routeId: number; name: string }[];
+  /** what he runs on the board's date: his scheduled own route and/or the route he covers */
+  scheduledRoutes: { routeId: number; name: string; covering: boolean }[];
   /** set when this agent is covering another route today */
   coveringRouteId: number | null;
   coveringRouteName: string | null;
@@ -153,6 +169,10 @@ export interface PublicBoardAgent {
 export interface PublicBoardRoute {
   routeId: number;
   name: string;
+  /** does the route run on the board's date? When not, agent/stops are empty ("Not scheduled today"). */
+  scheduled: boolean;
+  /** first scheduled date strictly after the board's date */
+  nextCollectionDay: string | null;
   /** who is responsible today (cover wins) */
   agentId: number | null;
   agentName: string | null;
@@ -224,6 +244,8 @@ export interface PublicCandidate {
   overCeiling: boolean;
   /** already asked for this route today and declined / didn't answer */
   previouslyAsked: boolean;
+  /** no route of his own scheduled that date — ranks first (Route-Schedule-Addendum §5) */
+  free: boolean;
 }
 
 export interface PublicCoverRequest {

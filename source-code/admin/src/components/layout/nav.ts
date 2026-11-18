@@ -7,6 +7,7 @@ import {
   Wallet,
   Banknote,
   HandCoins,
+  Coins,
   Users,
   Mountain,
   CalendarCheck,
@@ -54,6 +55,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // payments action (Process Settlements), since browsing owners moved
       // to its own People entry below and would otherwise duplicate this one.
       { label: 'Estate Owner Payments', to: '/estates/settlements', icon: Wallet, module: 'estateOwners' },
+      // EST-05 — was only reachable from the Issue form; its own data-driven module (estateAdvances)
+      { label: 'Estate Owner Advances', to: '/estates/advances', icon: Coins, module: 'estateAdvances' },
       { label: 'Payroll', to: '/employees/payroll', icon: Banknote, module: 'payroll' },
       { label: 'Salary Advances', to: '/employees/advances', icon: HandCoins, module: 'advances' },
     ],

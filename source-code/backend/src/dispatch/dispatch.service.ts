@@ -19,6 +19,7 @@ import { CandidateRankingService } from './candidate-ranking.service';
 import { DispatchNotifier } from './dispatch-notifier.service';
 import { DispatchSettingsService } from './dispatch-settings.service';
 import {
+  addDays,
   boardStatusOf,
   freshnessOf,
   localDate,
@@ -41,18 +42,17 @@ import {
   type ResolvedAgent,
   RouteResolverService,
 } from './route-resolver.service';
+import {
+  isScheduledOn,
+  nextScheduledDate,
+  RouteScheduleService,
+} from './route-schedule.service';
 
 export interface DispatchActor {
   name: string;
   role: AppRole;
   sub?: number | null;
 }
-
-const addDays = (date: string, days: number): string => {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-};
 
 export function toPublicAssignment(a: RouteAssignmentEntity): PublicAssignment {
   return {
@@ -88,30 +88,44 @@ export class DispatchService {
     private readonly notifier: DispatchNotifier,
     private readonly settings: DispatchSettingsService,
     private readonly audit: AuditService,
+    private readonly schedule: RouteScheduleService,
   ) {}
 
   /* ── Board ─────────────────────────────────────────────────────── */
 
-  async board(now: Date = new Date()): Promise<PublicBoard> {
-    const date = localDate(now);
+  /**
+   * The board for `date` (default today). Only routes scheduled that date have an agent
+   * and stops (Route-Schedule-Addendum §5); live fields (shift, kg, missed check-ins)
+   * only mean something for today.
+   */
+  async board(
+    now: Date = new Date(),
+    date: string = localDate(now),
+  ): Promise<PublicBoard> {
+    const isToday = date === localDate(now);
     await this.resolver.expireStale(now);
 
-    const [agents, routeRows, estateRows, dayRows, allAssignments] =
+    const [agents, routeRows, estateRows, dayRows, allAssignments, schedules] =
       await Promise.all([
         this.directory.all(),
         this.routes.find(),
         this.estates.find(),
         this.dayStatus.find({ where: { day: date } }),
         this.assignments.find(),
+        this.schedule.allSchedules(),
       ]);
     const active = allAssignments.filter((a) => a.status === 'ACTIVE');
     const routeName = new Map(
       routeRows.map((r) => [r.id, r.name ?? `Route ${r.id}`]),
     );
+    const scheduleOf = (routeId: number) =>
+      schedules.get(routeId) ?? { weekdays: [], overrides: [] };
+    const runs = (routeId: number) => isScheduledOn(scheduleOf(routeId), date);
     const dayByAgent = new Map(dayRows.map((d) => [d.agentId, d]));
-    const resolved = await this.resolver.getAgentsForRoutes(
+    const resolved = await this.scheduledResolution(
       routeRows.map((r) => r.id),
       date,
+      runs,
     );
     const agentName = new Map(agents.map((a) => [a.agentId, a.name]));
 
@@ -124,10 +138,16 @@ export class DispatchService {
         routeId,
       ]);
     }
+    // own permanent routes: all of them (any day) and the one scheduled that date
+    const ownRoutes = new Map<number, number[]>();
     const ownRoute = new Map<number, number>();
     for (const a of active) {
       if (a.type === 'PERMANENT' && windowIncludes(a, date)) {
-        ownRoute.set(a.agentId, a.routeId);
+        ownRoutes.set(a.agentId, [
+          ...(ownRoutes.get(a.agentId) ?? []),
+          a.routeId,
+        ]);
+        if (runs(a.routeId)) ownRoute.set(a.agentId, a.routeId);
       }
     }
 
@@ -151,18 +171,32 @@ export class DispatchService {
         now,
       );
       const own = ownRoute.get(agent.agentId) ?? null;
+      const label = (rid: number) => routeName.get(rid) ?? `Route ${rid}`;
       boardAgents.push({
         agentId: agent.agentId,
         employeeId: agent.employeeId,
         name: agent.name,
         routeId: own,
         routeName: own ? (routeName.get(own) ?? null) : null,
+        ownRoutes: (ownRoutes.get(agent.agentId) ?? [])
+          .sort((x, y) => label(x).localeCompare(label(y)))
+          .map((rid) => ({ routeId: rid, name: label(rid) })),
+        scheduledRoutes: mine
+          .sort((x, y) => label(x).localeCompare(label(y)))
+          .map((rid) => ({
+            routeId: rid,
+            name: label(rid),
+            covering: resolved.get(rid)?.covering ?? false,
+          })),
         coveringRouteId: coverRoute,
         coveringRouteName: coverRoute
           ? (routeName.get(coverRoute) ?? null)
           : null,
         status: boardStatusOf({
           absent: day?.status === 'ABSENT',
+          // "Not scheduled" = holds routes, none run that date; no routes at all stays "Not started"
+          scheduled:
+            own !== null || (ownRoutes.get(agent.agentId) ?? []).length === 0,
           covering: coverRoute !== null,
           shiftStarted: !!day?.shiftStartedAt,
           shiftEnded: !!day?.shiftEndedAt,
@@ -183,14 +217,18 @@ export class DispatchService {
 
     const routeCounts = new Map(
       await Promise.all(
-        routeRows.map(
-          async (r) => [r.id, await this.load.stopCounts(r.id, date)] as const,
-        ),
+        routeRows
+          .filter((r) => runs(r.id))
+          .map(
+            async (r) =>
+              [r.id, await this.load.stopCounts(r.id, date)] as const,
+          ),
       ),
     );
     const boardRoutes: PublicBoardRoute[] = routeRows.map((r) => {
       const res = resolved.get(r.id) ?? null;
       const counts = routeCounts.get(r.id);
+      const scheduled = runs(r.id);
       const stops = orderStops(
         estateRows
           .filter((e) => e.routeId === r.id && e.lat !== null && e.lng !== null)
@@ -204,6 +242,8 @@ export class DispatchService {
       return {
         routeId: r.id,
         name: r.name ?? `Route ${r.id}`,
+        scheduled,
+        nextCollectionDay: nextScheduledDate(scheduleOf(r.id), date),
         agentId: res?.agentId ?? null,
         agentName: res ? (agentName.get(res.agentId) ?? null) : null,
         covered: res?.covering ?? false,
@@ -240,16 +280,31 @@ export class DispatchService {
       agents: boardAgents,
       routes: boardRoutes,
       coverRequests,
-      missedCheckins: await this.missedCheckins(now, {
-        agents,
-        dayByAgent,
-        resolved,
-        routeName,
-      }),
+      missedCheckins: isToday
+        ? await this.missedCheckins(now, {
+            agents,
+            dayByAgent,
+            resolved,
+            routeName,
+          })
+        : [],
     };
   }
 
-  /** Alert (never automatic absence): agents due on a route who haven't started a shift by the cutoff. */
+  /** Who runs each route on `date` — null for every route that isn't scheduled that date. */
+  private async scheduledResolution(
+    routeIds: number[],
+    date: string,
+    runs: (routeId: number) => boolean,
+  ): Promise<Map<number, ResolvedAgent | null>> {
+    const resolved = await this.resolver.getAgentsForRoutes(routeIds, date);
+    for (const routeId of routeIds) {
+      if (!runs(routeId)) resolved.set(routeId, null);
+    }
+    return resolved;
+  }
+
+  /** Alert (never automatic absence): agents due on a SCHEDULED route who haven't started a shift by the cutoff. */
   async missedCheckins(
     now: Date = new Date(),
     pre?: {
@@ -276,9 +331,11 @@ export class DispatchService {
           d,
         ]),
       );
-      resolved = await this.resolver.getAgentsForRoutes(
+      const scheduled = await this.schedule.scheduledRoutesOn(date);
+      resolved = await this.scheduledResolution(
         routeRows.map((r) => r.id),
         date,
+        (routeId) => scheduled.has(routeId),
       );
       routeName = new Map(
         routeRows.map((r) => [r.id, r.name ?? `Route ${r.id}`]),
@@ -442,8 +499,9 @@ export class DispatchService {
     routeId: number,
     now: Date = new Date(),
   ): Promise<PublicCandidate[]> {
-    await this.requireRoute(routeId);
+    const route = await this.requireRoute(routeId);
     await this.resolver.expireStale(now);
+    await this.assertScheduledToday(route, localDate(now));
     return this.ranking.rank(routeId, localDate(now));
   }
 
@@ -456,6 +514,7 @@ export class DispatchService {
     const target = await this.requireAgent(input.agentId);
     const date = localDate(now);
     await this.resolver.expireStale(now);
+    await this.assertScheduledToday(route, date);
 
     const existing = (
       await this.assignments.find({ where: { routeId: route.id } })
@@ -574,6 +633,7 @@ export class DispatchService {
     );
 
     if (input.scope === 'today') {
+      await this.assertScheduledToday(route, date);
       const current = await this.resolver.getAgentForRoute(route.id, date);
       if (current?.agentId === target.agentId) {
         throw new ConflictException(
@@ -638,17 +698,19 @@ export class DispatchService {
     if (currentPermanent?.agentId === target.agentId) {
       throw new ConflictException(`${target.name} already owns ${routeLabel}.`);
     }
-    const targetOwns = (
-      await this.assignments.find({
-        where: { agentId: target.agentId, status: 'ACTIVE' },
-      })
-    ).find(
-      (a) =>
-        a.type === 'PERMANENT' && a.validTo === null && a.routeId !== route.id,
+    // One agent may hold several routes, but runs only one per date (Route-Schedule-Addendum §4).
+    const clash = await this.schedule.agentClash(
+      target.agentId,
+      route.id,
+      date,
+      { assumeHolds: true },
     );
-    if (targetOwns) {
+    if (clash) {
+      const other = await this.routes.findOne({
+        where: { id: clash.otherRouteId },
+      });
       throw new ConflictException(
-        `${target.name} already owns another route permanently — reassign that route first.`,
+        `${target.name} already runs ${other?.name ?? `Route ${clash.otherRouteId}`} on ${clash.date}, the same day as ${routeLabel}. Change one of the two schedules first.`,
       );
     }
 
@@ -733,6 +795,11 @@ export class DispatchService {
     selfDelivery: boolean;
     routeId: number | null;
     routeName: string | null;
+    /** does the route run on `date`? */
+    scheduled: boolean;
+    /** when it doesn't: its next collection day, and who runs it then */
+    nextScheduledDate: string | null;
+    nextAgent: { agentId: number; name: string; covering: boolean } | null;
     agent: { agentId: number; name: string; covering: boolean } | null;
   }> {
     const estate = await this.estates.findOne({ where: { id: estateId } });
@@ -745,12 +812,46 @@ export class DispatchService {
       routeName: estate.routeName,
     };
     if (estate.routeId === null || estate.selfDelivery) {
-      return { ...base, agent: null };
+      return {
+        ...base,
+        scheduled: false,
+        nextScheduledDate: null,
+        nextAgent: null,
+        agent: null,
+      };
     }
-    return { ...base, agent: await this.agentForRoute(estate.routeId, date) };
+    if (await this.schedule.isScheduled(estate.routeId, date)) {
+      return {
+        ...base,
+        scheduled: true,
+        nextScheduledDate: null,
+        nextAgent: null,
+        agent: await this.agentForRoute(estate.routeId, date),
+      };
+    }
+    const next = await this.schedule.nextCollectionDay(estate.routeId, date);
+    return {
+      ...base,
+      scheduled: false,
+      nextScheduledDate: next,
+      nextAgent: next ? await this.agentForRoute(estate.routeId, next) : null,
+      agent: null,
+    };
   }
 
   /* ── internals ─────────────────────────────────────────────────── */
+
+  /** Covers are today-only, and only for a route that actually runs today. */
+  private async assertScheduledToday(
+    route: RouteEntity,
+    today: string,
+  ): Promise<void> {
+    if (await this.schedule.isScheduled(route.id, today)) return;
+    const next = await this.schedule.nextCollectionDay(route.id, today);
+    throw new ConflictException(
+      `${route.name ?? `Route ${route.id}`} isn't scheduled today${next ? ` (next collection day: ${next})` : ''}, so it needs no cover or reassignment today.`,
+    );
+  }
 
   private async requireRoute(routeId: number): Promise<RouteEntity> {
     const route = await this.routes.findOne({ where: { id: routeId } });

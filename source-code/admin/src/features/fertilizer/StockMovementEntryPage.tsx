@@ -9,19 +9,19 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
-import { Toggle } from '@/components/ui/Toggle'
 import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as fertilizerService from '@/services/fertilizer'
-import { batchStatus, dispatchableRequests, remainderOf } from './lib'
-import type { FertilizerBatch, FertilizerRequest } from './types'
+import { batchStatus } from './lib'
+import type { FertilizerBatch } from './types'
 import { formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
 /* FERT-02 validation rules (fertilizer doc + addendum §7). Conditional on movement type.
-   Takes the live batch/request lists as arguments — the uniqueness/remainder checks read
-   whatever was last fetched from the backend, never a module-level fixture. */
-function buildMovementSchema(batches: FertilizerBatch[], requests: FertilizerRequest[]) {
+   Takes the live batch list as an argument — the uniqueness checks read whatever was last
+   fetched from the backend, never a module-level fixture. Outgoing is ad-hoc only
+   (Fertilizer-Delivery-Addendum §5): a request's fertilizer leaves through its handover. */
+function buildMovementSchema(batches: FertilizerBatch[]) {
   return z
     .object({
       type: z.enum(['Incoming', 'Outgoing']),
@@ -36,8 +36,6 @@ function buildMovementSchema(batches: FertilizerBatch[], requests: FertilizerReq
       expiryDate: z.string().optional(),
       // Outgoing
       destination: z.string().optional(),
-      linkedRequest: z.string().optional(),
-      adHoc: z.boolean().optional(),
       adHocReason: z.string().optional(),
       notes: z.string().optional(),
     })
@@ -66,20 +64,7 @@ function buildMovementSchema(batches: FertilizerBatch[], requests: FertilizerReq
               message: `Cannot exceed available stock (${formatWeight(batch.quantityKg)})`,
             })
         }
-        // §7 — dispatch must fulfil an approved request, unless explicitly ad-hoc.
-        if (!v.adHoc) {
-          if (!v.linkedRequest)
-            ctx.addIssue({ code: 'custom', path: ['linkedRequest'], message: 'Select an approved request, or mark this dispatch ad-hoc' })
-          else {
-            const req = requests.find((r) => r.id === v.linkedRequest)
-            if (req && v.quantity > remainderOf(req))
-              ctx.addIssue({
-                code: 'custom',
-                path: ['quantity'],
-                message: `Cannot exceed the approved remainder (${formatWeight(remainderOf(req))})`,
-              })
-          }
-        } else if (!v.adHocReason?.trim()) {
+        if (!v.adHocReason?.trim()) {
           ctx.addIssue({ code: 'custom', path: ['adHocReason'], message: 'A reason is required for an ad-hoc dispatch' })
         }
       }
@@ -104,14 +89,7 @@ export function StockMovementEntryPage() {
     isError: batchesError,
     refetch: refetchBatches,
   } = useQuery({ queryKey: ['fertilizer', 'batches'], queryFn: fertilizerService.listBatches })
-  const {
-    data: requests,
-    isPending: requestsPending,
-    isError: requestsError,
-    refetch: refetchRequests,
-  } = useQuery({ queryKey: ['fertilizer', 'requests'], queryFn: fertilizerService.listRequests })
-
-  if (batchesPending || requestsPending) {
+  if (batchesPending) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="size-6 animate-spin text-text-muted" aria-hidden />
@@ -119,23 +97,20 @@ export function StockMovementEntryPage() {
     )
   }
 
-  if (batchesError || requestsError || !batches || !requests) {
+  if (batchesError || !batches) {
     return (
       <ErrorState
         title="Couldn't load stock data"
-        description="Something went wrong fetching batches and requests."
-        onRetry={() => {
-          void refetchBatches()
-          void refetchRequests()
-        }}
+        description="Something went wrong fetching batches."
+        onRetry={() => void refetchBatches()}
       />
     )
   }
 
-  return <MovementForm batches={batches} requests={requests} />
+  return <MovementForm batches={batches} />
 }
 
-function MovementForm({ batches, requests }: { batches: FertilizerBatch[]; requests: FertilizerRequest[] }) {
+function MovementForm({ batches }: { batches: FertilizerBatch[] }) {
   const navigate = useNavigate()
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -148,21 +123,18 @@ function MovementForm({ batches, requests }: { batches: FertilizerBatch[]; reque
     setValue,
     formState: { errors },
   } = useForm<MovementForm>({
-    resolver: zodResolver(buildMovementSchema(batches, requests)),
+    resolver: zodResolver(buildMovementSchema(batches)),
     mode: 'onBlur',
     defaultValues: {
       type: 'Incoming',
       batchId: params.get('batch') ?? '',
       unit: 'kg',
-      adHoc: false,
       date: new Date().toISOString().slice(0, 10),
     },
   })
   const values = useWatch({ control })
   const type = values.type ?? 'Incoming'
-  const adHoc = values.adHoc ?? false
   const selectedBatch = batches.find((b) => b.id === values.batchId)
-  const openRequests = dispatchableRequests(requests)
 
   const recordMutation = useMutation({
     mutationFn: (input: fertilizerService.RecordMovementInput) => fertilizerService.recordMovement(input),
@@ -202,10 +174,7 @@ function MovementForm({ batches, requests }: { batches: FertilizerBatch[]; reque
         date: data.date,
         batchId: data.batchId,
         destination: data.destination,
-        linkedRequest: data.adHoc ? undefined : data.linkedRequest,
-        notes: data.adHoc
-          ? `Ad-hoc dispatch — ${data.adHocReason}${data.notes ? ` · ${data.notes}` : ''}`
-          : data.notes || undefined,
+        notes: `Ad-hoc dispatch — ${data.adHocReason}${data.notes ? ` · ${data.notes}` : ''}`,
       })
     }
   }
@@ -306,34 +275,18 @@ function MovementForm({ batches, requests }: { batches: FertilizerBatch[]; reque
                 {...register('destination')}
               />
 
-              {/* §7 — dispatch normally fulfils an approved request; ad-hoc is the audited exception. */}
-              <div className="flex items-center justify-between rounded-[var(--radius-sm)] bg-surface-sunken px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium text-text">Dispatch without a request (ad-hoc)</p>
-                  <p className="text-xs text-text-muted">Use only when no approved request exists — this is audited.</p>
-                </div>
-                <Toggle checked={adHoc} onChange={(v) => setValue('adHoc', v)} />
-              </div>
-
-              {adHoc ? (
-                <Input
-                  label="Ad-hoc reason"
-                  error={errors.adHocReason?.message}
-                  placeholder="e.g. Gate hand-over, request logged retrospectively"
-                  {...register('adHocReason')}
-                />
-              ) : (
-                <Select
-                  label="Linked fertilizer request"
-                  placeholder="Select an approved request"
-                  error={errors.linkedRequest?.message}
-                  options={openRequests.map((r) => ({
-                    value: r.id,
-                    label: `${r.id} — ${r.estateName} — ${formatWeight(remainderOf(r))} ${r.item} remaining`,
-                  }))}
-                  {...register('linkedRequest')}
-                />
-              )}
+              {/* Fertilizer-Delivery-Addendum §5 — a request's fertilizer goes out through its handover,
+                  so this form is only for ad-hoc stock (audited, needs a reason). */}
+              <p className="rounded-[var(--radius-sm)] bg-surface-sunken px-3 py-2 text-xs text-text-muted">
+                Fertilizer for an approved request goes out from the request itself (Record handover), on its route
+                stop. Use this only for stock that isn’t for a request — it can’t take stock committed to requests.
+              </p>
+              <Input
+                label="Reason for this dispatch"
+                error={errors.adHocReason?.message}
+                placeholder="e.g. Replacement for a damaged bag, demo plot"
+                {...register('adHocReason')}
+              />
             </fieldset>
           )}
 

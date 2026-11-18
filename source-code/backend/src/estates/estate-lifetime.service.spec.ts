@@ -1,3 +1,5 @@
+import type { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
+import type { FertilizerPaymentEntity } from '../fertilizer/fertilizer-payment.entity';
 import type { Repository } from 'typeorm';
 import type { AuditLogEntity } from '../audit/audit-log.entity';
 import type { CollectionRecordEntity } from '../collections/collection-record.entity';
@@ -54,6 +56,7 @@ function makeEstate(overrides: Partial<EstateEntity> = {}): EstateEntity {
     bankName: 'Bank of Ceylon',
     bankBranch: 'Nuwara Eliya',
     bankAccount: '8802345671',
+    paymentMethod: 'bank',
     lastUpdatedBy: null,
     lastUpdatedOn: null,
     registeredOn: '2021-03-01',
@@ -262,6 +265,8 @@ function build() {
   const movementRepo = new FakeRepository<StockMovementEntity>();
   const batchRepo = new FakeRepository<FertilizerBatchEntity>();
   const auditRepo = new FakeRepository<AuditLogEntity>();
+  const paymentRepo = new FakeRepository<FertilizerPaymentEntity>();
+  const recoveryRepo = new FakeRepository<EstateAdvanceRecoveryEntity>();
 
   const service = new EstateLifetimeService(
     estateRepo as unknown as Repository<EstateEntity>,
@@ -275,6 +280,8 @@ function build() {
     movementRepo as unknown as Repository<StockMovementEntity>,
     batchRepo as unknown as Repository<FertilizerBatchEntity>,
     auditRepo as unknown as Repository<AuditLogEntity>,
+    paymentRepo as unknown as Repository<FertilizerPaymentEntity>,
+    recoveryRepo as unknown as Repository<EstateAdvanceRecoveryEntity>,
   );
 
   return {
@@ -289,7 +296,9 @@ function build() {
     chargeRepo,
     movementRepo,
     batchRepo,
+    recoveryRepo,
     auditRepo,
+    paymentRepo,
   };
 }
 

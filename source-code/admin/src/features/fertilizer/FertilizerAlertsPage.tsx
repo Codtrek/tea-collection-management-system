@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as fertilizerService from '@/services/fertilizer'
-import { batchStatus, daysToExpiry, remainderOf } from './lib'
+import { batchStatus, daysToExpiry } from './lib'
 import type { FertilizerBatch, FertilizerRequest } from './types'
 import { formatDate, formatNumber, formatWeight } from '@/lib/format'
 
@@ -20,12 +20,13 @@ import { formatDate, formatNumber, formatWeight } from '@/lib/format'
    Amended per addendum §8: each expiring batch shows whether it can cover open demand,
    and batches with NO matching demand (genuine write-off risk) sort to the top. */
 
-/** Open demand (submitted + approved-undispatched) for an item — the batch can help fulfil this. */
+/**
+ * Open demand for an item — requests awaiting a decision (their requested kg) plus stock already
+ * committed to approved requests (server-computed `committedKg`). The batch can help fulfil this.
+ */
 function openDemandFor(item: string, requests: FertilizerRequest[]): { count: number; kg: number } {
-  const open = requests.filter(
-    (r) => r.item === item && (r.status === 'Submitted' || r.status === 'Approved' || r.status === 'Partially Dispatched'),
-  )
-  const kg = open.reduce((sum, r) => sum + (r.status === 'Submitted' ? r.quantityKg : remainderOf(r)), 0)
+  const open = requests.filter((r) => r.item === item && (r.status === 'Requested' || r.committedKg > 0))
+  const kg = open.reduce((sum, r) => sum + (r.status === 'Requested' ? r.quantityKg : r.committedKg), 0)
   return { count: open.length, kg }
 }
 
@@ -49,6 +50,8 @@ export function FertilizerAlertsPage() {
     isError: requestsError,
     refetch: refetchRequests,
   } = useQuery({ queryKey: ['fertilizer', 'requests'], queryFn: fertilizerService.listRequests })
+  // only for the expiring-soon window (system_settings.fertilizer.expiringSoonDays)
+  const { data: positions } = useQuery({ queryKey: ['fertilizer', 'positions'], queryFn: fertilizerService.listPositions })
 
   const discardMutation = useMutation({
     mutationFn: (id: string) => fertilizerService.discardBatch(id),
@@ -81,7 +84,9 @@ export function FertilizerAlertsPage() {
     )
   }
 
-  const expiring = batches.filter((b) => !b.discarded && daysToExpiry(b) <= 30).sort((a, b) => {
+  // the server marks each batch (same window as FERT-01's "Expiring soon") — nothing recomputed here
+  const windowDays = positions?.[0]?.expiringSoonDays ?? 30
+  const expiring = batches.filter((b) => batchStatus(b) === 'Expiring soon' || batchStatus(b) === 'Expired').sort((a, b) => {
     // Critical (≤7d) first; within a group, no-matching-demand (write-off risk) first; then soonest expiry.
     const critRank = (x: FertilizerBatch) => (daysToExpiry(x) <= 7 ? 0 : 1)
     if (critRank(a) !== critRank(b)) return critRank(a) - critRank(b)
@@ -149,14 +154,14 @@ export function FertilizerAlertsPage() {
           icon={<CalendarClock className="size-4" />}
           tone={within7 > 0 ? 'warning' : 'default'}
         />
-        <StatCard label="Expiring within 30 days" value={within30} format={formatNumber} icon={<CalendarClock className="size-4" />} />
+        <StatCard label={`Expiring within ${windowDays} days`} value={within30} format={formatNumber} icon={<CalendarClock className="size-4" />} />
       </div>
 
       {items.length === 0 ? (
         <EmptyState
           icon={<CheckCircle2 className="size-6" strokeWidth={1.5} />}
           title="No fertilizer nearing expiry"
-          description="All batches are fresh. Alerts appear here when stock comes within 30 days of expiry."
+          description={`All batches are fresh. Alerts appear here when stock comes within ${windowDays} days of expiry.`}
         />
       ) : (
         <AlertList items={items} />

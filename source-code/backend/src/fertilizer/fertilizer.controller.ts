@@ -13,15 +13,30 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt-payload.interface';
 import { UsersService } from '../users/users.service';
 import { CreateBatchDto } from './dto/create-batch.dto';
-import { DecideRequestDto } from './dto/decide-request.dto';
-import { LogRequestDto } from './dto/log-request.dto';
+import {
+  ChangeDeliveryDateDto,
+  CreateRequestsDto,
+  DecideRequestDto,
+  ManagerDecideDto,
+  PaymentMethodDto,
+  QuantityDto,
+  ReasonDto,
+  RecordPaymentDto,
+  RetryDto,
+  SetPriceDto,
+} from './dto/fertilizer-flow.dto';
 import { RecordMovementDto } from './dto/record-movement.dto';
+import { FertilizerDeliveryService } from './fertilizer-delivery.service';
 import type {
   PublicBatch,
   PublicItemPosition,
   PublicMovement,
+  PublicPrice,
   PublicRequest,
+  PublicRequestDetail,
 } from './fertilizer-map';
+import { FertilizerRequestService } from './fertilizer-request.service';
+import { FertilizerViewService } from './fertilizer-view.service';
 import { type Actor, FertilizerService } from './fertilizer.service';
 
 type AuthedRequest = Request & { user: JwtPayload };
@@ -32,6 +47,9 @@ export class FertilizerController {
   constructor(
     private readonly fertilizerService: FertilizerService,
     private readonly usersService: UsersService,
+    private readonly requests: FertilizerRequestService,
+    private readonly deliveries: FertilizerDeliveryService,
+    private readonly view: FertilizerViewService,
   ) {}
 
   @Get('positions')
@@ -71,35 +89,164 @@ export class FertilizerController {
     );
   }
 
+  /* ── Requests (Fertilizer-Delivery-Addendum) ───────────────────── */
+
   @Get('requests')
-  listRequests(): Promise<PublicRequest[]> {
-    return this.fertilizerService.listRequests();
+  async listRequests(): Promise<PublicRequest[]> {
+    await this.deliveries.reconcile();
+    return this.view.list();
   }
 
+  /** FERT-07: one order → one request per item, sharing an order reference. */
   @Post('requests')
-  async logRequest(
-    @Body() dto: LogRequestDto,
+  async createRequests(
+    @Body() dto: CreateRequestsDto,
     @Req() req: AuthedRequest,
-  ): Promise<PublicRequest> {
-    return this.fertilizerService.logRequest(dto, await this.resolveActor(req));
+  ) {
+    return this.requests.createRequests(
+      dto,
+      'web',
+      await this.resolveActor(req),
+    );
   }
 
   @Get('requests/:id')
-  getRequest(@Param('id') id: string): Promise<PublicRequest> {
-    return this.fertilizerService.getRequest(id);
+  async getRequest(@Param('id') id: string): Promise<PublicRequestDetail> {
+    const request = await this.view.find(id);
+    await this.deliveries.reconcile(new Date(), request.id);
+    return this.view.detail(request.id);
   }
 
+  /** Factory Officer: approve / partially approve / reject (`fertilizerApproval: approve`). */
   @Patch('requests/:id/decide')
   async decideRequest(
     @Param('id') id: string,
     @Body() dto: DecideRequestDto,
     @Req() req: AuthedRequest,
-  ): Promise<PublicRequest> {
-    return this.fertilizerService.decideRequest(
+  ): Promise<PublicRequestDetail> {
+    return this.requests.decide(id, dto, await this.resolveActor(req));
+  }
+
+  /** Factory Manager: the second sign-off above the limit (`fertilizerManagerApproval: approve`). */
+  @Patch('requests/:id/manager-decide')
+  async managerDecide(
+    @Param('id') id: string,
+    @Body() dto: ManagerDecideDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.requests.managerDecide(id, dto, await this.resolveActor(req));
+  }
+
+  @Post('requests/:id/ready')
+  async markReady(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.deliveries.markReady(id, await this.resolveActor(req));
+  }
+
+  @Patch('requests/:id/delivery-date')
+  async changeDate(
+    @Param('id') id: string,
+    @Body() dto: ChangeDeliveryDateDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.deliveries.changeDate(
       id,
-      dto,
+      dto.date,
+      dto.reason,
       await this.resolveActor(req),
     );
+  }
+
+  @Post('requests/:id/handover')
+  async handover(
+    @Param('id') id: string,
+    @Body() dto: QuantityDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.deliveries.handover(
+      id,
+      dto.qtyKg,
+      await this.resolveActor(req),
+    );
+  }
+
+  @Post('requests/:id/check-in')
+  async checkIn(
+    @Param('id') id: string,
+    @Body() dto: QuantityDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.deliveries.checkIn(id, dto.qtyKg, await this.resolveActor(req));
+  }
+
+  @Post('requests/:id/retry')
+  async retry(
+    @Param('id') id: string,
+    @Body() dto: RetryDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.deliveries.retry(id, dto.date, await this.resolveActor(req));
+  }
+
+  @Post('requests/:id/release-shortfall')
+  async releaseShortfall(
+    @Param('id') id: string,
+    @Body() dto: ReasonDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.deliveries.releaseShortfall(
+      id,
+      dto.reason,
+      await this.resolveActor(req),
+    );
+  }
+
+  @Post('requests/:id/cancel')
+  async cancel(
+    @Param('id') id: string,
+    @Body() dto: ReasonDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.requests.cancel(id, dto.reason, await this.resolveActor(req));
+  }
+
+  @Patch('requests/:id/payment-method')
+  async setPaymentMethod(
+    @Param('id') id: string,
+    @Body() dto: PaymentMethodDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.requests.setPaymentMethod(
+      id,
+      dto.method,
+      await this.resolveActor(req),
+    );
+  }
+
+  @Post('requests/:id/payments')
+  async recordPayment(
+    @Param('id') id: string,
+    @Body() dto: RecordPaymentDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicRequestDetail> {
+    return this.requests.recordPayment(id, dto, await this.resolveActor(req));
+  }
+
+  /* ── Prices (Administrator) ─────────────────────────────────────── */
+
+  @Get('prices')
+  listPrices(): Promise<PublicPrice[]> {
+    return this.requests.listPrices();
+  }
+
+  @Post('prices')
+  async setPrice(
+    @Body() dto: SetPriceDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicPrice[]> {
+    return this.requests.setPrice(dto, await this.resolveActor(req));
   }
 
   @Get('movements')
@@ -119,8 +266,14 @@ export class FertilizerController {
   }
 
   /** Resolves the JWT's `sub` to the acting user's display name + role for stamping. */
-  private async resolveActor(req: AuthedRequest): Promise<Actor> {
+  private async resolveActor(
+    req: AuthedRequest,
+  ): Promise<Actor & { sub: number }> {
     const profile = await this.usersService.getProfile(Number(req.user.sub));
-    return { name: profile?.name ?? 'Unknown', role: req.user.role };
+    return {
+      name: profile?.name ?? 'Unknown',
+      role: req.user.role,
+      sub: Number(req.user.sub),
+    };
   }
 }

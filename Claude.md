@@ -881,6 +881,212 @@ Migration `database/migrations/2026-10-16-grading-corrections.sql` (idempotent, 
   `freezeClock`/`setClock` that fake only `Date`). A running `nest start --watch` hot-reloads backend changes — don't start a second
   one (port 3000).
 
+## Route schedule (2026-10-22, `feature/fertilizer-delivery`)
+
+Spec: `docs/specs/Route-Schedule-Addendum.md` (amends the dispatch addendum). Branched from `feature/grading-corrections`; `origin/dev`
+NOT merged; uncommitted. Migration `database/migrations/2026-10-22-route-schedule.sql` (idempotent, mirrored in `init.sql`; backfills all
+7 weekdays for existing routes) — **not yet applied to the shared Neon DB; the user applies it on a Neon branch.**
+
+- **Routes don't collect daily.** `route_schedule_weekdays` (weekly pattern, 0 = Sunday) + `route_schedule_overrides` (ADD / CANCEL one
+  date, reason required, UNIQUE route+date; a move = CANCEL + ADD sharing `move_group`). Overrides beat the pattern.
+- **One place reads it:** `dispatch/route-schedule.service.ts` — pure `isScheduledOn` / `nextScheduledDate` (strictly AFTER `fromDate`,
+  366-day horizon, null if none) + `isScheduled` / `nextCollectionDay` / `scheduledRoutesOn` / `agentClash`. Who runs a route is still
+  `getAgentForRoute` (unchanged); callers ask both. Fertilizer dispatch/redelivery will use `nextCollectionDay`.
+- **One agent, many permanent routes, one route per date.** The old "already owns another route" block on permanent reassignment is
+  gone; pattern/override changes and permanent reassignment are refused when an agent would run two of his routes on one date. Un-scheduling
+  today is refused once the route started collecting; covers on a dropped date are cancelled + the agent notified.
+- **Dispatch:** board takes `?date=` (portal date picker; absence/cover/reassign stay today-only). Unscheduled routes: no agent, no stops,
+  `nextCollectionDay`. Agent rows carry `ownRoutes` + `scheduledRoutes`; status `Not scheduled` = holds routes, none run that day (an agent
+  with no routes stays `Not started`). Missed check-ins only for scheduled agents. Cover candidates: `free` agents (no own route that day)
+  rank first, then neighbour/stops/load; candidates, cover requests and today-only reassignment refuse an unscheduled route. COL-02's
+  route-agent lookup returns `scheduled` / `nextScheduledDate` / `nextAgent`. Agent `myStops` lists only scheduled routes.
+- **Permissions:** weekly pattern = `dispatch: approve`; single-date changes = `dispatch: edit`. Portal: `RouteScheduleModal` ("Route
+  schedules" on the board). Seed writes day-relative patterns (Route 4 never runs on the seed day; R. Senanayake holds Routes 3 + 4) and
+  only seeds history/today stops on scheduled days; it never overwrites an existing pattern.
+
+## Fertilizer delivery flow (2026-10-22, `feature/fertilizer-delivery`)
+
+Spec: `docs/specs/Fertilizer-Delivery-Addendum.md` (reconciled against the shipped FERT code — the FERT-01..08 source docs
+were not in the repo yet; diff against them when they land). Migration `database/migrations/2026-10-22-fertilizer-delivery.sql`
+(idempotent; apply AFTER the route-schedule migration; mirrored in `init.sql`) — **not applied to Neon** (a teammate's
+account; never write to it). This branch runs on a private local Postgres: `~/tea-pg-dev` (port 5433, db `tea_dev`, user `tea`,
+no password; `~/tea-pg-dev/start.sh` after a reboot), loaded from `init.sql` + `npm run seed`. Both migrations were verified on a throwaway local Postgres: old HEAD schema + seed → migrate → the mapping
+below on real rows → re-run is a no-op → new seed → API booted and the whole flow walked over HTTP.
+
+- **Statuses** (`fertilizer/fertilizer-flow.ts` `TRANSITIONS`, the only place moves are defined; every change goes through
+  `moveTo()` in `fertilizer-journal.ts`, which also writes `fertilizer_request_events` = the FERT-06 timeline): Requested →
+  (Awaiting manager approval →) Approved | Partially approved | Rejected → Ready for dispatch → Picked up → Out for delivery →
+  Delivered | **Partially delivered** (the one extra status) | Failed → Returned to factory → Rescheduled … → Needs review →
+  Rescheduled (retry) | Cancelled. `fertilizer_requests.status` widened to VARCHAR(30). Legacy mapping: Submitted→Requested,
+  Dispatched/Deducted/Partially Dispatched→Delivered (dispatched qty), Approved→FEFO-allocated or Needs review ("No live stock
+  at migration"). Legacy approvals have no price → priced at first dispatch (logged).
+- **Stock** (`fertilizer-stock-ledger.service.ts`): Committed = Σ ACTIVE `fertilizer_allocations` (FEFO, batch rows locked
+  `pessimistic_write`; approval capped at Available — the portal override is gone). Handover = picked (On Hand↓ Committed↓),
+  check-in = active again (stays the owner's), cancel/reject/owner-refused = released. Handover/check-in write `stock_movements`.
+  FERT-02 Outgoing is ad-hoc only and can't take committed stock. Positions: `FertilizerService.listPositions`.
+- **Dispatch** (`fertilizer-delivery.service.ts`): Ready → attempt on `nextCollectionDay(route, today)`; agent resolved at read
+  time via `getAgentForRoute` until the officer's handover pins `pickup_agent_id`. Handover only on the scheduled day, qty = committed.
+  Dropped/missed dates move lazily (`reconcile`). Check-in qty must match exactly; Nth failure (`system_settings.fertilizer.
+  maxDeliveryAttempts`, 3) → Needs review. `managerApprovalAboveKg` (500, on APPROVED kg) → Awaiting manager approval.
+- **Agent API** (`fertilizer-agent.controller.ts`, `/dispatch/me/fertilizer`): tasks, pickup confirm (evidence; mismatch flag),
+  delivered (photo metadata + owner name + confirm; device time; sync key idempotent), failed (reason list). Dispatch ↔ fertilizer
+  without a module cycle via `dispatch/agent-task-hooks.service.ts` (stop contributor → fertilizer flags on `myStops`, incl.
+  fertilizer-only stops; shift-start listener → Out for delivery).
+- **Money:** price = effective-dated `fertilizer_item_prices` (Administrator, ADM-03 card), snapshotted at approval. Charge written
+  AT DELIVERY (delivered qty × snapshot) on `fertilizer_charges` (`delivery_id`, `payment_method`; `stock_movement_id` now
+  nullable). Deduct = the pending deduction (settlement_id null). Cash/bank → `fertilizer_payments`. ONE balance rule:
+  `fertilizer/fertilizer-balance.ts` `fertilizerOutstanding` — used by EST-10 lifetime + EST-01 directory + FERT-06.
+- **Notices:** `fertilizer_notifications` outbox (grading pattern) + minute cron; "Stored, not delivered" = no device token.
+- **Permissions:** new keys `fertilizerApproval` (Officer approve) and `fertilizerManagerApproval` (Manager approve), Admin view on
+  both, both in `ADMIN_EDITABLE_MODULES`. Officer flow actions = `fertilizer: edit`; prices = `administration: approve`.
+- **Portal:** FERT-05 (stage tabs, attempt/date/agent, payment), FERT-06 (rewritten: decisions, delivery, timeline, payment,
+  allocations, notices), FERT-07 (multi-item order), FERT-02 (ad-hoc only), ADM-03 `FertilizerPricesCard`.
+- **Agent history (2026-10-27):** EMP-03 has a "Fertilizer deliveries" tab (`?tab=fertilizer`) beside Collections for Tea
+  Collecting Agents. It is fed by `GET /employees/:id/fertilizer-deliveries` (`fertilizer/agent-fertilizer-history.service.ts`,
+  exported from `FertilizerModule` and imported by `EmployeesModule`). It lists finished attempts the agent was handed
+  (delivered / part delivered / failed), with the same paging and "Covering Route X" rule as `AgentHistoryService`. It needs
+  `employees` view AND `fertilizer` view.
+- **Tests:** `fertilizer/fertilizer-delivery.spec.ts` + rewritten `fertilizer.service.spec.ts` over
+  `fertilizer/testing/fertilizer-harness.ts` (builds on the dispatch harness + collections `FakeRepo`/`FakeManager`).
+  **Gotcha:** the fakes don't enforce column lengths — two VARCHAR overflows were only caught on a real DB; keep timeline `action`
+  ≤ 80 chars. **Mobile UI for the agent flow is NOT built** (origin/dev not merged) — only the API.
+
+## Portal fixes: dispatch layout, approval UX, payroll months (2026-10-29, `fix/dispatch-fert-payroll`)
+
+Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so; kept separable as three commits.
+- **Dispatch board overlap:**
+  - **Cause:** `StatusBadge` was a fixed-height pill (`h-[22px]`) whose text wrapped and spilled onto the row above. It is now `whitespace-nowrap`, so pills never wrap anywhere.
+  - **`DataTable`:** gained three opt-in props, `Column.minWidth`, `valign="top"` and `stickyFirstColumn`.
+  - **Route cell:** `otherRoutesNote` ("Also holds …" under a route, "Holds: …" when none runs; "Not scheduled" lives only in Status).
+  - **Last seen:** `freshnessShort` keeps it on one line, with the full text as the tooltip.
+  - **Map:** beside the table only at `2xl`.
+- **Fertilizer approval** (Fertilizer-Delivery-Addendum §10):
+  - **FERT-05:** filters in the URL (`readQueueFilters` / `queueParams` / `queueRows` in `fertilizer/lib.ts`); no bulk approve; Reject from a row through a reason modal.
+  - **FERT-06:** review facts (next collection day, asked for *tomorrow*, because Mark ready books strictly after today; price; balance; previous requests), then Approve / Partial approve / Reject modals, then "Next request" (`nextInQueue`, following the `?from=` queue).
+- **One stock-position service** (Fertilizer-Delivery-Addendum §5.1):
+  - **Where:** `backend/src/fertilizer/fertilizer-position.service.ts` is the only place stock is computed.
+  - **Figures:** On Hand (live only), expired kg, committed (+ value), available, pending, expiring soon (`system_settings.fertilizer.expiringSoonDays`, default 30), nearest expiry and status.
+  - **Status, worst first:** Out of stock / Short X kg / Fully committed / Expiring soon / Healthy. "Tight" is gone.
+  - **Batches:** they carry their server `status`, `daysToExpiry` and `freeKg`.
+  - **Requested requests:** they carry `availability` (a verdict and the FEFO plan over **free** stock).
+  - **Portal:** `fertilizer/lib.ts` only formats (`coverageDisplay` caps at ">999%", `availabilityLabel`, `fefoPrefix`). It must never compute stock again.
+  - **Root cause it fixed:** a server status that ignored availability and expiry, plus portal-side request and FEFO math. On Hand never included expired stock.
+- **Request review is visible:**
+  - FERT-05 rows have a **Review** (or **View**) text button.
+  - FERT-06 puts Approve / Partial approve / Reject at the top (`DecisionBar`).
+  - With nothing free, it offers only Reject or "Keep pending until stock arrives" (no server call).
+- **Payroll by month** (`docs/specs/Payroll-Month-History-Addendum.md`):
+  - **Month:** `?month=YYYY-MM`, helpers in `employees/payroll-month.ts` ('2026-10' ↔ the backend period 'October 2026').
+  - **Statuses:** In progress / Ready to process / Processed / No payroll. There is no "Paid".
+  - **Processing:** the current month can't be processed until it ends.
+  - **Audit and calculation:** Generate and Process were *already* audited; the calculation is unchanged.
+
+## Settlements, salary advances, payroll filters (2026-11-01, `fix/dispatch-fert-payroll`)
+
+### Settlement period view (Part A; `docs/specs/Settlement-Period-View-Addendum.md`)
+
+- **Opening month:** EST-07 opens on **last month**.
+  - `?month=YYYY-MM|all` plus every filter and the sort are in the URL.
+  - Filtering, sorting and paging run server-side (`GET /estates/settlements` → `{rows, total, summary, months, routes}`).
+  - The summary is always the whole period.
+- **Sort order:** by the *real* month (`settlement-view.ts`), never the period label. The label sort was why only the "September 20xx" rows showed.
+- **New screens:**
+  - "Owners not yet settled": active owners with confirmed deliveries that month but no settlement row.
+  - Settlement detail at `/estates/settlements/:id`.
+  - CSV export.
+- **New column:** `estates.payment_method` (bank/cash), from migration `2026-11-01-settlement-period-view.sql`.
+  - It is caught by the `.gitignore` "database" rule, so commit it with `git add -f`.
+- **Processing:** Process Settlement now takes the viewed period. There is still **no settlement generator**.
+- **Bank file:** "Generate Bank Payment File" is disabled with "Coming soon".
+- **Shared portal pieces:**
+  - `lib/month.ts` (month helpers);
+  - `components/patterns/MonthPicker` (also used by Payroll);
+  - `lib/csv.ts`;
+  - DataTable's opt-in `serverPage` / `serverSort`.
+
+### Salary advances (Part B; `docs/specs/Salary-Advances-Addendum.md`)
+
+- **Tabs:** EMP-10 has Needs decision / Approved / Rejected / All, a request-date range (default this month), and filters in the URL, all server-side.
+  - **Needs decision ignores the range,** so an old pending request is never hidden.
+- **Detail page:** Approve / Reject at the top, and **a reason is required to reject** (stored in `decision_reason` and audited). It also shows previous advances and the outstanding balance.
+- **One shared calculation:** `employees/advance-balance.ts` is the ONLY place recovery status and remaining balance are computed. It is used by:
+  - the advances pages;
+  - payroll Generate / Process;
+  - the employee page.
+- **Two payroll bugs fixed** (user-approved):
+  - **Generate:** it now reserves the advances it deducts (`payroll_period`), so one advance is never counted in two months.
+  - **Process:** it recovers only what the row reserved (`recovered_period`).
+- **Migration:** `2026-11-01-salary-advances.sql`.
+- **Dates:** **"10 Jul 2026" everywhere.** `lib/format.ts` `formatDate` is the one formatter (it was DD/MM/YYYY).
+- **Advance rules:** no max-amount or one-open-advance rules exist. They are proposed in the addendum, NOT built.
+- **Recoveries (2026-11-02):** each month's deduction is a row in `advance_recoveries` (reserved at Generate, recovered at Process).
+  - A month deducts the smallest of: the installment, the free balance, and `system_settings.payroll.advanceDeductionCapPct`% of gross (default 50, **not a confirmed legal figure**).
+  - **Net payable is never below Rs. 0**; the rest is carried forward.
+  - Process refuses negative rows generated before this rule.
+  - August–November 2026 have Rs. 0 gross because **no attendance is marked** after July.
+- **Installments (2026-11-02, addendum §10):** each advance has a plan (`installment_amount` × months from `start_period`, default next month), and each month deducts at most one installment.
+  - **Approval:** the approver may change the plan (a note is required).
+  - **No self-approval, enforced on the server:** blocked for the requester (`requested_by_user_id`) and by NIC match, using `normalizeNic` (12-digit form).
+  - **Reschedules** (`advance_reschedules`) need someone else's approval.
+  - **Cash repayments** are `cash` recovery rows.
+  - **Leavers:** deactivation stores `deactivated_on`; that month's payroll is `is_final` and owes the whole balance, up to the cap.
+- **Searchable picker (addendum §11):** `components/ui/Combobox` is the one searchable picker for long lists of people or estates.
+  - Logic is in `combobox-logic.ts` (tested).
+  - Used by: Advance request (employee, with balance and open-advance warning), COL-02's `EstatePicker`, Log Fertilizer Request, Issue Estate Advance, Estate Analytics, and the report estate filters.
+  - Reuse it; don't build another per page.
+
+### Payroll filters (Part C; `docs/specs/Payroll-Month-History-Addendum.md` §6–11)
+
+- **Endpoint:** `GET /employees/payroll/month`. Filters and sort live in the URL; the summary is always the whole month ("Showing X of Y" when filtered).
+- **Status vs problems:** Status is only Pending/Processed. Problems are live chips that link to the fix:
+  - **"No bank details"** (bank-paid only) **blocks** processing;
+  - **"Rs. 0 gross"** is a warning.
+- **New column:** `employees.payment_method`, from migration `2026-11-01-payroll-filters.sql`.
+- **Readiness badge:** "Ready to process" only with no blocking issue; otherwise "N issues to fix", which applies `?issues=noBank`.
+- **Processing:** bank-paid employees with no bank details must be **excluded with a reason**, or the run is refused (409, naming them).
+  - Excluded rows stay Pending with `excluded_reason`, and the exclusion is audited.
+  - A month whose remaining rows are all excluded counts as Processed.
+- **Why July showed:** not a bug — it comes from `?month=` links.
+- **Rs 0 agents:** expected. Gross is attendance hours × rates for every role, and the agents have rates of 0 and no attendance.
+
+### Estate Owner Advances (`docs/specs/Estate-Owner-Advances-Addendum.md`)
+
+- **Sidebar:** Finance → Estate Owner Advances (`/estates/advances`), gated by its own data-driven module **`estateAdvances`**. It was seeded at each role's Estate Owner level (migration `2026-11-03-estate-advances.sql`).
+- **Active link:** the sidebar lights only the **most specific** match (`components/layout/nav-match.ts`). Don't bring back `NavLink` `end` lists.
+- **Recoveries:** `estate_advance_recoveries` records which settlement recovered how much (migration `2026-11-03-estate-advance-recoveries.sql`).
+  - `backend/src/estates/estate-advance-balance.ts` is the ONLY remaining-balance rule for estate advances.
+  - The list (`GET /estates/advances`, filtered and paged) and the detail page (`GET /estates/advances/:aid`) use it.
+- **Repayment plans (addendum §4):** `backend/src/advances/installments.ts` is the ONE installment model, shared by salary and estate advances.
+  - It covers schedule, validation, carry-forward, remaining balance, one period's deductions, reschedule and early repayment.
+  - Salary's `advance-schedule.ts` / `advance-balance.ts` are thin wrappers over it. Don't fork the logic again.
+- **Estate plans:**
+  - **Plan:** an estate advance has a plan (`installment_amount` / `installment_months` / `start_period`).
+  - **Recovery rows:** each settlement period it was due in is a recovery row (planned vs deducted; carry-forward extends the schedule). Cash and bank repayments are rows with no period.
+  - **Status:** Deducted only at Rs 0.
+- **Process (no settlement generator yet):** it splits each settlement's *stored* `advance_deduction` across open advances (`allocateStoredAdvanceDeduction`). It never changes settlement amounts.
+  - The future generator should call `planSettlementDeductions`: transport → fertilizer → advances, cap % of gross, net ≥ 0; `system_settings.estateAdvances`.
+- **Outstanding** on /estates and EST-10 = fertilizer + remaining advances.
+- **Inactive estates:**
+  - issuing to one is refused (409);
+  - the picker lists them disabled (`Combobox` `getDisabledReason`);
+  - a balance left on one is flagged, never written off.
+
+## Schema changes are TypeORM migrations now (2026-11-16, stack merge into dev)
+
+dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/data-source.ts`). The stack's hand-applied `database/migrations/*.sql` files are being converted PR by PR (`docs/specs/Stack-Merge-Addendum.md`).
+
+- **New schema work:** add a migration class numbered after the latest one. Keep `init.sql` in step while it's still mounted. Keep the entity exact: lengths, timestamptz, defaults, and CHECK / FK / UNIQUE / index **names**, which TypeORM matches by name. `migration:generate --dryrun` against a freshly migrated database must report no changes; the team's PR pipeline checks schema drift.
+- **Never run migrations or seeds against the hosted DB (Azure VM).** The team's pipeline does that.
+- **Local databases: port 5433 is shared.** 127.0.0.1:5433 can be an ssh tunnel to the hosted DB. Use `DATABASE_URL=postgresql://tea@localhost:5433/<db>?host=::1`. `npm run seed` refuses non-local URLs and non-local servers (`src/local-db-guard.ts`).
+- **A fresh local database:** `createdb` → `npm run migration:run` → `npm run seed`.
+
+## Newcomer's guide (2026-10-18)
+
+`docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React
+basics, and two traced clicks (collections list = read, Grade Delivery = write) from portal to database, plus permissions, JWT, DB,
+outbox/cron, errors, tests, run steps and a first-change recipe. Open the file in a browser. Keep file names/line refs in it in sync when
+the grading, auth or `apiFetch` code moves.
+
 ## Remaining work (as of 2026-08-05)
 
 **See `PLAN.md` at the repo root for the phased execution roadmap** (schema → auth slice →

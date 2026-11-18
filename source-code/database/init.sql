@@ -55,6 +55,10 @@ CREATE TABLE estates (
     bank_name          VARCHAR(100),
     bank_branch        VARCHAR(100),
     bank_account       VARCHAR(30),
+    -- Settlement period view (2026-11-01): how the owner is paid. Cash owners never count as
+    -- "missing bank details"; prepares the bank payment file.
+    payment_method     VARCHAR(10) NOT NULL DEFAULT 'bank'
+        CHECK (payment_method IN ('bank', 'cash')),
     last_updated_by    VARCHAR(100),
     last_updated_on    TIMESTAMP,
     -- Added 2026-07-28 (Estate Owner Lifetime History slice). The tenure
@@ -459,7 +463,11 @@ CREATE TABLE estate_advances (
     date_issued DATE NOT NULL,
     issued_by   VARCHAR(100) NOT NULL,
     status      VARCHAR(20) NOT NULL DEFAULT 'pending_deduction'
-        CHECK (status IN ('pending_deduction', 'deducted')),
+        CHECK (status IN ('pending_deduction', 'recovering', 'deducted')),
+    -- repayment plan (Estate-Owner-Advances-Addendum §4): one installment a settlement period
+    installment_amount DECIMAL(12,2),
+    installment_months INTEGER,
+    start_period       VARCHAR(30), -- e.g. 'December 2026'
     created_at  TIMESTAMP DEFAULT NOW()
 );
 
@@ -492,6 +500,47 @@ CREATE TABLE settlements (
     processed_on         TIMESTAMP,
     created_at           TIMESTAMP DEFAULT NOW()
 );
+
+-- Which settlement recovered how much of an estate advance (Estate-Owner-Advances-Addendum §3).
+-- remaining = estate_advances.amount − Σ amount — the shared estate-advance-balance.ts rule.
+-- kind 'settlement' = one settlement period (planned vs deducted — a short period shows its
+-- carry-forward); 'cash' / 'bank' = an early repayment recorded by an officer (settlement_id null).
+CREATE TABLE estate_advance_recoveries (
+    id             SERIAL PRIMARY KEY,
+    advance_id     VARCHAR(20) NOT NULL REFERENCES estate_advances(id),
+    settlement_id  VARCHAR(20) REFERENCES settlements(id),
+    kind           VARCHAR(12) NOT NULL DEFAULT 'settlement'
+        CHECK (kind IN ('settlement', 'cash', 'bank')),
+    period         VARCHAR(30),
+    planned_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    amount         DECIMAL(12,2) NOT NULL CHECK (amount >= 0),
+    status         VARCHAR(10) NOT NULL DEFAULT 'recovered'
+        CHECK (status IN ('reserved', 'recovered')),
+    reference      VARCHAR(100),
+    paid_on        DATE,
+    recorded_by    VARCHAR(100),
+    recovered_at   TIMESTAMP NOT NULL,
+    created_at     TIMESTAMP DEFAULT NOW(),
+    UNIQUE (advance_id, settlement_id)
+);
+CREATE INDEX estate_advance_recoveries_advance_idx ON estate_advance_recoveries (advance_id);
+
+-- A plan change on an estate advance — approved by someone other than the requester.
+CREATE TABLE estate_advance_reschedules (
+    id                   SERIAL PRIMARY KEY,
+    advance_id           VARCHAR(20) NOT NULL REFERENCES estate_advances(id) ON DELETE CASCADE,
+    installment_amount   DECIMAL(12,2) NOT NULL CHECK (installment_amount > 0),
+    start_period         VARCHAR(30) NOT NULL,
+    note                 TEXT NOT NULL,
+    status               VARCHAR(10) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected')),
+    requested_by_user_id INTEGER REFERENCES users(id),
+    requested_by_name    VARCHAR(100),
+    decided_by           VARCHAR(100),
+    decided_on           TIMESTAMP,
+    decision_reason      TEXT,
+    created_at           TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX idx_estate_advance_reschedules_advance ON estate_advance_reschedules(advance_id);
 
 -- Redefined 2026-07-28 (Estate Owner Lifetime History slice). The original
 -- shape (one row per fertilizer_request_id, UNIQUE) couldn't hold an ad-hoc
@@ -541,6 +590,12 @@ CREATE TABLE employees (
     bank_name        VARCHAR(100),
     bank_branch      VARCHAR(100),
     bank_account     VARCHAR(50),
+    -- Payroll filters (2026-11-01): how the employee is paid. Cash-paid employees never count
+    -- as "No bank details" and never block processing.
+    payment_method   VARCHAR(10) NOT NULL DEFAULT 'bank'
+        CHECK (payment_method IN ('bank', 'cash')),
+    -- Installments (2026-11-02): when the employee left — their final payroll month
+    deactivated_on   DATE,
     day_rate         DECIMAL(8,2) NOT NULL DEFAULT 0,
     day_ot_rate      DECIMAL(8,2) NOT NULL DEFAULT 0,
     night_rate       DECIMAL(8,2) NOT NULL DEFAULT 0,
@@ -590,6 +645,21 @@ CREATE TABLE salary_advances (
     deducted       BOOLEAN NOT NULL DEFAULT FALSE,
     decided_by     VARCHAR(100),
     decided_on     TIMESTAMP,
+    -- Salary advances (2026-11-01): the reason given with the decision (required to reject);
+    -- payroll_period = the payroll month whose row deducts it (reserved at Generate, so it is
+    -- counted once); recovered_period = the month it was recovered (stamped at Process).
+    decision_reason  TEXT,
+    payroll_period   VARCHAR(30),
+    recovered_period VARCHAR(30),
+    -- Installments (2026-11-02): the repayment plan (one deduction = installment = amount, 1 month),
+    -- the first payroll month, who requested it (no self-approval), and the approver's note when
+    -- they changed the plan.
+    installment_amount   DECIMAL(12,2),
+    installment_months   INTEGER CHECK (installment_months IS NULL OR installment_months >= 1),
+    start_period         VARCHAR(30),
+    requested_by_user_id INTEGER REFERENCES users(id),
+    requested_by_name    VARCHAR(100),
+    plan_change_note     TEXT,
     created_at     TIMESTAMP DEFAULT NOW()
 );
 
@@ -620,8 +690,52 @@ CREATE TABLE payroll_runs (
     missing_bank       BOOLEAN NOT NULL DEFAULT FALSE,
     processed_by       VARCHAR(100),
     processed_on       TIMESTAMP,
+    -- Payroll filters (2026-11-01): a bank-paid row with no bank details left out of a run, with
+    -- the officer's required reason. The row stays Pending; a later run picks it up once fixed.
+    excluded_reason    TEXT,
+    excluded_by        VARCHAR(100),
+    excluded_on        TIMESTAMP,
+    -- Installments (2026-11-02): the leaving month's payroll — the whole advance balance is due
+    is_final           BOOLEAN NOT NULL DEFAULT FALSE,
     created_at         TIMESTAMP DEFAULT NOW(),
     UNIQUE (employee_id, period)
+);
+
+-- Advance recoveries (2026-11-02): one row per advance per payroll month (and one per cash
+-- repayment). A payroll month's row is RESERVED at Generate (amount = what that month deducts,
+-- planned = what it meant to deduct; the difference is carried forward) and RECOVERED at Process.
+-- Remaining balance = approved amount − Σ recovered (advance-balance.ts).
+CREATE TABLE advance_recoveries (
+    id             SERIAL PRIMARY KEY,
+    advance_id     VARCHAR(20) NOT NULL REFERENCES salary_advances(id) ON DELETE CASCADE,
+    kind           VARCHAR(10) NOT NULL DEFAULT 'payroll' CHECK (kind IN ('payroll', 'cash')),
+    period         VARCHAR(30),            -- payroll month ('August 2026'); null for cash
+    payroll_run_id VARCHAR(20) REFERENCES payroll_runs(id) ON DELETE SET NULL,
+    status         VARCHAR(10) NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved', 'recovered')),
+    planned_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    amount         DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (amount >= 0),
+    reference      VARCHAR(100),           -- cash repayment receipt / reference
+    paid_on        DATE,                   -- cash repayment date
+    recorded_by    VARCHAR(100),
+    created_at     TIMESTAMP DEFAULT NOW()
+);
+CREATE UNIQUE INDEX uq_advance_recoveries_month ON advance_recoveries(advance_id, period) WHERE kind = 'payroll';
+
+-- A change to an approved plan (new installment / start month): needs approval by someone other
+-- than the requester; processed months are never changed (they're recovery rows).
+CREATE TABLE advance_reschedules (
+    id                   SERIAL PRIMARY KEY,
+    advance_id           VARCHAR(20) NOT NULL REFERENCES salary_advances(id) ON DELETE CASCADE,
+    installment_amount   DECIMAL(12,2) NOT NULL CHECK (installment_amount > 0),
+    start_period         VARCHAR(30) NOT NULL,
+    note                 TEXT NOT NULL,
+    status               VARCHAR(10) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected')),
+    requested_by_user_id INTEGER REFERENCES users(id),
+    requested_by_name    VARCHAR(100),
+    decided_by           VARCHAR(100),
+    decided_on           TIMESTAMP,
+    decision_reason      TEXT,
+    created_at           TIMESTAMP DEFAULT NOW()
 );
 
 -- ─── REPORTS ──────────────────────────────────────────────────────
@@ -736,6 +850,8 @@ CREATE INDEX idx_settlements_status ON settlements(status);
 CREATE INDEX idx_employee_attendance_employee ON employee_attendance(employee_id);
 CREATE INDEX idx_employee_attendance_date ON employee_attendance(date);
 CREATE INDEX idx_salary_advances_employee ON salary_advances(employee_id);
+CREATE INDEX idx_advance_recoveries_advance ON advance_recoveries(advance_id);
+CREATE INDEX idx_advance_reschedules_advance ON advance_reschedules(advance_id);
 CREATE INDEX idx_payroll_runs_employee ON payroll_runs(employee_id);
 CREATE INDEX idx_payroll_runs_status ON payroll_runs(status);
 CREATE INDEX idx_expense_entries_date ON expense_entries(entry_date);
@@ -848,3 +964,235 @@ CREATE INDEX IF NOT EXISTS idx_grading_notifications_due ON grading_notification
 -- Idempotent in-app rows: a retry after a crash can never store the same notification twice.
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS dedupe_key VARCHAR(80);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_notifications_dedupe ON notifications(dedupe_key) WHERE dedupe_key IS NOT NULL;
+
+-- ════════════════════════════════════════════════════════════════
+-- Route schedule (mirrors migrations/2026-10-22-route-schedule.sql)
+-- Spec: docs/specs/Route-Schedule-Addendum.md. Routes run on set weekdays plus
+-- one-date overrides, not daily. Fresh databases have no routes yet, so the
+-- migration's all-weekdays backfill is done by the seed instead.
+-- ════════════════════════════════════════════════════════════════
+
+-- Weekly pattern: one row per (route, weekday); 0 = Sunday … 6 = Saturday
+CREATE TABLE IF NOT EXISTS route_schedule_weekdays (
+    route_id INTEGER  NOT NULL REFERENCES routes(id),
+    weekday  SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+    PRIMARY KEY (route_id, weekday)
+);
+
+-- One-date exceptions. A move = CANCEL(old) + ADD(new) sharing move_group
+CREATE TABLE IF NOT EXISTS route_schedule_overrides (
+    id         SERIAL PRIMARY KEY,
+    route_id   INTEGER NOT NULL REFERENCES routes(id),
+    date       DATE NOT NULL,
+    kind       VARCHAR(6) NOT NULL CHECK (kind IN ('ADD', 'CANCEL')),
+    reason     TEXT NOT NULL,
+    move_group UUID,
+    created_by VARCHAR(100) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (route_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_route_overrides_route_date ON route_schedule_overrides (route_id, date);
+
+-- ════════════════════════════════════════════════════════════════
+-- Fertilizer delivery (mirrors migrations/2026-10-22-fertilizer-delivery.sql, minus the
+-- legacy-row mapping/backfill a fresh database doesn't need).
+-- Spec: docs/specs/Fertilizer-Delivery-Addendum.md
+-- ════════════════════════════════════════════════════════════════
+
+
+-- ─── Requests: new lifecycle + the columns the flow needs ──────────────────
+ALTER TABLE fertilizer_requests
+    ADD COLUMN IF NOT EXISTS order_ref          VARCHAR(30),
+    ADD COLUMN IF NOT EXISTS route_id           INTEGER REFERENCES routes(id),
+    ADD COLUMN IF NOT EXISTS payment_method     VARCHAR(10) NOT NULL DEFAULT 'deduct',
+    ADD COLUMN IF NOT EXISTS decision_reason    TEXT,
+    ADD COLUMN IF NOT EXISTS rate_per_kg        DECIMAL(8,2),
+    ADD COLUMN IF NOT EXISTS price_id           INTEGER,
+    ADD COLUMN IF NOT EXISTS delivered_qty_kg   DECIMAL(10,2) NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS cycle_failures     INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS manager_decided_by VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS manager_decided_on TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS updated_at         TIMESTAMP DEFAULT NOW();
+
+ALTER TABLE fertilizer_requests DROP CONSTRAINT IF EXISTS fertilizer_requests_payment_method_check;
+ALTER TABLE fertilizer_requests ADD CONSTRAINT fertilizer_requests_payment_method_check
+    CHECK (payment_method IN ('deduct', 'cash', 'bank'));
+
+ALTER TABLE fertilizer_requests DROP CONSTRAINT IF EXISTS fertilizer_requests_status_check;
+-- "Awaiting manager approval" is 25 characters; the column was VARCHAR(20).
+ALTER TABLE fertilizer_requests ALTER COLUMN status TYPE VARCHAR(30);
+ALTER TABLE fertilizer_requests ALTER COLUMN status SET DEFAULT 'Requested';
+ALTER TABLE fertilizer_requests ADD CONSTRAINT fertilizer_requests_status_check
+    CHECK (status IN ('Requested', 'Awaiting manager approval', 'Approved', 'Partially approved',
+                      'Rejected', 'Ready for dispatch', 'Picked up', 'Out for delivery',
+                      'Partially delivered', 'Delivered', 'Failed', 'Returned to factory',
+                      'Rescheduled', 'Needs review', 'Cancelled'));
+
+CREATE INDEX IF NOT EXISTS idx_fertilizer_requests_order ON fertilizer_requests(order_ref);
+
+-- ─── Item prices (effective-dated; the rate is SNAPSHOTTED onto a request) ──
+CREATE TABLE IF NOT EXISTS fertilizer_item_prices (
+    id             SERIAL PRIMARY KEY,
+    item           VARCHAR(100) NOT NULL,
+    rate_per_kg    DECIMAL(8,2) NOT NULL CHECK (rate_per_kg >= 0),
+    effective_date DATE NOT NULL,
+    set_by         VARCHAR(100) NOT NULL,
+    created_at     TIMESTAMP DEFAULT NOW(),
+    UNIQUE (item, effective_date)
+);
+
+-- ─── FEFO allocations: which batch's stock is promised to which request ─────
+-- Committed = Σ qty_kg of ACTIVE rows. 'picked' = handed to an agent (left on-hand);
+-- 'released' = given back to general stock (cancel / reject / owner refused).
+CREATE TABLE IF NOT EXISTS fertilizer_allocations (
+    id         SERIAL PRIMARY KEY,
+    request_id INTEGER NOT NULL REFERENCES fertilizer_requests(id),
+    batch_id   INTEGER NOT NULL REFERENCES fertilizer_batches(id),
+    qty_kg     DECIMAL(10,2) NOT NULL CHECK (qty_kg > 0),
+    state      VARCHAR(10) NOT NULL DEFAULT 'active'
+        CHECK (state IN ('active', 'picked', 'released')),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_fert_alloc_request ON fertilizer_allocations(request_id);
+CREATE INDEX IF NOT EXISTS idx_fert_alloc_batch_state ON fertilizer_allocations(batch_id, state);
+
+-- ─── Delivery attempts: the fertilizer flag on a route stop (one row per attempt) ──
+CREATE TABLE IF NOT EXISTS fertilizer_deliveries (
+    id                 SERIAL PRIMARY KEY,
+    request_id         INTEGER NOT NULL REFERENCES fertilizer_requests(id),
+    attempt_no         INTEGER NOT NULL,
+    estate_id          INTEGER NOT NULL REFERENCES estates(id),
+    route_id           INTEGER NOT NULL REFERENCES routes(id),
+    scheduled_date     DATE NOT NULL,
+    -- pickup: the officer's handover moves the stock; the agent's confirmation is evidence
+    pickup_agent_id    INTEGER REFERENCES collection_agents(id),
+    handover_qty_kg    DECIMAL(10,2),
+    handover_by        VARCHAR(100),
+    handover_at        TIMESTAMPTZ,
+    agent_confirm_qty_kg DECIMAL(10,2),
+    agent_confirmed_at TIMESTAMPTZ,                 -- device time
+    pickup_mismatch    BOOLEAN NOT NULL DEFAULT FALSE,
+    pickup_sync_key    VARCHAR(80) UNIQUE,
+    out_for_delivery_at TIMESTAMPTZ,
+    -- outcome at the estate
+    outcome            VARCHAR(10) CHECK (outcome IN ('delivered', 'partial', 'failed')),
+    delivered_qty_kg   DECIMAL(10,2),
+    shortfall_reason   TEXT,
+    owner_name         VARCHAR(100),
+    owner_confirmed_at TIMESTAMPTZ,                 -- device time of the owner's tap
+    photos             JSONB NOT NULL DEFAULT '[]', -- [{label, takenAt, takenBy, photoUrl?}]
+    fail_reason        VARCHAR(20)
+        CHECK (fail_reason IN ('owner_not_available', 'road_not_passable', 'owner_refused',
+                               'wrong_estate', 'other')),
+    fail_note          TEXT,
+    recorded_at        TIMESTAMPTZ,                 -- device time of the outcome
+    synced_at          TIMESTAMPTZ,                 -- server time it arrived
+    outcome_sync_key   VARCHAR(80) UNIQUE,
+    -- check-in of what came back
+    checked_in_qty_kg  DECIMAL(10,2),
+    checked_in_by      VARCHAR(100),
+    checked_in_at      TIMESTAMPTZ,
+    cancelled_at       TIMESTAMPTZ,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (request_id, attempt_no)
+);
+CREATE INDEX IF NOT EXISTS idx_fert_deliveries_route_date ON fertilizer_deliveries(route_id, scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_fert_deliveries_agent ON fertilizer_deliveries(pickup_agent_id);
+
+-- ─── Timeline: who did what, when, and why (append-only) ────────────────────
+CREATE TABLE IF NOT EXISTS fertilizer_request_events (
+    id          SERIAL PRIMARY KEY,
+    request_id  INTEGER NOT NULL REFERENCES fertilizer_requests(id),
+    at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    device_at   TIMESTAMPTZ,                        -- set when the agent's phone recorded it
+    actor       VARCHAR(100) NOT NULL,
+    actor_role  VARCHAR(30) NOT NULL,
+    action      VARCHAR(80) NOT NULL,
+    from_status VARCHAR(30),
+    to_status   VARCHAR(30),
+    note        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_fert_events_request ON fertilizer_request_events(request_id, at);
+
+-- ─── Charges: one per DELIVERY now (qty delivered × snapshot rate) ──────────
+ALTER TABLE fertilizer_charges ALTER COLUMN stock_movement_id DROP NOT NULL;
+ALTER TABLE fertilizer_charges
+    ADD COLUMN IF NOT EXISTS delivery_id    INTEGER UNIQUE REFERENCES fertilizer_deliveries(id),
+    ADD COLUMN IF NOT EXISTS payment_method VARCHAR(10);
+
+-- ─── Cash / bank payments recorded by an officer ────────────────────────────
+CREATE TABLE IF NOT EXISTS fertilizer_payments (
+    id          SERIAL PRIMARY KEY,
+    request_id  INTEGER NOT NULL REFERENCES fertilizer_requests(id),
+    estate_id   INTEGER NOT NULL REFERENCES estates(id),
+    amount      DECIMAL(12,2) NOT NULL CHECK (amount > 0),
+    paid_on     DATE NOT NULL,
+    method      VARCHAR(10) NOT NULL CHECK (method IN ('cash', 'bank')),
+    reference   VARCHAR(100),
+    recorded_by VARCHAR(100) NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+    CHECK (method <> 'bank' OR reference IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_fert_payments_request ON fertilizer_payments(request_id);
+CREATE INDEX IF NOT EXISTS idx_fert_payments_estate ON fertilizer_payments(estate_id);
+
+-- ─── Owner notification outbox (same claim/sweep design as grading_notifications) ──
+CREATE TABLE IF NOT EXISTS fertilizer_notifications (
+    id               SERIAL PRIMARY KEY,
+    request_id       INTEGER NOT NULL REFERENCES fertilizer_requests(id),
+    kind             VARCHAR(20) NOT NULL
+        CHECK (kind IN ('approved', 'partially_approved', 'rejected', 'dispatched',
+                        'delivered', 'failed', 'cancelled')),
+    status           VARCHAR(10) NOT NULL DEFAULT 'queued'
+        CHECK (status IN ('queued', 'sending', 'sent', 'failed', 'cancelled')),
+    send_after       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    attempts         INTEGER NOT NULL DEFAULT 0,
+    last_error       TEXT,
+    sent_at          TIMESTAMPTZ,
+    device_delivered BOOLEAN,                       -- false = stored for the owner, no device to push to
+    payload          JSONB NOT NULL DEFAULT '{}',
+    dedupe_key       VARCHAR(80) NOT NULL UNIQUE,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_fert_notifications_due ON fertilizer_notifications(status, send_after);
+
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
+ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
+    CHECK (type IN ('delivery_confirmation', 'otp', 'complaint',
+                    'fertilizer_approval', 'payment_update',
+                    'collection_complete', 'no_agents',
+                    'cover_request', 'cover_response', 'missed_checkin',
+                    'route_reassigned', 'exception_request',
+                    'delivery_graded', 'grade_correction', 'fertilizer_update'));
+
+-- ─── Settings + permissions ─────────────────────────────────────────────────
+INSERT INTO system_settings (key, value, updated_by)
+VALUES ('fertilizer', '{"managerApprovalAboveKg": 500, "maxDeliveryAttempts": 3}'::jsonb, 'migration')
+ON CONFLICT (key) DO NOTHING;
+
+-- Estate owner advances (Estate-Owner-Advances-Addendum §4). deductionCapPct 50 is a placeholder,
+-- not a confirmed rule; deductionOrder is the order a settlement takes its deductions in.
+INSERT INTO system_settings (key, value, updated_by)
+VALUES ('estateAdvances', '{"deductionCapPct": 50, "maxInstallmentMonths": 6, "netWarnPct": 50, "deductionOrder": ["transport", "fertilizer", "advances"]}'::jsonb, 'migration')
+ON CONFLICT (key) DO NOTHING;
+
+-- fertilizerApproval        approve = approve / partially approve / reject a request
+-- fertilizerManagerApproval approve = the second sign-off above managerApprovalAboveKg
+-- Separate keys because `approve` implies `edit`; the Administrator audits (view).
+INSERT INTO role_permissions (role, module, level) VALUES
+    ('Administrator',    'fertilizerApproval',        'view'),
+    ('Officer',          'fertilizerApproval',        'approve'),
+    ('Manager',          'fertilizerApproval',        'view'),
+    ('ReceivingOfficer', 'fertilizerApproval',        'none'),
+    ('Administrator',    'fertilizerManagerApproval', 'view'),
+    ('Officer',          'fertilizerManagerApproval', 'view'),
+    ('Manager',          'fertilizerManagerApproval', 'approve'),
+    ('ReceivingOfficer', 'fertilizerManagerApproval', 'none'),
+    -- Estate Owner Advances (EST-05) — its own sidebar entry, seeded at each role's Estate Owner level
+    ('Administrator',    'estateAdvances',            'approve'),
+    ('Officer',          'estateAdvances',            'edit'),
+    ('Manager',          'estateAdvances',            'view'),
+    ('ReceivingOfficer', 'estateAdvances',            'none')
+ON CONFLICT (role, module) DO NOTHING;

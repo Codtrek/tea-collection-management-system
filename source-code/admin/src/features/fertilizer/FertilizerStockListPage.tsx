@@ -11,10 +11,12 @@ import { Select } from '@/components/ui/Select'
 import { useAuth } from '@/context/AuthContext'
 import * as fertilizerService from '@/services/fertilizer'
 import { StockPositionTable } from './StockPositionTable'
-import { itemsBelowDemand, pendingRequests, committedSummary, shortfalls } from './lib'
+import { itemsBelowDemand, committedSummary, shortfalls } from './lib'
 import type { CoverageStatus, ItemCategory } from './types'
 import { formatCurrency, formatWeight } from '@/lib/format'
 import { cn } from '@/lib/cn'
+
+const COVERAGE_STATUSES: CoverageStatus[] = ['Out of stock', 'Short', 'Fully committed', 'Expiring soon', 'Healthy']
 
 /*
   FERT-01 — Fertilizer Stock Position (addendum §5). Item-level, because staff ask
@@ -77,10 +79,11 @@ export function FertilizerStockListPage() {
     )
   }
 
+  // every card reads the server's positions (the one stock-position service)
   const below = itemsBelowDemand(positions)
-  const pending = pendingRequests(requests)
-  const pendingKg = pending.reduce((s, r) => s + r.quantityKg, 0)
-  const committed = committedSummary(requests)
+  const pendingCount = positions.reduce((s, p) => s + p.pendingCount, 0)
+  const pendingKg = positions.reduce((s, p) => s + p.pendingDemand, 0)
+  const committed = committedSummary(positions, requests)
   const shortfallList = shortfalls(positions)
   const shortfallKg = shortfallList.reduce((s, r) => s + r.shortfallKg, 0)
 
@@ -120,7 +123,7 @@ export function FertilizerStockListPage() {
         <SummaryCard
           icon={<ClipboardList className="size-4" />}
           label="Requests pending approval"
-          value={String(pending.length)}
+          value={String(pendingCount)}
           note={`${formatWeight(pendingKg)} total`}
           onClick={() => navigate('/fertilizer/requests')}
         />
@@ -181,7 +184,7 @@ export function FertilizerStockListPage() {
           placeholder="All coverage"
           value={coverage}
           onChange={(e) => setCoverage(e.target.value)}
-          options={['Healthy', 'Tight', 'Short'].map((c) => ({ value: c, label: c }))}
+          options={COVERAGE_STATUSES.map((c) => ({ value: c, label: c }))}
         />
       </div>
 

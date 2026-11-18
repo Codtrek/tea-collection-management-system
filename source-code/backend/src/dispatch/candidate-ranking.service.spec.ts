@@ -23,12 +23,16 @@ describe('CandidateRankingService.rank', () => {
 
     const ranked = await h.ranking.rank(1, TODAY);
 
-    expect(ranked.map((c) => c.agentId)).toEqual([2, 4, 3, 5]);
-    expect(ranked[0]).toMatchObject({ neighbour: true, remainingStops: 1 });
-    expect(ranked[1]).toMatchObject({ neighbour: true, remainingStops: 3 });
-    expect(ranked[2]).toMatchObject({ neighbour: false, ownRouteId: 3 });
-    // agent 5 has no route of their own: zero load, not a neighbour
-    expect(ranked[3]).toMatchObject({ ownRouteId: null, remainingStops: 0 });
+    // agent 5 runs no route today, so is the freest choice and comes first
+    expect(ranked.map((c) => c.agentId)).toEqual([5, 2, 4, 3]);
+    expect(ranked[0]).toMatchObject({
+      free: true,
+      ownRouteId: null,
+      remainingStops: 0,
+    });
+    expect(ranked[1]).toMatchObject({ neighbour: true, remainingStops: 1 });
+    expect(ranked[2]).toMatchObject({ neighbour: true, remainingStops: 3 });
+    expect(ranked[3]).toMatchObject({ neighbour: false, ownRouteId: 3 });
   });
 
   it('never offers the route’s own agent', async () => {
@@ -135,7 +139,17 @@ describe('CandidateRankingService.rank', () => {
     const h = scenario();
     h.cover(1, 2, 'DECLINED');
     const ranked = await h.ranking.rank(1, TODAY);
-    expect(ranked[0].agentId).toBe(4); // next neighbour
+    expect(ranked.slice(0, 2).map((c) => c.agentId)).toEqual([5, 4]); // free agent, next neighbour
     expect(ranked.at(-1)).toMatchObject({ agentId: 2, previouslyAsked: true });
+  });
+});
+
+describe('CandidateRankingService.rank with route schedules', () => {
+  it('ranks an agent whose own route is not scheduled that day as free', async () => {
+    const h = scenario();
+    h.pattern(3, [1, 4]); // agent 3's Route 3 runs Mon/Thu — today is Friday
+    const ranked = await h.ranking.rank(1, TODAY);
+    expect(ranked.slice(0, 2).map((c) => c.agentId)).toEqual([3, 5]);
+    expect(ranked[0]).toMatchObject({ free: true, ownRouteId: null });
   });
 });

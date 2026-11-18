@@ -1,6 +1,7 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { PanelLeftClose, PanelLeft } from 'lucide-react'
 import { NAV_GROUPS } from './nav'
+import { activeNavTo } from './nav-match'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/cn'
 import fullLogo from '@/assets/brand/fullLogoGreen.svg'
@@ -9,16 +10,17 @@ import brandMark from '@/assets/brand/brandLogoGreen.svg'
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { can } = useAuth()
   const { pathname } = useLocation()
-  // Agent Dispatch lives under /collections/…, so the plain Collection entry (which matches by
-  // prefix, to stay lit on record pages) must step aside on the dispatch page.
-  const onDispatchPage = pathname.startsWith('/collections/dispatch')
-  const isLit = (to: string, isActive: boolean) => isActive && !(to === '/collections' && onDispatchPage)
 
   // Permission-aware: whole group hides when no child is permitted (§4 — hidden, never greyed).
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
     items: g.items.filter((i) => can(i.module, 'view')),
   })).filter((g) => g.items.length > 0)
+  // Only the most specific match lights (/estates/advances/new → Estate Owner Advances, not Estate Owners).
+  const litTo = activeNavTo(
+    pathname,
+    groups.flatMap((g) => g.items.map((i) => i.to)),
+  )
 
   return (
     <aside
@@ -40,28 +42,20 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             <ul className="flex flex-col gap-0.5">
               {group.items.map((item) => (
                 <li key={item.to}>
-                  <NavLink
+                  <Link
                     to={item.to}
-                    end={item.to === '/employees' || item.to === '/fertilizer'}
                     title={collapsed ? item.label : undefined}
-                    className={({ isActive }) =>
-                      cn(
-                        'group relative flex items-center gap-3 rounded-[var(--radius-sm)] px-2 py-2 text-sm font-medium transition-colors',
-                        collapsed && 'justify-center',
-                        isLit(item.to, isActive)
-                          ? 'bg-brand-soft text-primary'
-                          : 'text-text-muted hover:bg-surface-hover hover:text-text',
-                      )
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {isLit(item.to, isActive) && <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand" />}
-                        <item.icon className="size-5 shrink-0" strokeWidth={1.5} />
-                        {!collapsed && <span className="truncate">{item.label}</span>}
-                      </>
+                    aria-current={item.to === litTo ? 'page' : undefined}
+                    className={cn(
+                      'group relative flex items-center gap-3 rounded-[var(--radius-sm)] px-2 py-2 text-sm font-medium transition-colors',
+                      collapsed && 'justify-center',
+                      item.to === litTo ? 'bg-brand-soft text-primary' : 'text-text-muted hover:bg-surface-hover hover:text-text',
                     )}
-                  </NavLink>
+                  >
+                    {item.to === litTo && <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand" />}
+                    <item.icon className="size-5 shrink-0" strokeWidth={1.5} />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </Link>
                 </li>
               ))}
             </ul>

@@ -9,6 +9,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -89,4 +90,44 @@ export class PushTokenDto {
   @IsString()
   @MaxLength(10)
   platform?: string;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Route-Schedule-Addendum §6 — the weekly pattern (0 = Sunday … 6 = Saturday). Empty = never. */
+export class SetWeekdaysDto {
+  @IsArray()
+  @ArrayMaxSize(7)
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(6, { each: true })
+  weekdays: number[];
+}
+
+/** Add or cancel one collection date. */
+export class ScheduleOverrideDto {
+  @Matches(ISO_DATE, { message: 'date must be YYYY-MM-DD.' })
+  date: string;
+
+  @IsIn(['ADD', 'CANCEL'])
+  kind: 'ADD' | 'CANCEL';
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  reason: string;
+}
+
+/** Move one collection date to another. */
+export class MoveScheduleDateDto {
+  @Matches(ISO_DATE, { message: 'fromDate must be YYYY-MM-DD.' })
+  fromDate: string;
+
+  @Matches(ISO_DATE, { message: 'toDate must be YYYY-MM-DD.' })
+  toDate: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  reason: string;
 }

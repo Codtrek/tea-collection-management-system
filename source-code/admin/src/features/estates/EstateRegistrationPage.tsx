@@ -13,12 +13,12 @@ import { Toggle } from '@/components/ui/Toggle'
 import { MultiStepWizard } from '@/components/patterns/MultiStepWizard'
 import { useToast } from '@/components/ui/Toast'
 import * as estatesService from '@/services/estates'
-import { estateOwnerSchema, type EstateOwnerForm, BANKS, BRANCHES } from './schema'
+import { estateOwnerSchema, type EstateOwnerForm, BANKS, BRANCHES, PAYMENT_METHOD_OPTIONS } from './schema'
 
 const STEPS = [
   { id: 'owner', label: 'Owner Details', fields: ['ownerName', 'nic', 'contact', 'email'] },
   { id: 'estate', label: 'Estate Location & Route', fields: ['estateName', 'address', 'location'] },
-  { id: 'bank', label: 'Bank Details', fields: ['bank', 'branch', 'account'] },
+  { id: 'bank', label: 'Bank Details', fields: ['paymentMethod', 'bank', 'branch', 'account'] },
   { id: 'documents', label: 'Documents', fields: [] },
   { id: 'review', label: 'Review', fields: [] },
 ] as const
@@ -41,7 +41,7 @@ export function EstateRegistrationPage() {
   } = useForm<EstateOwnerForm>({
     resolver: zodResolver(estateOwnerSchema),
     mode: 'onBlur',
-    defaultValues: { selfDelivery: false, email: '' },
+    defaultValues: { selfDelivery: false, email: '', paymentMethod: 'bank', bank: '', branch: '', account: '' },
   })
   const values = useWatch({ control })
 
@@ -125,6 +125,8 @@ export function EstateRegistrationPage() {
 
             {step === 2 && (
               <div className="grid gap-4 sm:grid-cols-2">
+                <Select label="Paid by" options={PAYMENT_METHOD_OPTIONS} {...register('paymentMethod')} />
+                <div className="hidden sm:block" />
                 <Select label="Bank" placeholder="Select bank" error={errors.bank?.message} options={BANKS.map((b) => ({ value: b, label: b }))} {...register('bank')} />
                 <Select label="Branch" placeholder="Select branch" error={errors.branch?.message} options={BRANCHES.map((b) => ({ value: b, label: b }))} {...register('branch')} />
                 <Input
@@ -156,7 +158,7 @@ export function EstateRegistrationPage() {
               <div className="flex flex-col gap-4">
                 <ReviewGroup title="Owner" rows={[['Name', values.ownerName], ['NIC', values.nic], ['Contact', values.contact], ['Email', values.email || '—']]} />
                 <ReviewGroup title="Estate" rows={[['Estate', values.estateName], ['Location', values.location], ['Address', values.address], ['Route', 'Auto-assigned'], ['Self-delivery', values.selfDelivery ? 'Yes — transport exempt' : 'No']]} />
-                <ReviewGroup title="Bank" rows={[['Bank', values.bank], ['Branch', values.branch], ['Account', values.account]]} />
+                <ReviewGroup title="Bank" rows={[['Paid by', values.paymentMethod === 'cash' ? 'Cash' : 'Bank transfer'], ['Bank', values.bank || '—'], ['Branch', values.branch || '—'], ['Account', values.account || '—']]} />
               </div>
             )}
 

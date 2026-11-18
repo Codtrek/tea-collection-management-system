@@ -1,3 +1,5 @@
+import type { PayslipAdvanceLine, RecoveryStatus } from './advance-balance';
+
 /**
  * DB ↔ portal mapping for the Employees module. Unlike Estates/Collections,
  * every status enum here uses the exact same string on both sides (the DB
@@ -11,6 +13,8 @@ export type DbEmploymentType = 'Permanent' | 'Contract' | 'Casual';
 export type DbAttendanceStatus = 'Present' | 'Absent' | 'Leave' | 'Half-day';
 export type DbAdvanceStatus = 'Pending' | 'Approved' | 'Rejected';
 export type DbPayrollStatus = 'Pending' | 'Processed';
+/** how an employee is paid (Payroll filters, 2026-11-01) */
+export type EmployeePaymentMethod = 'bank' | 'cash';
 
 /** 'EMP-0001' — formatted from the employees.id serial, not stored directly. */
 export function formatEmployeeId(id: number): string {
@@ -50,6 +54,7 @@ export interface PublicEmployee {
   employmentType: DbEmploymentType;
   status: DbEmployeeStatus;
   bank: EmployeeBank;
+  paymentMethod: EmployeePaymentMethod;
   hasLogin: boolean;
   lastUpdatedBy?: string;
   lastUpdatedOn?: string;
@@ -72,6 +77,27 @@ export interface PublicAdvance {
   status: DbAdvanceStatus;
   decidedBy?: string;
   decidedOn?: string;
+  /** given with the decision — always present on a rejection made since 2026-11-01 */
+  decisionReason?: string;
+  /** Salary-Advances-Addendum — from advance-balance.ts, the one place these are computed */
+  recovery: RecoveryStatus | null;
+  remaining: number;
+  /** Σ recovered so far */
+  recovered: number;
+  /** Σ (planned − deducted) over its payroll months — what the gross couldn't take */
+  carriedForward: number;
+  /** the Pending payroll month that deducts from it next, if one is reserved */
+  payrollPeriod: string | null;
+  /** the latest month it was (partly) recovered in */
+  recoveredPeriod: string | null;
+  /** the repayment plan (Salary-Advances-Addendum §10) */
+  plan: { installment: number; months: number; startPeriod: string | null };
+  /** the next month that deducts from it, and the month it clears (projected) */
+  nextPeriod: string | null;
+  clearedPeriod: string | null;
+  requestedBy?: string;
+  /** the approver's note when they changed the requested plan */
+  planChangeNote?: string;
 }
 
 export interface PublicAttendance {
@@ -95,6 +121,12 @@ export interface PublicPayrollRow {
   deductions: { advances: number; other: number };
   status: DbPayrollStatus;
   missingBank?: boolean;
+  /** left out of a run with this reason (bank-paid, no bank details); the row stays Pending */
+  excludedReason?: string;
+  /** Salary-Advances-Addendum §9 — per advance: planned / deducted / carried forward / remaining */
+  advanceLines?: PayslipAdvanceLine[];
+  /** the leaving month's payroll — the whole advance balance was due (up to the cap) */
+  isFinal?: boolean;
   /** Additive — shift-hours/rate breakdown behind the stored `gross` snapshot. */
   shiftHours?: ShiftHours;
   rates?: ShiftHours;

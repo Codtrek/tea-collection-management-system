@@ -6,7 +6,7 @@ import { AreaChartCard, DonutChartCard } from '@/components/charts/ChartCard'
 import { GRADE_NORMAL, GRADE_SUPER } from '@/components/charts/palette'
 import { StatCard } from '@/components/data/StatCard'
 import { ErrorState } from '@/components/data/ErrorState'
-import { Select } from '@/components/ui/Select'
+import { Combobox } from '@/components/ui/Combobox'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import * as estatesService from '@/services/estates'
@@ -100,11 +100,17 @@ export function EstateAnalyticsPage() {
       />
 
       <div className="mb-5 max-w-sm">
-        <Select
+        <Combobox
           label="Estate"
+          placeholder="Search estate, owner or EST- number…"
+          noun="estates"
+          items={[...(estates ?? [])].sort((a, b) => a.estateName.localeCompare(b.estateName))}
           value={selected ?? ''}
-          onChange={(e) => setEstateId(e.target.value)}
-          options={(estates ?? []).map((e) => ({ value: e.id, label: `${e.estateName} — ${e.ownerName}` }))}
+          onChange={(id) => id && setEstateId(id)}
+          getKey={(e) => e.id}
+          getLabel={(e) => `${e.estateName} — ${e.ownerName}`}
+          getMeta={(e) => `${e.id} · ${e.route || 'No route'}`}
+          clearable={false}
         />
       </div>
 

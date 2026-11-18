@@ -19,6 +19,7 @@ import { AgentHistoryService } from './agent-history.service';
 import { AgentProvisioningService } from './agent-provisioning.service';
 import { AgentLocationPingEntity } from './agent-location-ping.entity';
 import { AgentSelfService } from './agent-self.service';
+import { AgentTaskHooks } from './agent-task-hooks.service';
 import { CandidateRankingService } from './candidate-ranking.service';
 import { CollectionAgentEntity } from './collection-agent.entity';
 import { DevicePushTokenEntity } from './device-push-token.entity';
@@ -35,6 +36,11 @@ import { RouteAssignmentEntity } from './route-assignment.entity';
 import { RouteLoadService } from './route-load.service';
 import { RouteNeighbourEntity } from './route-neighbour.entity';
 import { RouteResolverService } from './route-resolver.service';
+import {
+  RouteScheduleOverrideEntity,
+  RouteScheduleWeekdayEntity,
+} from './route-schedule.entity';
+import { RouteScheduleService } from './route-schedule.service';
 
 @Module({
   imports: [
@@ -42,6 +48,8 @@ import { RouteResolverService } from './route-resolver.service';
     TypeOrmModule.forFeature([
       RouteAssignmentEntity,
       RouteNeighbourEntity,
+      RouteScheduleWeekdayEntity,
+      RouteScheduleOverrideEntity,
       AgentDayStatusEntity,
       AgentLocationPingEntity,
       DevicePushTokenEntity,
@@ -64,6 +72,7 @@ import { RouteResolverService } from './route-resolver.service';
   controllers: [DispatchController, DispatchAgentController],
   providers: [
     RouteResolverService,
+    RouteScheduleService,
     RouteLoadService,
     CandidateRankingService,
     AgentDirectoryService,
@@ -75,16 +84,20 @@ import { RouteResolverService } from './route-resolver.service';
     PositionCacheService,
     DispatchService,
     AgentSelfService,
+    AgentTaskHooks,
     DispatchTasks,
   ],
   exports: [
     RouteResolverService,
+    RouteScheduleService,
     AgentDirectoryService,
     AgentHistoryService,
     AgentProvisioningService,
     DispatchAccessService,
     DispatchNotifier,
     RouteLoadService,
+    AgentSelfService,
+    AgentTaskHooks,
   ],
 })
 export class DispatchModule {}

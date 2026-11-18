@@ -13,7 +13,7 @@ import { Toggle } from '@/components/ui/Toggle'
 import { MultiStepWizard } from '@/components/patterns/MultiStepWizard'
 import { useToast } from '@/components/ui/Toast'
 import * as employeesService from '@/services/employees'
-import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS } from './schema'
+import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS, PAYMENT_METHOD_OPTIONS } from './schema'
 import { InitialPasswordModal } from './InitialPasswordModal'
 import { useEmployeeRoles } from './useEmployeeRoles'
 import type { Employee } from './types'
@@ -26,7 +26,7 @@ const STEPS = [
     label: 'Employment Details',
     fields: ['role', 'department', 'hireDate', 'employmentType', 'dayRate', 'dayOtRate', 'nightRate', 'nightOtRate'],
   },
-  { id: 'bank', label: 'Bank Details', fields: ['bank', 'branch', 'account'] },
+  { id: 'bank', label: 'Bank Details', fields: ['paymentMethod', 'bank', 'branch', 'account'] },
   { id: 'documents', label: 'Documents', fields: [] },
   { id: 'permissions', label: 'Permissions / Role', fields: [] },
   { id: 'review', label: 'Review', fields: [] },
@@ -50,6 +50,10 @@ export function EmployeeRegistrationPage() {
     mode: 'onBlur',
     defaultValues: {
       employmentType: 'Permanent',
+      paymentMethod: 'bank',
+      bank: '',
+      branch: '',
+      account: '',
       hasLogin: false,
       dayRate: 0,
       dayOtRate: 0,
@@ -145,6 +149,8 @@ export function EmployeeRegistrationPage() {
 
             {step === 2 && (
               <div className="grid gap-4 sm:grid-cols-2">
+                <Select label="Paid by" options={PAYMENT_METHOD_OPTIONS} {...register('paymentMethod')} />
+                <div className="hidden sm:block" />
                 <Select label="Bank" placeholder="Select bank" error={errors.bank?.message} options={BANKS.map((b) => ({ value: b, label: b }))} {...register('bank')} />
                 <Select label="Branch" placeholder="Select branch" error={errors.branch?.message} options={BRANCHES.map((b) => ({ value: b, label: b }))} {...register('branch')} />
                 <Input label="Account number" hint="Masked on the profile; revealed on click." error={errors.account?.message} {...register('account')} />
@@ -193,7 +199,7 @@ export function EmployeeRegistrationPage() {
                     ['Pay rates', `Day Rs. ${values.dayRate ?? 0} · Day OT Rs. ${values.dayOtRate ?? 0} · Night Rs. ${values.nightRate ?? 0} · Night OT Rs. ${values.nightOtRate ?? 0}`],
                   ]}
                 />
-                <ReviewGroup title="Bank" rows={[['Bank', values.bank], ['Branch', values.branch], ['Account', values.account]]} />
+                <ReviewGroup title="Bank" rows={[['Paid by', values.paymentMethod === 'cash' ? 'Cash' : 'Bank transfer'], ['Bank', values.bank || '—'], ['Branch', values.branch || '—'], ['Account', values.account || '—']]} />
                 <ReviewGroup title="Permissions" rows={[['System login', isAgent ? 'Mobile login — created on registration' : values.hasLogin ? 'Enabled' : 'Disabled']]} />
               </div>
             )}

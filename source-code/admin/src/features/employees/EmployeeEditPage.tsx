@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -13,7 +13,7 @@ import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as employeesService from '@/services/employees'
 import type { Employee } from './types'
-import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS } from './schema'
+import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS, PAYMENT_METHOD_OPTIONS } from './schema'
 import { InitialPasswordModal } from './InitialPasswordModal'
 import { useEmployeeRoles } from './useEmployeeRoles'
 
@@ -71,6 +71,12 @@ function EditForm({ employee }: { employee: Employee }) {
   const navigate = useNavigate()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const { hash } = useLocation()
+  // the form mounts after the employee loads, so the browser's own #hash jump finds nothing —
+  // scroll once it's there (a DOM call, not state)
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
+  }, [hash])
 
   const {
     register,
@@ -88,6 +94,7 @@ function EditForm({ employee }: { employee: Employee }) {
       department: employee.department,
       hireDate: employee.hireDate,
       employmentType: employee.employmentType,
+      paymentMethod: employee.paymentMethod ?? 'bank',
       bank: employee.bank.bank,
       branch: employee.bank.branch,
       account: employee.bank.account,
@@ -159,9 +166,12 @@ function EditForm({ employee }: { employee: Employee }) {
           </div>
         </Card>
 
-        <Card>
-          <CardHeader><CardTitle>Bank Details</CardTitle></CardHeader>
+        {/* `#bank` target — Payroll's "No bank details" chip links straight here */}
+        <Card id="bank" className="scroll-mt-20">
+          <CardHeader><CardTitle>Payment &amp; Bank Details</CardTitle></CardHeader>
           <div className="grid gap-4 sm:grid-cols-2">
+            <Select label="Paid by" options={PAYMENT_METHOD_OPTIONS} {...register('paymentMethod')} />
+            <div className="hidden sm:block" />
             <Select label="Bank" error={errors.bank?.message} options={BANKS.map((b) => ({ value: b, label: b }))} {...register('bank')} />
             <Select label="Branch" error={errors.branch?.message} options={BRANCHES.map((b) => ({ value: b, label: b }))} {...register('branch')} />
             <Input label="Account number" error={errors.account?.message} {...register('account')} />

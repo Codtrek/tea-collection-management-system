@@ -7,10 +7,13 @@
 export type DbEstateStatus = 'active' | 'inactive';
 export type AppEstateStatus = 'Active' | 'Inactive';
 
-export type DbAdvanceStatus = 'pending_deduction' | 'deducted';
-export type AppAdvanceStatus = 'Pending deduction' | 'Deducted';
+export type DbAdvanceStatus = 'pending_deduction' | 'recovering' | 'deducted';
+export type AppAdvanceStatus = 'Pending deduction' | 'Recovering' | 'Deducted';
 
 export type DbSettlementStatus = 'pending' | 'processed';
+
+/** How an estate owner is paid (Settlement-Period-View-Addendum). */
+export type OwnerPaymentMethod = 'bank' | 'cash';
 export type AppSettlementStatus = 'Pending' | 'Processed';
 
 const DB_TO_APP_ESTATE_STATUS: Record<DbEstateStatus, AppEstateStatus> = {
@@ -25,6 +28,7 @@ const APP_TO_DB_ESTATE_STATUS: Record<AppEstateStatus, DbEstateStatus> = {
 
 const DB_TO_APP_ADVANCE_STATUS: Record<DbAdvanceStatus, AppAdvanceStatus> = {
   pending_deduction: 'Pending deduction',
+  recovering: 'Recovering',
   deducted: 'Deducted',
 };
 
@@ -91,6 +95,7 @@ export interface PublicEstate {
   status: AppEstateStatus;
   ytdDeliveriesKg: number;
   bank: EstateBank;
+  paymentMethod: OwnerPaymentMethod;
   documents: EstateDocument[];
   lastUpdatedBy?: string;
   lastUpdatedOn?: string;
