@@ -37,6 +37,8 @@ export function AppShell() {
   }
 
   if (!user) return <Navigate to="/login" replace />
+  // the server refuses every route but /auth/me and change-password until this is done
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />
 
   return (
     <div className="flex min-h-screen bg-background">
