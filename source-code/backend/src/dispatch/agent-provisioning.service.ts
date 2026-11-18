@@ -65,6 +65,8 @@ export class AgentProvisioningService {
       const user = await m.getRepository(User).save(
         m.getRepository(User).create({
           phone: employee.contact ?? '',
+          // users.name is VARCHAR(32) NOT NULL — same rule as UsersService.createUser
+          name: employee.name.trim().slice(0, 32),
           password_hash: await bcrypt.hash(initialPassword, 10),
           role: 'collection_agent',
           status: 'active',
