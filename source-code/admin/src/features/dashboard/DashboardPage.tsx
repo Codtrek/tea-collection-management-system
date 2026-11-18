@@ -181,7 +181,13 @@ export function DashboardContent({
                   {data.todayView && <TodayPanel view={data.todayView} today={data.today} />}
                 </Block>
                 <Block label="this month's figures" section="month" data={data} onRetry={onRefresh}>
-                  {data.monthView && <MonthPanel view={data.monthView} payrollInQueue={data.actions.some((a) => a.key === 'payrollDue')} />}
+                  {data.monthView && (
+                  <MonthPanel
+                    view={data.monthView}
+                    payrollInQueue={data.actions.some((a) => a.key === 'payrollDue')}
+                    settlementsInQueue={data.actions.some((a) => a.key === 'settlementsToProcess')}
+                  />
+                )}
                 </Block>
                 {/* 1024–1279 with both panels above it: a full row, not half of one */}
                 <div className={cn('min-w-0', data.todayView && data.monthView && 'lg:col-span-2 xl:col-span-1')}>
@@ -381,7 +387,8 @@ function QueueRow({ item: i }: { item: ActionItem }) {
         {(i.reason || i.blocked) && (
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
             {i.blocked && <StatusBadge tone="warning">Blocked</StatusBadge>}
-            {i.reason && <span>{i.reason}</span>}
+            {/* the badge already says "Blocked": the reason line says by what */}
+            {i.reason && <span>{i.blocked ? i.reason.replace(/^Blocked:\s*/i, '') : i.reason}</span>}
           </p>
         )}
       </div>
@@ -561,10 +568,19 @@ function TodayPanel({ view, today }: { view: TodayView; today: string }) {
 /** Expenses is shown with what it is made of, so nobody adds it to Leaf purchase value (decision (c)). */
 const EXPENSES_INCLUDE = 'Includes leaf purchases, processed wages, fertilizer stock and daily entries'
 
-function MonthPanel({ view, payrollInQueue }: { view: MonthView; payrollInQueue: boolean }) {
-  const { intake, leafPurchase, expenses, payroll, settlements } = view
-  // payroll is a queue item for roles that act on it; a summary row only for the others
+function MonthPanel({
+  view,
+  payrollInQueue,
+  settlementsInQueue,
+}: {
+  view: MonthView
+  payrollInQueue: boolean
+  settlementsInQueue: boolean
+}) {
+  const { intake, leafPurchase, expenses, payroll } = view
+  // payroll and settlements are queue items for roles that act on them; a summary row only for the others
   const payrollRow = payroll && !payrollInQueue
+  const settlements = settlementsInQueue ? undefined : view.settlements
   if (!intake && !leafPurchase && !expenses && !payrollRow && !settlements) return null
   const vsWindow = intake ? `vs ${windowLabel(intake.compare)}` : 'vs last month (same days)'
   return (

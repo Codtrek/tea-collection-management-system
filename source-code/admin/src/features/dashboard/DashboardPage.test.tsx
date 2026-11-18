@@ -188,6 +188,15 @@ describe('Dashboard — figures come from the response', () => {
     expect(text.indexOf('Due soon')).toBeLessThan(text.indexOf('To decide'))
     expect(text).toContain('Blocks 1 of 4 pending settlements')
     expect(text).toContain('Blocked Transport amount not set for July 2026')
+    // said once: the badge, then what blocks it (a reason already starting "Blocked:" is not repeated)
+    const twice = render({ ...queued, actions: queued.actions.map((x) => (x.blocked ? { ...x, reason: 'Blocked: monthly transport amount not set' } : x)) })
+    expect(twice).toContain('Blocked monthly transport amount not set')
+    expect(twice).not.toContain('Blocked: monthly')
+    // a role with settlements in its queue doesn't get them again as a This month row; others do
+    const settlements = { pending: 4, noBank: 1, transportMissing: true, href: '/estates/settlements?status=Pending' }
+    const row = 'How “Settlements” is counted'
+    expect(render({ ...queued, monthView: { label: 'November so far', settlements } })).not.toContain(row)
+    expect(render({ ...data, monthView: { label: 'November so far', settlements } })).toContain(row)
     expect(text).toContain('Fix bank details')
     // only the rows are list items (the e2e counts #needs-action li against the response)
     const queue = html.slice(html.indexOf('id="needs-action"'), html.indexOf('id="today-title"'))
