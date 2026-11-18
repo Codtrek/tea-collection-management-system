@@ -23,6 +23,18 @@ class FakeRepository<T extends { id: string }> {
     this.store.set(withCreatedAt.id, withCreatedAt);
     return Promise.resolve(withCreatedAt);
   }
+
+  /** Like Postgres: a duplicate primary key is a 23505 unique violation. */
+  insert(record: T): Promise<void> {
+    if (this.store.has(record.id)) {
+      return Promise.reject(Object.assign(new Error('duplicate key'), { code: '23505' }));
+    }
+    return this.save(record).then(() => undefined);
+  }
+
+  remove(id: string): void {
+    this.store.delete(id);
+  }
 }
 
 const actor: AuditActor = { name: 'A. Bandara', role: 'Administrator', sub: 1 };
@@ -91,5 +103,35 @@ describe('AuditService', () => {
     expect(await service.list({ module: 'Reports' })).toHaveLength(1);
     expect(await service.list({ search: 'settlement' })).toHaveLength(1);
     expect(await service.list({ search: 'nomatch' })).toHaveLength(0);
+  });
+
+  it('retries with the next id when count()+1 collides (a row was removed, or two writes raced)', async () => {
+    const repo = new FakeRepository<AuditLogEntity>();
+    const service = new AuditService(repo as unknown as Repository<AuditLogEntity>);
+    await service.record(actor, { action: 'A', module: 'Reports' });
+    await service.record(actor, { action: 'B', module: 'Reports' });
+    repo.remove('AUD-00001'); // count is now 1 → next guess AUD-00002 already exists
+    await service.record(actor, { action: 'C', module: 'Reports' });
+    const rows = await service.list();
+    expect(rows.map((r) => r.id).sort()).toEqual(['AUD-00002', 'AUD-00003']);
+    expect(rows.find((r) => r.action === 'C')?.id).toBe('AUD-00003');
+  });
+
+  it('stores structured before / after and the reason', async () => {
+    const repo = new FakeRepository<AuditLogEntity>();
+    const service = new AuditService(repo as unknown as Repository<AuditLogEntity>);
+    await service.record(actor, {
+      action: 'Changed user role',
+      module: 'Administration',
+      before: { role: 'Officer' },
+      after: { role: 'Manager' },
+      reason: 'Promoted',
+    });
+    const [row] = await service.list();
+    expect(row).toMatchObject({
+      before: { role: 'Officer' },
+      after: { role: 'Manager' },
+      reason: 'Promoted',
+    });
   });
 });

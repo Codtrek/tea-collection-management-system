@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import type { AppRole } from '../auth/role-map';
 import { AuditLogEntity } from './audit-log.entity';
 import {
@@ -12,9 +13,17 @@ import {
 /** Who performed the action. `sub` (users.id) is optional — name/role suffice. */
 export interface AuditActor {
   name: string;
-  role: AppRole;
+  /** 'System' for automatic events with no acting user (e.g. a login lockout). */
+  role: AppRole | 'System';
   sub?: number | null;
 }
+
+/** The actor for automatic events (no user row). */
+export const SYSTEM_ACTOR: AuditActor = {
+  name: 'System',
+  role: 'System',
+  sub: null,
+};
 
 export interface AuditRecordInput {
   action: string;
@@ -22,6 +31,10 @@ export interface AuditRecordInput {
   record?: string;
   recordHref?: string;
   details?: string;
+  /** Structured before → after (user / role / permission changes). */
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  reason?: string;
 }
 
 export interface AuditListFilters {
@@ -47,19 +60,35 @@ export class AuditService {
    */
   async record(actor: AuditActor, input: AuditRecordInput): Promise<void> {
     try {
-      const seq = (await this.auditRepo.count()) + 1;
-      const entity = this.auditRepo.create({
-        id: formatAuditId(seq),
-        userId: actor.sub ?? null,
-        userName: actor.name,
-        role: actor.role,
-        action: input.action,
-        module: input.module,
-        record: input.record ?? null,
-        recordHref: input.recordHref ?? null,
-        details: input.details ?? null,
-      });
-      await this.auditRepo.save(entity);
+      // `count()+1` can collide when two writes race (or a row was removed): retry on the PK.
+      let seq = (await this.auditRepo.count()) + 1;
+      for (let attempt = 0; ; attempt++) {
+        const entity = this.auditRepo.create({
+          id: formatAuditId(seq),
+          userId: actor.sub ?? null,
+          userName: actor.name,
+          role: actor.role,
+          action: input.action,
+          module: input.module,
+          record: input.record ?? null,
+          recordHref: input.recordHref ?? null,
+          details: input.details ?? null,
+          before: input.before ?? null,
+          after: input.after ?? null,
+          reason: input.reason ?? null,
+        });
+        try {
+          // jsonb columns: TypeORM's deep-partial type can't express `Record<string, unknown>`
+          await this.auditRepo.insert(
+            entity as QueryDeepPartialEntity<AuditLogEntity>,
+          );
+          return;
+        } catch (err) {
+          const code = (err as { code?: string }).code;
+          if (code !== '23505' || attempt >= 4) throw err;
+          seq += 1 + attempt;
+        }
+      }
     } catch (err) {
       this.logger.error(
         `Failed to record audit entry (${input.module}: ${input.action}): ${String(err)}`,
@@ -96,6 +125,9 @@ export class AuditService {
       record: row.record ?? undefined,
       recordHref: row.recordHref ?? undefined,
       details: row.details ?? undefined,
+      before: row.before ?? undefined,
+      after: row.after ?? undefined,
+      reason: row.reason ?? undefined,
     };
   }
 }

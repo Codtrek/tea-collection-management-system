@@ -5,6 +5,8 @@ export interface JwtPayload {
   /** users.id, as a string (JWT `sub` convention). */
   sub: string;
   role: AppRole;
+  /** `users.token_version` when the token was issued; a mismatch ends the session (portal only). */
+  tv?: number;
 }
 
 /**

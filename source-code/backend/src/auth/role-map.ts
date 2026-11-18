@@ -41,3 +41,21 @@ export function toPortalRole(dbRole: DbRole): PortalRole {
   }
   return appRole as PortalRole;
 }
+
+/** The three DB roles that own a factory-portal login, in display order. */
+export const FACTORY_DB_ROLES: DbRole[] = [
+  'factory_admin',
+  'factory_officer',
+  'factory_manager',
+];
+
+const PORTAL_TO_DB_ROLE: Record<PortalRole, DbRole> = {
+  Administrator: 'factory_admin',
+  Officer: 'factory_officer',
+  Manager: 'factory_manager',
+};
+
+/** Portal role → `users.role` / `factory_employees.role`. */
+export function toDbRole(role: PortalRole): 'factory_admin' | 'factory_officer' | 'factory_manager' {
+  return PORTAL_TO_DB_ROLE[role] as 'factory_admin' | 'factory_officer' | 'factory_manager';
+}

@@ -50,4 +50,15 @@ export class AuditLogEntity {
 
   @Column({ type: 'text', nullable: true })
   details: string | null;
+
+  /** Structured state before the change (user / permission changes); null for plain entries. */
+  @Column({ type: 'jsonb', nullable: true })
+  before: Record<string, unknown> | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  after: Record<string, unknown> | null;
+
+  /** Why — required for approval-level / finance permission changes and deactivations. */
+  @Column({ type: 'text', nullable: true })
+  reason: string | null;
 }

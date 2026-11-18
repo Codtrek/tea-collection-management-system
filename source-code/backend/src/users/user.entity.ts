@@ -3,6 +3,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
@@ -34,6 +35,8 @@ export type UserStatus = 'active' | 'suspended';
   `"role" IN ('estate_owner', 'estate_manager', 'plucking_employee', 'collection_agent', 'receiving_officer', 'factory_admin', 'factory_officer', 'factory_manager')`,
 )
 @Check('users_status_check', `"status" IN ('active', 'suspended')`)
+// Expression index (lower(email)) — created by migration 1794400026000; TypeORM can't model it.
+@Index('users_email_lower_key', { synchronize: false })
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
@@ -70,4 +73,23 @@ export class User {
   /** Optional (most existing users have none); UNIQUE via `users_nic_unique`. */
   @Column({ type: 'varchar', length: 12, nullable: true, unique: true })
   nic: string | null;
+
+  /** Optional contact email (Users & Roles); unique case-insensitively via `users_email_lower_key`. */
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  email: string | null;
+
+  /**
+   * Bumped on deactivate, role change, password reset or change. The portal JWT carries it as `tv`;
+   * a token whose `tv` differs is refused on its next request (immediate revocation).
+   */
+  @Column({ name: 'token_version', type: 'int', default: 0 })
+  token_version: number;
+
+  /** Consecutive wrong passwords; reset on a successful login and when the lock is set. */
+  @Column({ name: 'failed_login_count', type: 'int', default: 0 })
+  failed_login_count: number;
+
+  /** Login is refused until this moment (5 wrong passwords → 15 minutes). */
+  @Column({ name: 'locked_until', type: 'timestamptz', nullable: true })
+  locked_until: Date | null;
 }
