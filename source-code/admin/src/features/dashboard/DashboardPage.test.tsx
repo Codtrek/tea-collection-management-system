@@ -161,11 +161,96 @@ describe('Dashboard — figures come from the response', () => {
     const text = render({ ...data, role: 'Manager', monthView: month })
     expect(text).toContain('Expenses to date')
     expect(text).toContain('Includes leaf purchases, processed wages, fertilizer stock and daily entries')
-    expect(text).toContain('-69.4% vs last month (same days)')
+    // the change carries an arrow and a word, not only a colour
+    expect(text).toContain('▼ down 69.4% vs last month (same days)')
     // an Officer's summary has no monthView: neither the section nor the note appears
     const officer = render({ ...data, monthView: null })
     expect(officer).not.toContain('Expenses to date')
     expect(officer).not.toContain('Includes leaf purchases')
+  })
+
+  it('the queue is grouped Urgent → Due soon → To decide; a blocked item says so; each row has one action', () => {
+    const queued: DashboardSummary = {
+      ...data,
+      actions: [
+        { key: 'estatesNoBank', count: 1, label: '1 estate missing bank details', reason: 'Blocks 1 of 4 pending settlements', href: '/estates/settlements?bank=missing', group: 'urgent', urgency: 10, action: 'Fix bank details', blocks: 'settlementsToProcess' },
+        { key: 'settlementsToProcess', count: 4, label: '4 settlements to process', reason: 'Transport amount not set for July 2026', href: '/estates/settlements?status=Pending', group: 'dueSoon', urgency: 20, action: 'Open settlements', blocked: true },
+        ...data.actions,
+      ],
+    }
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <DashboardContent userName="A. Bandara" data={queued} isPending={false} isError={false} isFetching={false} onRefresh={() => {}} now={NOW} />
+      </MemoryRouter>,
+    )
+    const text = render(queued)
+    expect(text.indexOf('Urgent')).toBeLessThan(text.indexOf('Due soon'))
+    expect(text.indexOf('Due soon')).toBeLessThan(text.indexOf('To decide'))
+    expect(text).toContain('Blocks 1 of 4 pending settlements')
+    expect(text).toContain('Blocked Transport amount not set for July 2026')
+    expect(text).toContain('Fix bank details')
+    // only the rows are list items (the e2e counts #needs-action li against the response)
+    const queue = html.slice(html.indexOf('id="needs-action"'), html.indexOf('id="today-title"'))
+    expect(queue.match(/<li/g)?.length).toBe(queued.actions.length)
+  })
+
+  it('"Updated" turns into a warning once the figures are 15 minutes old', () => {
+    const at = (min: number) => new Date(NOW.getTime() + min * 60000)
+    const html = (now: Date) =>
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <DashboardContent userName="" data={data} isPending={false} isError={false} isFetching={false} onRefresh={() => {}} now={now} />
+        </MemoryRouter>,
+      )
+    expect(html(at(5))).toContain('Updated 09:30')
+    expect(html(at(5))).not.toContain('text-warning-fg font-medium')
+    expect(html(at(47))).toContain('Updated 47 min ago')
+  })
+
+  it('the chart says what it shows in words; routes are ranked with their share', () => {
+    const withCharts: DashboardSummary = {
+      ...data,
+      charts: {
+        daily: [
+          { key: '2026-11-01', label: '1 Nov', kg: 0, deliveries: 0, partial: false, lastMonthKg: 115.5 },
+          { key: '2026-11-05', label: '5 Nov', kg: 190.4, deliveries: 4, partial: false, lastMonthKg: 165.1 },
+        ],
+        lastMonthLabel: 'October 2026',
+        changePct: -69.4,
+        compare: { from: '2026-10-01', to: '2026-10-17' },
+        byRoute: [
+          { id: 1, name: 'Route 2', kg: 100, deliveries: 3 },
+          { id: 2, name: 'Route 3', kg: 300, deliveries: 5 },
+        ],
+        href: '/reports/collection?thisMonth=1',
+      },
+    }
+    const text = render(withCharts)
+    expect(text).toContain('No deliveries recorded since 5 Nov. Intake is 69.4% below the same days in October.')
+    expect(text.indexOf('Route 3')).toBeLessThan(text.indexOf('Route 2'))
+    expect(text).toContain('300.0 kg · 75.0%')
+  })
+
+  it('activity: grouped by day, amounts shown the portal’s way, the audit log link for Administrators only', () => {
+    const withActivity: DashboardSummary = {
+      ...data,
+      activity: [
+        { id: 'AUD-1', timestamp: '2026-11-17T03:00:00Z', user: 'A. Bandara', role: 'Administrator', action: 'Issued advance Rs. 50000', module: 'Estate Owner', record: 'EADV-2026-0031', recordHref: '/estates/EST-0001' },
+        { id: 'AUD-2', timestamp: '2026-07-15T06:00:00Z', user: 'S. Fernando', role: 'Officer', action: 'Processed payroll run', module: 'Employee', record: 'July 2026' },
+      ],
+    }
+    const text = render(withActivity)
+    expect(text).toContain('Today')
+    expect(text).toContain('Earlier')
+    expect(text).toContain('Issued advance Rs. 50,000')
+    expect(text).toContain('15 Jul 2026')
+    expect(text).not.toContain('View audit log')
+    const admin = renderToStaticMarkup(
+      <MemoryRouter>
+        <DashboardContent userName="" auditLogLink data={withActivity} isPending={false} isError={false} isFetching={false} onRefresh={() => {}} now={NOW} />
+      </MemoryRouter>,
+    )
+    expect(admin).toContain('View audit log')
   })
 
   it('greets by name (not an initial); one primary action and "Review approvals (N)"; reason lines', () => {

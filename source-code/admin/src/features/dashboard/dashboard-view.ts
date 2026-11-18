@@ -1,4 +1,4 @@
-import { formatPercent } from '@/lib/format'
+import { formatCurrency, formatDate, formatPercent } from '@/lib/format'
 
 /*
   Dashboard display helpers (Dashboard-Addendum). They format figures the server sent; none of
@@ -63,4 +63,107 @@ export function agentLine(a: { onRoute: number; notStarted: number; absent: numb
     .filter(([n]) => (n as number) > 0)
     .map(([n, l]) => `${n} ${l}`)
   return parts.length ? parts.join(' · ') : null
+}
+
+/** The factory calendar date (`YYYY-MM-DD`, Colombo) of a timestamp. */
+export function colomboDate(at: Date | string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: COLOMBO, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+    typeof at === 'string' ? new Date(at) : at,
+  )
+}
+
+/** Minutes after which "Updated …" turns into a warning: the figures may have moved. */
+export const STALE_MINUTES = 15
+
+/** "Updated 21:49" while fresh; "Updated 47 min ago" / "Updated 2 h ago" once stale. */
+export function updatedText(generatedAt: string, now: Date): { text: string; stale: boolean } {
+  const min = Math.floor((now.getTime() - new Date(generatedAt).getTime()) / 60000)
+  if (min < STALE_MINUTES) return { text: `Updated ${colomboTime(generatedAt)}`, stale: false }
+  return { text: min < 60 ? `Updated ${min} min ago` : `Updated ${Math.floor(min / 60)} h ago`, stale: true }
+}
+
+/**
+ * A change shown with its direction three ways — arrow, word and (by the caller) colour — so it is
+ * never colour-only. null when there is nothing to compare.
+ */
+export function trend(changePct: number | null): { arrow: '▲' | '▼' | '■'; word: 'up' | 'down' | 'level'; pct: string } | null {
+  if (changePct === null) return null
+  if (Math.abs(changePct) < 0.05) return { arrow: '■', word: 'level', pct: '0.0%' }
+  return { arrow: changePct > 0 ? '▲' : '▼', word: changePct > 0 ? 'up' : 'down', pct: formatPercent(Math.abs(changePct)) }
+}
+
+const SHORT_MONTH = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })
+const DAY = (d: string) => Number(d.slice(8, 10))
+
+/** The report's comparison window: "1–18 Oct", or "28 Oct – 3 Nov" across a month end. */
+export function windowLabel(w: { from: string; to: string }): string {
+  if (w.from === w.to) return `${DAY(w.from)} ${SHORT_MONTH(w.from)}`
+  if (w.from.slice(0, 7) === w.to.slice(0, 7)) return `${DAY(w.from)}–${DAY(w.to)} ${SHORT_MONTH(w.to)}`
+  return `${DAY(w.from)} ${SHORT_MONTH(w.from)} – ${DAY(w.to)} ${SHORT_MONTH(w.to)}`
+}
+
+/**
+ * The chart's written takeaway, read off the report's own days and change (nothing new is
+ * computed): when deliveries last came in, if not lately, and how the month compares.
+ */
+export function intakeTakeaway(
+  daily: { key: string; label: string; kg: number }[],
+  changePct: number | null,
+  lastMonthLabel: string,
+  today: string,
+): string {
+  const upToToday = daily.filter((d) => d.key <= today)
+  const last = [...upToToday].reverse().find((d) => d.kg > 0)
+  if (!last) return 'No graded deliveries this month yet.'
+  const yesterday = new Date(`${today}T00:00:00Z`)
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+  const parts: string[] = []
+  if (last.key < yesterday.toISOString().slice(0, 10)) parts.push(`No deliveries recorded since ${last.label}.`)
+  const t = trend(changePct)
+  const month = lastMonthLabel.split(' ')[0]
+  if (t) {
+    parts.push(
+      t.word === 'level'
+        ? `Intake is level with the same days in ${month}.`
+        : `Intake is ${t.pct} ${t.word === 'down' ? 'below' : 'above'} the same days in ${month}.`,
+    )
+  }
+  return parts.join(' ') || `Deliveries came in up to ${last.label}.`
+}
+
+export type ActivityGroupKey = 'today' | 'yesterday' | 'earlier'
+
+/**
+ * Recent activity grouped by the factory date it happened on. `actor` is set when one person did
+ * everything in the group, so the heading can say it once instead of on every row.
+ */
+export function activityGroups<T extends { timestamp: string; user: string }>(
+  entries: T[],
+  today: string,
+): { key: ActivityGroupKey; title: string; entries: T[]; actor: string | null }[] {
+  const y = new Date(`${today}T00:00:00Z`)
+  y.setUTCDate(y.getUTCDate() - 1)
+  const yesterday = y.toISOString().slice(0, 10)
+  const keyOf = (e: T): ActivityGroupKey => {
+    const d = colomboDate(e.timestamp)
+    return d === today ? 'today' : d === yesterday ? 'yesterday' : 'earlier'
+  }
+  const titles: Record<ActivityGroupKey, string> = { today: 'Today', yesterday: 'Yesterday', earlier: 'Earlier' }
+  return (['today', 'yesterday', 'earlier'] as const)
+    .map((key) => {
+      const list = entries.filter((e) => keyOf(e) === key)
+      const users = new Set(list.map((e) => e.user))
+      return { key, title: titles[key], entries: list, actor: list.length > 1 && users.size === 1 ? list[0].user : null }
+    })
+    .filter((g) => g.entries.length > 0)
+}
+
+/** "21:49" inside Today / Yesterday (the heading says the day); `17 Jul 2026` for Earlier. */
+export function activityTime(timestamp: string, group: ActivityGroupKey): string {
+  return group === 'earlier' ? formatDate(colomboDate(timestamp)) : colomboTime(timestamp)
+}
+
+/** Amounts written into stored audit text ("Issued advance Rs. 50000") shown the portal's way. */
+export function amountsInText(text: string): string {
+  return text.replace(/Rs\.?\s?(\d+(?:\.\d+)?)(?![\d,])/g, (_m, n: string) => formatCurrency(Number(n)))
 }

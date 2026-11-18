@@ -16,14 +16,26 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { CHART_AXIS, CHART_GRID, CHART_SERIES } from './palette'
+import { CHART_AXIS, CHART_COMPARE, CHART_GRID, CHART_SERIES } from './palette'
 import { cn } from '@/lib/cn'
 
 /* Rounded, softly-bordered chart container (foundations §6). */
-function ChartShell({ title, children, className }: { title?: string; children: ReactNode; className?: string }) {
+function ChartShell({
+  title,
+  caption,
+  children,
+  className,
+}: {
+  title?: string
+  /** a written takeaway under the title (opt-in) */
+  caption?: ReactNode
+  children: ReactNode
+  className?: string
+}) {
   return (
     <div className={cn('rounded-[var(--radius-md)] border border-border bg-surface p-5', className)}>
-      {title && <h3 className="mb-3 text-[13px] font-semibold text-text-heading">{title}</h3>}
+      {title && <h3 className={cn('text-[13px] font-semibold text-text-heading', caption ? 'mb-1' : 'mb-3')}>{title}</h3>}
+      {caption && <p className="mb-3 text-sm text-text">{caption}</p>}
       {children}
     </div>
   )
@@ -576,6 +588,7 @@ function ComboTooltip({
   lineLabel,
   barFmt,
   lineFmt,
+  compareLine = false,
 }: {
   active?: boolean
   payload?: Array<{ payload: ComboRow }>
@@ -583,6 +596,7 @@ function ComboTooltip({
   lineLabel: string
   barFmt: (v: number) => string
   lineFmt: (v: number) => string
+  compareLine?: boolean
 }) {
   const row = active ? payload?.[0]?.payload : undefined
   if (!row) return null
@@ -598,8 +612,14 @@ function ComboTooltip({
       </p>
       {row.line !== null && (
         <p className="tabular flex items-center gap-2 text-text">
-          <span className="size-2 rounded-full" style={{ background: CHART_SERIES[3] }} />
+          <span className="size-2 rounded-full" style={{ background: compareLine ? CHART_COMPARE : CHART_SERIES[3] }} />
           {lineLabel}: {lineFmt(row.line)}
+        </p>
+      )}
+      {compareLine && row.line !== null && (
+        <p className="tabular mt-0.5 text-xs text-text-muted">
+          Difference: {row.bar - row.line > 0 ? '+' : row.bar - row.line < 0 ? '−' : ''}
+          {barFmt(Math.abs(row.bar - row.line))}
         </p>
       )}
       {row.note && <p className="tabular mt-0.5 text-xs text-text-muted">{row.note}</p>}
@@ -611,9 +631,15 @@ function ComboTooltip({
  * Bars on the left axis and a straight line on the right axis, each axis sized to its labels. A
  * period in progress draws a lighter bar and a dashed line segment, with a note — never as if
  * complete.
+ *
+ * Opt-in: `compareLine` draws the line as a comparison of the same quantity (e.g. last month's kg)
+ * on the bars' own axis — dashed, muted, no dots, no right axis — and the tooltip adds the
+ * difference. `yTicks` fixes round ticks on the bar axis; `ariaLabel` makes the chart one image
+ * with that description; `caption` is a written takeaway under the title.
  */
 export function ComboChartCard({
   title,
+  caption,
   data,
   barLabel,
   lineLabel,
@@ -623,9 +649,13 @@ export function ComboChartCard({
   lineTick,
   height = 280,
   partialNote = 'Month in progress',
+  compareLine = false,
+  yTicks,
+  ariaLabel,
   className,
 }: {
   title?: string
+  caption?: ReactNode
   data: ComboDatum[]
   barLabel: string
   lineLabel: string
@@ -635,30 +665,36 @@ export function ComboChartCard({
   lineTick: (v: number) => string
   height?: number
   partialNote?: string
+  compareLine?: boolean
+  yTicks?: number[]
+  ariaLabel?: string
   className?: string
 }) {
   const firstPartial = data.findIndex((d) => d.partial)
   const rows: ComboRow[] = data.map((d, i) => ({
     ...d,
-    solid: firstPartial === -1 || i < firstPartial ? d.line : null,
-    dashed: firstPartial !== -1 && i >= firstPartial - 1 ? d.line : null,
+    solid: compareLine || firstPartial === -1 || i < firstPartial ? d.line : null,
+    dashed: !compareLine && firstPartial !== -1 && i >= firstPartial - 1 ? d.line : null,
   }))
-  const maxBar = Math.max(0, ...data.map((d) => d.bar))
+  const maxBar = Math.max(0, ...data.map((d) => Math.max(d.bar, compareLine ? (d.line ?? 0) : 0)))
   const maxLine = Math.max(0, ...data.map((d) => d.line ?? 0))
-  return (
-    <ChartShell title={title} className={className}>
-      <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart data={rows} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
-          <CartesianGrid stroke={CHART_GRID} vertical={false} />
-          <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: CHART_AXIS, fontSize: 12 }} interval="preserveStartEnd" minTickGap={12} />
-          <YAxis
-            yAxisId="bar"
-            tickLine={false}
-            axisLine={false}
-            tick={{ fill: CHART_AXIS, fontSize: 12 }}
-            width={axisWidth(maxBar, barTick)}
-            tickFormatter={barTick}
-          />
+  const lineAxis = compareLine ? 'bar' : 'line'
+  const chart = (
+    <ResponsiveContainer width="100%" height={height}>
+      <ComposedChart data={rows} margin={{ top: 8, right: compareLine ? 12 : 4, bottom: 0, left: 0 }}>
+        <CartesianGrid stroke={CHART_GRID} vertical={false} />
+        <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: CHART_AXIS, fontSize: 12 }} interval="preserveStartEnd" minTickGap={12} />
+        <YAxis
+          yAxisId="bar"
+          tickLine={false}
+          axisLine={false}
+          tick={{ fill: CHART_AXIS, fontSize: 12 }}
+          width={axisWidth(yTicks ? yTicks[yTicks.length - 1] : maxBar, barTick)}
+          tickFormatter={barTick}
+          ticks={yTicks}
+          domain={yTicks ? [0, yTicks[yTicks.length - 1]] : undefined}
+        />
+        {!compareLine && (
           <YAxis
             yAxisId="line"
             orientation="right"
@@ -668,62 +704,82 @@ export function ComboChartCard({
             width={axisWidth(maxLine, lineTick)}
             tickFormatter={lineTick}
           />
-          <Tooltip
-            content={<ComboTooltip barLabel={barLabel} lineLabel={lineLabel} barFmt={barFmt} lineFmt={lineFmt} />}
-            cursor={{ fill: CHART_GRID, opacity: 0.4 }}
-          />
-          <Bar yAxisId="bar" dataKey="bar" maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
-            {rows.map((r) => (
-              <Cell key={r.label} fill={CHART_SERIES[0]} fillOpacity={r.partial ? 0.35 : 1} />
-            ))}
-          </Bar>
+        )}
+        <Tooltip
+          content={<ComboTooltip barLabel={barLabel} lineLabel={lineLabel} barFmt={barFmt} lineFmt={lineFmt} compareLine={compareLine} />}
+          cursor={{ fill: CHART_GRID, opacity: 0.4 }}
+        />
+        <Bar yAxisId="bar" dataKey="bar" maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+          {rows.map((r) => (
+            <Cell key={r.label} fill={CHART_SERIES[0]} fillOpacity={r.partial ? 0.35 : 1} />
+          ))}
+        </Bar>
+        <Line
+          yAxisId={lineAxis}
+          type="linear"
+          dataKey="solid"
+          stroke={compareLine ? CHART_COMPARE : CHART_SERIES[3]}
+          strokeWidth={compareLine ? 1.5 : 2}
+          strokeDasharray={compareLine ? '4 3' : undefined}
+          dot={compareLine ? false : { r: 3, fill: CHART_SERIES[3], strokeWidth: 0 }}
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+        {!compareLine && firstPartial !== -1 && (
           <Line
             yAxisId="line"
             type="linear"
-            dataKey="solid"
+            dataKey="dashed"
             stroke={CHART_SERIES[3]}
             strokeWidth={2}
-            dot={{ r: 3, fill: CHART_SERIES[3], strokeWidth: 0 }}
+            strokeDasharray="5 4"
+            dot={(p: { cx?: number; cy?: number; index?: number }) => (
+              <circle
+                key={`partial-${p.index}`}
+                cx={p.cx}
+                cy={p.cy}
+                r={p.index !== undefined && p.index >= firstPartial ? 4 : 0}
+                fill="var(--color-surface)"
+                stroke={CHART_SERIES[3]}
+                strokeWidth={2}
+              />
+            )}
             connectNulls={false}
             isAnimationActive={false}
           />
-          {firstPartial !== -1 && (
-            <Line
-              yAxisId="line"
-              type="linear"
-              dataKey="dashed"
-              stroke={CHART_SERIES[3]}
-              strokeWidth={2}
-              strokeDasharray="5 4"
-              dot={(p: { cx?: number; cy?: number; index?: number }) => (
-                <circle
-                  key={`partial-${p.index}`}
-                  cx={p.cx}
-                  cy={p.cy}
-                  r={p.index !== undefined && p.index >= firstPartial ? 4 : 0}
-                  fill="var(--color-surface)"
-                  stroke={CHART_SERIES[3]}
-                  strokeWidth={2}
-                />
-              )}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-          )}
-        </ComposedChart>
-      </ResponsiveContainer>
+        )}
+      </ComposedChart>
+    </ResponsiveContainer>
+  )
+  return (
+    <ChartShell title={title} caption={caption} className={className}>
+      {ariaLabel ? (
+        <div role="img" aria-label={ariaLabel}>
+          {chart}
+        </div>
+      ) : (
+        chart
+      )}
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
         <span className="flex items-center gap-1.5">
           <span className="size-2.5 rounded-sm" style={{ background: CHART_SERIES[0] }} />
           {barLabel}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-0.5 w-4" style={{ background: CHART_SERIES[3] }} />
-          {lineLabel} (right axis)
+          {compareLine ? (
+            <span className="h-0.5 w-4 border-t-2 border-dashed" style={{ borderColor: CHART_COMPARE }} />
+          ) : (
+            <span className="h-0.5 w-4" style={{ background: CHART_SERIES[3] }} />
+          )}
+          {compareLine ? lineLabel : `${lineLabel} (right axis)`}
         </span>
         {firstPartial !== -1 && (
           <span className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-full border-2" style={{ borderColor: CHART_SERIES[3] }} />
+            {compareLine ? (
+              <span className="size-2.5 rounded-sm" style={{ background: CHART_SERIES[0], opacity: 0.35 }} />
+            ) : (
+              <span className="size-2.5 rounded-full border-2" style={{ borderColor: CHART_SERIES[3] }} />
+            )}
             {partialNote}
           </span>
         )}

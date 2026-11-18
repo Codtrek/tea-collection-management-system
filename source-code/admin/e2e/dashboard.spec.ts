@@ -124,8 +124,13 @@ for (const [role, phone] of Object.entries(ROLES)) {
       const main = page.locator('main')
       await expect(main.getByRole('heading', { name: 'Needs your action' })).toBeVisible()
       await expect(main.locator('#needs-action li')).toHaveCount(summary.actions.length)
-      await expect(main.getByRole('heading', { name: 'Today', exact: true })).toHaveCount(summary.todayView ? 1 : 0)
-      await expect(main.getByRole('heading', { name: 'This month', exact: true })).toHaveCount(summary.monthView ? 1 : 0)
+      // by id: Recent activity has its own "Today" group heading
+      await expect(main.locator('h2#today-title')).toHaveCount(summary.todayView ? 1 : 0)
+      await expect(main.locator('h2#month-title')).toHaveCount(summary.monthView ? 1 : 0)
+      // Expenses (decision c): Manager and Administrator only, always with what it includes
+      const expensesNote = main.getByText('Includes leaf purchases, processed wages, fertilizer stock and daily entries')
+      await expect(expensesNote).toHaveCount(summary.monthView && 'expenses' in summary.monthView ? 1 : 0)
+      if (role === 'Officer') await expect(main.getByText('Expenses to date')).toHaveCount(0)
       for (const gone of ["Today's Revenue", 'Net profit', 'Monthly Revenue', 'not live GPS', 'Hill Crest', 'Welcome back']) {
         await expect(main.getByText(gone)).toHaveCount(0)
       }
