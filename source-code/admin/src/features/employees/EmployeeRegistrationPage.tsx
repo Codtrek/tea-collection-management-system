@@ -180,7 +180,7 @@ export function EmployeeRegistrationPage() {
                     <p className="text-xs text-text-muted">
                       {isAgent
                         ? `${agentRole}s always get a mobile login — it is created on registration.`
-                        : "Non-workflow roles (operators, drivers) are HR records only and don't get login (§3.2.2)."}
+                        : "Non-workflow roles (operators, drivers) are HR records only and don't get login."}
                     </p>
                   </div>
                   <Toggle checked={isAgent || (values.hasLogin ?? false)} onChange={(v) => !isAgent && setValue('hasLogin', v)} />

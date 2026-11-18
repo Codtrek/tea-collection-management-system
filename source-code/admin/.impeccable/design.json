@@ -1,0 +1,415 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-18T11:27:22.760517+00:00",
+  "title": "Design System: Harboost Factory Web Portal",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Ledger Green",
+        "canonical": "#1d6839",
+        "tonalRamp": [
+          "#081f11",
+          "#0e341c",
+          "#144827",
+          "#1a5d33",
+          "#4a8660",
+          "#82ab92",
+          "#bbd1c3",
+          "#e8efeb"
+        ]
+      },
+      "brand": {
+        "role": "accent",
+        "displayName": "Harboost Leaf",
+        "canonical": "#53cf81",
+        "tonalRamp": [
+          "#183e26",
+          "#296740",
+          "#3a905a",
+          "#4aba74",
+          "#75d89a",
+          "#a0e4b9",
+          "#cbf0d9",
+          "#edfaf2"
+        ]
+      },
+      "brand-soft": {
+        "role": "accent",
+        "displayName": "Leaf Wash",
+        "canonical": "#eafaf0",
+        "tonalRamp": [
+          "#464b48",
+          "#757d78",
+          "#a3afa8",
+          "#d2e1d8",
+          "#eefbf3",
+          "#f3fcf6",
+          "#f8fdfa",
+          "#fcfefd"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Ledger Paper",
+        "canonical": "#f8fbf9",
+        "tonalRamp": [
+          "#4a4b4a",
+          "#7c7d7c",
+          "#adafae",
+          "#dfe1e0",
+          "#f9fbfa",
+          "#fbfcfb",
+          "#fcfdfd",
+          "#fefefe"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Sheet White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#4c4c4c",
+          "#7f7f7f",
+          "#b2b2b2",
+          "#e5e5e5",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "surface-hover": {
+        "role": "neutral",
+        "displayName": "Row Hover",
+        "canonical": "#f2f7f4",
+        "tonalRamp": [
+          "#484a49",
+          "#797b7a",
+          "#a9acaa",
+          "#d9dedb",
+          "#f4f8f6",
+          "#f7faf8",
+          "#fbfcfb",
+          "#fdfefd"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Ruled Line",
+        "canonical": "#e3e9e4",
+        "tonalRamp": [
+          "#444544",
+          "#717472",
+          "#9ea39f",
+          "#ccd1cd",
+          "#e8ede9",
+          "#eff2f0",
+          "#f6f8f6",
+          "#fcfcfc"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1a1a1a",
+        "tonalRamp": [
+          "#070707",
+          "#0d0d0d",
+          "#121212",
+          "#171717",
+          "#474747",
+          "#818181",
+          "#bababa",
+          "#e8e8e8"
+        ]
+      },
+      "text-heading": {
+        "role": "neutral",
+        "displayName": "Heading Ink",
+        "canonical": "#08120b",
+        "tonalRamp": [
+          "#020503",
+          "#040905",
+          "#050c07",
+          "#071009",
+          "#39413b",
+          "#777c78",
+          "#b4b7b5",
+          "#e6e7e6"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Field Note Grey",
+        "canonical": "#566a5d",
+        "tonalRamp": [
+          "#191f1b",
+          "#2b352e",
+          "#3c4a41",
+          "#4d5f53",
+          "#77877d",
+          "#a2ada5",
+          "#ccd2ce",
+          "#eef0ee"
+        ]
+      },
+      "chart-1": {
+        "role": "chart",
+        "displayName": "Chart Green",
+        "canonical": "#1b8b4e",
+        "tonalRamp": [
+          "#082917",
+          "#0d4527",
+          "#126136",
+          "#187d46",
+          "#48a271",
+          "#81bf9d",
+          "#badcc9",
+          "#e8f3ed"
+        ]
+      },
+      "chart-track": {
+        "role": "chart",
+        "displayName": "Bar Track",
+        "canonical": "#e8f4ed",
+        "tonalRamp": [
+          "#454947",
+          "#747a76",
+          "#a2aaa5",
+          "#d0dbd5",
+          "#ecf6f0",
+          "#f2f8f5",
+          "#f8fbf9",
+          "#fcfdfd"
+        ]
+      },
+      "chart-compare": {
+        "role": "chart",
+        "displayName": "Comparison Grey",
+        "canonical": "#566a5d",
+        "tonalRamp": [
+          "#191f1b",
+          "#2b352e",
+          "#3c4a41",
+          "#4d5f53",
+          "#77877d",
+          "#a2ada5",
+          "#ccd2ce",
+          "#eef0ee"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page title only."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "A summary card's single value."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section, card and panel headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Rows, descriptions, table cells."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Figure labels, chart titles."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Notes, reasons, timestamps, axis ticks."
+      },
+      "id": {
+        "displayName": "Record ID",
+        "purpose": "Mono face for record IDs only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shadow-1",
+        "value": "0 1px 2px rgba(27, 139, 78, 0.04), 0 1px 3px rgba(27, 139, 78, 0.06)",
+        "purpose": "Cards at rest: paper, not floating."
+      },
+      {
+        "name": "shadow-2",
+        "value": "0 4px 8px -2px rgba(27, 139, 78, 0.06), 0 2px 4px -2px rgba(27, 139, 78, 0.04)",
+        "purpose": "Hover and focus lift."
+      },
+      {
+        "name": "shadow-3",
+        "value": "0 12px 24px -6px rgba(27, 139, 78, 0.1), 0 4px 8px -4px rgba(27, 139, 78, 0.06)",
+        "purpose": "Popovers, toasts, menus."
+      },
+      {
+        "name": "shadow-4",
+        "value": "0 24px 48px -12px rgba(27, 139, 78, 0.18)",
+        "purpose": "Modals."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "State changes."
+      },
+      {
+        "name": "ease-entrance",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Things appearing (fade-up)."
+      },
+      {
+        "name": "duration-fast",
+        "value": "120ms",
+        "purpose": "Hover and press."
+      },
+      {
+        "name": "duration-base",
+        "value": "200ms",
+        "purpose": "Panels, sidebar."
+      },
+      {
+        "name": "duration-slow",
+        "value": "320ms",
+        "purpose": "Entrances."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "wide",
+        "value": "1440px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one green action per view.",
+      "html": "<button class=\"ds-btn-primary\">Fix bank details</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;height:40px;padding:0 16px;border:0;border-radius:var(--radius-sm,8px);background:var(--color-primary,#1d6839);color:#fff;font:500 14px/1 Inter,system-ui,sans-serif;box-shadow:var(--shadow-1);transition:background-color 120ms cubic-bezier(.2,0,0,1)}.ds-btn-primary:hover{background:var(--color-primary-hover,#185a31)}.ds-btn-primary:active{background:var(--color-primary-active,#134a28)}.ds-btn-primary:focus-visible{outline:2px solid var(--color-brand,#53cf81);outline-offset:2px;box-shadow:0 0 0 6px rgba(83,207,129,.25)}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Every other action, including a queue row's own action.",
+      "html": "<button class=\"ds-btn-secondary\">Review approvals (2)</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;height:32px;padding:0 12px;border:1px solid var(--color-border,#e3e9e4);border-radius:var(--radius-sm,8px);background:var(--color-surface,#fff);color:var(--color-text,#1a1a1a);font:500 13px/1 Inter,system-ui,sans-serif;transition:background-color 120ms}.ds-btn-secondary:hover{background:var(--color-surface-hover,#f2f7f4)}.ds-btn-secondary:focus-visible{outline:2px solid var(--color-brand,#53cf81);outline-offset:2px}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Plain field; focus turns the border green.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search employees, estates, collections…\">",
+      "css": ".ds-input{height:40px;width:280px;padding:0 12px;border:1px solid var(--color-border,#e3e9e4);border-radius:var(--radius-sm,8px);background:var(--color-surface,#fff);color:var(--color-text,#1a1a1a);font:400 14px Inter,system-ui,sans-serif}.ds-input::placeholder{color:var(--color-text-muted,#566a5d)}.ds-input:focus{outline:none;border-color:var(--color-primary,#1d6839)}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-warning",
+      "description": "A verified bg/fg pair, always with a word.",
+      "html": "<span class=\"ds-badge\">Blocked</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:var(--radius-xs,4px);background:var(--color-warning-bg,#fffbeb);color:var(--color-warning-fg,#92400e);font:500 12px/18px Inter,system-ui,sans-serif}"
+    },
+    {
+      "name": "Nav Item (active)",
+      "kind": "nav",
+      "description": "Leaf Wash with a 2px Harboost Leaf marker.",
+      "html": "<a class=\"ds-nav\" href=\"#\">Dashboard</a>",
+      "css": ".ds-nav{position:relative;display:flex;align-items:center;width:200px;padding:8px 8px 8px 12px;border-radius:var(--radius-sm,8px);background:var(--color-brand-soft,#eafaf0);color:var(--color-primary,#1d6839);font:500 14px Inter,system-ui,sans-serif;text-decoration:none}.ds-nav::before{content:\"\";position:absolute;left:0;top:4px;bottom:4px;width:2px;border-radius:2px;background:var(--color-brand,#53cf81)}"
+    },
+    {
+      "name": "Figure Row",
+      "kind": "custom",
+      "description": "A labelled figure in a panel; the whole row opens its records.",
+      "html": "<div class=\"ds-fig\"><span class=\"ds-fig-l\">Leaf intake</span><span class=\"ds-fig-v\">876.6 kg</span><span class=\"ds-fig-d\"><b>▼ down 69.4%</b> vs 1–18 Oct</span></div>",
+      "css": ".ds-fig{display:grid;grid-template-columns:1fr auto;gap:2px 12px;width:320px;padding:12px 20px;background:var(--color-surface,#fff);font-family:Inter,system-ui,sans-serif;cursor:pointer;transition:background-color 150ms}.ds-fig:hover{background:var(--color-surface-hover,#f2f7f4)}.ds-fig-l{font-size:13px;color:var(--color-text-muted,#566a5d)}.ds-fig-v{font-size:16px;font-weight:600;color:var(--color-text-heading,#08120b);font-variant-numeric:tabular-nums}.ds-fig-d{grid-column:span 2;font-size:12px;color:var(--color-text-muted,#566a5d)}.ds-fig-d b{font-weight:500;color:var(--color-warning-fg,#92400e)}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Sheet White, 16px radius, faint green-tinted level-1 shadow.",
+      "html": "<div class=\"ds-card\"><h3>Needs your action</h3><p>Nothing is waiting for you.</p></div>",
+      "css": ".ds-card{width:320px;padding:24px;border-radius:var(--radius-lg,16px);background:var(--color-surface,#fff);box-shadow:var(--shadow-1,0 1px 2px rgba(27,139,78,.04),0 1px 3px rgba(27,139,78,.06));font-family:Inter,system-ui,sans-serif;transition:box-shadow 200ms}.ds-card:hover{box-shadow:var(--shadow-2)}.ds-card h3{margin:0 0 8px;font-size:16px;font-weight:600;color:var(--color-text-heading,#08120b)}.ds-card p{margin:0;font-size:14px;color:var(--color-text-muted,#566a5d)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Factory Ledger",
+    "overview": "The portal is the factory's record book. It's calm, exact and trustworthy: a page of white surfaces on a faintly green paper (#f8fbf9). Figures are set in tabular numbers so columns of kilograms and rupees line up. The factory's green is its ink. Nothing on the page is decorative. Each number is another record's own figure and opens that record, and each colour means something.\n\nThe pages are dense but quiet, because staff come to work, not to browse. On every screen the work comes first (\"what needs me\"), then the figures that show how the day and the month are going. Colour is kept for meaning: green for actions and progress, amber for something due, red for something blocked or wrong. Each is paired with a word or an icon, never alone. The look rejects marketing dashboards: no hero banners, no gradients behind content, no \"revenue\" tiles for figures the factory doesn't record.",
+    "keyCharacteristics": [
+      "White surfaces on a faintly green page; thin warm-grey borders and dividers.",
+      "One solid green primary action per view; everything else is quiet.",
+      "Tabular figures everywhere; record IDs in a mono face.",
+      "Labelled rows over hero numbers; every figure opens its records.",
+      "Flat at rest; shadows lift only on hover, focus and floating layers."
+    ],
+    "rules": [
+      {
+        "name": "The Pair Rule",
+        "body": "A status colour never appears alone. It always comes with its pair (bg and fg) and with a word or an icon: \"Blocked\", \"▼ down 69.4%\".",
+        "section": "colors"
+      },
+      {
+        "name": "The One Green Button Rule",
+        "body": "One primary action per view, and it is Ledger Green. Destructive and irreversible money actions also stay primary green; red means a destructive delete, never \"important\".",
+        "section": "colors"
+      },
+      {
+        "name": "The No Raw Hex Rule",
+        "body": "Components use tokens only. A new colour is a new token first.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every kilogram, rupee, percentage, count and date is `tabular-nums`, so columns align and values don't jitter as they update.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "Headings, nav groups and buttons are sentence case. Uppercase is used only for small form-field labels.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Depth is a response to use: hover, focus, or something floating above the page. It is never decoration.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** link every figure to the list that it counts, and make the count equal that list.",
+      "**Do** say why a block is empty or blocked, in a sentence.",
+      "**Do** pair every status colour with a word or an arrow (▲ up / ▼ down).",
+      "**Do** use `formatDate` (`10 Jul 2026`), `formatCurrency` (`Rs. 1,245,600`) and `formatKg` for every figure.",
+      "**Do** show skeletons the size of the block they replace, and respect `prefers-reduced-motion`."
+    ],
+    "donts": [
+      "**Don't** use raw hex, `bg-white`, or a colour without a token.",
+      "**Don't** add hero banners, gradients behind content, or decorative illustrations to working screens.",
+      "**Don't** show revenue, profit or any figure the factory does not record.",
+      "**Don't** put Approve or Decline buttons on a dashboard or summary; decisions happen on their own page.",
+      "**Don't** grey out what a role can't do; hide it.",
+      "**Don't** use red for irreversible money actions; those are primary green with a re-type confirmation."
+    ]
+  }
+}

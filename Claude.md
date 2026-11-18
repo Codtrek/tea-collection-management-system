@@ -265,7 +265,7 @@ Notable fields worth preserving in any implementation:
 
 **Web portal (`source-code/admin/`) — ALL SIX MODULES UI-COMPLETE as of 2026-07-18.** React 19 +
 Vite 8 + Tailwind v4. Design-token foundation (hybrid Harboost palette: brand green `#53cf81`
-for accent/logo/charts, darkened `#1b8b4e` for AA-safe interactive primary) validated at
+for accent/logo/charts, darkened `#1b8b4e` for AA-safe interactive primary — now `#1d6839`, see the Dashboard section) validated at
 `/design-foundations` (FND-01). Built 2026-07-17: Global screens (Login, Dashboard, Notification
 Center, Search, Profile) + Employee Management (EMP-01..14). Built 2026-07-18: Fertilizer
 Inventory (FERT-01..04, new `AlertList` pattern), Tea Estate Owner (EST-01..09, two
@@ -1142,6 +1142,118 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
 - **Playwright** (`admin/e2e/`, Chromium only) checks 7 pages × 6 widths plus zoom against a running backend: `E2E_API_URL`, `E2E_USER`, `E2E_PASS`.
   - Screenshots are git-ignored, except the Dispatch before/after pair in `docs/screenshots/`.
 
+## Collection Report RPT-01 (2026-11-08, `feat/collection-report`)
+
+- **One service** (`docs/specs/Reports-Collection-Addendum.md`): `backend/src/reports/collection-report-rules.ts` (pure) + `CollectionReportService`, behind `GET /reports/collection`. It computes every figure: cards, charts, the table and totals, and the CSV.
+  - Graded deliveries (collected or confirmed, with grade lines) count by factory weight (Σ lines = the latest approved revision).
+  - Ungraded deliveries and provisional entries are counted apart; not-delivered rows are excluded.
+  - Dates are Colombo calendar days.
+- **Default period:** the last complete month. The month in progress is labelled "… so far (1–8 Nov)" and compared like for like. Year on year is null, shown as "No data last year", when last year had nothing.
+- **October 2026 page vs SQL:** identical. The opt-in check is `REPORT_SQL_CHECK_URL=… npx jest collection-report.sql`.
+- **Page:**
+  - The whole view is in the URL (`collection-report-view.ts`).
+  - Five cards using the shared `components/data/SummaryCard`; `TrendChartCard` (straight lines, partial period hollow); horizontal bars for routes and the top 10 estates.
+  - A grouped table with a `DataTable` `footer` totals row.
+  - Agent rows only link to Performance.
+- **`ReportActionsBar`** is honest everywhere: a handler means a working button; otherwise it is disabled with "Coming soon"; Preview is removed. RPT-01 has CSV export and print. The `print:hidden` chrome and `@media print` are shared.
+- **`AppShell`** scrolls to the top on a new page. The cached report opened at the old scroll position, with its title under the top bar.
+
+## Leaf Purchase Report RPT-02 + grade-rate versioning (2026-11-15, `feat/collection-report`)
+
+- **"Revenue Reports" became the Leaf Purchase Report** (`/reports/leaf-purchases`). `/reports/revenue` redirects with its query string. The page shows a **cost**, and "Revenue" is kept for a future made-tea sales module (`docs/specs/Reports-Collection-Addendum.md` §9–§11).
+- **Leaf value:** each graded delivery is valued at the grade-rate version **in force on its date** (`rateVersionFor`, `estates/settlement-calc.ts`, the one lookup).
+  - It runs through the Collection report's delivery rules and loaders (`leaf-purchase-rules.ts` + `LeafPurchaseService`).
+  - **October 2026:** page = SQL = Rs 798,201.50. The check is opt-in: `REPORT_SQL_CHECK_URL=… npx jest leaf-purchase.sql`.
+  - Deliveries before the first rate version show as "No rate"; they are never given a guessed value.
+- **Settled vs not yet settled:**
+  - Settled = deliveries linked (`settlement_id`) to a processed settlement, so Settled + Not yet settled = Accrued.
+  - **No settlement generator exists**, so today everything is "not yet settled".
+  - The seeded processed settlements show only on the "Paid in settlements" card, flagged as not linked.
+- **Expenses:**
+  - Added "Green leaf purchases": the same number as the report, linked to it.
+  - Removed the settlement fertilizer and transport lines. Those are recoveries from owners, shown as deductions on the Leaf Purchase Report.
+  - Expenses no longer reads settlements.
+- **ADM-01** (`docs/specs/Grade-Rates-Addendum.md`):
+  - "Current" means in force today; a later version is "Scheduled".
+  - No back-dated versions (400) and no duplicate dates (409, plus `UNIQUE (effective_date)` in migration `2026-11-15-grade-rates-unique.sql`).
+  - Factory Setup's date defaults to today, with `min` set to today.
+- **Charts:** a new `ComboChartCard` (bars + Rs/kg line on two axes). `axisWidth` now sizes to the rounded-up top tick, so no report axis clips.
+
+## Expense report RPT-03 + daily expense entries RPT-04 (2026-11-15, `feat/collection-report`)
+
+- **Expense vs recovery vs loan is defined once** in `docs/specs/Finance-Reports-Addendum.md`.
+  - Expenses: green leaf (at the rate in force), **processed** wages, fertilizer stock bought (qty × `unit_cost`), daily entries.
+  - Not expenses: transport / fertilizer / advance deductions (recovered from estate owners), advances issued (loans), wages estimated from attendance, write-offs.
+- **One finance service:** `backend/src/reports/finance-rules.ts` (pure) + `FinanceService` (`finance.service.ts`) load and decide every money figure. `LeafPurchaseService` reads rates and settlements through it.
+  - The gross formula is shared: `employees/payroll-gross.ts` (`grossFromHours`), used by `generatePayroll` and the wage estimate.
+- **Expense page** (`ExpenseReportPage.tsx`, `expense-report-view.ts`):
+  - It defaults to the **last complete month**; "latest with data" is gone.
+  - Four cards, stacked monthly bars, category bars, a "Not expenses" panel (recovered with Net leaf cost, loans, estimated wages), a Category/Month/Entry table, an empty state that says why, and CSV + Print.
+  - `GET /reports/expenses?month|from&to|thisMonth&groupBy&category`.
+- **Stock cost:** `stock_movements.unit_cost`, required on every new Incoming movement (migration `2026-11-15-stock-unit-cost.sql`). Older stock has no cost and is flagged, never guessed.
+- **Daily entries** (migration `2026-11-15-finance-expenses.sql`):
+  - Categories are data (`expense_categories`, ADM-01 → Expense Categories).
+  - Each entry has paid via cash / bank. **No receipts** (removed 2026-11-16): the DB upload is gone and `expense_receipts` is kept empty for the shared Cloudinary task. Don't add database file storage.
+  - Ids come from `expense_entry_seq`.
+  - New `expenses` permission module: Officer edit (own entry within `system_settings.expenses.editWindowDays` = 7, editable in ADM-03), Manager approve (any entry, with a reason after the window), Administrator view.
+  - Every change is audited before → after. There is no month close yet.
+  - The entry page `/reports/expenses/:id` is create / edit / view in one.
+- **Checks:** `REPORT_SQL_CHECK_URL=… npx jest finance.sql`. On Oct 2026, page = SQL: leaf 798,201.50, processed wages 0, estimated 536,400 (not in total), stock 0, entries 0.
+- **Shared components (opt-in props):**
+  - `StackedBarChartCard` `partial` (dashed month in progress)
+  - `HorizontalBarChartCard` per-bar `color`
+  - `EmptyState` accepts a node description
+  - `lib/api` `apiBlob` + FormData uploads
+  - `axisWidth` now measures the in-between ticks too
+
+## Factory Setup, Item Prices, Pay Rates and pay changes (2026-11-15, `feat/factory-setup-pay-rates`)
+
+- **One rule for every money rate** (`docs/specs/Administration-Addendum.md`, `backend/src/admin/versioning.ts`):
+  - Rates are effective-dated, never edited, and start today or later; there is one live version per date, and a version identical to the one it follows is refused.
+  - A reason is required, and the change is audited old → new.
+  - A scheduled version can be cancelled before it starts; it is kept, and ignored from then on.
+  - This covers grade rates, transport rates, item prices and pay rates.
+- **Factory Setup:**
+  - Each tab saves or publishes on its own, and unsaved changes prompt when switching tabs or leaving the page (`useBlocker`).
+  - General Info is real (`system_settings.factoryProfile`), with the factory bank account. Only the last 4 digits ever leave the server, via `/admin/factory-profile`, Administrator only.
+  - The logo upload says "Coming soon (file storage)".
+  - Spec references are removed from the UI.
+- **Grade rates:**
+  - Value applies by **delivery date**, so a version starting today re-values today's recorded deliveries (warned).
+  - The date defaults to tomorrow.
+  - Reason and cancel columns, with a partial unique index on live dates.
+- **Transport (decided 2026-11-15: a FIXED MONTHLY charge per estate, the same for all):**
+  - One versioned "Monthly transport charge per estate". It charges from a month (stored as the 1st). Only the **first** version may be back-dated, and only to the earliest month with unprocessed settlements.
+  - Preview: "Last month this would have charged N estates, total Rs Y".
+  - Charged **once** per settlement month when the estate has ≥1 confirmed delivery. No deliveries = no charge; self-delivery = exempt.
+  - Transport gives way to the stored fertilizer and advance deductions: net is never below 0, and the rest is carried forward.
+  - Frozen on the settlement at processing (`transport_status/charge/version_id/carried_in/carried_out`). Processing is blocked ("Transport: not configured") until a version covers the month.
+  - Pure rules: `admin/transport-rules.ts` + `estates/settlement-transport.ts`.
+  - The seeded 42/km row is kept as **Never applied**.
+  - Gotcha: `transport_rates.basis` was VARCHAR(6), so `fixed_month` needed it widened. Jest fakes didn't catch it; the live check did.
+- **Item Prices:**
+  - `fertilizer_item_prices` is the one selling-price source, per kg or per bag of N kg. `rate_per_kg` is still what a request snapshots at approval.
+  - Average purchase cost from costed stock-ins, with a "Selling below cost" warning.
+  - New `itemPrices` key: Admin sets; Officer and Manager view.
+  - Tab in Factory Setup, read-only page at `/fertilizer/prices`. Removed from System Settings.
+- **Pay history:**
+  - `pay_rates` holds the 4 **hourly** rates, effective-dated per role with a per-employee override.
+  - `payOn`: the override in force that day, else the role rate (`employees/pay-resolution.ts`).
+  - Payroll and the Expense wage estimate price each attendance day at that day's rates (`grossByDay`); processed runs keep their snapshot.
+  - Migrated from the rates on record, effective 2019. Local result: 5 role rates, 0 overrides; 48/48 employee-months unchanged (opt-in `pay-history.sql.spec`).
+  - The edit form no longer edits pay (the API refuses it); registration starts the history.
+  - Pay Rates appears in Factory Setup and People → Pay Rates; the employee page has a Pay tab.
+  - New `payRates` key: Admin approve, Manager edit, Officer none.
+  - System Settings → Payroll rules: standard hours/day (8), and minimum daily pay per category, blank until entered.
+- **Pay changes** (`/employees/pay-rates/change`, `pay-adjustment-rules.ts` + `PayAdjustmentService`):
+  - Who: all, a role, or selected employees. The change is ±% or ±Rs per hour on all 4 rates, with rounding to 10/50; Rs 0 rates are untouched.
+  - Starts today or later, never in or before a processed payroll month.
+  - The preview shows old → new per person and the monthly cost from last month's hours.
+  - Blocks: below the minimum blocks; an unset minimum shows "No minimum set — not checked"; a decrease needs the written-agreement checkbox.
+  - Approval: Administrator only, via HighStakesConfirmFlow. Nobody approves their own change or one that includes them (NIC).
+  - Re-checked at approval; written to pay_rates only then; audited.
+- **Migrations** (local `tea_dev` only, mirrored in `init.sql`): `2026-11-15-factory-setup.sql`, `-item-prices.sql`, `-pay-rates.sql`, `-pay-adjustments.sql`.
+
 ## Schema changes are TypeORM migrations now (2026-11-16, stack merge into dev)
 
 dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/data-source.ts`). The stack's hand-applied `database/migrations/*.sql` files are being converted PR by PR (`docs/specs/Stack-Merge-Addendum.md`).
@@ -1150,6 +1262,40 @@ dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/dat
 - **Never run migrations or seeds against the hosted DB (Azure VM).** The team's pipeline does that.
 - **Local databases: port 5433 is shared.** 127.0.0.1:5433 can be an ssh tunnel to the hosted DB. Use `DATABASE_URL=postgresql://tea@localhost:5433/<db>?host=::1`. `npm run seed` refuses non-local URLs and non-local servers (`src/local-db-guard.ts`).
 - **A fresh local database:** `createdb` → `npm run migration:run` → `npm run seed`.
+- **Login needs Redis** (dev's rate limiting, `REDIS_URL`). This machine has none, so local e2e runs preload an in-memory stand-in (not committed).
+- **The report e2e specs** (Collection, Expense and Leaf Purchase) need the demo seed's Aug–Nov 2026 data.
+
+## Dashboard on real data, by role (2026-11-17, `feat/dashboard`)
+
+`docs/specs/Dashboard-Addendum.md`. The old `/dashboard` was all mock: revenue, net profit, invented estates and activity, and a hardcoded date. It is now fed by `GET /dashboard/summary` (`backend/src/dashboard/`).
+
+- **No new calculations.** The summary only reads services the linked pages already use: the Collection / Leaf Purchase / Expense reports, the dispatch board, the fertilizer queue and expiry alerts, payroll month, advances, pay changes, holidays, settlements and audit. It calls them with the same inputs, so every count equals the list its link opens. `e2e/dashboard.spec.ts` checks this per role. Those modules now export these services.
+- **Role-aware, data-driven.**
+  - The role comes from the JWT (`?role=` is ignored).
+  - Section audiences: Today for Officer and Manager, This month for Manager and Administrator.
+  - Every figure needs `view` on its module, and every "Needs your action" item needs the permission its page checks (`role_permissions` via `DispatchAccessService.levelFor`).
+  - Items at 0 are hidden. The portal never checks a role itself.
+- **Links that pre-filter.**
+  - Collections filters are in the URL (`grade`, `status`, `date`, `olderThan`, `corrections=pending`; `collection-filters.ts`).
+  - Fertilizer queue scopes `stale` and `today`; Expiry Alerts anchors such as `#expired`.
+  - Settlements `bank=missing` (backend `noBank`).
+  - Pay changes `changes=decide`.
+- **The page** (`DashboardPage.tsx`):
+  - `DashboardContent` renders from the query state (tested with `renderToStaticMarkup`: before the API answers, the only digits are today's date).
+  - Values are never coloured for a fall, only for real problems.
+  - The Notifications box is gone; the bell and the Notifications page are still mock (follow-up).
+- **`--color-primary` is `#1D6839`.** `#1B8B4E` measured 4.33:1 white-on-primary and failed AA.
+- **Gaps** (addendum §2.2): no leave requests yet; estate advances have no approval step; settlement items move to the generator's `run()` after PR5.
+- **v2, 2026-11-18 (addendum §8).**
+  - **Checkpoint decisions:** the queues are OK, and Expenses is option (c). Don't ask either again.
+  - **Header:** one primary button (the top queue row's action) and "Review approvals (N)". The quick actions are gone.
+  - **The queue** is grouped Urgent / Due soon / To decide. Each row is one link with its own action button, and a Blocked badge where it applies.
+  - **Today and This month** are panels of labelled rows, with the change shown as a drawn arrow plus a word. **Expenses** (Manager and Administrator only) always says what it includes.
+  - **No doubling:** settlements and payroll appear as panel rows only for roles that don't have them in the queue.
+  - **Charts:** intake by day uses `ComboChartCard`'s opt-in `compareLine` / `yTicks` / `ariaLabel` / `caption` / `variant="panel"`, with `niceTicks` in `components/charts/ticks.ts`. By route is a ranked list.
+  - **Activity** is grouped by Colombo date.
+  - The e2e finds the panels by `#today-title` / `#month-title`, because activity has its own "Today" heading.
+  - `source-code/admin/PRODUCT.md` + `DESIGN.md` ("The Factory Ledger") are the design record. Read them before UI work in the portal.
 
 ## Newcomer's guide (2026-10-18)
 

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Eye, Pencil, Leaf, Loader2, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -15,6 +15,8 @@ import * as collectionsService from '@/services/collections'
 import { COLLECTION_TONE, isLocked } from './status'
 import { GradeChips } from './GradeChips'
 import { gradeKg, hasGrade } from './weights'
+import { collectionParams, filterCollections, linkFilterLabels, readCollectionFilters, type CollectionFilters } from './collection-filters'
+import { factoryToday } from '@/features/dispatch/status'
 import type { CollectionRecord, CollectionStatus, TeaGrade } from './types'
 import { formatDate, formatWeight } from '@/lib/format'
 
@@ -31,22 +33,18 @@ export function CollectionListPage() {
     refetch,
   } = useQuery({ queryKey: ['collections'], queryFn: collectionsService.list })
 
-  const [search, setSearch] = useState('')
-  const [route, setRoute] = useState('')
-  const [grade, setGrade] = useState('')
-  const [status, setStatus] = useState('')
+  // filters live in the URL (Dashboard links open the list pre-filtered) — derived on every render
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filters = readCollectionFilters(searchParams)
+  const { search, route, grade, status } = filters
+  const setFilters = (patch: Partial<CollectionFilters>) =>
+    setSearchParams(collectionParams({ ...filters, ...patch }), { replace: true })
+  const linkLabels = linkFilterLabels(filters, formatDate)
 
-  const rows = useMemo(() => {
-    const q = search.toLowerCase()
-    return (collections ?? []).filter(
-      (c) =>
-        (c.estateName.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)) &&
-        (!route || c.route === route) &&
-        // "contains this grade" — a multi-grade delivery matches either of its grades; Ungraded = no lines
-        (!grade || (grade === 'Ungraded' ? !c.graded : hasGrade(c, grade as TeaGrade))) &&
-        (!status || c.status === status),
-    )
-  }, [collections, search, route, grade, status])
+  const rows = useMemo(
+    () => filterCollections(collections ?? [], readCollectionFilters(searchParams), factoryToday()),
+    [collections, searchParams],
+  )
 
   const columns: Column<CollectionRecord>[] = [
     {
@@ -112,26 +110,40 @@ export function CollectionListPage() {
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_150px_150px_220px]">
-        <Input placeholder="Search estate or delivery ID…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input placeholder="Search estate or delivery ID…" value={search} onChange={(e) => setFilters({ search: e.target.value })} />
         <Select
           placeholder="All routes"
           value={route}
-          onChange={(e) => setRoute(e.target.value)}
+          onChange={(e) => setFilters({ route: e.target.value })}
           options={[...new Set((collections ?? []).map((c) => c.route))].sort().map((r) => ({ value: r, label: r }))}
         />
         <Select
           placeholder="All grades"
           value={grade}
-          onChange={(e) => setGrade(e.target.value)}
+          onChange={(e) => setFilters({ grade: e.target.value })}
           options={['Super', 'Normal', 'Ungraded'].map((g) => ({ value: g, label: g }))}
         />
         <Select
           placeholder="All statuses"
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          onChange={(e) => setFilters({ status: e.target.value })}
           options={(Object.keys(COLLECTION_TONE) as CollectionStatus[]).map((s) => ({ value: s, label: s }))}
         />
       </div>
+
+      {linkLabels.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+          {linkLabels.map((l) => (
+            <StatusBadge key={l} tone="neutral">
+              {l}
+            </StatusBadge>
+          ))}
+          <span className="tabular text-text-muted">· {rows.length} shown</span>
+          <Button size="sm" variant="ghost" onClick={() => setFilters({ date: '', olderThan: null, corrections: false })}>
+            Clear
+          </Button>
+        </div>
+      )}
 
       {isPending ? (
         <div className="flex items-center justify-center rounded-[var(--radius-lg)] border border-border bg-surface py-16">

@@ -1,412 +1,233 @@
-import { ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import type { Repository } from 'typeorm';
-import type { CollectionRecordEntity } from '../collections/collection-record.entity';
-import type { DeliveryGradeLineEntity } from '../collections/delivery-grade-line.entity';
-import type { PayrollRunEntity } from '../employees/payroll-run.entity';
-import type { SettlementEntity } from '../estates/settlement.entity';
-import type { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
-import type { StockMovementEntity } from '../fertilizer/stock-movement.entity';
+import type { PermissionLevel } from '../admin/admin-map';
+import type { SystemSettingEntity } from '../admin/system-setting.entity';
+import type { AuditService } from '../audit/audit.service';
+import type { DispatchAccessService } from '../dispatch/dispatch-access.service';
+import type { ExpenseCategoryEntity } from './expense-category.entity';
 import type { ExpenseEntryEntity } from './expense-entry.entity';
 import { type Actor, ReportsService } from './reports.service';
 
-/** Minimal in-memory stand-in for the TypeORM Repository surface the service uses. */
-class FakeRepository<T extends { id: string | number }> {
-  private readonly store = new Map<string | number, T>();
+/** RPT-04 daily expense entries — permissions, the edit window and the audit trail. */
 
-  seed(record: T): void {
-    this.store.set(record.id, record);
+class FakeRepo<T extends object> {
+  rows: T[] = [];
+  seq = 136;
+  constructor(private readonly key: keyof T) {}
+  find(): Promise<T[]> {
+    return Promise.resolve([...this.rows]);
   }
-
-  find(where?: { where: Partial<T> }): Promise<T[]> {
-    if (!where) return Promise.resolve([...this.store.values()]);
-    const [key, value] = Object.entries(where.where)[0] as [keyof T, unknown];
-    return Promise.resolve(
-      [...this.store.values()].filter((r) => r[key] === value),
+  findOne(o: { where: Partial<T> }): Promise<T | null> {
+    const hit = this.rows.find((r) =>
+      Object.entries(o.where).every(([k, v]) => r[k as keyof T] === v),
     );
+    return Promise.resolve(hit ?? null);
   }
-
-  count(): Promise<number> {
-    return Promise.resolve(this.store.size);
+  create(p: Partial<T>): T {
+    return { ...p } as T;
   }
-
-  create(partial: Partial<T>): T {
-    return partial as T;
+  save(r: T): Promise<T> {
+    const row = r as Record<string, unknown>;
+    if (this.key === 'id' && row.id === undefined)
+      row.id = this.rows.length + 1;
+    const i = this.rows.findIndex((x) => x[this.key] === r[this.key]);
+    if (i >= 0) this.rows[i] = r;
+    else this.rows.push(r);
+    return Promise.resolve(r);
   }
-
-  save(record: T): Promise<T> {
-    const withCreatedAt = { createdAt: new Date(), ...record } as T;
-    this.store.set(withCreatedAt.id, withCreatedAt);
-    return Promise.resolve(withCreatedAt);
+  query(): Promise<{ seq: string }[]> {
+    return Promise.resolve([{ seq: String(++this.seq) }]);
   }
 }
 
-/**
- * Test shorthand: `grade` ('super' | 'normal' | 'pending') becomes a single factory grade
- * line carrying the record's weight; 'pending' (the default for non-confirmed rows) leaves
- * the delivery Ungraded. Real code reads `gradeLines`, never a `grade` column.
- */
-type CollectionOverrides = Partial<CollectionRecordEntity> & {
-  grade?: 'super' | 'normal' | 'pending';
+const LEVELS: Record<string, Record<string, PermissionLevel>> = {
+  Officer: { expenses: 'edit', administration: 'none' },
+  Manager: { expenses: 'approve', administration: 'none' },
+  Administrator: { expenses: 'view', administration: 'approve' },
+};
+const ORDER: PermissionLevel[] = ['none', 'view', 'edit', 'approve'];
+const levelOf = (role: string, module: string): PermissionLevel =>
+  LEVELS[role]?.[module] ?? 'none';
+const access = {
+  levelFor: (role: string, module: string) =>
+    Promise.resolve(levelOf(role, module)),
+  require: (
+    role: string,
+    needed: PermissionLevel,
+    what: string,
+    module: string,
+  ) =>
+    ORDER.indexOf(levelOf(role, module)) < ORDER.indexOf(needed)
+      ? Promise.reject(new ForbiddenException(`Your role may not ${what}.`))
+      : Promise.resolve(),
 };
 
-function makeCollection(
-  overrides: CollectionOverrides = {},
-): CollectionRecordEntity {
-  const { grade = 'super', ...rest } = overrides;
-  const weightKg = rest.weightKg ?? '210.00';
-  return {
-    id: 'GV-2026-0714',
-    estateId: 1,
-    estateRef: 'EST-0001',
-    estateName: 'Green Valley Estate',
-    routeId: 1,
-    routeName: 'Route 3',
-    weightKg: '210.00',
-    gradeLines:
-      grade === 'pending'
-        ? []
-        : [{ grade, weightKg } as DeliveryGradeLineEntity],
-    status: 'confirmed',
-    collectionDate: '2026-07-14',
-    agentId: 1,
-    agentName: 'R. Senanayake',
-    photos: [],
-    timeline: [],
-    provisional: null,
-    mismatch: null,
-    lastUpdatedBy: null,
-    lastUpdatedOn: null,
-    createdAt: new Date('2026-07-14T00:00:00.000Z'),
-    ...rest,
-  } as CollectionRecordEntity;
-}
+const officer: Actor = { name: 'S. Fernando', role: 'Officer', sub: 2 };
+const otherOfficer: Actor = { name: 'P. Silva', role: 'Officer', sub: 5 };
+const manager: Actor = { name: 'R. Jayasuriya', role: 'Manager', sub: 3 };
+const admin: Actor = { name: 'A. Perera', role: 'Administrator', sub: 1 };
 
-function makeSettlement(
-  overrides: Partial<SettlementEntity> = {},
-): SettlementEntity {
-  return {
-    id: 'SET-2026-07-001',
-    estateId: 1,
-    estateName: 'Green Valley Estate',
-    period: 'July 2026',
-    superKg: '400.00',
-    normalKg: '100.00',
-    superRate: '185.00',
-    normalRate: '95.00',
-    transportCost: '8000.00',
-    fertilizerDeduction: '20000.00',
-    advanceDeduction: '0.00',
-    status: 'processed',
-    selfDelivery: false,
-    missingBank: false,
-    processedBy: 'A. Bandara',
-    processedOn: new Date('2026-07-15T00:00:00.000Z'),
-    createdAt: new Date('2026-07-01T00:00:00.000Z'),
-    ...overrides,
-  } as SettlementEntity;
-}
+const NOV_10 = new Date('2026-11-10T09:00:00+05:30');
+const NOV_15 = new Date('2026-11-15T09:00:00+05:30');
+const NOV_20 = new Date('2026-11-20T09:00:00+05:30');
 
-function makePayroll(
-  overrides: Partial<PayrollRunEntity> = {},
-): PayrollRunEntity {
-  return {
-    id: 'PR-0001',
-    employeeId: 1,
-    employeeName: 'S. Fernando',
-    period: 'July 2026',
-    dayHours: '160.00',
-    dayOtHours: '0.00',
-    nightHours: '0.00',
-    nightOtHours: '0.00',
-    dayRate: '500.00',
-    dayOtRate: '750.00',
-    nightRate: '600.00',
-    nightOtRate: '900.00',
-    gross: '80000.00',
-    deductionsAdvances: '0.00',
-    deductionsOther: '0.00',
-    status: 'Pending',
-    missingBank: false,
-    processedBy: null,
-    processedOn: null,
-    createdAt: new Date('2026-07-01T00:00:00.000Z'),
-    ...overrides,
-  } as PayrollRunEntity;
-}
-
-function makeExpense(
-  overrides: Partial<ExpenseEntryEntity> = {},
-): ExpenseEntryEntity {
-  return {
-    id: 'EXP-2026-0001',
-    category: 'Utilities',
-    description: 'CEB electricity',
-    amount: '214600.00',
-    entryDate: '2026-07-10',
-    enteredBy: 'S. Fernando',
-    createdAt: new Date('2026-07-10T00:00:00.000Z'),
-    ...overrides,
-  } as ExpenseEntryEntity;
-}
-
-describe('ReportsService', () => {
-  let collectionRepo: FakeRepository<CollectionRecordEntity>;
-  let settlementRepo: FakeRepository<SettlementEntity>;
-  let payrollRepo: FakeRepository<PayrollRunEntity>;
-  let expenseRepo: FakeRepository<ExpenseEntryEntity>;
-  let movementRepo: FakeRepository<StockMovementEntity>;
-  let batchRepo: FakeRepository<FertilizerBatchEntity>;
+describe('ReportsService — daily expense entries', () => {
+  let entries: FakeRepo<ExpenseEntryEntity>;
+  let categories: FakeRepo<ExpenseCategoryEntity>;
+  let audit: { record: jest.Mock };
   let service: ReportsService;
 
-  const officer: Actor = { name: 'S. Fernando', role: 'Officer' };
-  const manager: Actor = { name: 'R. Jayasuriya', role: 'Manager' };
-
   beforeEach(() => {
-    collectionRepo = new FakeRepository();
-    settlementRepo = new FakeRepository();
-    payrollRepo = new FakeRepository();
-    expenseRepo = new FakeRepository();
-    movementRepo = new FakeRepository();
-    batchRepo = new FakeRepository();
-
-    const audit = { record: jest.fn().mockResolvedValue(undefined) };
+    entries = new FakeRepo<ExpenseEntryEntity>('id');
+    categories = new FakeRepo<ExpenseCategoryEntity>('id');
+    categories.rows = [
+      { id: 1, name: 'Electricity', active: true, sortOrder: 2 },
+      { id: 2, name: 'Water', active: true, sortOrder: 3 },
+      { id: 3, name: 'Utilities', active: false, sortOrder: 99 },
+    ] as ExpenseCategoryEntity[];
+    const settings = new FakeRepo<SystemSettingEntity>('key');
+    settings.rows = [
+      { key: 'expenses', value: { editWindowDays: 7 } } as SystemSettingEntity,
+    ];
+    audit = { record: jest.fn().mockResolvedValue(undefined) };
     service = new ReportsService(
-      expenseRepo as unknown as Repository<ExpenseEntryEntity>,
-      collectionRepo as unknown as Repository<CollectionRecordEntity>,
-      settlementRepo as unknown as Repository<SettlementEntity>,
-      payrollRepo as unknown as Repository<PayrollRunEntity>,
-      movementRepo as unknown as Repository<StockMovementEntity>,
-      batchRepo as unknown as Repository<FertilizerBatchEntity>,
-      audit as unknown as import('../audit/audit.service').AuditService,
+      entries as unknown as Repository<ExpenseEntryEntity>,
+      categories as unknown as Repository<ExpenseCategoryEntity>,
+      settings as unknown as Repository<SystemSettingEntity>,
+      access as unknown as DispatchAccessService,
+      audit as unknown as AuditService,
     );
   });
 
-  describe('collectionReport — RPT-01', () => {
-    it('excludes non-Confirmed records from the totals', async () => {
-      collectionRepo.seed(
-        makeCollection({ id: 'A', status: 'confirmed', weightKg: '100.00' }),
-      );
-      collectionRepo.seed(
-        makeCollection({
-          id: 'B',
-          status: 'pending_agent_confirmation',
-          weightKg: '9999.00',
-        }),
-      );
+  const log = (
+    actor = officer,
+    now = NOV_10,
+    o: Partial<{ categoryId: number; date: string }> = {},
+  ) =>
+    service.createExpense(
+      {
+        categoryId: 1,
+        amount: 52000,
+        date: '2026-11-10',
+        description: 'CEB electricity — factory floor',
+        paidVia: 'bank',
+        ...o,
+      },
+      actor,
+      now,
+    );
 
-      const report = await service.collectionReport('2026-07');
-      expect(report.totalKg).toBe(100);
+  it('an Officer logs an entry: id from the sequence, creator stamped, audited', async () => {
+    const e = await log();
+    expect(e).toMatchObject({
+      id: 'EXP-2026-0137',
+      category: 'Electricity',
+      paidVia: 'bank',
+      enteredBy: 'S. Fernando',
+      loggedOn: '2026-11-10',
+      access: { canEdit: true, needsReason: false },
     });
-
-    it('computes the grade split as a percentage of graded weight', async () => {
-      collectionRepo.seed(
-        makeCollection({ id: 'A', grade: 'super', weightKg: '300.00' }),
-      );
-      collectionRepo.seed(
-        makeCollection({ id: 'B', grade: 'normal', weightKg: '100.00' }),
-      );
-
-      const report = await service.collectionReport('2026-07');
-      expect(report.gradeSplit).toEqual({ superPct: 75, normalPct: 25 });
-    });
-
-    it('buckets the trend by month across the full confirmed history', async () => {
-      collectionRepo.seed(
-        makeCollection({
-          id: 'A',
-          collectionDate: '2026-06-10',
-          weightKg: '50.00',
-        }),
-      );
-      collectionRepo.seed(
-        makeCollection({
-          id: 'B',
-          collectionDate: '2026-07-14',
-          weightKg: '210.00',
-        }),
-      );
-
-      const report = await service.collectionReport('2026-07');
-      expect(report.trend).toEqual([
-        { month: 'Jun', value: 50 },
-        { month: 'Jul', value: 210 },
-      ]);
-    });
-
-    it('defaults to the latest month with confirmed data when no period is given', async () => {
-      collectionRepo.seed(
-        makeCollection({ id: 'A', collectionDate: '2026-05-01' }),
-      );
-      collectionRepo.seed(
-        makeCollection({ id: 'B', collectionDate: '2026-07-01' }),
-      );
-
-      const report = await service.collectionReport();
-      expect(report.period).toBe('2026-07');
-    });
+    expect(entries.rows[0].createdByUserId).toBe(2);
+    expect(audit.record).toHaveBeenCalledWith(
+      officer,
+      expect.objectContaining({
+        action: 'Logged daily expense',
+        record: 'EXP-2026-0137',
+        details: expect.stringContaining('Electricity · Rs. 52,000') as string,
+      }),
+    );
   });
 
-  describe('revenueReport — RPT-02', () => {
-    it('excludes pending settlements — only processed revenue is realized', async () => {
-      settlementRepo.seed(
-        makeSettlement({
-          id: 'A',
-          status: 'processed',
-          superKg: '100.00',
-          normalKg: '0.00',
-          superRate: '185.00',
-          normalRate: '95.00',
-        }),
-      );
-      settlementRepo.seed(
-        makeSettlement({ id: 'B', status: 'pending', superKg: '1000.00' }),
-      );
-
-      const report = await service.revenueReport('2026-07');
-      expect(report.totalRevenue).toBe(18500); // 100 * 185
-    });
-
-    it('computes month-over-month delta against the previous period', async () => {
-      settlementRepo.seed(
-        makeSettlement({
-          id: 'A',
-          period: 'June 2026',
-          superKg: '100.00',
-          normalKg: '0.00',
-          superRate: '100.00',
-        }),
-      );
-      settlementRepo.seed(
-        makeSettlement({
-          id: 'B',
-          period: 'July 2026',
-          superKg: '150.00',
-          normalKg: '0.00',
-          superRate: '100.00',
-        }),
-      );
-
-      const report = await service.revenueReport('2026-07');
-      expect(report.prevRevenue).toBe(10000);
-      expect(report.totalRevenue).toBe(15000);
-      expect(report.deltaPercent).toBe(50);
-    });
+  it('rejects a future date and an inactive category', async () => {
+    await expect(log(officer, NOV_10, { date: '2026-11-11' })).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(log(officer, NOV_10, { categoryId: 3 })).rejects.toThrow(
+      /no longer in use/,
+    );
   });
 
-  describe('expenseReport — RPT-03/04', () => {
-    it('unions payroll, settlement, and manual entries for the period', async () => {
-      payrollRepo.seed(makePayroll({ id: 'PR-1', gross: '80000.00' }));
-      settlementRepo.seed(
-        makeSettlement({
-          id: 'SET-1',
-          transportCost: '8000.00',
-          fertilizerDeduction: '20000.00',
-        }),
-      );
-      expenseRepo.seed(
-        makeExpense({ id: 'EXP-1', category: 'Utilities', amount: '5000.00' }),
-      );
-
-      const report = await service.expenseReport('2026-07');
-      expect(report.total).toBe(80000 + 8000 + 20000 + 5000);
-      expect(report.manualTotal).toBe(5000);
-      expect(report.rows).toHaveLength(4);
-      expect(report.split).toEqual(
-        expect.arrayContaining([
-          { category: 'Payroll', amount: 80000 },
-          { category: 'Transport', amount: 8000 },
-          { category: 'Fertilizer', amount: 20000 },
-          { category: 'Utilities', amount: 5000 },
-        ]),
-      );
-    });
-
-    it('shows write-offs as "Stock lost" without counting them as an expense', async () => {
-      payrollRepo.seed(makePayroll({ id: 'PR-1', gross: '80000.00' }));
-      batchRepo.seed({
-        id: 7,
-        item: 'Muriate of Potash',
-      } as FertilizerBatchEntity);
-      for (const [id, qty, date] of [
-        [1, '200.00', '2026-07-05'],
-        [2, '100.00', '2026-07-20'],
-        [3, '50.00', '2026-08-01'], // another month
-      ] as const) {
-        movementRepo.seed({
-          id,
-          batchId: 7,
-          type: 'Write-off',
-          writeOffReason: 'expired',
-          quantityKg: qty,
-          movementDate: date,
-        } as StockMovementEntity);
-      }
-
-      const report = await service.expenseReport('2026-07');
-      expect(report.stockLost).toEqual([
-        { item: 'Muriate of Potash', reason: 'expired', kg: 300 },
-      ]);
-      expect(report.total).toBe(80000);
-      expect(report.split).toEqual([{ category: 'Payroll', amount: 80000 }]);
-    });
-
-    it('groups multiple manual entries in the same category together', async () => {
-      expenseRepo.seed(
-        makeExpense({
-          id: 'EXP-1',
-          category: 'Miscellaneous',
-          amount: '1000.00',
-        }),
-      );
-      expenseRepo.seed(
-        makeExpense({
-          id: 'EXP-2',
-          category: 'Miscellaneous',
-          amount: '2000.00',
-        }),
-      );
-
-      const report = await service.expenseReport('2026-07');
-      const misc = report.split.find((s) => s.category === 'Miscellaneous');
-      expect(misc?.amount).toBe(3000);
-    });
-
-    it('omits zero-amount categories from the split', async () => {
-      const report = await service.expenseReport('2026-07');
-      expect(report.split).toEqual([]);
-      expect(report.largest).toBeNull();
-    });
+  it('the Administrator views but cannot log', async () => {
+    await expect(log(admin)).rejects.toThrow(ForbiddenException);
   });
 
-  describe('createExpense', () => {
-    it('rejects a Manager (read-only, same tier as every other module)', async () => {
-      await expect(
-        service.createExpense(
-          {
-            category: 'Utilities',
-            amount: 1000,
-            date: '2026-07-20',
-            description: 'Test',
-          },
-          manager,
-        ),
-      ).rejects.toThrow(ForbiddenException);
-    });
+  it('the creator edits within the window; the change is audited before → after', async () => {
+    const { id } = await log();
+    const e = await service.updateExpense(
+      id,
+      { amount: 52500 },
+      officer,
+      NOV_15,
+    );
+    expect(e.amount).toBe(52500);
+    expect(e.updatedBy).toBe('S. Fernando');
+    expect(audit.record).toHaveBeenLastCalledWith(
+      officer,
+      expect.objectContaining({
+        action: 'Changed daily expense',
+        details: 'Amount: Rs. 52,000 → Rs. 52,500',
+      }),
+    );
+  });
 
-    it('lets an Officer log an expense, stamping the actor as enteredBy', async () => {
-      const entry = await service.createExpense(
-        {
-          category: 'Maintenance',
-          amount: 4500,
-          date: '2026-07-20',
-          description: 'Fan replacement',
-        },
-        officer,
-      );
-
-      expect(entry.enteredBy).toBe('S. Fernando');
-      expect(entry.id).toMatch(/^EXP-2026-\d{4}$/);
-      expect(entry.amount).toBe(4500);
+  it('after the window only the Manager may change it, with a reason', async () => {
+    const { id } = await log();
+    await expect(
+      service.updateExpense(id, { amount: 1 }, officer, NOV_20),
+    ).rejects.toThrow(ForbiddenException);
+    await expect(
+      service.updateExpense(id, { amount: 51000 }, manager, NOV_20),
+    ).rejects.toThrow(/reason/);
+    const e = await service.updateExpense(
+      id,
+      { amount: 51000, reason: 'CEB bill re-issued' },
+      manager,
+      NOV_20,
+    );
+    expect(e).toMatchObject({
+      amount: 51000,
+      editReason: 'CEB bill re-issued',
     });
+    expect(audit.record).toHaveBeenLastCalledWith(
+      manager,
+      expect.objectContaining({
+        details: 'Amount: Rs. 52,000 → Rs. 51,000 — reason: CEB bill re-issued',
+      }),
+    );
+  });
+
+  it('another Officer can’t change someone else’s entry', async () => {
+    const { id } = await log();
+    await expect(
+      service.updateExpense(id, { amount: 1 }, otherOfficer, NOV_15),
+    ).rejects.toThrow(ForbiddenException);
+    const seen = await service.getExpense(id, otherOfficer, NOV_15);
+    expect(seen.access.canEdit).toBe(false);
+  });
+
+  it('no receipt storage: the entry carries no receipt (it waits for file storage)', async () => {
+    const e = await log();
+    expect(e).not.toHaveProperty('receipt');
+  });
+
+  it('categories: Administrator only, unique names, audited', async () => {
+    await expect(
+      service.createCategory({ name: 'Packaging' }, officer),
+    ).rejects.toThrow(ForbiddenException);
+    await expect(
+      service.createCategory({ name: 'water' }, admin),
+    ).rejects.toThrow(ConflictException);
+    const list = await service.createCategory({ name: 'Packaging' }, admin);
+    expect(list.map((c) => c.name)).toContain('Packaging');
+    await service.updateCategory(2, { active: false }, admin);
+    expect(categories.rows.find((c) => c.id === 2)?.active).toBe(false);
+    expect(audit.record).toHaveBeenLastCalledWith(
+      admin,
+      expect.objectContaining({ details: 'In use: yes → no' }),
+    );
   });
 });

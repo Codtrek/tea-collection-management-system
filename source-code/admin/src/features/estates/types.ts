@@ -146,6 +146,25 @@ export interface Settlement {
   missingBank?: boolean
   processedBy?: string
   processedOn?: string
+  /** Administration-Addendum §4 — frozen when processed, live while pending; null on older history */
+  transport?: TransportLine | null
+}
+
+/** The transport line of a settlement: a fixed monthly charge per estate. */
+export interface TransportLine {
+  status: 'charged' | 'exempt' | 'no_deliveries' | 'not_configured'
+  /** the month's charge */
+  charge: number
+  /** carried in from the estate's last processed settlement */
+  carriedIn: number
+  /** taken from this settlement */
+  taken: number
+  /** left owing, carried to the next settlement */
+  carriedOut: number
+  versionId: number | null
+  /** 'YYYY-MM' the version charges from */
+  versionMonth: string | null
+  frozen: boolean
 }
 
 /*

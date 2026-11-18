@@ -20,14 +20,16 @@
   /* ---- Brand & primary ---------------------------------------------------
      --brand  #53cf81  : logo, active-nav, accents, chart series, focus ring
      --primary          : darkened Harboost green for buttons/links/text —
-                          #1B8B4E gives ~4.5:1 white-on-green (passes AA). */
+                          #1D6839 gives 6.8:1 white-on-green and 6.3:1 as text
+                          on the soft/hover surfaces (WCAG AA). The earlier
+                          #1B8B4E measured 4.33:1 and failed AA for body text. */
   --color-brand: #53cf81;
   --color-brand-strong: #3bb96b;
   --color-brand-soft: #eafaf0;
 
-  --color-primary: #1b8b4e;
-  --color-primary-hover: #157a43;
-  --color-primary-active: #106138;
+  --color-primary: #1d6839;
+  --color-primary-hover: #185a31;
+  --color-primary-active: #134a28;
   --color-primary-disabled: #b7d8c4;
 
   /* Hero gradient (brand doc §3) — roots-to-growth, dark to bright Harboost
@@ -81,6 +83,11 @@
   --color-chart-5: #8fbba1;
   --color-chart-6: #e0bc72;
   --color-chart-7: #5b7b8a;
+  /* Dashboard-Addendum: a bar's empty track, and the comparison period (last month). The
+     comparison uses the muted text colour: the lighter #8f9c94 is 2.8:1 on white, below the
+     3:1 chart marks need. */
+  --color-chart-track: #e8f4ed;
+  --color-chart-compare: #566a5d;
 
   /* ---- Radius (foundations §3) ------------------------------------------- */
   --radius-xs: 4px;
@@ -231,5 +238,27 @@ body {
   .skeleton {
     animation: none;
     background: #eef2ef;
+  }
+}
+
+/* Print layout (Reports-Collection-Addendum §8): the app chrome is `print:hidden`; the page prints
+   on A4 with flat cards, and nothing is cut across pages that can be kept whole. */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body {
+    background: var(--color-surface);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  [class*='shadow-'] {
+    box-shadow: none !important;
+  }
+  .recharts-wrapper,
+  tr,
+  section {
+    break-inside: avoid;
   }
 }

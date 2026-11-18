@@ -3,8 +3,10 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -15,10 +17,21 @@ import { UsersService } from '../users/users.service';
 import { type Actor, AdminService } from './admin.service';
 import type {
   PermissionMatrix,
+  PublicFactoryProfile,
   PublicGradeRate,
   PublicSystemUser,
 } from './admin-map';
-import { CreateGradeRateDto } from './dto/create-grade-rate.dto';
+import {
+  CancelVersionDto,
+  CreateGradeRateDto,
+  CreateTransportChargeDto,
+  UpdateFactoryProfileDto,
+} from './dto/create-grade-rate.dto';
+import {
+  type TransportPreview,
+  TransportRatesService,
+  type TransportRatesView,
+} from './transport-rates.service';
 import { UpdatePermissionsDto } from './dto/update-permissions.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
@@ -30,6 +43,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly usersService: UsersService,
+    private readonly transportRates: TransportRatesService,
   ) {}
 
   // ── ADM-01 grade rates ──
@@ -46,6 +60,74 @@ export class AdminController {
     return this.adminService.createGradeRate(dto, await this.resolveActor(req));
   }
 
+  /** Cancel a scheduled version before it starts (reason required, audited). */
+  @Post('grade-rates/:id/cancel')
+  async cancelGradeRate(
+    @Param('id') id: string,
+    @Body() dto: CancelVersionDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicGradeRate[]> {
+    return this.adminService.cancelGradeRate(
+      id,
+      dto.reason,
+      await this.resolveActor(req),
+    );
+  }
+
+  // ── ADM-01 transport: a fixed monthly charge per estate (Administration-Addendum §4) ──
+  @Get('transport-rates')
+  listTransportRates(): Promise<TransportRatesView> {
+    return this.transportRates.list();
+  }
+
+  /** "Last month this would have charged N estates, total Rs Y" — before publishing. */
+  @Get('transport-rates/preview')
+  previewTransportCharge(
+    @Query('amount') amount?: string,
+  ): Promise<TransportPreview> {
+    return this.transportRates.preview(Number(amount));
+  }
+
+  @Post('transport-rates')
+  async createTransportRate(
+    @Body() dto: CreateTransportChargeDto,
+    @Req() req: AuthedRequest,
+  ): Promise<TransportRatesView> {
+    return this.transportRates.create(dto, await this.resolveActor(req));
+  }
+
+  @Post('transport-rates/:id/cancel')
+  async cancelTransportRate(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CancelVersionDto,
+    @Req() req: AuthedRequest,
+  ): Promise<TransportRatesView> {
+    return this.transportRates.cancel(
+      id,
+      dto.reason,
+      await this.resolveActor(req),
+    );
+  }
+
+  // ── ADM-01 factory profile (Administration-Addendum §2) ──
+  @Get('factory-profile')
+  async getFactoryProfile(
+    @Req() req: AuthedRequest,
+  ): Promise<PublicFactoryProfile> {
+    return this.adminService.getFactoryProfile(await this.resolveActor(req));
+  }
+
+  @Put('factory-profile')
+  async updateFactoryProfile(
+    @Body() dto: UpdateFactoryProfileDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicFactoryProfile> {
+    return this.adminService.updateFactoryProfile(
+      dto,
+      await this.resolveActor(req),
+    );
+  }
+
   // ── ADM-02 permission matrix ──
   @Get('permissions')
   getPermissions(): Promise<PermissionMatrix> {
@@ -57,7 +139,10 @@ export class AdminController {
     @Body() dto: UpdatePermissionsDto,
     @Req() req: AuthedRequest,
   ): Promise<PermissionMatrix> {
-    return this.adminService.updatePermissions(dto, await this.resolveActor(req));
+    return this.adminService.updatePermissions(
+      dto,
+      await this.resolveActor(req),
+    );
   }
 
   // ── ADM-03 system settings ──

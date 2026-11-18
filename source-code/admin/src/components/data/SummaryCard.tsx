@@ -6,7 +6,7 @@ import { cn } from '@/lib/cn'
 type CardTone = 'default' | 'danger' | 'success'
 
 /**
- * A FERT-01 summary card. Clicking it (or Enter/Space on it) opens the exact records it counts,
+ * A summary card (FERT-01, RPT-01). Clicking it (or Enter/Space on it) opens the exact records it counts,
  * through `onOpen`. The (i) button states the card's rule, and `preview` (when given) opens on
  * hover, on keyboard focus, or on tap of the chevron for touch screens. The primary action is a
  * stretched button laid over the card, with the (i) and chevron buttons stacked above it as its
@@ -26,7 +26,7 @@ export function SummaryCard({
   icon: ReactNode
   label: string
   value: string
-  note: string
+  note: ReactNode
   /** the exact rule, shown by the (i) button */
   rule: ReactNode
   tone?: CardTone
@@ -87,7 +87,7 @@ export function SummaryCard({
       </div>
       <p className={cn('tabular text-[28px] font-semibold leading-none tracking-tight', valueColor)}>{value}</p>
       <div className="mt-2 flex items-end justify-between gap-2">
-        <p className="text-xs text-text-muted">{note}</p>
+        <div className="text-xs text-text-muted">{note}</div>
         {preview && (
           // touch screens have no hover: the chevron opens the preview without leaving the page
           <button

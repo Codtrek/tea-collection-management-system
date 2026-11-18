@@ -18,6 +18,11 @@ import type {
   Employee,
   EmployeeRoles,
   PayrollRow,
+  EmployeePay,
+  PayAdjustment,
+  PayChangeInput,
+  PayPreview,
+  RolePay,
 } from '@/features/employees/types'
 
 export interface EmployeeInput {
@@ -306,4 +311,39 @@ export function getPayrollMonth(q: PayrollMonthQuery): Promise<PayrollMonthResul
   const params = new URLSearchParams()
   for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') params.set(k, String(v))
   return apiFetch<PayrollMonthResult>(`/employees/payroll/month?${params.toString()}`)
+}
+
+/* ── Pay history (Administration-Addendum §6) — `payRates: view` ── */
+
+/** Every role's rate in force today, its next change and its people. */
+export function getPayRates(): Promise<RolePay[]> {
+  return apiFetch<RolePay[]>('/employees/pay-rates')
+}
+
+/** One employee's pay: in force today, the next change, and every version that applies. */
+export function getEmployeePay(id: string): Promise<EmployeePay> {
+  return apiFetch<EmployeePay>(`/employees/${encodeURIComponent(id)}/pay`)
+}
+
+/* ── Pay adjustments (Administration-Addendum §8): the Manager prepares, the Administrator approves ── */
+
+export function listPayAdjustments(): Promise<PayAdjustment[]> {
+  return apiFetch<PayAdjustment[]>('/employees/pay-adjustments')
+}
+
+/** What a change would do, per employee — nothing is saved. */
+export function previewPayChange(input: PayChangeInput): Promise<PayPreview> {
+  return apiFetch<PayPreview>('/employees/pay-adjustments/preview', { method: 'POST', body: JSON.stringify(input) })
+}
+
+/** Prepare a change (reason required); it applies only once an Administrator approves it. */
+export function preparePayChange(input: PayChangeInput): Promise<PayAdjustment> {
+  return apiFetch<PayAdjustment>('/employees/pay-adjustments', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function decidePayChange(id: number, decision: 'approve' | 'reject', reason?: string): Promise<PayAdjustment> {
+  return apiFetch<PayAdjustment>(`/employees/pay-adjustments/${id}/decide`, {
+    method: 'PATCH',
+    body: JSON.stringify({ decision, ...(reason ? { reason } : {}) }),
+  })
 }

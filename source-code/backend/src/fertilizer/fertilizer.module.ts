@@ -32,6 +32,7 @@ import { FertilizerStockLedger } from './fertilizer-stock-ledger.service';
 import { FertilizerViewService } from './fertilizer-view.service';
 import { FertilizerController } from './fertilizer.controller';
 import { FertilizerService } from './fertilizer.service';
+import { ItemPriceService } from './item-price.service';
 import { StockMovementEntity } from './stock-movement.entity';
 
 @Module({
@@ -76,9 +77,16 @@ import { StockMovementEntity } from './stock-movement.entity';
     FertilizerNotificationService,
     FertilizerNotificationTasks,
     AgentFertilizerHistoryService,
+    ItemPriceService,
   ],
   // the Employee detail page's "Fertilizer deliveries" tab
   // FertilizerDeliveryService: a declared holiday moves deliveries off cancelled collection days
-  exports: [AgentFertilizerHistoryService, FertilizerDeliveryService],
+  exports: [
+    AgentFertilizerHistoryService,
+    FertilizerDeliveryService,
+    // the Dashboard's request and expiry counts (Dashboard-Addendum)
+    FertilizerViewService,
+    FertilizerService,
+  ],
 })
 export class FertilizerModule {}

@@ -1,3 +1,4 @@
+import { factoryToday } from '@/features/dispatch/status'
 import { formatDayMonth, formatWeight } from '@/lib/format'
 import type { BatchStatus, FertilizerBatch, FertilizerRequest, ItemPosition, RequestAvailability, RequestStatus } from './types'
 
@@ -212,6 +213,14 @@ export const QUEUE_TAB_STATUSES: Record<string, RequestStatus[]> = {
 export const QUEUE_SCOPES: Record<string, { label: string; test: (r: FertilizerRequest) => boolean }> = {
   holding: { label: 'Holding stock', test: holdsStock },
   open: { label: 'Open (to decide or holding stock)', test: isOpenDemand },
+  // the Dashboard's links — the same predicates its counts use (backend dashboard-rules.ts)
+  stale: { label: 'Holding expired stock', test: hasStaleCommitment },
+  today: { label: 'Delivery scheduled today', test: (r) => isScheduledOn(r, factoryToday()) },
+}
+
+/** A delivery attempt scheduled on `date` and not cancelled (Dashboard "fertilizer deliveries today"). */
+export function isScheduledOn(r: FertilizerRequest, date: string): boolean {
+  return !!r.attempt && !r.attempt.cancelled && r.attempt.scheduledDate === date
 }
 
 export interface QueueFilters {

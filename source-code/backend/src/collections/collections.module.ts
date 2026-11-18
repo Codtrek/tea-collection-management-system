@@ -56,6 +56,6 @@ import { TeaCollectionDiscrepancyEntity } from './collection-requests/tea-collec
     GradingNotificationService,
     GradingNotificationTasks,
   ],
-  exports: [CollectionSettingsService],
+  exports: [CollectionSettingsService, CollectionsService, GradingService],
 })
 export class CollectionsModule {}

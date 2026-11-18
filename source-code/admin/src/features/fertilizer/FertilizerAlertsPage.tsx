@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AlertOctagon, CalendarClock, CheckCircle2, Eye, ListChecks, Loader2, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -32,6 +32,12 @@ export function FertilizerAlertsPage() {
     queryKey: ['fertilizer', 'alerts'],
     queryFn: fertilizerService.getExpiryAlerts,
   })
+
+  // `#expired` (the Dashboard's "expired stock to write off"): the section only exists once loaded
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (data && hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
+  }, [data, hash])
 
   if (isPending) {
     return (

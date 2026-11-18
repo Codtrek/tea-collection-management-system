@@ -570,8 +570,14 @@ describe('7–8. price snapshot and amount owed', () => {
     const h = scenario();
     h.batch({ qty: 500, expiry: '2027-01-01' });
     const id = await h.ready(200);
-    await h.requestService.setPrice(
-      { item: 'Urea Fertilizer', ratePerKg: 120, effectiveDate: TODAY },
+    await h.itemPrices.set(
+      {
+        item: 'Urea Fertilizer',
+        unit: 'kg',
+        pricePerUnit: 120,
+        effectiveDate: TODAY,
+        reason: 'Supplier increase',
+      },
       admin,
       NOW,
     );
@@ -593,19 +599,114 @@ describe('7–8. price snapshot and amount owed', () => {
   it('only an Administrator sets prices, never in the past', async () => {
     const h = scenario();
     await expect(
-      h.requestService.setPrice(
-        { item: 'Urea Fertilizer', ratePerKg: 95, effectiveDate: D1 },
+      h.itemPrices.set(
+        {
+          item: 'Urea Fertilizer',
+          unit: 'kg',
+          pricePerUnit: 95,
+          effectiveDate: D1,
+          reason: 'x y z',
+        },
         officer,
         NOW,
       ),
     ).rejects.toThrow(ForbiddenException);
     await expect(
-      h.requestService.setPrice(
-        { item: 'Urea Fertilizer', ratePerKg: 95, effectiveDate: '2026-10-01' },
+      h.itemPrices.set(
+        {
+          item: 'Urea Fertilizer',
+          unit: 'kg',
+          pricePerUnit: 95,
+          effectiveDate: '2026-10-01',
+          reason: 'x y z',
+        },
         admin,
         NOW,
       ),
     ).rejects.toThrow(/past/);
+  });
+
+  it('a price per bag becomes a per-kg price; identical versions are refused; a scheduled one can be cancelled and never applies', async () => {
+    const h = scenario();
+    const list = await h.itemPrices.set(
+      {
+        item: 'Urea Fertilizer',
+        unit: 'bag',
+        bagSizeKg: 50,
+        pricePerUnit: 4750,
+        effectiveDate: D1,
+        reason: 'Sold by the bag',
+      },
+      admin,
+      NOW,
+    );
+    const v = list.find((p) => p.effectiveDate === D1)!;
+    expect(v).toMatchObject({
+      unit: 'bag',
+      bagSizeKg: 50,
+      pricePerUnit: 4750,
+      ratePerKg: 95,
+      status: 'scheduled',
+    });
+    await expect(
+      h.itemPrices.set(
+        {
+          item: 'Urea Fertilizer',
+          unit: 'bag',
+          bagSizeKg: 50,
+          pricePerUnit: 4750,
+          effectiveDate: '2026-12-01',
+          reason: 'again',
+        },
+        admin,
+        NOW,
+      ),
+    ).rejects.toThrow(/same as the price for Urea Fertilizer/);
+    await h.itemPrices.cancel(v.id, 'Supplier withdrew', admin, NOW);
+    // the cancelled version never takes over: approval on D1 still snapshots Rs 90/kg
+    expect(
+      (await h.requestService.currentPrice('Urea Fertilizer', D1))?.ratePerKg,
+    ).toBe('90.00');
+    expect(h.audit.record).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ action: 'Cancelled scheduled item price' }),
+    );
+  });
+
+  it('purchase cost per kg comes from costed stock-ins of the last 90 days', async () => {
+    const h = scenario();
+    const b = h.batch({ qty: 500, expiry: '2027-01-01' });
+    h.movements.seed(
+      {
+        id: 901,
+        batchId: b.id,
+        type: 'Incoming',
+        quantityKg: '100',
+        movementDate: TODAY,
+        unitCost: '80',
+      } as never,
+      {
+        id: 902,
+        batchId: b.id,
+        type: 'Incoming',
+        quantityKg: '300',
+        movementDate: TODAY,
+        unitCost: '100',
+      } as never,
+      {
+        id: 903,
+        batchId: b.id,
+        type: 'Incoming',
+        quantityKg: '50',
+        movementDate: TODAY,
+        unitCost: null,
+      } as never,
+    );
+    const costs = await h.itemPrices.purchaseCosts(NOW);
+    expect(costs.find((c) => c.item === 'Urea Fertilizer')).toMatchObject({
+      avgCostPerKg: 95,
+      stockIns: 2,
+    });
   });
 
   it('amount owed uses the delivered quantity (partial approval, then partial delivery)', async () => {

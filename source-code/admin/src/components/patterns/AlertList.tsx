@@ -68,8 +68,10 @@ export function AlertList({
         return (
           <section
             key={section.id}
+            // named sections can be linked to (`/fertilizer/alerts#expired`, from the Dashboard)
+            id={sections ? section.id : undefined}
             aria-label={`${section.label} alerts`}
-            className={cn('overflow-hidden rounded-[var(--radius-lg)] border bg-surface', group.band)}
+            className={cn('scroll-mt-20 overflow-hidden rounded-[var(--radius-lg)] border bg-surface', group.band)}
           >
             <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border px-4 py-2.5">
               <span className={cn('flex h-6 items-center gap-1.5 rounded-full px-2 text-xs font-semibold', group.chip)}>

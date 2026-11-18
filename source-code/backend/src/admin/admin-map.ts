@@ -1,3 +1,4 @@
+import type { VersionStatus } from './versioning';
 /**
  * DB ↔ portal mapping for the Administration module (ADM-01..03) plus the
  * shared permission-matrix vocabulary. These `ModuleKey`/`PermissionLevel`/
@@ -24,6 +25,9 @@ export type ModuleKey =
   | 'attendance'
   | 'performance'
   | 'reports'
+  | 'expenses'
+  | 'itemPrices'
+  | 'payRates'
   | 'dispatch'
   | 'grading'
   | 'gradingApproval'
@@ -51,6 +55,9 @@ export const MODULE_KEYS: ModuleKey[] = [
   'attendance',
   'performance',
   'reports',
+  'expenses',
+  'itemPrices',
+  'payRates',
   'dispatch',
   'grading',
   'gradingApproval',
@@ -71,6 +78,9 @@ export const ADMIN_EDITABLE_MODULES: ModuleKey[] = [
   // above the limit, the Administrator audits (Fertilizer-Delivery-Addendum §4).
   'fertilizerApproval',
   'fertilizerManagerApproval',
+  // Daily expenses (Finance-Reports-Addendum §7): Officers log, the Manager corrects, the
+  // Administrator audits (view) and manages the category list.
+  'expenses',
 ];
 
 export type PermissionMatrix = Record<
@@ -125,7 +135,68 @@ export interface PublicGradeRate {
   normalRate: number;
   effectiveDate: string; // 'YYYY-MM-DD'
   setBy: string;
+  reason: string | null;
+  status: VersionStatus;
+  /** in force today */
   current: boolean;
+  /** starts after today (and not cancelled) */
+  scheduled: boolean;
+  cancelled: { at: string; by: string | null; reason: string | null } | null;
+}
+
+/* ── ADM-01 transport rates (Administration-Addendum §4) ─────────── */
+
+export interface PublicTransportRate {
+  id: number;
+  effectiveDate: string;
+  /** 'YYYY-MM' — the first month it charges */
+  firstMonth: string;
+  basis: 'per_km' | 'per_kg' | 'fixed_month';
+  /** fixed_month: the monthly charge per estate */
+  rate: number;
+  minimumCharge: number;
+  basisConfirmed: boolean;
+  /** never charged (the seeded per-km placeholder) */
+  neverApplied: boolean;
+  /** the one-time first version that started in a past month */
+  backdated: boolean;
+  setBy: string;
+  reason: string | null;
+  status: VersionStatus;
+  cancelled: { at: string; by: string | null; reason: string | null } | null;
+}
+
+/* ── ADM-01 factory profile (Administration-Addendum §2) ─────────── */
+
+export interface FactoryProfile {
+  name: string;
+  registrationNo: string;
+  address: string;
+  contact: string;
+  email: string;
+  bank: {
+    bank: string;
+    branch: string;
+    accountName: string;
+    accountNumber: string;
+  };
+}
+
+/** What the portal gets: the account number masked to its last 4 digits. */
+export interface PublicFactoryProfile extends Omit<FactoryProfile, 'bank'> {
+  bank: {
+    bank: string;
+    branch: string;
+    accountName: string;
+    /** '••••1234', or '' when none is on record */
+    accountNumberMasked: string;
+  };
+}
+
+/** '••••1234' — never more than the last 4 digits leave the server. */
+export function maskAccount(n: string): string {
+  const digits = n.replace(/\s/g, '');
+  return digits ? `••••${digits.slice(-4)}` : '';
 }
 
 /** 'GR-2026-0001' — embeds the effective year and a running sequence. */

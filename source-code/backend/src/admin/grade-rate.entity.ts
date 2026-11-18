@@ -13,6 +13,10 @@ import {
  */
 @Entity('grade_rates')
 @Index('idx_grade_rates_effective', ['effectiveDate'])
+@Index('grade_rates_live_effective_key', ['effectiveDate'], {
+  unique: true,
+  where: `(cancelled_at IS NULL)`,
+})
 export class GradeRateEntity {
   /** Business key, e.g. 'GR-2026-0001'. */
   @PrimaryColumn({ type: 'varchar', length: 20 })
@@ -33,4 +37,23 @@ export class GradeRateEntity {
   /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
   @CreateDateColumn({ name: 'created_at', nullable: true })
   createdAt: Date;
+
+  /** why the rates changed (Administration-Addendum §3); null on versions made before 2026-11-15 */
+  @Column({ type: 'text', nullable: true })
+  reason: string | null;
+
+  /** a scheduled version cancelled before it started — kept, ignored from then on */
+  @Column({ name: 'cancelled_at', type: 'timestamp', nullable: true })
+  cancelledAt: Date | null;
+
+  @Column({
+    name: 'cancelled_by',
+    type: 'varchar',
+    nullable: true,
+    length: 100,
+  })
+  cancelledBy: string | null;
+
+  @Column({ name: 'cancel_reason', type: 'text', nullable: true })
+  cancelReason: string | null;
 }

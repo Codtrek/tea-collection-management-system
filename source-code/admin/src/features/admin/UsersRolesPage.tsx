@@ -42,11 +42,14 @@ const MATRIX_MODULES: Array<{ key: ModuleKey; label: string }> = [
   { key: 'grading', label: 'Grading' },
   { key: 'gradingApproval', label: 'Approve Corrections' },
   { key: 'reports', label: 'Reports' },
+  { key: 'expenses', label: 'Daily Expenses' },
+  { key: 'itemPrices', label: 'Item Prices' },
+  { key: 'payRates', label: 'Pay Rates' },
   { key: 'administration', label: 'Administration' },
 ]
 
 /** The Administrator is pinned to full access everywhere EXCEPT these separation-of-duties modules (server-enforced). */
-const ADMIN_EDITABLE: ModuleKey[] = ['grading', 'gradingApproval', 'fertilizerApproval', 'fertilizerManagerApproval']
+const ADMIN_EDITABLE: ModuleKey[] = ['grading', 'gradingApproval', 'fertilizerApproval', 'fertilizerManagerApproval', 'expenses']
 
 const LEVELS: Array<{ value: PermissionLevel; label: string }> = [
   { value: 'none', label: 'No Access' },

@@ -4,7 +4,8 @@ import { Breadcrumb, type Crumb } from './Breadcrumb'
 interface PageHeaderProps {
   title: string
   breadcrumb?: Crumb[]
-  description?: string
+  /** a line under the title; may hold inline emphasis (e.g. a stale "Updated" time) */
+  description?: ReactNode
   /** primary action(s), rendered right-aligned (§17) */
   actions?: ReactNode
 }

@@ -25,7 +25,6 @@ import {
   type DbRequestOrigin,
   type NotificationKind,
   type PaymentMethod,
-  type PublicPrice,
   type PublicRequestDetail,
 } from './fertilizer-map';
 import { FertilizerNotificationEntity } from './fertilizer-notification.entity';
@@ -551,77 +550,7 @@ export class FertilizerRequestService {
     return this.view.detail(request.id);
   }
 
-  /* ── Prices (Administrator) ─────────────────────────────────────── */
-
-  async listPrices(now: Date = new Date()): Promise<PublicPrice[]> {
-    const today = localDate(now);
-    const rows = await this.prices.find();
-    const currentId = new Map<string, number>();
-    for (const item of new Set(rows.map((r) => r.item))) {
-      const cur = pickPrice(
-        rows.filter((r) => r.item === item),
-        today,
-      );
-      if (cur) currentId.set(item, cur.id);
-    }
-    return [...rows]
-      .sort(
-        (a, b) =>
-          a.item.localeCompare(b.item) ||
-          b.effectiveDate.localeCompare(a.effectiveDate),
-      )
-      .map((r) => ({
-        id: r.id,
-        item: r.item,
-        ratePerKg: Number(r.ratePerKg),
-        effectiveDate: r.effectiveDate,
-        setBy: r.setBy,
-        current: currentId.get(r.item) === r.id,
-      }));
-  }
-
-  /** A new price version. Past versions are never edited, so approved requests keep their price. */
-  async setPrice(
-    input: { item: string; ratePerKg: number; effectiveDate: string },
-    actor: FlowActor,
-    now: Date = new Date(),
-  ): Promise<PublicPrice[]> {
-    await this.access.require(
-      actor.role,
-      'approve',
-      'set fertilizer prices',
-      'administration',
-    );
-    const item = requireText(input.item, 'The item');
-    if (input.effectiveDate < localDate(now)) {
-      throw new BadRequestException(
-        'A new price can’t take effect in the past.',
-      );
-    }
-    const clash = await this.prices.findOne({
-      where: { item, effectiveDate: input.effectiveDate },
-    });
-    if (clash) {
-      throw new ConflictException(
-        `${item} already has a price taking effect on ${input.effectiveDate}.`,
-      );
-    }
-    await this.prices.save(
-      this.prices.create({
-        item,
-        ratePerKg: String(round2(input.ratePerKg)),
-        effectiveDate: input.effectiveDate,
-        setBy: actor.name,
-      }),
-    );
-    await this.audit.record(actor as never, {
-      action: 'Set fertilizer price',
-      module: 'Fertilizer',
-      record: item,
-      details: `Rs. ${input.ratePerKg}/kg from ${input.effectiveDate}`,
-    });
-    return this.listPrices(now);
-  }
+  /* ── Prices: set in ItemPriceService (Item Prices tab); read here at approval ── */
 
   /** The price version in force on `date` (latest effective date ≤ date), or null. */
   async currentPrice(
@@ -696,7 +625,8 @@ export function pickPrice(
 ): FertilizerItemPriceEntity | null {
   return (
     rows
-      .filter((r) => r.effectiveDate <= date)
+      // a cancelled scheduled price never applies (Administration-Addendum §5)
+      .filter((r) => !r.cancelledAt && r.effectiveDate <= date)
       .sort(
         (a, b) => b.effectiveDate.localeCompare(a.effectiveDate) || b.id - a.id,
       )[0] ?? null
