@@ -156,6 +156,23 @@ describe('TransportRatesService — monthly charge per estate (Administration-Ad
     );
   });
 
+  it('Legacy (seed) rows never count; the month after the last processed one is still to settle', async () => {
+    const { service, settlements } = build();
+    settlements.rows = [
+      { id: 'SET-2026-07-001', period: 'July 2026', status: 'legacy' },
+      { id: 'SET-2026-05-001', period: 'May 2026', status: 'processed' },
+      { id: 'SET-2026-06-001', period: 'June 2026', status: 'processed' },
+    ] as SettlementEntity[];
+    expect((await service.list(NOV)).firstVersionFrom).toBe('2026-07');
+    // a pending draft for an even earlier month wins
+    settlements.rows.push({
+      id: 'SET-2026-04-009',
+      period: 'April 2026',
+      status: 'pending',
+    } as SettlementEntity);
+    expect((await service.list(NOV)).firstVersionFrom).toBe('2026-04');
+  });
+
   it('no waiting settlements = no back-date at all', async () => {
     const { service, settlements } = build();
     settlements.rows = [];

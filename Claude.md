@@ -1262,8 +1262,29 @@ dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/dat
 - **Never run migrations or seeds against the hosted DB (Azure VM).** The team's pipeline does that.
 - **Local databases: port 5433 is shared.** 127.0.0.1:5433 can be an ssh tunnel to the hosted DB. Use `DATABASE_URL=postgresql://tea@localhost:5433/<db>?host=::1`. `npm run seed` refuses non-local URLs and non-local servers (`src/local-db-guard.ts`).
 - **A fresh local database:** `createdb` → `npm run migration:run` → `npm run seed`.
-- **Login needs Redis** (dev's rate limiting, `REDIS_URL`). This machine has none, so local e2e runs preload an in-memory stand-in (not committed).
+- **Login needs Redis** (dev's rate limiting, `REDIS_URL`). Run a local redis-server; there is no stand-in.
 - **The report e2e specs** (Collection, Expense and Leaf Purchase) need the demo seed's Aug–Nov 2026 data.
+
+## Settlement generator (2026-11-16, `feat/settlement-generator`; `docs/specs/Settlement-Addendum.md`)
+
+Settlements are calculated from the deliveries now, not typed into the seed.
+
+- **The rules live in one pure function:** `estates/settlement-generator.ts` `generateSettlement`. It covers:
+  - each delivery at the rate on its own date, grouped by rate period
+  - adjustments, then transport → fertilizer → advances (settings order), each up to what's left
+  - whole fertilizer charges, oldest first
+  - advances capped at the cap % of gross
+  - net ≥ 0, with every remainder carried and listed
+  - ungraded deliveries block, OPEN ones roll on, and a bank payout with no account is excluded
+- **`SettlementGeneratorService`** runs it: `run` (read-only), `prepare` (drafts recalculate until processed), `exclude` (a Manager rolls an ungraded delivery to the next month) and `process`.
+- **What process does:** one transaction that freezes `settlements.calculation`, links the deliveries, marks the charges, writes `estate_advance_recoveries` and refuses if the re-typed net moved.
+- **Never re-derive a processed settlement:** read its `calculation` (and `gross_amount` for gross, via `settlementGross`). A later rate never changes it.
+- **`'legacy'` status:** the seeded July 2026 snapshots. They are read-only, never processed, and never counted in a period's figures.
+- **Portal:**
+  - `SettlementCalculationView` is the one breakdown (Process rows, detail, owner statement).
+  - The Process page's totals row and the confirm popup both render `RunTotalsList` from the run's totals.
+  - `HighStakesConfirmFlow`'s re-type input starts empty, placeholder "Type the amount" (`components/patterns/confirm-amount.ts`).
+- **Transport amount:** not decided. Use test values in specs and scratch DBs; never publish a real version.
 
 ## Dashboard on real data, by role (2026-11-17, `feat/dashboard`)
 

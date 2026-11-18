@@ -234,18 +234,28 @@ export class TransportRatesService {
     return this.list(now);
   }
 
-  /** The earliest month the first version may start from, or null when the exception is spent. */
+  /**
+   * The earliest month the first version may start from, or null when the exception is spent: the
+   * earliest month still to settle — a pending draft's month, or the month after the latest
+   * processed settlement. Legacy (seed) rows are never processed, so they don't count either way.
+   */
   private async firstVersionFrom(
     rows: TransportRateEntity[],
   ): Promise<string | null> {
     if (liveVersions(rows).some((r) => r.basis === 'fixed_month')) return null;
-    const months = (
-      await this.settlements.find({ where: { status: 'pending' } })
-    )
-      .map((s) => labelToKey(s.period))
-      .filter(Boolean)
-      .sort();
-    return months[0] ?? null;
+    const all = await this.settlements.find();
+    const monthsOf = (status: string) =>
+      all
+        .filter((s) => s.status === status)
+        .map((s) => labelToKey(s.period))
+        .filter(Boolean)
+        .sort();
+    const lastProcessed = monthsOf('processed').at(-1);
+    const candidates = [
+      ...monthsOf('pending'),
+      ...(lastProcessed ? [firstChargedMonth(`${lastProcessed}-02`)] : []),
+    ].sort();
+    return candidates[0] ?? null;
   }
 
   private assertIsAdmin(actor: Actor): void {

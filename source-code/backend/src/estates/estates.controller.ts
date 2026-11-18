@@ -39,7 +39,17 @@ import {
   RescheduleAdvanceDto,
 } from './dto/estate-advance-change.dto';
 import { IssueAdvanceDto } from './dto/issue-advance.dto';
-import { ProcessSettlementsDto } from './dto/process-settlements.dto';
+import {
+  ExcludeDeliveryDto,
+  PrepareSettlementsDto,
+  ProcessSettlementsDto,
+} from './dto/process-settlements.dto';
+import {
+  SettlementGeneratorService,
+  type SettlementRun,
+} from './settlement-generator.service';
+import type { RunTotals } from './settlement-generator';
+import { labelToKey } from '../reports/reports-map';
 import { UpdateEstateDto } from './dto/update-estate.dto';
 import type {
   EstateAnalytics,
@@ -91,6 +101,7 @@ export class EstatesController {
     private readonly advancePlans: EstateAdvancePlanService,
     private readonly usersService: UsersService,
     private readonly transport: TransportStatusService,
+    private readonly generator: SettlementGeneratorService,
   ) {}
 
   // Static segments (advances/settlements) are registered before the `:id`
@@ -211,7 +222,9 @@ export class EstatesController {
       search,
       routeId: routeId ? Number(routeId) : undefined,
       status:
-        status === 'Pending' || status === 'Processed' ? status : undefined,
+        status === 'Pending' || status === 'Processed' || status === 'Legacy'
+          ? status
+          : undefined,
       method: method === 'bank' || method === 'cash' ? method : undefined,
       nonPositive: nonPositive === 'true' || nonPositive === '1',
       noBank: noBank === 'true' || noBank === '1',
@@ -238,6 +251,40 @@ export class EstatesController {
     return this.transport.forPeriod(period ?? '');
   }
 
+  /**
+   * Settlement generator (Settlement-Addendum) — the month's run: every estate's calculation
+   * (drafts recalculate until processed), what blocks or excludes it, and the totals a Process
+   * run would take. Read-only.
+   */
+  @Get('settlements/run')
+  settlementRun(@Query('month') month: string): Promise<SettlementRun> {
+    return this.generator.run(month);
+  }
+
+  /** "Prepare settlements for <month>": create or recalculate the drafts. */
+  @Post('settlements/prepare')
+  async prepareSettlements(
+    @Body() dto: PrepareSettlementsDto,
+    @Req() req: AuthedRequest,
+  ): Promise<SettlementRun> {
+    return this.generator.prepare(await this.resolveActor(req), dto.month);
+  }
+
+  /** A Manager leaves an ungraded delivery out of a month, with a reason (it rolls on). */
+  @Post('settlements/deliveries/:deliveryId/exclude')
+  async excludeDelivery(
+    @Param('deliveryId') deliveryId: string,
+    @Body() dto: ExcludeDeliveryDto,
+    @Req() req: AuthedRequest,
+  ): Promise<SettlementRun> {
+    return this.generator.exclude(
+      await this.resolveActor(req),
+      deliveryId,
+      dto.month,
+      dto.reason,
+    );
+  }
+
   /** One settlement: deliveries + grade lines, each deduction line, net. */
   @Get('settlements/:sid')
   settlementDetail(@Param('sid') sid: string): Promise<SettlementDetail> {
@@ -255,14 +302,16 @@ export class EstatesController {
     return this.lifetimeService.directory();
   }
 
+  /** Processes the month's ready drafts in one run — freezing each calculation. */
   @Post('settlements/process')
   async processSettlements(
     @Body() dto: ProcessSettlementsDto,
     @Req() req: AuthedRequest,
-  ): Promise<PublicSettlement[]> {
-    return this.estatesService.processSettlements(
+  ): Promise<{ processed: string[]; totals: RunTotals }> {
+    return this.generator.process(
       await this.resolveActor(req),
-      dto.period,
+      dto.month ?? labelToKey(dto.period ?? ''),
+      dto.expectedNet,
     );
   }
 

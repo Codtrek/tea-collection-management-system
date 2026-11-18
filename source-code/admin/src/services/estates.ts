@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api'
 import type { CollectionRecord } from '@/features/collections/types'
+import type { RunTotals, SettlementRun } from '@/features/estates/settlement-run-types'
 import type {
   EstateAdvance,
   EstateAdvanceContext,
@@ -181,11 +182,38 @@ export function getTransportStatus(period: string): Promise<{ configured: boolea
   return apiFetch(`/estates/settlements/transport-status?period=${encodeURIComponent(period)}`)
 }
 
-/** EST-08 — processes the Pending settlements of one period ('July 2026'). */
-export function processSettlements(period: string): Promise<Settlement[]> {
-  return apiFetch<Settlement[]>('/estates/settlements/process', {
+/** Settlement generator (Settlement-Addendum): the month's run — every estate's calculation. */
+export function getSettlementRun(month: string): Promise<SettlementRun> {
+  return apiFetch<SettlementRun>(`/estates/settlements/run?month=${month}`)
+}
+
+/** "Prepare settlements for <month>": creates or recalculates the drafts. */
+export function prepareSettlements(month: string): Promise<SettlementRun> {
+  return apiFetch<SettlementRun>('/estates/settlements/prepare', {
     method: 'POST',
-    body: JSON.stringify({ period }),
+    body: JSON.stringify({ month }),
+  })
+}
+
+/** A Manager leaves an ungraded delivery out of the month, with a reason; it rolls to the next one. */
+export function excludeDelivery(deliveryId: string, month: string, reason: string): Promise<SettlementRun> {
+  return apiFetch<SettlementRun>(`/estates/settlements/deliveries/${encodeURIComponent(deliveryId)}/exclude`, {
+    method: 'POST',
+    body: JSON.stringify({ month, reason }),
+  })
+}
+
+/**
+ * EST-08 — processes the month's ready drafts. `expectedNet` is the total the officer reviewed and
+ * re-typed; if the figures moved since, the backend refuses and nothing is processed.
+ */
+export function processSettlements(
+  month: string,
+  expectedNet: number,
+): Promise<{ processed: string[]; totals: RunTotals }> {
+  return apiFetch('/estates/settlements/process', {
+    method: 'POST',
+    body: JSON.stringify({ month, expectedNet }),
   })
 }
 
