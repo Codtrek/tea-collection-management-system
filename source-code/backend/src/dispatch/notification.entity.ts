@@ -19,7 +19,10 @@ export type NotificationType =
   | 'delivery_graded'
   | 'grade_correction'
   | 'fertilizer_approval'
-  | 'fertilizer_update';
+  | 'fertilizer_update'
+  | 'holiday_declared'
+  | 'holiday_request'
+  | 'holiday_cancelled';
 
 /** In-app notification row (the `notifications` table). Dispatch is its first writer. */
 /**

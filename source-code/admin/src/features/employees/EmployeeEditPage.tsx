@@ -13,7 +13,7 @@ import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as employeesService from '@/services/employees'
 import type { Employee } from './types'
-import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS, PAYMENT_METHOD_OPTIONS } from './schema'
+import { employeeSchema, type EmployeeForm, BANKS, BRANCHES, DEPARTMENTS, PAYMENT_METHOD_OPTIONS, CATEGORY_OPTIONS } from './schema'
 import { InitialPasswordModal } from './InitialPasswordModal'
 import { useEmployeeRoles } from './useEmployeeRoles'
 
@@ -94,6 +94,7 @@ function EditForm({ employee }: { employee: Employee }) {
       department: employee.department,
       hireDate: employee.hireDate,
       employmentType: employee.employmentType,
+      category: employee.category ?? 'factory',
       paymentMethod: employee.paymentMethod ?? 'bank',
       bank: employee.bank.bank,
       branch: employee.bank.branch,
@@ -153,6 +154,7 @@ function EditForm({ employee }: { employee: Employee }) {
               <Select label="Department" error={errors.department?.message} options={DEPARTMENTS.map((d) => ({ value: d, label: d }))} {...register('department')} />
               <Input label="Hire date" type="date" error={errors.hireDate?.message} {...register('hireDate')} />
               <Select label="Employment type" options={['Permanent', 'Contract', 'Casual'].map((t) => ({ value: t, label: t }))} {...register('employmentType')} />
+              <Select label="Category" options={CATEGORY_OPTIONS} {...register('category')} />
             </div>
             <div>
               <p className="mb-2 text-sm font-medium text-text">Pay rates (Rs. / hour)</p>

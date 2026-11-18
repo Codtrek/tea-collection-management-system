@@ -10,7 +10,12 @@ import type { PayslipAdvanceLine, RecoveryStatus } from './advance-balance';
 
 export type DbEmployeeStatus = 'Active' | 'Suspended' | 'Inactive';
 export type DbEmploymentType = 'Permanent' | 'Contract' | 'Casual';
-export type DbAttendanceStatus = 'Present' | 'Absent' | 'Leave' | 'Half-day';
+export type DbAttendanceStatus =
+  | 'Present'
+  | 'Absent'
+  | 'Leave'
+  | 'Half-day'
+  | 'Short leave';
 export type DbAdvanceStatus = 'Pending' | 'Approved' | 'Rejected';
 export type DbPayrollStatus = 'Pending' | 'Processed';
 /** how an employee is paid (Payroll filters, 2026-11-01) */
@@ -55,6 +60,8 @@ export interface PublicEmployee {
   status: DbEmployeeStatus;
   bank: EmployeeBank;
   paymentMethod: EmployeePaymentMethod;
+  /** office staff (Shop & Office Act) vs factory workers (Wages Board) */
+  category: 'factory' | 'office';
   hasLogin: boolean;
   lastUpdatedBy?: string;
   lastUpdatedOn?: string;

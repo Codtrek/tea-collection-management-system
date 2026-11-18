@@ -24,6 +24,8 @@ export interface Employee {
   bank: { bank: string; branch: string; account: string }
   /** how the employee is paid — cash-paid employees need no bank details */
   paymentMethod: EmployeePaymentMethod
+  /** office staff (Shop & Office Act) vs factory workers (Wages Board) */
+  category?: 'factory' | 'office'
   hasLogin: boolean
   lastUpdatedBy?: string
   lastUpdatedOn?: string
@@ -265,7 +267,7 @@ export interface PayrollMonthResult {
   periods: string[]
 }
 
-export type AttendanceStatus = 'Present' | 'Absent' | 'Leave' | 'Half-day'
+export type AttendanceStatus = 'Present' | 'Absent' | 'Leave' | 'Half-day' | 'Short leave'
 
 export interface AttendanceRecord {
   employeeId: string
@@ -277,4 +279,201 @@ export interface AttendanceRecord {
   nightHours: number
   nightOtHours: number
   markedBy?: string
+}
+
+/* ── Attendance-Leave-Addendum Phase 1 — the month grid, the day view, the holiday calendar ── */
+
+export type AttendanceCode = 'P' | 'A' | 'L' | 'H' | 'S' | 'W'
+export type DayType = 'working' | 'half' | 'weekly' | 'rest' | 'poya' | 'public' | 'closure'
+
+export interface AttendanceCell {
+  date: string
+  code: AttendanceCode | null
+  status: AttendanceStatus | null
+  tooltip: string
+  dayType: DayType
+  dayLabel: string | null
+  future: boolean
+  lockedReason: string | null
+}
+
+export interface AttendanceTotals {
+  present: number
+  absent: number
+  leave: number
+  half: number
+  short: number
+  holidayWorked: number
+  workingDays: number
+  pct: number | null
+  unmarked: number
+}
+
+export interface AttendanceMonthRow {
+  employeeId: string
+  name: string
+  role: string
+  category: 'factory' | 'office'
+  routes: { id: number; name: string }[]
+  cells: AttendanceCell[]
+  totals: AttendanceTotals
+}
+
+export interface AttendanceMonth {
+  month: string
+  today: string
+  days: { date: string; dayType: DayType; label: string | null; today: boolean; future: boolean }[]
+  rows: AttendanceMonthRow[]
+  roles: string[]
+  routes: { id: number; name: string }[]
+}
+
+export interface AttendanceDayRow {
+  employeeId: string
+  name: string
+  role: string
+  routes: { id: number; name: string }[]
+  status: AttendanceStatus | null
+  code: AttendanceCode | null
+  half: 'AM' | 'PM' | null
+  shortOut: string | null
+  shortBack: string | null
+  holidayWorked: boolean
+  markedBy: string | null
+  markedAt: string | null
+  source: 'portal' | 'dispatch' | 'app' | 'leave' | 'holiday' | null
+  dayType: DayType
+  dayLabel: string | null
+  workAllowed: boolean
+  lockedReason: string | null
+}
+
+export interface AttendanceDay {
+  date: string
+  today: string
+  editWindowDays: number
+  needsReason: boolean
+  rows: AttendanceDayRow[]
+  summary: { present: number; absent: number; onLeave: number; notMarked: number }
+}
+
+export type HolidayKind = 'poya' | 'public' | 'closure'
+
+export interface Holiday {
+  id: number
+  date: string
+  name: string
+  type: HolidayKind
+  paid: boolean
+  workAllowed: boolean
+  appliesTo: 'all' | 'factory' | 'office'
+  collectionStops: boolean
+  declareGroup: string | null
+  reason: string | null
+  createdBy: string | null
+  createdAt: string | null
+  /** manual · google (imported) · file (uploaded .ics / CSV) */
+  source: 'manual' | 'google' | 'file'
+  importedAt: string | null
+  cancelled: boolean
+  cancelReason: string | null
+  /** may the viewer change / cancel it — decided by the server (holiday permission matrix) */
+  canChange: boolean
+}
+
+/** A Manager's proposal / request waiting for the Administrator, or an emergency closure to review. */
+export interface HolidayRequest {
+  id: number
+  kind: 'weekly_rule' | 'closure' | 'emergency'
+  status: 'pending' | 'approved' | 'rejected' | 'kept' | 'reverted'
+  name: string
+  dateFrom: string
+  dateTo: string
+  appliesTo: 'all' | 'factory' | 'office' | null
+  summary: string
+  reason: string | null
+  requestedBy: string
+  requestedAt: string
+  decidedBy: string | null
+  decidedAt: string | null
+  decisionReason: string | null
+}
+
+/** applied = in force · pending = waiting for the Administrator · review = in force, reviewed after */
+export type HolidayChangeResult = { status: 'applied' } | { status: 'pending' | 'review'; requestId: number }
+
+export interface HolidayYear {
+  year: number
+  /** the calendar's first weekday: 0 = Sunday, 1 = Monday */
+  weekStartsOn: 0 | 1
+  holidays: Holiday[]
+  counts: { poya: number; public: number; closure: number }
+  pending: HolidayRequest[]
+  types: { type: 'poya' | 'public' | 'weekly' | 'closure'; label: string; paid: boolean; workAllowed: boolean }[]
+  weeklyRules: { id: number; category: 'factory' | 'office'; weekdays: number[]; halfDayWeekday: number | null; effectiveFrom: string; createdBy: string | null }[]
+  restDays: { id: number; employeeId: string; employeeName: string; weekday: number | null; effectiveFrom: string }[]
+  /** rows to check by hand — a Poya on the wrong month, duplicates (never changed automatically) */
+  suspicious: { id: number; date: string; name: string; problem: string }[]
+  /** December, and next year's holidays haven't been imported */
+  nextYearMissing: boolean
+  nextYear: number
+}
+
+/** One row of the Sri Lanka holiday import's review table. */
+export interface ImportPreviewRow {
+  uid: string
+  date: string
+  name: string
+  type: 'poya' | 'public'
+  include: boolean
+  /** why it is unticked (observance, bank-only …) or "Already imported" */
+  note: string | null
+  tentative: boolean
+  alreadyImported: boolean
+  conflict: string | null
+  sameDay: boolean
+}
+
+export interface ImportPreview {
+  year: number
+  source: 'google' | 'file'
+  feedUrl: string | null
+  note: string
+  rows: ImportPreviewRow[]
+}
+
+/** A re-sync difference between Google's feed and what was imported from it. */
+export type ResyncItem =
+  | { kind: 'added'; uid: string; date: string; name: string; type: 'poya' | 'public'; include: boolean; note: string | null }
+  | { kind: 'removed'; uid: string; holidayId: number; date: string; name: string }
+  | { kind: 'changed'; uid: string; holidayId: number; date: string; name: string; was: { date: string; name: string } }
+
+/** One employee category's day type (backend working-days.ts `dayInfo`). */
+export interface HolidayDayInfo {
+  type: 'working' | 'half' | 'weekly' | 'rest' | 'poya' | 'public' | 'closure'
+  label: string | null
+  working: boolean
+  paid: boolean
+  workAllowed: boolean
+}
+
+/** The day drawer (`GET /holidays/day/:date`). */
+export interface HolidayDay {
+  date: string
+  holidays: Holiday[]
+  pending: HolidayRequest[]
+  dayType: { factory: HolidayDayInfo; office: HolidayDayInfo }
+  impact: {
+    attendanceMarked: number
+    attendanceNames: string[]
+    routes: { id: number; name: string }[]
+    /** null until leave requests exist (Phase 2) */
+    approvedLeave: number | null
+  }
+}
+
+export interface DeclarePreview {
+  dates: string[]
+  attendance: { employeeId: string; name: string; date: string; status: string }[]
+  routeDays: { routeId: number; routeName: string; date: string }[]
 }

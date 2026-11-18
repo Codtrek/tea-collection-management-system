@@ -155,6 +155,8 @@ export interface PublicBoardAgent {
   coveringRouteName: string | null;
   status: BoardStatus;
   absent: boolean;
+  /** absent because attendance has him on approved leave (Attendance-Leave-Addendum) */
+  onLeave: boolean;
   stopsDone: number;
   stopsTotal: number;
   /** estate weight collected so far today — estate-level weighing exists by design */

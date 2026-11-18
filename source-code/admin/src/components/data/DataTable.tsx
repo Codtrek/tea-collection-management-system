@@ -19,6 +19,8 @@ export interface Column<T> {
   hideable?: boolean
   /** px — the column never squeezes below this; a narrow viewport scrolls the table instead */
   minWidth?: number
+  /** opt-in: rendered under the header (beside, never inside, the sort button) — e.g. an (i) button and an average */
+  headerExtra?: ReactNode
 }
 
 type SortDirection = 'asc' | 'desc' | null
@@ -274,6 +276,7 @@ export function DataTable<T>({
                     ) : (
                       c.header
                     )}
+                    {c.headerExtra && <div className="mt-0.5 font-normal normal-case tracking-normal">{c.headerExtra}</div>}
                   </th>
                 )
               })}

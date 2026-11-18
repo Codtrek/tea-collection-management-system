@@ -32,6 +32,8 @@ const MATRIX_MODULES: Array<{ key: ModuleKey; label: string }> = [
   { key: 'employees', label: 'Employee' },
   { key: 'estateOwners', label: 'Estate Owner' },
   { key: 'estateAdvances', label: 'Estate Owner Advances' },
+  { key: 'holidayCalendar', label: 'Holiday Calendar' },
+  { key: 'holidayStatutory', label: 'Poya & Public Holidays' },
   { key: 'fertilizer', label: 'Fertilizer' },
   { key: 'fertilizerApproval', label: 'Approve Fertilizer' },
   { key: 'fertilizerManagerApproval', label: 'Fertilizer over limit' },

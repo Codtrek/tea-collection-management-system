@@ -1071,6 +1071,35 @@ Branched from `feature/fertilizer-delivery`. Uncommitted until the user says so;
   - the picker lists them disabled (`Combobox` `getDisabledReason`);
   - a balance left on one is flagged, never written off.
 
+### Attendance & holidays (`docs/specs/Attendance-Leave-Addendum.md`, Phase 1; branch `feat/attendance-leave`)
+
+- **Attendance:** `employees/attendance-rules.ts` (pure) + `AttendanceService`. These hold every attendance rule:
+  - no future dates;
+  - the edit window (`system_settings.attendance.editWindowDays`): an Officer edits within it; `attendance: approve` with a reason edits older days;
+  - the per-employee payroll lock;
+  - holidays can't be Absent; working one is "Worked on holiday";
+  - half-day AM/PM and short-leave times.
+- **Portal pages:** the month grid and day view read `GET /employees/attendance/month` and `/day`. The entry page never defaults to Present.
+- **The ONE working-day rule:** `holidays/working-days.ts` (`dayInfo`).
+- **Holiday permissions** (addendum §4.1–4.2): two keys, `holidayCalendar` (Officer view · Manager edit · Administrator approve) and `holidayStatutory` (Poya / public, type settings, import: Administrator).
+  - `holidays/holiday-permissions.ts` `decide()` is the matrix; `HolidayService` asks it before every write. Never check a role by name.
+  - A Manager's weekly holiday and factory-wide closure are `holiday_requests` with **no effect** until approved, because `facts()` never reads requests.
+  - Emergency closures apply at once and keep an attendance snapshot for revert.
+- **Calendar page** (`admin/src/features/holidays/`, §4.4): month / year / list views; the state is in the URL (`calendar-model.ts`, tested); the day drawer reads `GET /holidays/day/:date`; `components/ui/Drawer.tsx`.
+- **Google import** (§4.5): `holidays/ical.ts` + `import-rules.ts` (pure, tested against the real 2026 feed in `holidays/testing/`) + `HolidayImportService`.
+  - The feed is fetched server-side; a .ics / CSV upload is the fallback.
+  - Re-sync lists differences only and never touches manual rows.
+- **Attendance ↔ dispatch:** one record. `dispatch/agent-attendance-link.service.ts` + `DispatchService.syncFromAttendance`: attendance is the record, `agent_day_status` the board's view. Don't write one without the other.
+
+### Performance (`docs/specs/Performance-Addendum.md`; branch `feat/performance-overview`)
+
+- **One service:** `backend/src/performance/` — `performance-rules.ts` (pure formulas, minimum data, trends, fact notes) + `PerformanceService` compute every measure from real records.
+  - The team table, the employee tab and `GET /performance/definitions` read it. Never recalculate on a screen.
+- **Never** add an overall score, rank or badge; a spec checks for it. Trends compare only with the person's own previous 3 months; averages stay within the same role.
+- **Kg** is compared only with the same route's history (cover → the covered route). Weight accuracy uses `collection.mismatchTolerancePct`, shared with grading.
+- **Portal:** `features/performance/` (team overview, `EmployeePerformanceTab`, `HowMeasuredPage`). `MEASURE_DEFINITIONS` is the one copy of each measure's wording.
+- **Permission** `performance`: Manager edit, Administrator approve, Officer none.
+
 ## Schema changes are TypeORM migrations now (2026-11-16, stack merge into dev)
 
 dev runs `backend/src/migrations/*.ts` (`npm run migration:run`; config `src/data-source.ts`). The stack's hand-applied `database/migrations/*.sql` files are being converted PR by PR (`docs/specs/Stack-Merge-Addendum.md`).

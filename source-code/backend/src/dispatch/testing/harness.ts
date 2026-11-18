@@ -1,3 +1,5 @@
+import { EmployeeAttendanceEntity } from '../../employees/employee-attendance.entity';
+import { AgentAttendanceLink } from '../agent-attendance-link.service';
 import type { ConfigService } from '@nestjs/config';
 import type { Repository } from 'typeorm';
 import type { AuditService } from '../../audit/audit.service';
@@ -64,6 +66,7 @@ export function buildHarness() {
   const userRows = new FakeRepository<User>();
   const weekdayRows = new FakeRepository<RouteScheduleWeekdayEntity>(null);
   const overrideRows = new FakeRepository<RouteScheduleOverrideEntity>();
+  const attendanceRows = new FakeRepository<EmployeeAttendanceEntity>();
 
   [1, 2, 3, 4].forEach((id) =>
     routes.seed({ id, factoryId: 1, name: `Route ${id}` }),
@@ -151,6 +154,11 @@ export function buildHarness() {
   };
 
   const hooks = new AgentTaskHooks();
+  const attendanceLink = new AgentAttendanceLink(
+    cast<EmployeeAttendanceEntity>(attendanceRows),
+    cast<AgentDayStatusEntity>(dayStatus),
+    cast<CollectionAgentEntity>(agentRows),
+  );
   const dispatch = new DispatchService(
     cast<RouteAssignmentEntity>(assignments),
     cast<AgentDayStatusEntity>(dayStatus),
@@ -166,6 +174,7 @@ export function buildHarness() {
     settings as unknown as DispatchSettingsService,
     audit as unknown as AuditService,
     schedule,
+    attendanceLink,
   );
   const self = new AgentSelfService(
     cast<RouteAssignmentEntity>(assignments),
@@ -192,6 +201,7 @@ export function buildHarness() {
     agentRows,
     assignments,
     dayStatus,
+    attendanceRows,
     pings,
     routes,
     estates,

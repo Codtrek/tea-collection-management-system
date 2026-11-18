@@ -54,7 +54,7 @@ export function agentColumns(): Column<BoardAgent>[] {
       key: 'status',
       header: 'Status',
       minWidth: 130,
-      render: (a) => <StatusBadge tone={BOARD_STATUS_TONE[a.status]}>{a.status}</StatusBadge>,
+      render: (a) => <StatusBadge tone={BOARD_STATUS_TONE[a.status]}>{a.onLeave ? 'On leave' : a.status}</StatusBadge>,
     },
     {
       key: 'progress',

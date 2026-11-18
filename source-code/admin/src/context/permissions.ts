@@ -30,6 +30,10 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     fertilizer: 'approve',
     estateOwners: 'approve',
     estateAdvances: 'approve',
+    // Holidays (Attendance-Leave-Addendum §4): the Administrator approves holiday changes and owns
+    // Poya / public holidays, type settings and the Google import (`holidayStatutory`).
+    holidayCalendar: 'approve',
+    holidayStatutory: 'approve',
     payroll: 'approve',
     advances: 'approve',
     employees: 'approve',
@@ -54,11 +58,13 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     fertilizer: 'edit',
     estateOwners: 'edit',
     estateAdvances: 'edit',
+    holidayCalendar: 'view',
+    holidayStatutory: 'view',
     payroll: 'edit',
     advances: 'approve',
     employees: 'view',
     attendance: 'edit',
-    performance: 'view',
+    performance: 'none',  // Performance-Addendum: Manager + Administrator only, for now
     // RPT-04 (log a daily expense) is a real write path once Reports is
     // backend-wired — Officer edits like every other module's `edit` tier,
     // Manager stays read-only (§4 three-role model).
@@ -77,11 +83,15 @@ export const DEFAULT_PERMISSIONS: PermissionMatrix = {
     fertilizer: 'view',
     estateOwners: 'view',
     estateAdvances: 'view',
+    // edit = category holidays, rest days, emergency closures; weekly holiday + factory-wide closure as requests
+    holidayCalendar: 'edit',
+    holidayStatutory: 'view',
     payroll: 'view',
     advances: 'view',
     employees: 'view',
-    attendance: 'view',
-    performance: 'approve',
+    // approve = older-than-window edits, with a reason (Attendance-Leave-Addendum)
+    attendance: 'approve',
+    performance: 'edit',  // view the measures + private notes
     reports: 'view',
     dispatch: 'approve',
     grading: 'view',

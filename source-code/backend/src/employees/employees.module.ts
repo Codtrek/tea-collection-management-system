@@ -1,3 +1,5 @@
+import { HolidaysModule } from '../holidays/holidays.module';
+import { AttendanceService } from './attendance.service';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditModule } from '../audit/audit.module';
@@ -36,6 +38,8 @@ import { SystemSettingEntity } from '../admin/system-setting.entity';
     AuditModule,
     // agent provisioning (registering a Tea Collecting Agent) + their collection history
     DispatchModule,
+    // the holiday calendar — day types for attendance (Attendance-Leave-Addendum)
+    HolidaysModule,
     // an agent's fertilizer delivery history
     FertilizerModule,
   ],
@@ -47,6 +51,7 @@ import { SystemSettingEntity } from '../admin/system-setting.entity';
     PayrollViewService,
     PayrollSettingsService,
     AdvancePlanService,
+    AttendanceService,
   ],
 })
 export class EmployeesModule {}

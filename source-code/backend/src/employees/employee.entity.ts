@@ -31,6 +31,10 @@ import type { DbEmployeeStatus, DbEmploymentType } from './employee-map';
   'employees_payment_method_check',
   `((payment_method)::text = ANY ((ARRAY['bank'::character varying, 'cash'::character varying])::text[]))`,
 )
+@Check(
+  'employees_category_check',
+  `((category)::text = ANY ((ARRAY['factory'::character varying, 'office'::character varying])::text[]))`,
+)
 export class EmployeeEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -98,6 +102,10 @@ export class EmployeeEntity {
   /** when the employee left — that month's payroll is their final one (Salary-Advances-Addendum §10) */
   @Column({ name: 'deactivated_on', type: 'date', nullable: true })
   deactivatedOn: string | null;
+
+  /** office staff (Shop & Office Act) vs factory workers (Wages Board) — Attendance-Leave-Addendum */
+  @Column({ type: 'varchar', default: 'factory', length: 10 })
+  category: 'factory' | 'office';
 
   @Column({
     name: 'day_rate',

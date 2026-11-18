@@ -30,6 +30,8 @@ export const employeeSchema = z.object({
     .min(1, 'Hire date is required')
     .refine((v) => new Date(v) <= new Date(), 'Hire date cannot be in the future'),
   employmentType: z.enum(['Permanent', 'Contract', 'Casual']),
+  /** office staff (Shop & Office Act) vs factory workers (Wages Board) — leave policy + weekly holiday */
+  category: z.enum(['factory', 'office']),
 
   // Payment — a cash-paid employee needs no bank details (Payroll-Month-History-Addendum, Part C)
   paymentMethod: z.enum(['bank', 'cash']),
@@ -64,3 +66,9 @@ export const PAYMENT_METHOD_OPTIONS = [
 export const BANKS = ['Bank of Ceylon', "People's Bank", 'Commercial Bank', 'Hatton National Bank', 'Sampath Bank']
 export const BRANCHES = ['Nuwara Eliya', 'Kandy', 'Hatton', 'Colombo']
 export const DEPARTMENTS = ['Operations', 'Factory Floor', 'Logistics', 'Management', 'Administration']
+
+/** Attendance-Leave-Addendum — leave policies and the weekly holiday are set per category. */
+export const CATEGORY_OPTIONS = [
+  { value: 'factory', label: 'Factory worker (Wages Board)' },
+  { value: 'office', label: 'Office staff (Shop & Office Act)' },
+]

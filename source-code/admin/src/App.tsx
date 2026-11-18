@@ -11,6 +11,7 @@ import { EmployeeRegistrationPage } from './features/employees/EmployeeRegistrat
 import { EmployeeDetailPage } from './features/employees/EmployeeDetailPage'
 import { EmployeeEditPage } from './features/employees/EmployeeEditPage'
 import { AttendanceOverviewPage } from './features/employees/AttendanceOverviewPage'
+import { HolidayCalendarPage } from './features/holidays/HolidayCalendarPage'
 import { AttendanceEntryPage } from './features/employees/AttendanceEntryPage'
 import { AdvanceListPage } from './features/employees/AdvanceListPage'
 import { AdvanceDetailPage } from './features/employees/AdvanceDetailPage'
@@ -18,7 +19,8 @@ import { AdvanceRequestPage } from './features/employees/AdvanceRequestPage'
 import { PayrollListPage } from './features/employees/PayrollListPage'
 import { PayrollProcessingPage } from './features/employees/PayrollProcessingPage'
 import { PayslipPage } from './features/employees/PayslipPage'
-import { PerformancePage } from './features/employees/PerformancePage'
+import { PerformancePage } from './features/performance/PerformancePage'
+import { HowMeasuredPage } from './features/performance/HowMeasuredPage'
 import { CollectionListPage } from './features/collections/CollectionListPage'
 import { CollectionExceptionEntryPage } from './features/collections/CollectionExceptionEntryPage'
 import { DispatchBoardPage } from './features/dispatch/DispatchBoardPage'
@@ -100,6 +102,7 @@ export const router = createBrowserRouter([
       { path: 'employees/new', element: <EmployeeRegistrationPage /> },
       { path: 'employees/attendance', element: <AttendanceOverviewPage /> },
       { path: 'employees/attendance/entry', element: <AttendanceEntryPage /> },
+      { path: 'holidays', element: <HolidayCalendarPage /> },
       { path: 'employees/advances', element: <AdvanceListPage /> },
       { path: 'employees/advances/new', element: <AdvanceRequestPage /> },
       { path: 'employees/advances/:id', element: <AdvanceDetailPage /> },
@@ -107,6 +110,7 @@ export const router = createBrowserRouter([
       { path: 'employees/payroll/process', element: <PayrollProcessingPage /> },
       { path: 'employees/payroll/:id/payslip', element: <PayslipPage /> },
       { path: 'employees/performance', element: <PerformancePage /> },
+      { path: 'employees/performance/how', element: <HowMeasuredPage /> },
       { path: 'employees/:id', element: <EmployeeDetailPage /> },
       { path: 'employees/:id/edit', element: <EmployeeEditPage /> },
 

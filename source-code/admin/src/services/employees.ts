@@ -11,6 +11,8 @@ import type {
   PayrollMonthResult,
   PayrollRules,
   AdvanceReschedule,
+  AttendanceDay,
+  AttendanceMonth,
   AttendanceRecord,
   AttendanceStatus,
   Employee,
@@ -29,6 +31,7 @@ export interface EmployeeInput {
   hireDate: string
   employmentType: Employee['employmentType']
   paymentMethod: Employee['paymentMethod']
+  category: 'factory' | 'office'
   bank: string
   branch: string
   account: string
@@ -42,15 +45,18 @@ export interface EmployeeInput {
 export interface AttendanceRecordInput {
   employeeId: string
   status: AttendanceStatus
-  dayHours?: number
-  dayOtHours?: number
-  nightHours?: number
-  nightOtHours?: number
+  /** Half-day */
+  half?: 'AM' | 'PM'
+  /** Short leave, 'HH:MM' */
+  shortOut?: string
+  shortBack?: string
 }
 
 export interface MarkAttendanceInput {
   date: string
   records: AttendanceRecordInput[]
+  /** required for a day older than the edit window (Factory Manager) */
+  reason?: string
 }
 
 export interface RequestAdvanceInput {
@@ -126,6 +132,31 @@ export function listAttendance(employeeId?: string, month?: string): Promise<Att
   if (month) params.set('month', month)
   const qs = params.toString()
   return apiFetch<AttendanceRecord[]>(`/employees/attendance${qs ? `?${qs}` : ''}`)
+}
+
+export interface AttendanceMonthQuery {
+  month: string
+  search?: string
+  role?: string
+  routeId?: number
+  unmarked?: boolean
+  employeeId?: string
+}
+
+/** Attendance-Leave-Addendum — the month grid (filters run server-side). */
+export function getAttendanceMonth(q: AttendanceMonthQuery): Promise<AttendanceMonth> {
+  const p = new URLSearchParams({ month: q.month })
+  if (q.search) p.set('search', q.search)
+  if (q.role) p.set('role', q.role)
+  if (q.routeId !== undefined) p.set('routeId', String(q.routeId))
+  if (q.unmarked) p.set('unmarked', '1')
+  if (q.employeeId) p.set('employeeId', q.employeeId)
+  return apiFetch<AttendanceMonth>(`/employees/attendance/month?${p}`)
+}
+
+/** One date for everyone — the Day tab and the daily entry page. */
+export function getAttendanceDay(date: string): Promise<AttendanceDay> {
+  return apiFetch<AttendanceDay>(`/employees/attendance/day?date=${encodeURIComponent(date)}`)
 }
 
 export function markAttendance(input: MarkAttendanceInput): Promise<void> {

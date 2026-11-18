@@ -16,6 +16,8 @@ export type ModuleKey =
   | 'fertilizer'
   | 'estateOwners'
   | 'estateAdvances'
+  | 'holidayCalendar'
+  | 'holidayStatutory'
   | 'payroll'
   | 'advances'
   | 'employees'
@@ -29,7 +31,11 @@ export type ModuleKey =
   | 'fertilizerManagerApproval'
   | 'administration';
 
-export const PORTAL_ROLES: PortalRole[] = ['Administrator', 'Officer', 'Manager'];
+export const PORTAL_ROLES: PortalRole[] = [
+  'Administrator',
+  'Officer',
+  'Manager',
+];
 
 export const MODULE_KEYS: ModuleKey[] = [
   'dashboard',
@@ -37,6 +43,8 @@ export const MODULE_KEYS: ModuleKey[] = [
   'fertilizer',
   'estateOwners',
   'estateAdvances',
+  'holidayCalendar',
+  'holidayStatutory',
   'payroll',
   'advances',
   'employees',
