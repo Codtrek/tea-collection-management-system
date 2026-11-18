@@ -25,6 +25,9 @@ const MODULE_LABELS: Record<ModuleKey, string> = {
   collection: 'Collection',
   fertilizer: 'Fertilizer',
   estateOwners: 'Estate Owners',
+  estateAdvances: 'Estate Owner Advances',
+  holidayCalendar: 'Holiday Calendar',
+  holidayStatutory: 'Poya & Public Holidays',
   payroll: 'Payroll',
   advances: 'Advances',
   employees: 'Employees',
@@ -34,6 +37,8 @@ const MODULE_LABELS: Record<ModuleKey, string> = {
   dispatch: 'Agent Dispatch',
   grading: 'Grading',
   gradingApproval: 'Grading Corrections',
+  fertilizerApproval: 'Fertilizer Approval',
+  fertilizerManagerApproval: 'Fertilizer Approval (over limit)',
   administration: 'Administration',
 }
 

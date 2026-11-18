@@ -5,12 +5,13 @@ import { EstateAvatarWithDetails } from "@/components/estate";
 import { CollectionRecordsList } from "@/components/collection-request/CollectionRecordsList";
 import { CollectionRequestFormModal } from "@/components/collection-request/CollectionRequestFormModal";
 import { factoryOptions } from "@/data/collectionRequest";
-import { estateProfiles } from "@/data/estateOwnerEstates";
+import { useEstateStore } from "@/store/estateStore";
 import { useCollectionRequest } from "@/hooks/useCollectionRequest";
 import { AppButton, AppText, Dropdown, Screen, Stat } from "@/components/ui";
 import { spacing } from "@/theme";
 
 export default function CollectionRequest() {
+  const estateProfiles = useEstateStore((state) => state.estates);
   const { estateId: estateIdParam } =
     useLocalSearchParams<{ estateId?: string }>();
   const estate =

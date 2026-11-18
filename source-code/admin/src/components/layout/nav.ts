@@ -7,9 +7,11 @@ import {
   Wallet,
   Banknote,
   HandCoins,
+  Coins,
   Users,
   Mountain,
   CalendarCheck,
+  CalendarDays,
   TrendingUp,
   BarChart3,
   FileText,
@@ -54,6 +56,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // payments action (Process Settlements), since browsing owners moved
       // to its own People entry below and would otherwise duplicate this one.
       { label: 'Estate Owner Payments', to: '/estates/settlements', icon: Wallet, module: 'estateOwners' },
+      // EST-05 — was only reachable from the Issue form; its own data-driven module (estateAdvances)
+      { label: 'Estate Owner Advances', to: '/estates/advances', icon: Coins, module: 'estateAdvances' },
       { label: 'Payroll', to: '/employees/payroll', icon: Banknote, module: 'payroll' },
       { label: 'Salary Advances', to: '/employees/advances', icon: HandCoins, module: 'advances' },
     ],
@@ -64,6 +68,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Estate Owners', to: '/estates', icon: Mountain, module: 'estateOwners' },
       { label: 'Employees', to: '/employees', icon: Users, module: 'employees' },
       { label: 'Attendance', to: '/employees/attendance', icon: CalendarCheck, module: 'attendance' },
+      // Attendance-Leave-Addendum §4 — everyone with holidayCalendar: view; changes follow the holiday matrix
+      { label: 'Holiday Calendar', to: '/holidays', icon: CalendarDays, module: 'holidayCalendar' },
       { label: 'Performance', to: '/employees/performance', icon: TrendingUp, module: 'performance' },
     ],
   },

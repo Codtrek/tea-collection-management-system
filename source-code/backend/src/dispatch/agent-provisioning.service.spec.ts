@@ -83,6 +83,7 @@ describe('AgentProvisioningService.provision — registering an agent', () => {
     const user = users.rows[0];
     expect(user).toMatchObject({
       phone: '0777000016',
+      name: 'P. Fernando', // users.name is NOT NULL (the fake doesn't enforce it, so assert it)
       role: 'collection_agent',
       must_change_password: true,
     });
@@ -98,6 +99,15 @@ describe('AgentProvisioningService.provision — registering an agent', () => {
     });
     expect(emp).toMatchObject({ userId: user.id, hasLogin: true });
     expect(employees.rows).toContain(emp);
+  });
+
+  it('the login gets the employee’s name, trimmed and cut to the column’s 32 characters', async () => {
+    const { svc, users } = setup();
+    await svc.provision(
+      employee({ name: '  Wijesinghe Mudiyanselage Kamal Perera  ' }),
+    );
+    expect(users.rows[0].name).toBe('Wijesinghe Mudiyanselage Kamal P');
+    expect(users.rows[0].name).toHaveLength(32);
   });
 
   it('refuses a contact number that already belongs to a login (409) and creates nothing', async () => {

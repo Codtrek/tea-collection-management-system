@@ -10,6 +10,7 @@ import { DataTable, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorState } from '@/components/data/ErrorState'
 import { Select } from '@/components/ui/Select'
+import { Combobox } from '@/components/ui/Combobox'
 import * as reportsService from '@/services/reports'
 import { REPORT_PERIODS, type RevenueReport } from './types'
 import { formatCurrency, formatPercent } from '@/lib/format'
@@ -85,12 +86,15 @@ export function RevenueReportPage() {
               onChange={(e) => setPeriod(e.target.value || undefined)}
               options={REPORT_PERIODS}
             />
-            <Select
+            <Combobox
               label="Estate"
-              placeholder="All estates"
+              placeholder="All estates — type to search"
+              noun="estates"
+              items={[...new Set(report.rows.map((r) => r.estate))].sort()}
               value={estate}
-              onChange={(e) => setEstate(e.target.value)}
-              options={report.rows.map((r) => ({ value: r.estate, label: r.estate }))}
+              onChange={setEstate}
+              getKey={(name) => name}
+              getLabel={(name) => name}
             />
             <div aria-hidden />
           </>

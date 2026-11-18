@@ -15,6 +15,9 @@ export type ModuleKey =
   | 'collection'
   | 'fertilizer'
   | 'estateOwners'
+  | 'estateAdvances'
+  | 'holidayCalendar'
+  | 'holidayStatutory'
   | 'payroll'
   | 'advances'
   | 'employees'
@@ -24,15 +27,24 @@ export type ModuleKey =
   | 'dispatch'
   | 'grading'
   | 'gradingApproval'
+  | 'fertilizerApproval'
+  | 'fertilizerManagerApproval'
   | 'administration';
 
-export const PORTAL_ROLES: PortalRole[] = ['Administrator', 'Officer', 'Manager'];
+export const PORTAL_ROLES: PortalRole[] = [
+  'Administrator',
+  'Officer',
+  'Manager',
+];
 
 export const MODULE_KEYS: ModuleKey[] = [
   'dashboard',
   'collection',
   'fertilizer',
   'estateOwners',
+  'estateAdvances',
+  'holidayCalendar',
+  'holidayStatutory',
   'payroll',
   'advances',
   'employees',
@@ -42,6 +54,8 @@ export const MODULE_KEYS: ModuleKey[] = [
   'dispatch',
   'grading',
   'gradingApproval',
+  'fertilizerApproval',
+  'fertilizerManagerApproval',
   'administration',
 ];
 
@@ -50,7 +64,14 @@ export const MODULE_KEYS: ModuleKey[] = [
  * pinned to `approve` (the factory always has one unrestricted account), but grading is a
  * separation-of-duties control: the Administrator audits it, an Officer grades, a Manager approves.
  */
-export const ADMIN_EDITABLE_MODULES: ModuleKey[] = ['grading', 'gradingApproval'];
+export const ADMIN_EDITABLE_MODULES: ModuleKey[] = [
+  'grading',
+  'gradingApproval',
+  // Fertilizer approval is the same kind of control: the Officer approves, a Manager signs off
+  // above the limit, the Administrator audits (Fertilizer-Delivery-Addendum §4).
+  'fertilizerApproval',
+  'fertilizerManagerApproval',
+];
 
 export type PermissionMatrix = Record<
   PortalRole,

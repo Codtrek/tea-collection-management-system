@@ -11,6 +11,7 @@
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { Client } from 'pg';
+import { assertLocalDatabaseUrl, assertLocalServer } from './local-db-guard';
 import { AGENT_JOB_ROLE } from './employees/employee-roles';
 
 const DEV_PASSWORD = 'Password123!';
@@ -987,15 +988,26 @@ const AGENT_SEEDS = [
 ] as const;
 
 /* ── Agent Dispatch (COL-05) reference data ─────────────────────────────────
-   Each route's permanent agent (D. Silva is deliberately a floater with no
-   route — an obvious zero-load cover candidate), neighbouring routes, and map
-   coordinates for the estates. Only inserted where nothing is assigned yet, so
-   re-seeding never overrides an officer's reassignment. */
+   Each route's permanent agent (N. Perera and D. Silva are deliberately floaters
+   with no route — obvious zero-load cover candidates; R. Senanayake holds two
+   routes that run on different days), neighbouring routes, and map coordinates
+   for the estates. Only inserted where nothing is assigned yet, so re-seeding
+   never overrides an officer's reassignment. */
 const PERMANENT_AGENT_SEEDS: Record<string, string> = {
   'Route 2': 'K. Weerasinghe',
   'Route 3': 'R. Senanayake',
-  'Route 4': 'N. Perera',
+  'Route 4': 'R. Senanayake',
   'Route 5': 'W. Gunaratne',
+};
+/* Route schedule (Route-Schedule-Addendum): weekdays as offsets from the seed
+   day's weekday, so every demo run has routes running today and one (Route 4)
+   that isn't. Route 3 and Route 4 share an agent, so they never share a day.
+   Only written for a route that has no pattern yet. */
+const ROUTE_SCHEDULE_SEEDS: Record<string, number[]> = {
+  'Route 2': [0, 3],
+  'Route 3': [0, 3],
+  'Route 4': [1, 4],
+  'Route 5': [0, 2, 5],
 };
 const NEIGHBOUR_ROUTE_SEEDS: [string, string][] = [
   ['Route 2', 'Route 3'],
@@ -1569,6 +1581,10 @@ interface SeedBatch {
   discarded?: boolean;
 }
 
+/** 'YYYY-MM-DD', `days` from the day the seed runs — keeps a few lots live whenever it's run. */
+const seedDaysFromNow = (days: number): string =>
+  new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+
 const BATCH_SEEDS: SeedBatch[] = [
   {
     item: 'Urea Fertilizer',
@@ -1681,6 +1697,53 @@ const BATCH_SEEDS: SeedBatch[] = [
     lotNumber: 'LOT-HIST-0001',
     qualityNotes: 'Historical placeholder for pre-2026 dispatch records.',
   },
+  // Fertilizer-Delivery-Addendum: fresh lots with expiries relative to the seed day, so the
+  // request → approval → delivery flow always has live stock to commit (the fixed-date lots
+  // above age out over time — that is still the FEFO / expiry showcase).
+  {
+    item: 'Urea Fertilizer',
+    category: 'Fertilizer',
+    quantityKg: 800,
+    unit: 'kg',
+    receivedDate: '2026-10-01',
+    expiryDate: seedDaysFromNow(270),
+    location: 'Warehouse A',
+    supplier: 'CIC Agri Businesses',
+    lotNumber: 'LOT-U-4520',
+  },
+  {
+    item: 'TSP',
+    category: 'Fertilizer',
+    quantityKg: 600,
+    unit: 'kg',
+    receivedDate: '2026-10-01',
+    expiryDate: seedDaysFromNow(240),
+    location: 'Warehouse A',
+    supplier: 'Hayleys Agriculture',
+    lotNumber: 'LOT-T-2290',
+  },
+  {
+    item: 'Muriate of Potash',
+    category: 'Fertilizer',
+    quantityKg: 500,
+    unit: 'kg',
+    receivedDate: '2026-10-01',
+    expiryDate: seedDaysFromNow(300),
+    location: 'Warehouse B',
+    supplier: 'CIC Agri Businesses',
+    lotNumber: 'LOT-M-3390',
+  },
+  {
+    item: 'Dolomite',
+    category: 'Fertilizer',
+    quantityKg: 400,
+    unit: 'kg',
+    receivedDate: '2026-10-01',
+    expiryDate: seedDaysFromNow(200),
+    location: 'Warehouse B',
+    supplier: 'Lanka Minerals',
+    lotNumber: 'LOT-D-0990',
+  },
 ];
 
 interface SeedFertilizerRequest {
@@ -1688,19 +1751,64 @@ interface SeedFertilizerRequest {
   item: string;
   quantityKg: number;
   origin: 'mobile' | 'web';
-  status:
-    | 'Submitted'
-    | 'Approved'
-    | 'Partially Dispatched'
-    | 'Dispatched'
-    | 'Deducted'
-    | 'Rejected'
-    | 'Cancelled';
+  /** Fertilizer-Delivery-Addendum statuses (seeded only on insert — never reset afterwards). */
+  status: 'Requested' | 'Approved' | 'Delivered' | 'Rejected';
   reason?: string;
   approvedQtyKg?: number;
   dispatchedQtyKg?: number;
   decidedBy?: string;
+  paymentMethod?: 'deduct' | 'cash' | 'bank';
 }
+
+/** Same FEFO rule as `FertilizerStockLedger.allocate` and the migration's legacy backfill. */
+const SEED_FEFO_BACKFILL_SQL = `
+DO $$
+DECLARE r RECORD; b RECORD; need NUMERIC; take NUMERIC; price RECORD;
+BEGIN
+  FOR r IN
+    SELECT fr.* FROM fertilizer_requests fr
+     WHERE fr.status = 'Approved'
+       AND NOT EXISTS (SELECT 1 FROM fertilizer_allocations a WHERE a.request_id = fr.id)
+     ORDER BY fr.created_at, fr.id
+  LOOP
+    need := COALESCE(r.approved_qty_kg, r.quantity_kg) - r.delivered_qty_kg;
+    FOR b IN
+      SELECT fb.id,
+             fb.quantity_kg - COALESCE((SELECT SUM(a.qty_kg) FROM fertilizer_allocations a
+                                         WHERE a.batch_id = fb.id AND a.state = 'active'), 0) AS free
+        FROM fertilizer_batches fb
+       WHERE fb.item = r.item AND NOT fb.discarded AND fb.expiry_date >= CURRENT_DATE
+       ORDER BY fb.expiry_date, fb.id
+    LOOP
+      EXIT WHEN need <= 0;
+      take := LEAST(need, b.free);
+      IF take > 0 THEN
+        INSERT INTO fertilizer_allocations (request_id, batch_id, qty_kg) VALUES (r.id, b.id, take);
+        need := need - take;
+      END IF;
+    END LOOP;
+    SELECT id, rate_per_kg INTO price FROM fertilizer_item_prices
+     WHERE item = r.item AND effective_date <= CURRENT_DATE
+     ORDER BY effective_date DESC, id DESC LIMIT 1;
+    UPDATE fertilizer_requests SET rate_per_kg = price.rate_per_kg, price_id = price.id
+     WHERE id = r.id AND rate_per_kg IS NULL;
+    IF need > 0 THEN
+      UPDATE fertilizer_requests SET status = 'Needs review', updated_at = NOW() WHERE id = r.id;
+      INSERT INTO fertilizer_request_events (request_id, actor, actor_role, action, from_status, to_status, note)
+      VALUES (r.id, 'seed', 'System', 'Moved to review', 'Approved', 'Needs review',
+              'Not enough live stock to commit (' || need || ' kg short)');
+    END IF;
+  END LOOP;
+END $$;`;
+
+/* Fertilizer prices (Rs./kg) — none existed before the delivery flow. Effective 2026-01-01. */
+const FERTILIZER_PRICE_SEEDS: { item: string; ratePerKg: number }[] = [
+  { item: 'Urea Fertilizer', ratePerKg: 90 },
+  { item: 'TSP', ratePerKg: 85 },
+  { item: 'Muriate of Potash', ratePerKg: 95 },
+  { item: 'Dolomite', ratePerKg: 40 },
+  { item: 'Rice', ratePerKg: 210 },
+];
 
 // `quantityKg` is unique per (estate, item) below, so that triple doubles as
 // this fixture's natural key for idempotent re-seeding (fertilizer_requests
@@ -1756,15 +1864,16 @@ const FERTILIZER_REQUEST_SEEDS: SeedFertilizerRequest[] = [
     item: 'Urea Fertilizer',
     quantityKg: 300,
     origin: 'mobile',
-    status: 'Submitted',
+    status: 'Requested',
     reason: 'Top dressing for the new flush.',
+    paymentMethod: 'cash',
   },
   {
     estateName: 'Hilltop Estate',
     item: 'TSP',
     quantityKg: 200,
     origin: 'mobile',
-    status: 'Submitted',
+    status: 'Requested',
     reason: 'Base fertiliser, lower field.',
   },
   {
@@ -1772,15 +1881,16 @@ const FERTILIZER_REQUEST_SEEDS: SeedFertilizerRequest[] = [
     item: 'Muriate of Potash',
     quantityKg: 400,
     origin: 'web',
-    status: 'Submitted',
+    status: 'Requested',
     reason: 'Phoned in — potassium deficiency flagged by manager.',
+    paymentMethod: 'bank',
   },
   {
     estateName: 'Silver Peak Estate',
     item: 'Rice',
     quantityKg: 100,
     origin: 'mobile',
-    status: 'Submitted',
+    status: 'Requested',
     reason: 'Monthly beneficiary ration.',
   },
   {
@@ -1788,7 +1898,7 @@ const FERTILIZER_REQUEST_SEEDS: SeedFertilizerRequest[] = [
     item: 'Urea Fertilizer',
     quantityKg: 120,
     origin: 'mobile',
-    status: 'Dispatched',
+    status: 'Delivered',
     approvedQtyKg: 120,
     dispatchedQtyKg: 120,
     decidedBy: 'A. Bandara',
@@ -2004,23 +2114,32 @@ const PERMISSION_MATRIX: Record<
   Administrator: {
     dashboard: 'approve', collection: 'approve', fertilizer: 'approve',
     estateOwners: 'approve', payroll: 'approve', advances: 'approve',
+    estateAdvances: 'approve',
+    holidayCalendar: 'approve', holidayStatutory: 'approve',
     employees: 'approve', attendance: 'approve', performance: 'approve',
     reports: 'approve', administration: 'approve', dispatch: 'approve',
     grading: 'view', gradingApproval: 'view',
+    fertilizerApproval: 'view', fertilizerManagerApproval: 'view',
   },
   Officer: {
     dashboard: 'view', collection: 'edit', fertilizer: 'edit',
     estateOwners: 'edit', payroll: 'edit', advances: 'approve',
-    employees: 'view', attendance: 'edit', performance: 'view',
+    estateAdvances: 'edit',
+    holidayCalendar: 'view', holidayStatutory: 'view',
+    employees: 'view', attendance: 'edit', performance: 'none',
     reports: 'edit', administration: 'none', dispatch: 'edit',
     grading: 'edit', gradingApproval: 'view',
+    fertilizerApproval: 'approve', fertilizerManagerApproval: 'view',
   },
   Manager: {
     dashboard: 'view', collection: 'view', fertilizer: 'view',
     estateOwners: 'view', payroll: 'view', advances: 'view',
-    employees: 'view', attendance: 'view', performance: 'approve',
+    estateAdvances: 'view',
+    holidayCalendar: 'edit', holidayStatutory: 'view',
+    employees: 'view', attendance: 'approve', performance: 'edit',
     reports: 'view', administration: 'none', dispatch: 'approve',
     grading: 'view', gradingApproval: 'approve',
+    fertilizerApproval: 'view', fertilizerManagerApproval: 'approve',
   },
 };
 
@@ -2116,6 +2235,32 @@ async function seedDispatch(client: Client, ctx: DispatchSeedContext) {
     }
   }
 
+  // route schedule (Route-Schedule-Addendum) — written before the permanent assignments
+  // (one route per agent per day). A route that already has a pattern keeps it.
+  const todayWeekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+  for (const [routeName, routeId] of Object.entries(routeIds)) {
+    const offsets = ROUTE_SCHEDULE_SEEDS[routeName] ?? [0, 1, 2, 3, 4, 5, 6];
+    await client.query(
+      `INSERT INTO route_schedule_weekdays (route_id, weekday)
+       SELECT $1, d FROM unnest($2::smallint[]) AS d
+        WHERE NOT EXISTS (SELECT 1 FROM route_schedule_weekdays WHERE route_id = $1)`,
+      [routeId, offsets.map((o) => (todayWeekday + o) % 7)],
+    );
+  }
+  // what the seeded records below may use: does a route run on a date (overrides win)?
+  const patternRows = await client.query<{ route_id: number; weekday: number }>(
+    `SELECT route_id, weekday FROM route_schedule_weekdays`,
+  );
+  const overrideRows = await client.query<{ route_id: number; date: string; kind: string }>(
+    `SELECT route_id, to_char(date, 'YYYY-MM-DD') AS date, kind FROM route_schedule_overrides`,
+  );
+  const runsOn = (routeId: number, date: string): boolean => {
+    const o = overrideRows.rows.find((r) => r.route_id === routeId && r.date === date);
+    if (o) return o.kind === 'ADD';
+    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+    return patternRows.rows.some((r) => r.route_id === routeId && Number(r.weekday) === weekday);
+  };
+
   // permanent assignments — only where the route has none
   for (const [routeName, agentName] of Object.entries(PERMANENT_AGENT_SEEDS)) {
     const routeId = routeIds[routeName];
@@ -2167,13 +2312,14 @@ async function seedDispatch(client: Client, ctx: DispatchSeedContext) {
   );
 
   // The last 10 days: collected, awaiting factory grading → gives load history
-  // for the "expected route load" and the agent's soft ceiling.
+  // for the "expected route load" and the agent's soft ceiling. Only on the days
+  // each route actually runs.
   let history = 0;
   for (let back = 1; back <= 10; back++) {
     const date = dayOffset(back);
     for (const [idx, e] of estates.rows.entries()) {
       const owner = ownerByRoute.get(e.route_id as number);
-      if (!owner) continue;
+      if (!owner || !runsOn(e.route_id as number, date)) continue;
       const kg = 40 + ((idx * 37 + back * 53) % 70);
       const id = `DSP-${date.replace(/-/g, '')}-${e.id}`;
       await client.query(
@@ -2194,13 +2340,13 @@ async function seedDispatch(client: Client, ctx: DispatchSeedContext) {
     }
   }
 
-  // Today: the first estate on each route is the day's stop. Route 3 has already been
-  // collected (so reassigning it is blocked); the rest are still to do (so they can be
-  // covered / reassigned, and COL-01 shows the resolver-driven agent).
+  // Today: the first estate on each route that runs today is the day's stop. Route 3
+  // has already been collected (so reassigning it is blocked); the rest are still to do
+  // (so they can be covered / reassigned, and COL-01 shows the resolver-driven agent).
   const seenRoute = new Set<number>();
   for (const e of estates.rows) {
     const routeId = e.route_id as number;
-    if (seenRoute.has(routeId)) continue;
+    if (seenRoute.has(routeId) || !runsOn(routeId, today)) continue;
     seenRoute.add(routeId);
     const owner = ownerByRoute.get(routeId);
     if (!owner) continue;
@@ -2267,8 +2413,16 @@ async function seedDispatch(client: Client, ctx: DispatchSeedContext) {
 }
 
 async function seed() {
+  // never the hosted database: the URL must be local, and so must the server (local-db-guard.ts)
+  assertLocalDatabaseUrl(process.env.DATABASE_URL);
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
+  try {
+    await assertLocalServer(client);
+  } catch (err) {
+    await client.end();
+    throw err;
+  }
 
   try {
     // `factories` has no unique constraint, so this can't rely on ON CONFLICT —
@@ -2285,10 +2439,10 @@ async function seed() {
 
     for (const seedUser of SEED_USERS) {
       const user = await client.query<{ id: number }>(
-        `INSERT INTO users (phone, password_hash, role) VALUES ($1, $2, $3)
+        `INSERT INTO users (phone, password_hash, role, name) VALUES ($1, $2, $3, $4)
          ON CONFLICT (phone) DO UPDATE SET password_hash = EXCLUDED.password_hash
          RETURNING id`,
-        [seedUser.phone, passwordHash, seedUser.role],
+        [seedUser.phone, passwordHash, seedUser.role, seedUser.name.slice(0, 32)],
       );
       const userId = user.rows[0].id;
 
@@ -2376,10 +2530,10 @@ async function seed() {
     const estateOwnerIds: Record<string, number> = {};
     for (const e of ESTATE_SEEDS) {
       const ownerUser = await client.query<{ id: number }>(
-        `INSERT INTO users (phone, password_hash, role) VALUES ($1, $2, 'estate_owner')
+        `INSERT INTO users (phone, password_hash, role, name) VALUES ($1, $2, 'estate_owner', $3)
          ON CONFLICT (phone) DO UPDATE SET password_hash = EXCLUDED.password_hash
          RETURNING id`,
-        [e.ownerPhone, passwordHash],
+        [e.ownerPhone, passwordHash, e.ownerName.slice(0, 32)],
       );
       const ownerUserId = ownerUser.rows[0].id;
 
@@ -2508,6 +2662,29 @@ async function seed() {
       );
     }
     console.log(`Seeded ${SETTLEMENT_SEEDS.length} settlements`);
+    // Which settlement recovered which advance (Estate-Owner-Advances-Addendum §3) — the one
+    // deducted seed advance was taken in full by Mount Rest's June 2026 settlement.
+    await client.query(
+      `INSERT INTO estate_advance_recoveries
+         (advance_id, settlement_id, kind, period, planned_amount, amount, recovered_at)
+       SELECT a.id, s.id, 'settlement', s.period, a.amount, a.amount, COALESCE(s.processed_on, NOW())
+       FROM estate_advances a JOIN settlements s ON s.id = 'SET-2026-06-003'
+       WHERE a.id = 'EADV-2026-0022' AND a.status = 'deducted'
+       ON CONFLICT (advance_id, settlement_id) DO NOTHING`,
+    );
+    // Every seed advance is a one-deduction plan, starting at the settlement already set up for it
+    // (the estate's first settlement on or after the issue month) — Estate-Owner-Advances-Addendum §4.
+    await client.query(
+      `UPDATE estate_advances a
+          SET installment_amount = a.amount, installment_months = 1,
+              start_period = COALESCE(
+                (SELECT s.period FROM settlements s
+                  WHERE s.estate_id = a.estate_id
+                    AND to_date(s.period, 'FMMonth YYYY') >= date_trunc('month', a.date_issued)
+                  ORDER BY to_date(s.period, 'FMMonth YYYY') LIMIT 1),
+                trim(to_char(a.date_issued + INTERVAL '1 month', 'FMMonth YYYY')))
+        WHERE a.start_period IS NULL`,
+    );
 
     // ── Employees + Payroll (EMP-01..14) ──
 
@@ -2555,6 +2732,11 @@ async function seed() {
       );
     }
     console.log(`Seeded ${EMPLOYEE_SEEDS.length} employees`);
+    // Office staff (Shop & Office Act) vs factory workers (Wages Board) — Attendance-Leave-Addendum
+    await client.query(
+      `UPDATE employees SET category = CASE WHEN role IN ('Factory Officer', 'Factory Manager')
+         THEN 'office' ELSE 'factory' END`,
+    );
 
     for (const a of ATTENDANCE_SEEDS) {
       await client.query(
@@ -2674,6 +2856,20 @@ async function seed() {
           missingBank,
         ],
       );
+      // the July row reserves the advances it deducts (Salary-Advances-Addendum §9)
+      for (const a of SALARY_ADVANCE_SEEDS.filter(
+        (s) =>
+          s.employeeName === e.name && s.status === 'Approved' && !s.deducted,
+      )) {
+        await client.query(
+          `INSERT INTO advance_recoveries
+             (advance_id, kind, period, payroll_run_id, status, planned_amount, amount)
+           SELECT $1, 'payroll', $2::varchar, p.id, 'reserved', $3, $3
+             FROM payroll_runs p WHERE p.employee_id = $4 AND p.period = $2::varchar
+           ON CONFLICT DO NOTHING`,
+          [a.id, PAYROLL_PERIOD, a.amount, employeeId],
+        );
+      }
     }
     console.log(`Seeded payroll for ${PAYROLL_PERIOD}`);
 
@@ -2700,10 +2896,10 @@ async function seed() {
     const agentIds: Record<string, number> = {};
     for (const a of AGENT_SEEDS) {
       const agentUser = await client.query<{ id: number }>(
-        `INSERT INTO users (phone, password_hash, role) VALUES ($1, $2, 'collection_agent')
+        `INSERT INTO users (phone, password_hash, role, name) VALUES ($1, $2, 'collection_agent', $3)
          ON CONFLICT (phone) DO UPDATE SET password_hash = EXCLUDED.password_hash
          RETURNING id`,
-        [a.phone, passwordHash],
+        [a.phone, passwordHash, a.name.slice(0, 32)],
       );
       const agentUserId = agentUser.rows[0].id;
 
@@ -2884,11 +3080,7 @@ async function seed() {
       const ownerId = estateOwnerIds[r.estateName];
       const approvedQtyKg =
         r.approvedQtyKg ??
-        (r.status === 'Approved' ||
-        r.status === 'Dispatched' ||
-        r.status === 'Partially Dispatched'
-          ? r.quantityKg
-          : null);
+        (r.status === 'Approved' || r.status === 'Delivered' ? r.quantityKg : null);
 
       const requestId = await findOrCreate(
         client,
@@ -2896,8 +3088,10 @@ async function seed() {
         [estateId, r.item, r.quantityKg],
         `INSERT INTO fertilizer_requests
            (estate_id, owner_id, item, quantity_kg, justification, origin, status,
-            approved_qty_kg, dispatched_qty_kg, decided_by, decided_on)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+            approved_qty_kg, dispatched_qty_kg, decided_by, decided_on,
+            route_id, payment_method, delivered_qty_kg)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+                 (SELECT route_id FROM estates WHERE id = $1), $12, $13)
          RETURNING id`,
         [
           estateId,
@@ -2911,24 +3105,73 @@ async function seed() {
           r.dispatchedQtyKg ?? 0,
           r.decidedBy ?? null,
           r.decidedBy ? new Date() : null,
+          r.paymentMethod ?? 'deduct',
+          r.status === 'Delivered' ? (r.dispatchedQtyKg ?? 0) : 0,
         ],
       );
       requestIds[requestKey(r.estateName, r.item, r.quantityKg)] = requestId;
 
+      // Status / quantities are seeded on insert only: re-seeding must never rewind a request
+      // the delivery flow has moved on (its allocations, attempts and charges would disagree).
       await client.query(
-        `UPDATE fertilizer_requests SET
-           justification = $2, origin = $3, status = $4, approved_qty_kg = $5,
-           dispatched_qty_kg = $6, decided_by = $7
-         WHERE id = $1`,
-        [
-          requestId,
-          r.reason ?? null,
-          r.origin,
-          r.status,
-          approvedQtyKg,
-          r.dispatchedQtyKg ?? 0,
-          r.decidedBy ?? null,
-        ],
+        `UPDATE fertilizer_requests SET justification = $2, origin = $3 WHERE id = $1`,
+        [requestId, r.reason ?? null, r.origin],
+      );
+    }
+
+    for (const p of FERTILIZER_PRICE_SEEDS) {
+      await client.query(
+        `INSERT INTO fertilizer_item_prices (item, rate_per_kg, effective_date, set_by)
+         VALUES ($1, $2, '2026-01-01', 'seed')
+         ON CONFLICT (item, effective_date) DO NOTHING`,
+        [p.item, p.ratePerKg],
+      );
+    }
+
+    // Approved requests with nothing committed yet: FEFO-allocate from live stock and snapshot
+    // the price — exactly what approving one does. Anything live stock can't cover goes to
+    // Needs review (same rule as the migration's legacy backfill).
+    await client.query(SEED_FEFO_BACKFILL_SQL);
+
+    // One request already on today's route stop, so the handover → agent → delivery flow can be
+    // tried straight away (Green Valley's route runs on the seed day — see ROUTE_SCHEDULE_SEEDS).
+    const demo = requestIds[requestKey('Green Valley Estate', 'Urea Fertilizer', 400)];
+    const demoState = await client.query<{ status: string }>(
+      `SELECT status FROM fertilizer_requests WHERE id = $1`,
+      [demo],
+    );
+    const hasAttempt = await client.query(
+      `SELECT 1 FROM fertilizer_deliveries WHERE request_id = $1`,
+      [demo],
+    );
+    if (demoState.rows[0]?.status === 'Approved' && hasAttempt.rowCount === 0) {
+      const today = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Colombo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+      await client.query(
+        `INSERT INTO fertilizer_deliveries (request_id, attempt_no, estate_id, route_id, scheduled_date)
+         SELECT r.id, 1, r.estate_id, e.route_id, $2 FROM fertilizer_requests r
+           JOIN estates e ON e.id = r.estate_id WHERE r.id = $1`,
+        [demo, today],
+      );
+      // markReady prices a legacy approval at dispatch; do the same here.
+      await client.query(
+        `UPDATE fertilizer_requests r SET status = 'Ready for dispatch', updated_at = NOW(),
+                rate_per_kg = COALESCE(r.rate_per_kg, p.rate_per_kg),
+                price_id = COALESCE(r.price_id, p.id)
+           FROM (SELECT id, rate_per_kg FROM fertilizer_item_prices
+                  WHERE item = 'Urea Fertilizer' AND effective_date <= CURRENT_DATE
+                  ORDER BY effective_date DESC, id DESC LIMIT 1) p
+          WHERE r.id = $1`,
+        [demo],
+      );
+      await client.query(
+        `INSERT INTO fertilizer_request_events (request_id, actor, actor_role, action, from_status, to_status, note)
+         VALUES ($1, 'seed', 'System', 'Ready for dispatch', 'Approved', 'Ready for dispatch', $2)`,
+        [demo, `On today's stop (${today}) — record the handover on FERT-06 to send it out`],
       );
     }
     console.log(

@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from "expo-router";
 
 import { FormCheckbox } from "@/components/forms";
 import { AppButton, AppInput, AppText, Avatar, Screen } from "@/components/ui";
-import { estateProfiles } from "@/data/estateOwnerEstates";
+import { useEstateStore } from "@/store/estateStore";
 import {
   getEstateWorkers,
   saveEstateWorkers,
@@ -23,6 +23,7 @@ import type { EstateWorker } from "@/data/estateWorkers";
 import { colors, spacing } from "@/theme";
 
 export default function EstateWorkers() {
+  const estateProfiles = useEstateStore((state) => state.estates);
   const { estateId } = useLocalSearchParams<{ estateId: string }>();
   const estate = estateProfiles.find((profile) => profile.id === estateId);
   const [workers, setWorkers] = useState<EstateWorker[]>(() =>

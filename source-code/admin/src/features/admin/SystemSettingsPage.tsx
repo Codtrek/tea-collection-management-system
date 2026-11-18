@@ -3,6 +3,7 @@ import { Cloud, Loader2, MessageSquareText } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { AdminGuard } from './AdminGuard'
+import { FertilizerPricesCard } from './FertilizerPricesCard'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
@@ -179,6 +180,8 @@ export function SystemSettingsPage() {
               </ul>
               <p className="mt-3 text-xs text-text-muted">Status display only — integrations are configured outside the UI.</p>
             </Card>
+
+            <FertilizerPricesCard />
           </div>
         </div>
       )}

@@ -19,6 +19,11 @@ import { GradingNotificationEntity } from './grading-notification.entity';
 import { GradingNotificationService } from './grading-notification.service';
 import { GradingNotificationTasks } from './grading-notification.tasks';
 import { GradingService } from './grading.service';
+import { CollectionRequestEntity } from './collection-requests/tea-collection-request.entity';
+import { CollectionRequestAssignmentEntity } from './collection-requests/tea-collection-request-assignment.entity';
+import { TeaCollectionVerificationEntity } from './collection-requests/tea-collection-verification.entity';
+import { TeaCollectionEvidenceEntity } from './collection-requests/tea-collection-evidence.entity';
+import { TeaCollectionDiscrepancyEntity } from './collection-requests/tea-collection-discrepency.entity';
 
 @Module({
   imports: [
@@ -33,6 +38,11 @@ import { GradingService } from './grading.service';
       SettlementEntity,
       EstateOwnerEntity,
       SystemSettingEntity,
+      CollectionRequestEntity,
+      CollectionRequestAssignmentEntity,
+      TeaCollectionVerificationEntity,
+      TeaCollectionDiscrepancyEntity,
+      TeaCollectionEvidenceEntity
     ]),
     DispatchModule,
     UsersModule,

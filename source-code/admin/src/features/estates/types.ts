@@ -16,12 +16,16 @@ export interface EstateOwner {
   status: EstateStatus
   ytdDeliveriesKg: number
   bank: { bank: string; branch: string; account: string }
+  /** how the owner is paid — cash owners need no bank details */
+  paymentMethod: OwnerPaymentMethod
   documents: Array<{ name: string; uploadedOn: string }>
   lastUpdatedBy?: string
   lastUpdatedOn?: string
 }
 
-export type EstateAdvanceStatus = 'Pending deduction' | 'Deducted'
+export type OwnerPaymentMethod = 'bank' | 'cash'
+
+export type EstateAdvanceStatus = 'Pending deduction' | 'Recovering' | 'Deducted'
 
 export interface EstateAdvance {
   id: string
@@ -32,6 +36,85 @@ export interface EstateAdvance {
   dateIssued: string
   issuedBy: string
   status: EstateAdvanceStatus
+}
+
+/** EST-05 (Estate-Owner-Advances-Addendum §3) — balances from the server's estate-advance-balance.ts */
+export type EstateAdvanceRecovery = 'Pending deduction' | 'Recovering' | 'Deducted'
+
+export interface EstateAdvanceRow extends EstateAdvance {
+  ownerName: string
+  routeId: number | null
+  route: string
+  recovered: number
+  remaining: number
+  recovery: EstateAdvanceRecovery
+  /** one installment a settlement period */
+  plan: { installment: number; months: number; startPeriod: string }
+  nextPeriod: string | null
+  clearedPeriod: string | null
+  carriedForward: number
+  /** "Outstanding: estate inactive" — a balance left on an estate that's no longer active */
+  estateInactive: boolean
+}
+
+export interface EstateAdvanceListResult extends PaginatedResult<EstateAdvanceRow> {
+  summary: {
+    /** issued in the range */
+    issued: number
+    issuedCount: number
+    /** recovered by settlements processed in the range */
+    deducted: number
+    /** every remaining balance, any date */
+    pendingDeduction: number
+    pendingCount: number
+  }
+  routes: { id: number; name: string }[]
+  issuers: string[]
+}
+
+export interface EstateAdvanceScheduleRow {
+  period: string
+  planned: number
+  deducted: number
+  carried: number
+  status: 'Deducted' | 'Reserved' | 'Planned'
+  settlementId: string | null
+  settlementStatus: 'Pending' | 'Processed' | null
+}
+
+export interface EstateAdvanceReschedule {
+  id: number
+  installmentAmount: number
+  startPeriod: string
+  note: string
+  status: 'Pending' | 'Approved' | 'Rejected'
+  requestedBy: string | null
+  decidedBy: string | null
+  decidedOn: string | null
+  decisionReason: string | null
+  requestedOn: string
+}
+
+export interface EstateAdvanceDetail {
+  advance: EstateAdvanceRow
+  schedule: EstateAdvanceScheduleRow[]
+  repayments: { kind: 'cash' | 'bank'; amount: number; paidOn: string | null; reference: string | null; recordedBy: string | null }[]
+  reschedules: EstateAdvanceReschedule[]
+}
+
+/** The Issue form's helper once an estate is picked (Estate-Owner-Advances-Addendum §4–5). */
+export interface EstateAdvanceContext {
+  estateId: string
+  estateName: string
+  active: boolean
+  outstandingAdvanceRs: number
+  openAdvances: { id: string; remaining: number; nextPeriod: string | null }[]
+  /** average net over the last 3 processed settlements — null when none are processed */
+  averageNetRs: number | null
+  averagePeriods: string[]
+  deductionCapPct: number
+  netWarnPct: number
+  maxInstallmentMonths: number
 }
 
 export type SettlementStatus = 'Pending' | 'Processed'
@@ -66,6 +149,71 @@ export interface Settlement {
 }
 
 /*
+  Settlement period view (Settlement-Period-View-Addendum) — mirrors the backend's
+  `settlement-view.ts`. Every figure, the summary and the filtering are server-side.
+*/
+export interface SettlementDeductions {
+  fertilizer: number
+  advances: number
+  /** transport */
+  other: number
+}
+
+export interface SettlementRow extends Settlement {
+  month: string // 'YYYY-MM'
+  ownerName: string
+  routeId: number | null
+  route: string
+  paymentMethod: OwnerPaymentMethod
+  gross: number
+  deductions: SettlementDeductions
+  deductionsTotal: number
+  net: number
+}
+
+export interface SettlementSummary {
+  month: string | null
+  ownersSettled: number
+  processed: number
+  pending: number
+  activeOwners: number
+  gross: number
+  deductions: SettlementDeductions
+  deductionsTotal: number
+  net: number
+  notYetSettled: number | null
+  latestMonth: string | null
+}
+
+export interface SettlementListResult {
+  rows: SettlementRow[]
+  page: number
+  limit: number
+  total: number
+  hasMore: boolean
+  summary: SettlementSummary
+  months: string[]
+  routes: { id: number; name: string }[]
+}
+
+export interface UnsettledOwner {
+  estateId: string
+  estateName: string
+  ownerName: string
+  route: string
+  paymentMethod: OwnerPaymentMethod
+  deliveries: number
+  gradedKg: number
+}
+
+export interface SettlementDetail {
+  settlement: SettlementRow
+  deliveries: { id: string; date: string; superKg: number; normalKg: number; paid: boolean }[]
+  fertilizerCharges: { id: string; date: string; quantityKg: number; ratePerKg: number; totalCharge: number; recovered: boolean }[]
+  advances: { id: string; dateIssued: string; amount: number; reason: string; status: EstateAdvanceStatus }[]
+}
+
+/*
   Estate Owner Lifetime History (EST-03 amended + EST-10) — mirrors the
   backend's `estate-lifetime-map.ts` byte-for-byte. Every figure here is
   computed server-side (addendum §3); no component sums a table for a total.
@@ -85,6 +233,9 @@ export interface EstateLifetimeMetrics {
   }
   outstanding: {
     fertilizerUndeductedRs: number
+    /** remaining over open advances — the shared estate-advance balance */
+    advancesRs: number
+    openAdvanceCount: number
     undeductedDispatchCount: number
     lastSettlementRs: number | null
     lastSettlementDate: string | null
@@ -157,7 +308,10 @@ export interface EstateDirectoryRow {
   lastDeliveryDate: string | null
   lastPaymentRs: number | null
   lastPaymentDate: string | null
+  /** owed to the factory: unpaid fertilizer + remaining advances */
   outstandingRs: number
+  fertilizerOutstandingRs: number
+  advanceOutstandingRs: number
   hasOutstanding: boolean
   lifetimeEarnedRs: number
   lifetimeDeliveredKg: number

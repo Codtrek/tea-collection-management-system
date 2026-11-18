@@ -50,6 +50,8 @@ export default function ChangePasswordScreen() {
         <PasswordInput
           label="Current Password"
           placeholder="Enter current password"
+          autoComplete="current-password"
+          textContentType="password"
           value={currentPassword}
           onChangeText={setCurrentPassword}
         />
@@ -57,6 +59,8 @@ export default function ChangePasswordScreen() {
         <PasswordInput
           label="New Password"
           placeholder="Enter new password"
+          autoComplete="new-password"
+          textContentType="newPassword"
           value={newPassword}
           onChangeText={setNewPassword}
         />
@@ -64,6 +68,8 @@ export default function ChangePasswordScreen() {
         <PasswordInput
           label="Confirm New Password"
           placeholder="Confirm new password"
+          autoComplete="new-password"
+          textContentType="newPassword"
           value={confirmPassword}
           onChangeText={setConfirmPassword}
         />

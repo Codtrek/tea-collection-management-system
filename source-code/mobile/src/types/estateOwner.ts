@@ -4,7 +4,7 @@
  * (estates, pickup requests, deliveries).
  */
 
-export type EstateGrade = "Super" | "Normal" | "Mixed";
+export type EstateGrade = "Super" | "Normal" | "Mixed" | "Not graded";
 
 export interface Estate {
   id: string;

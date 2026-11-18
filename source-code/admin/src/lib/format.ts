@@ -2,7 +2,7 @@
   Content & formatting standards (master brief §6). Define once, use everywhere.
   - Currency: Rs. 1,245,600  (thousands separator, Rs. prefix, no decimals unless cents)
   - Weight:   45,670 kg       (thousands separator, one decimal only when fractional)
-  - Dates:    DD/MM/YYYY
+  - Dates:    10 Jul 2026 (formatDate) · 10 Jul 2026, 14:30 (formatDateTime)
 */
 
 const grouped = new Intl.NumberFormat('en-US')
@@ -65,21 +65,36 @@ export function formatPercent(value: number, signed = false): string {
   return `${sign}${s}%`
 }
 
-/** `DD/MM/YYYY` throughout the portal. */
-export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  const dd = String(d.getDate()).padStart(2, '0')
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const yyyy = d.getFullYear()
-  return `${dd}/${mm}/${yyyy}`
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * A bare `YYYY-MM-DD` is a calendar date, read as-is — never shifted a day by a time zone (a
+ * plain `new Date('2026-07-10')` is UTC midnight). Timestamps are shown in local time.
+ */
+function toDate(date: Date | string): Date {
+  if (typeof date !== 'string') return date
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(date)
 }
 
-/** `DD/MM/YYYY HH:mm` for audit timestamps. */
+/** `10 Jul 2026` throughout the portal — never DD/MM vs MM/DD ambiguous. */
+export function formatDate(date: Date | string): string {
+  const d = toDate(date)
+  return `${String(d.getDate()).padStart(2, '0')} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`
+}
+
+/** `10 Jul 2026, 14:30` for audit timestamps. */
 export function formatDateTime(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
+  const d = toDate(date)
   const hh = String(d.getHours()).padStart(2, '0')
   const min = String(d.getMinutes()).padStart(2, '0')
-  return `${formatDate(d)} ${hh}:${min}`
+  return `${formatDate(d)}, ${hh}:${min}`
+}
+
+/** `12 Nov` — a short date where the year is obvious (fertilizer request labels). */
+export function formatDayMonth(date: Date | string): string {
+  const d = toDate(date)
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`
 }
 
 /** Relative time for notifications: `12m ago`, `2h ago`, `3d ago`. */

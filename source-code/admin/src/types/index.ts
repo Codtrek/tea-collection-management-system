@@ -8,6 +8,9 @@ export type ModuleKey =
   | 'collection'
   | 'fertilizer'
   | 'estateOwners'
+  | 'estateAdvances'
+  | 'holidayCalendar'
+  | 'holidayStatutory'
   | 'payroll'
   | 'advances'
   | 'employees'
@@ -17,6 +20,8 @@ export type ModuleKey =
   | 'dispatch'
   | 'grading'
   | 'gradingApproval'
+  | 'fertilizerApproval'
+  | 'fertilizerManagerApproval'
   | 'administration'
 
 /** Ordered so that a higher level implies the lower ones. */

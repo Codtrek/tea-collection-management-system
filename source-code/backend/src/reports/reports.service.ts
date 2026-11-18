@@ -7,6 +7,8 @@ import { gradeKg, weightSummary } from '../collections/collection-map';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { PayrollRunEntity } from '../employees/payroll-run.entity';
 import { SettlementEntity } from '../estates/settlement.entity';
+import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
+import { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { ExpenseEntryEntity } from './expense-entry.entity';
 import {
@@ -29,7 +31,10 @@ export interface Actor {
   role: AppRole;
 }
 
-function groupBy<T>(items: T[], keyOf: (item: T) => string): Record<string, T[]> {
+function groupBy<T>(
+  items: T[],
+  keyOf: (item: T) => string,
+): Record<string, T[]> {
   const out: Record<string, T[]> = {};
   for (const item of items) {
     const key = keyOf(item);
@@ -62,6 +67,10 @@ export class ReportsService {
     private readonly settlementRepo: Repository<SettlementEntity>,
     @InjectRepository(PayrollRunEntity)
     private readonly payrollRepo: Repository<PayrollRunEntity>,
+    @InjectRepository(StockMovementEntity)
+    private readonly movementRepo: Repository<StockMovementEntity>,
+    @InjectRepository(FertilizerBatchEntity)
+    private readonly batchRepo: Repository<FertilizerBatchEntity>,
     private readonly audit: AuditService,
   ) {}
 
@@ -239,13 +248,11 @@ export class ReportsService {
     const payrollSum = sumBy(payrollByPeriod[resolvedPeriod] ?? [], (p) =>
       Number(p.gross),
     );
-    const transportSum = sumBy(
-      settlementByPeriod[resolvedPeriod] ?? [],
-      (s) => Number(s.transportCost),
+    const transportSum = sumBy(settlementByPeriod[resolvedPeriod] ?? [], (s) =>
+      Number(s.transportCost),
     );
-    const fertilizerSum = sumBy(
-      settlementByPeriod[resolvedPeriod] ?? [],
-      (s) => Number(s.fertilizerDeduction),
+    const fertilizerSum = sumBy(settlementByPeriod[resolvedPeriod] ?? [], (s) =>
+      Number(s.fertilizerDeduction),
     );
     const manualRows = manualByPeriod[resolvedPeriod] ?? [];
     const manualByCategory = new Map<string, number>();
@@ -347,7 +354,34 @@ export class ReportsService {
       split,
       trend,
       rows,
+      stockLost: await this.stockLost(resolvedPeriod),
     };
+  }
+
+  /** Fertilizer written off in the month, per item and reason (kg). Never an expense. */
+  private async stockLost(period: string): Promise<ExpenseReport['stockLost']> {
+    const [writeOffs, batches] = await Promise.all([
+      this.movementRepo.find({ where: { type: 'Write-off' } }),
+      this.batchRepo.find(),
+    ]);
+    const itemOf = new Map(batches.map((b) => [b.id, b.item]));
+    const byKey = new Map<
+      string,
+      { item: string; reason: string; kg: number }
+    >();
+    for (const m of writeOffs) {
+      if (monthKeyOfDate(m.movementDate) !== period) continue;
+      const item = itemOf.get(m.batchId) ?? 'Unknown item';
+      const reason = m.writeOffReason ?? 'other';
+      const key = `${item}|${reason}`;
+      const row = byKey.get(key) ?? { item, reason, kg: 0 };
+      row.kg = Math.round((row.kg + Number(m.quantityKg)) * 100) / 100;
+      byKey.set(key, row);
+    }
+    return [...byKey.values()].sort(
+      (a, b) =>
+        a.item.localeCompare(b.item) || a.reason.localeCompare(b.reason),
+    );
   }
 
   /** RPT-04 — Officer+ (Manager is read-only, same tier as every other module). */

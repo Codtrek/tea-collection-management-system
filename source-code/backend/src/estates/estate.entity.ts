@@ -7,8 +7,9 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { EstateManager } from '../users/estate-manager.entity';
 import { EstateOwnerEntity } from './estate-owner.entity';
-import type { DbEstateStatus } from './estate-map';
+import type { DbEstateStatus, OwnerPaymentMethod } from './estate-map';
 import { RouteEntity } from './route.entity';
 
 /**
@@ -22,6 +23,10 @@ import { RouteEntity } from './route.entity';
 @Entity('estates')
 @Check('estates_status_check', `"status" IN ('active', 'inactive')`)
 @Index('idx_estates_owner', ['ownerId'])
+@Check(
+  'estates_payment_method_check',
+  `((payment_method)::text = ANY ((ARRAY['bank'::character varying, 'cash'::character varying])::text[]))`,
+)
 export class EstateEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -30,8 +35,28 @@ export class EstateEntity {
   @ForeignKey(() => EstateOwnerEntity, { name: 'estates_owner_id_fkey' })
   ownerId: number;
 
+  @Column({
+    name: 'manager_id',
+    type: 'integer',
+    nullable: true,
+  })
+  @ForeignKey(() => EstateManager, {
+    name: 'estates_manager_id_fkey',
+    onDelete: 'SET NULL',
+  })
+  managerId: number | null;
+
   @Column({ type: 'varchar', length: 100 })
   name: string;
+
+  @Column({
+    name: 'area_acres',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  areaAcres: string | null;
 
   @Column({ type: 'text' })
   location: string;
@@ -69,6 +94,15 @@ export class EstateEntity {
 
   @Column({ name: 'bank_account', type: 'varchar', length: 30, nullable: true })
   bankAccount: string | null;
+
+  /** How the owner is paid (Settlement-Period-View-Addendum). Cash owners need no bank details. */
+  @Column({
+    name: 'payment_method',
+    type: 'varchar',
+    default: 'bank',
+    length: 10,
+  })
+  paymentMethod: OwnerPaymentMethod;
 
   @Column({
     name: 'last_updated_by',

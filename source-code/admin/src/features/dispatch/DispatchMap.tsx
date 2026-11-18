@@ -24,6 +24,17 @@ function FitTo({ bounds }: { bounds: LatLngBoundsExpression | null }) {
   return null
 }
 
+/** Leaflet measures its box once; redraw the tiles whenever the box changes (map toggle, resize). */
+function KeepSized() {
+  const map = useMap()
+  useEffect(() => {
+    const observer = new ResizeObserver(() => map.invalidateSize())
+    observer.observe(map.getContainer())
+    return () => observer.disconnect()
+  }, [map])
+  return null
+}
+
 /*
   Agent pins + route lines on OpenStreetMap tiles (Leaflet: small, no API key). Pins are the
   agent's LAST KNOWN fix, coloured by how old it is — the tooltip says "5 min ago" / "Last
@@ -67,6 +78,7 @@ export function DispatchMap({ board, selectedAgentId, onSelectAgent }: DispatchM
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitTo bounds={bounds} />
+      <KeepSized />
 
       {board.routes.map((r) => {
         const active = selectedRouteIds.has(r.routeId)

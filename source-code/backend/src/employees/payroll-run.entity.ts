@@ -149,6 +149,20 @@ export class PayrollRunEntity {
   @Column({ name: 'processed_on', type: 'timestamp', nullable: true })
   processedOn: Date | null;
 
+  /** left out of a run (bank-paid, no bank details) with the officer's required reason */
+  @Column({ name: 'excluded_reason', type: 'text', nullable: true })
+  excludedReason: string | null;
+
+  @Column({ name: 'excluded_by', type: 'varchar', nullable: true, length: 100 })
+  excludedBy: string | null;
+
+  @Column({ name: 'excluded_on', type: 'timestamp', nullable: true })
+  excludedOn: Date | null;
+
+  /** the leaving month's payroll — the whole advance balance is due (up to the cap) */
+  @Column({ name: 'is_final', default: false })
+  isFinal: boolean;
+
   /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
   @CreateDateColumn({ name: 'created_at', nullable: true })
   createdAt: Date;

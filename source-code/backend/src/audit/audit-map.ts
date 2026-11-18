@@ -14,6 +14,8 @@ export type AuditModuleName =
   | 'Employee'
   | 'Reports'
   | 'Dispatch'
+  | 'Holidays'
+  | 'Performance'
   | 'Administration';
 
 export interface PublicAuditEntry {

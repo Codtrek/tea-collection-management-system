@@ -1,15 +1,19 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Select } from '@/components/ui/Select'
+import { Combobox } from '@/components/ui/Combobox'
 import { HighStakesConfirmFlow } from '@/components/patterns/HighStakesConfirmFlow'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import * as estatesService from '@/services/estates'
+import { currentMonth } from '@/lib/month'
+import { defaultStartMonth, planInstallment, planLabel, planValueError, scheduleText, previewSchedule, type PlanValue } from '@/features/advances/advance-plan'
+import { RepaymentPlanFields } from '@/features/advances/RepaymentPlanFields'
+import { estateOptionMeta, estateSearchText, INACTIVE_REASON } from './estate-picker'
 import { formatCurrency } from '@/lib/format'
 
 /*
@@ -23,6 +27,10 @@ export function IssueAdvancePage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [params] = useSearchParams()
+  const location = useLocation()
+  // Back to wherever the form was opened from (/estates, EST-03, the advances list); a direct
+  // link with no in-app history falls back to the list.
+  const cancel = () => (location.key !== 'default' ? navigate(-1) : navigate('/estates/advances'))
 
   const { data: estates } = useQuery({ queryKey: ['estates'], queryFn: estatesService.list })
 
@@ -31,26 +39,57 @@ export function IssueAdvancePage() {
   const [reason, setReason] = useState('')
   const [errors, setErrors] = useState<{ estate?: string; amount?: string; reason?: string }>({})
   const [confirming, setConfirming] = useState(false)
+  const firstMonth = defaultStartMonth(currentMonth())
+  const [plan, setPlan] = useState<PlanValue>({ mode: 'single', installment: '', months: '', startMonth: firstMonth })
 
-  const estate = (estates ?? []).find((e) => e.id === estateId)
+  // every estate owner, A–Z by estate name; inactive ones are listed but can't be picked
+  const allEstates = [...(estates ?? [])].sort((a, b) => a.estateName.localeCompare(b.estateName))
+  const estate = allEstates.find((e) => e.id === estateId && e.status === 'Active')
+  // a pre-filled (?estate=) owner the picker can't offer — say so rather than show a silent blank
+  const inactive = !estate ? (estates ?? []).find((e) => e.id === estateId) : undefined
+  const estateError = errors.estate ?? (inactive ? `${inactive.estateName} is ${inactive.status} — advances go to active estate owners only` : undefined)
   const parsedAmount = Number(amount)
+
+  // the picked estate's open advance balance, 3-period average net and the plan limits (§4)
+  const { data: context } = useQuery({
+    queryKey: ['estates', 'advance-context', estate?.id],
+    queryFn: () => estatesService.getAdvanceContext(estate!.id),
+    enabled: !!estate,
+  })
+  const maxMonths = context?.maxInstallmentMonths ?? 6
+  const installment = parsedAmount > 0 ? planInstallment(parsedAmount, plan) : 0
+  const planProblem = parsedAmount > 0 ? planValueError(parsedAmount, plan, maxMonths) : null
+  const warnAbove = context?.averageNetRs != null ? (context.averageNetRs * context.netWarnPct) / 100 : null
+  const installmentTooHigh = warnAbove !== null && installment > warnAbove
+  const planSummary =
+    parsedAmount > 0 && !planProblem
+      ? `${planLabel({ installment, months: Math.max(1, Math.ceil(parsedAmount / Math.max(1, installment))) })} — ${scheduleText(previewSchedule(parsedAmount, installment, plan.startMonth))}`
+      : ''
 
   const validate = () => {
     const next: typeof errors = {}
-    if (!estateId) next.estate = 'Select an estate owner'
+    if (!estate) next.estate = inactive ? INACTIVE_REASON : 'Select an estate owner'
     if (!amount || Number.isNaN(parsedAmount) || parsedAmount <= 0) next.amount = 'Enter a positive amount'
     if (!reason.trim()) next.reason = 'Reason is required'
+    if (planProblem) next.amount = next.amount ?? planProblem
     setErrors(next)
     return Object.keys(next).length === 0
   }
 
   const issueMutation = useMutation({
-    mutationFn: () => estatesService.issueAdvance({ estateId, amount: parsedAmount, reason }),
-    onSuccess: () => {
+    mutationFn: () =>
+      estatesService.issueAdvance({
+        estateId,
+        amount: parsedAmount,
+        reason,
+        installmentAmount: plan.mode === 'installments' ? installment : undefined,
+        startMonth: plan.startMonth,
+      }),
+    onSuccess: (issued) => {
       // Audit trail entry per the module doc.
       toast(`Advance of ${formatCurrency(parsedAmount)} issued to ${estate?.estateName} by ${user?.name}`)
       void queryClient.invalidateQueries({ queryKey: ['estates', 'advances'] })
-      navigate('/estates/advances')
+      navigate(`/estates/advances?highlight=${encodeURIComponent(issued.id)}`)
     },
     onError: (err) => {
       setConfirming(false)
@@ -64,26 +103,27 @@ export function IssueAdvancePage() {
         title="Issue Advance Payment"
         breadcrumb={[
           { label: 'Home', to: '/dashboard' },
-          { label: 'Estate Owners', to: '/estates' },
-          { label: 'Advances', to: '/estates/advances' },
-          { label: 'Issue' },
+          { label: 'Estate Owner Advances', to: '/estates/advances' },
+          { label: 'New' },
         ]}
       />
 
       <Card className="max-w-xl">
         <div className="flex flex-col gap-5">
-          <Select
+          <Combobox
             label="Estate owner"
-            placeholder="Select estate"
+            placeholder="Search estate, owner, EST- number or route…"
+            noun="estate owners"
+            items={allEstates}
             value={estateId}
-            error={errors.estate}
-            onChange={(e) => setEstateId(e.target.value)}
-            options={(estates ?? [])
-              .filter((e) => e.status === 'Active')
-              .map((e) => ({
-                value: e.id,
-                label: `${e.estateName} — ${e.ownerName}`,
-              }))}
+            onChange={setEstateId}
+            getKey={(e) => e.id}
+            getLabel={(e) => e.estateName}
+            getMeta={estateOptionMeta}
+            getSearchText={estateSearchText}
+            getDisabledReason={(e) => (e.status === 'Active' ? null : INACTIVE_REASON)}
+            disabledBadge="Inactive"
+            error={estateError}
           />
           <Input
             label="Amount (Rs.)"
@@ -102,6 +142,44 @@ export function IssueAdvancePage() {
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g. Pre-season plucking labour costs"
           />
+          {estate && context && (
+            <div className="rounded-[var(--radius-md)] border border-border bg-surface-sunken/50 p-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-text-muted">Outstanding advances</span>
+                <span className="tabular font-medium text-text">{formatCurrency(context.outstandingAdvanceRs)}</span>
+              </div>
+              <div className="mt-1 flex justify-between gap-3">
+                <span className="text-text-muted">Average settlement net</span>
+                <span className="tabular text-text">
+                  {context.averageNetRs !== null ? formatCurrency(context.averageNetRs) : '—'}
+                  <span className="block text-right text-xs text-text-muted">
+                    {context.averagePeriods.length > 0 ? `last ${context.averagePeriods.length} processed` : 'no processed settlement yet'}
+                  </span>
+                </span>
+              </div>
+              {context.openAdvances.length > 0 && (
+                <p className="mt-2 text-xs text-warning-fg">
+                  {context.openAdvances.length === 1 ? 'An advance is' : `${context.openAdvances.length} advances are`} already open (
+                  {context.openAdvances.map((o) => o.id).join(', ')}) — this one is deducted on top.
+                </p>
+              )}
+            </div>
+          )}
+          <RepaymentPlanFields
+            amount={parsedAmount > 0 ? parsedAmount : 0}
+            value={plan}
+            onChange={setPlan}
+            maxMonths={maxMonths}
+            firstMonth={firstMonth}
+            singleLabel="One deduction from the next settlement"
+          />
+          {installmentTooHigh && (
+            <p className="rounded-[var(--radius-md)] border border-warning-fg/25 bg-warning-bg/60 p-3 text-sm text-text">
+              <strong className="text-warning-fg">High for this estate</strong> — {formatCurrency(installment)} a period is more than{' '}
+              {context?.netWarnPct}% of its average settlement net ({formatCurrency(context?.averageNetRs ?? 0)}). Whatever a settlement can't
+              cover is carried forward.
+            </p>
+          )}
           {estate && !estate.bank.account && (
             <p className="rounded-[var(--radius-md)] border border-warning-fg/25 bg-warning-bg/60 p-3 text-sm text-text">
               <strong className="text-warning-fg">No bank details on file</strong> — this advance would need to be paid
@@ -110,7 +188,7 @@ export function IssueAdvancePage() {
           )}
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button variant="secondary" onClick={() => navigate('/estates/advances')}>
+            <Button variant="secondary" onClick={cancel}>
               Cancel
             </Button>
             <Button size="lg" onClick={() => validate() && setConfirming(true)}>
@@ -138,12 +216,16 @@ export function IssueAdvancePage() {
               <span className="text-text-muted">Reason</span>
               <span className="max-w-[60%] text-right text-text">{reason}</span>
             </div>
+            <div className="mt-1 flex justify-between gap-3 text-sm">
+              <span className="text-text-muted">Repayment</span>
+              <span className="max-w-[70%] text-right text-text">{planSummary}</span>
+            </div>
             <div className="mt-2 flex justify-between border-t border-border pt-2 text-sm">
               <span className="font-medium text-text">Amount to issue now</span>
               <span className="tabular font-semibold text-text-heading">{formatCurrency(parsedAmount || 0)}</span>
             </div>
             <p className="mt-2 text-xs text-text-muted">
-              Money moves immediately and is deducted at this estate's next settlement. This cannot be undone.
+              Money moves immediately and is deducted by this estate's settlements as planned. This cannot be undone.
             </p>
           </div>
         }
