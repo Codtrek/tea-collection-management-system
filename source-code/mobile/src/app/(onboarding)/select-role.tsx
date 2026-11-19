@@ -50,7 +50,8 @@ const styles = StyleSheet.create({
     ...typography.heading,
     color: colors.black,
     marginBottom: spacing.lg,
-    textAlign: "center",
+    alignSelf: "stretch",
+    textAlign: "left",
   }
 
 })

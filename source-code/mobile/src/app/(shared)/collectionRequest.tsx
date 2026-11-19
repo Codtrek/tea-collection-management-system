@@ -17,6 +17,9 @@ export default function CollectionRequest() {
   const estate =
     estateProfiles.find((profile) => profile.id === estateIdParam) ??
     estateProfiles[0];
+  const availableFactories = estateIdParam && estate.factories.length > 0
+    ? estate.factories.map(({ name }) => ({ label: name, value: name }))
+    : factoryOptions;
   const {
     factory,
     setFactory,
@@ -53,7 +56,7 @@ export default function CollectionRequest() {
       params: {
         estateId: estate.id,
         collectionFactory:
-          factoryOptions.find((option) => option.value === factory)?.label ??
+          availableFactories.find((option) => option.value === factory)?.label ??
           factory,
         collectionWeightKg: String(totalWeight),
         collectionRequestedAt: new Date().toISOString(),
@@ -85,7 +88,7 @@ export default function CollectionRequest() {
               <AppText variant="bodySmall">Factory</AppText>
               <Dropdown
                 accessibilityLabel="Select factory"
-                options={factoryOptions}
+                options={availableFactories}
                 onChange={setFactory}
                 placeholder="Select a factory"
                 value={factory}
