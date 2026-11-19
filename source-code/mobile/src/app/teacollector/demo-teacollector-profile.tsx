@@ -3,6 +3,7 @@ import { Alert,  Pressable, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { fonts } from '@/theme/fonts';
+import ConfirmationWarning from '@/components/ui/demo-teacollector-confirmationWarning';
 import type { CollectorProfile } from '@/utils/collectorSession';
 
 
@@ -98,58 +99,27 @@ export default function DemoTeaCollectorProfile({
         <Text style={styles.logoutText}>Log out</Text>
       </Pressable>
 
-      {showLogoutDialog && (
-        <View style={styles.dialogOverlay}>
-          <View style={styles.dialogCard}>
-            <View style={styles.dialogIcon}>
-              <Ionicons
-                name="log-out-outline"
-                size={28}
-                color={colors.error}
-              />
-            </View>
-
-            <Text style={styles.dialogTitle}>Log out?</Text>
-
-            <Text style={styles.dialogMessage}>
-              Are you sure you want to log out of your account?
-            </Text>
-
-            <View style={styles.dialogActions}>
-              <Pressable
-                onPress={() => setShowLogoutDialog(false)}
-                disabled={isLoggingOut}
-                style={styles.cancelButton}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </Pressable>
-
-              <Pressable
-                disabled={isLoggingOut}
-                onPress={async () => {
-                  try {
-                    setIsLoggingOut(true);
-                    await onLogout();
-                    setShowLogoutDialog(false);
-                  } catch {
-                    Alert.alert(
-                      "Logout failed",
-                      "Please try again."
-                    );
-                  } finally {
-                    setIsLoggingOut(false);
-                  }
-                }}
-                style={styles.confirmLogoutButton}
-              >
-                <Text style={styles.confirmLogoutText}>
-                  {isLoggingOut ? "Logging out..." : "Log out"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      )}
+      <ConfirmationWarning
+        visible={showLogoutDialog}
+        title="Log out?"
+        message="Are you sure you want to log out of your account?"
+        confirmLabel={isLoggingOut ? "Logging out..." : "Log out"}
+        onCancel={() => {
+          if (!isLoggingOut) setShowLogoutDialog(false);
+        }}
+        onConfirm={async () => {
+          if (isLoggingOut) return;
+          try {
+            setIsLoggingOut(true);
+            await onLogout();
+            setShowLogoutDialog(false);
+          } catch {
+            Alert.alert("Logout failed", "Please try again.");
+          } finally {
+            setIsLoggingOut(false);
+          }
+        }}
+      />
 
 
 
@@ -317,79 +287,5 @@ const styles = StyleSheet.create({
   },
 
 
-
-  dialogOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    zIndex: 1000,
-  },
-  dialogCard: {
-    width: '100%',
-    maxWidth: 360,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-  },
-  dialogIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.errorBackground,
-    marginBottom: 16,
-  },
-  dialogTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text.primary,
-  },
-  dialogMessage: {
-    fontSize: 14,
-    color: colors.text.tertiary,
-    textAlign: 'center',
-    marginTop: 10,
-    marginBottom: 24,
-    lineHeight: 21,
-  },
-  dialogActions: {
-    flexDirection: 'row',
-    width: '100%',
-    gap: 12,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  cancelButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  confirmLogoutButton: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: colors.error,
-  },
-  confirmLogoutText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.white,
-  },
 
 });
