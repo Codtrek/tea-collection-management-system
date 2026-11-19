@@ -9,12 +9,12 @@ import {
   Screen,
 } from "@/components/ui";
 import { changeAgentPassword } from "../services/api/auth.api";
-import { getErrorMessages } from "../services/api/client";
+import { ApiError, getErrorMessages } from "../services/api/client";
 import {
-  completeCollectorSession,
   getPendingCollectorSession,
   type CollectorSession,
 } from "@/utils/collectorSession";
+import { useCollectorAuth } from "@/context/CollectorAuthContext";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 
@@ -26,6 +26,7 @@ type PasswordFieldErrors = {
 
 export default function CollectorChangePasswordScreen() {
   const router = useRouter();
+  const { authenticate, logout } = useCollectorAuth();
   const [session, setSession] = useState<CollectorSession>();
   const [loadingSession, setLoadingSession] = useState(true);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -101,6 +102,12 @@ export default function CollectorChangePasswordScreen() {
         newPassword,
       );
     } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        await logout();
+        router.replace("/auth/login");
+        return;
+      }
+
       const messages = getErrorMessages(error, "Unable to change password.");
       const fieldMessages: PasswordFieldErrors = {};
       const formMessages: string[] = [];
@@ -122,7 +129,7 @@ export default function CollectorChangePasswordScreen() {
     }
 
     try {
-      await completeCollectorSession(session);
+      await authenticate(session);
       router.replace("/teacollector/teacollectorMobile");
     } catch {
       setFormError(
@@ -214,7 +221,7 @@ export default function CollectorChangePasswordScreen() {
               </AppText>
             </View>
           ) : null}
-          <Link href="./collector-login">
+          <Link href="/auth/login">
             <AppText variant="bodySmall" style={styles.link}>
               Back to Collector sign in
             </AppText>

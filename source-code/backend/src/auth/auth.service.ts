@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -48,6 +49,11 @@ export interface AgentLoginResult {
   accessToken: string;
   agent: { id: number; name: string; phone: string; role: string };
   /** true while the one-time temporary password is still in use — the app must force a change */
+  mustChangePassword: boolean;
+}
+
+export interface AgentSessionResult {
+  agent: { id: number; name: string; phone: string; role: string };
   mustChangePassword: boolean;
 }
 
@@ -185,6 +191,42 @@ export class AuthService {
     }
 
     return this.agentLoginWithUser(user, password);
+  }
+
+  async agentSession(userId: number): Promise<AgentSessionResult> {
+    const user = await this.usersService.findById(userId);
+    if (!user || user.role !== 'collection_agent') {
+      throw new UnauthorizedException(
+        'This account is not a collection agent.',
+      );
+    }
+    if (user.status === 'suspended') {
+      throw new ForbiddenException({
+        code: 'AGENT_SESSION_INVALID',
+        message: 'This login has been suspended. Contact your factory.',
+      });
+    }
+
+    const [agent, role] = await Promise.all([
+      this.agentDirectory.byUserId(userId),
+      this.agentDirectory.roleByUserId(userId),
+    ]);
+    if (!agent || !role) {
+      throw new ForbiddenException({
+        code: 'AGENT_SESSION_INVALID',
+        message: 'This account is not an active collection agent.',
+      });
+    }
+
+    return {
+      agent: {
+        id: agent.agentId,
+        name: agent.name,
+        phone: user.phone,
+        role,
+      },
+      mustChangePassword: user.must_change_password,
+    };
   }
 
 

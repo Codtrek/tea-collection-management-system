@@ -7,12 +7,12 @@ import type { CollectorProfile } from '@/utils/collectorSession';
 
 interface DemoTeaCollectorProfileProps {
   profile?: CollectorProfile;
-  profileUnavailable?: boolean;
+  onLogout: () => Promise<void>;
 }
 
 export default function DemoTeaCollectorProfile({
   profile,
-  profileUnavailable = false,
+  onLogout,
 }: DemoTeaCollectorProfileProps) {
   return (
     <ScrollView
@@ -28,7 +28,7 @@ export default function DemoTeaCollectorProfile({
           </View>
         </View>
         <Text style={styles.name}>
-          {profile?.name || (profileUnavailable ? "Profile unavailable" : "Collector")}
+          {profile?.name || "Collector"}
         </Text>
         <Text style={styles.role}>{profile?.role || "Role unavailable"}</Text>
         <Text style={styles.employeeId}>EMP-2291 · Kotmale MPT Factory</Text>
@@ -83,7 +83,18 @@ export default function DemoTeaCollectorProfile({
         onPress={() =>
           Alert.alert('Log out', 'Are you sure you want to log out?', [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Log out', style: 'destructive' },
+            {
+              text: 'Log out',
+              style: 'destructive',
+              onPress: () => {
+                void onLogout().catch(() =>
+                  Alert.alert(
+                    'Unable to log out',
+                    'Your session could not be cleared. Please try again.',
+                  ),
+                );
+              },
+            },
           ])
         }
         style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}

@@ -7,10 +7,15 @@ import MobileLoginForm from "@/components/auth/MobileLoginForm";
 import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoGreen.png";
 import { spacing } from "@/theme/spacing";
 import { login } from "../services/api/auth.api";
-import { completeCollectorSession, storePendingCollectorSession, } from "@/utils/collectorSession";
+import { useCollectorAuth } from "@/context/CollectorAuthContext";
 
 export default function LogInScreen() {
   const router = useRouter();
+  const {
+    authenticate,
+    beginPasswordChange,
+    activateEstateRole,
+  } = useCollectorAuth();
 
   async function persistSession(accessToken: string, user: object) {
     const serializedUser = JSON.stringify(user);
@@ -36,12 +41,12 @@ export default function LogInScreen() {
       };
 
       if (result.mustChangePassword) {
-        await storePendingCollectorSession(session);
-        router.replace("./collector-change-password");
+        await beginPasswordChange(session);
+        router.replace("/auth/collector-change-password");
         return;
       }
 
-      await completeCollectorSession(session);
+      await authenticate(session);
       router.replace("/teacollector/teacollectorMobile");
       return;
     }
@@ -51,10 +56,12 @@ export default function LogInScreen() {
 
     switch (result.user.role) {
       case "Estate Owner":
+        await activateEstateRole("Estate Owner");
         router.replace("/(estate-owner)/home");
         return;
 
       case "Estate Manager":
+        await activateEstateRole("Estate Manager");
         router.replace("/estate-manager");
         return;
 

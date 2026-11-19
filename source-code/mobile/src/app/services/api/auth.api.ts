@@ -18,12 +18,19 @@ export interface LoginResult {
 
 export interface AgentLoginResult {
   accessToken: string;
-  agent: {
-    id: number;
-    name: string;
-    phone: string;
-    role: string;
-  };
+  agent: AgentProfile;
+  mustChangePassword: boolean;
+}
+
+export interface AgentProfile {
+  id: number;
+  name: string;
+  phone: string;
+  role: string;
+}
+
+export interface AgentSessionResult {
+  agent: AgentProfile;
   mustChangePassword: boolean;
 }
 
@@ -47,6 +54,16 @@ export async function loginAgent(
   return apiRequest<AgentLoginResult>("/auth/agent/login", {
     method: "POST",
     body: JSON.stringify({ phone, password }),
+  });
+}
+
+export async function validateAgentSession(
+  accessToken: string,
+): Promise<AgentSessionResult> {
+  return apiRequest<AgentSessionResult>("/auth/agent/session", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 }
 
