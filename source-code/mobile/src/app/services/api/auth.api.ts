@@ -1,5 +1,7 @@
 import { apiRequest } from "./client";
 
+export type MobileLoginResult = LoginResult | AgentLoginResult;
+
 export interface PublicUser {
   id: string;
   name: string;
@@ -20,6 +22,7 @@ export interface AgentLoginResult {
     id: number;
     name: string;
     phone: string;
+    role: string;
   };
   mustChangePassword: boolean;
 }
@@ -27,8 +30,8 @@ export interface AgentLoginResult {
 export async function login(
   phone: string,
   password: string,
-): Promise<LoginResult> {
-  return apiRequest<LoginResult>("/auth/mobile/login", {
+): Promise<MobileLoginResult> {
+  return apiRequest<MobileLoginResult>("/auth/mobile/login", {
     method: "POST",
     body: JSON.stringify({
       phone,

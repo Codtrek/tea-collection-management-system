@@ -5,11 +5,19 @@ export interface CollectorAgent {
   id: number;
   name: string;
   phone: string;
+  role?: string;
 }
 
 export interface CollectorSession {
   accessToken: string;
   agent: CollectorAgent;
+}
+
+export interface CollectorProfile {
+  name?: string;
+  role?: string;
+  phone?: string;
+  email?: string;
 }
 
 const PENDING_SESSION_KEY = "collectorPendingSession";
@@ -50,7 +58,9 @@ function isCollectorSession(value: unknown): value is CollectorSession {
     typeof session.accessToken === "string" &&
     typeof session.agent?.id === "number" &&
     typeof session.agent.name === "string" &&
-    typeof session.agent.phone === "string"
+    typeof session.agent.phone === "string" &&
+    (session.agent.role === undefined ||
+      typeof session.agent.role === "string")
   );
 }
 
@@ -83,8 +93,60 @@ export async function completeCollectorSession(
     ...session.agent,
     id: String(session.agent.id),
     role: "CollectionAgent",
+    ...(session.agent.role?.trim()
+      ? { jobRole: session.agent.role.trim() }
+      : {}),
   };
   await setStoredValue("accessToken", session.accessToken);
   await setStoredValue("user", JSON.stringify(user));
   await removeStoredValue(PENDING_SESSION_KEY);
+}
+
+export async function getCollectorProfile(): Promise<
+  CollectorProfile | undefined
+> {
+  const [accessToken, serializedUser] = await Promise.all([
+    getStoredValue("accessToken"),
+    getStoredValue("user"),
+  ]);
+  if (!accessToken || !serializedUser) {
+    return undefined;
+  }
+
+  let parsedUser: unknown;
+  try {
+    parsedUser = JSON.parse(serializedUser);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return undefined;
+    }
+    throw error;
+  }
+  if (typeof parsedUser !== "object" || parsedUser === null) {
+    return undefined;
+  }
+
+  const user = parsedUser as {
+    role?: unknown;
+    name?: unknown;
+    jobRole?: unknown;
+    phone?: unknown;
+    email?: unknown;
+  };
+  if (user.role !== "CollectionAgent") {
+    return undefined;
+  }
+
+  return {
+    name:
+      typeof user.name === "string" ? user.name.trim() || undefined : undefined,
+    role:
+      typeof user.jobRole === "string"
+        ? user.jobRole.trim() || undefined
+        : undefined,
+    phone:
+      typeof user.phone === "string" ? user.phone.trim() || undefined : undefined,
+    email:
+      typeof user.email === "string" ? user.email.trim() || undefined : undefined,
+  };
 }
