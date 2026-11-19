@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { RouteError } from './components/data/RouteError'
 import { AppShell } from './components/layout/AppShell'
 import { DesignFoundationsPage } from './pages/design-foundations/DesignFoundationsPage'
 import { LoginPage } from './features/auth/LoginPage'
@@ -11,20 +12,25 @@ import { EmployeeRegistrationPage } from './features/employees/EmployeeRegistrat
 import { EmployeeDetailPage } from './features/employees/EmployeeDetailPage'
 import { EmployeeEditPage } from './features/employees/EmployeeEditPage'
 import { AttendanceOverviewPage } from './features/employees/AttendanceOverviewPage'
+import { HolidayCalendarPage } from './features/holidays/HolidayCalendarPage'
 import { AttendanceEntryPage } from './features/employees/AttendanceEntryPage'
 import { AdvanceListPage } from './features/employees/AdvanceListPage'
 import { AdvanceDetailPage } from './features/employees/AdvanceDetailPage'
 import { AdvanceRequestPage } from './features/employees/AdvanceRequestPage'
+import { PayRatesPage } from './features/employees/PayRatesPage'
+import { PayChangePage } from './features/employees/PayChangePage'
 import { PayrollListPage } from './features/employees/PayrollListPage'
 import { PayrollProcessingPage } from './features/employees/PayrollProcessingPage'
 import { PayslipPage } from './features/employees/PayslipPage'
-import { PerformancePage } from './features/employees/PerformancePage'
+import { PerformancePage } from './features/performance/PerformancePage'
+import { HowMeasuredPage } from './features/performance/HowMeasuredPage'
 import { CollectionListPage } from './features/collections/CollectionListPage'
 import { CollectionExceptionEntryPage } from './features/collections/CollectionExceptionEntryPage'
 import { DispatchBoardPage } from './features/dispatch/DispatchBoardPage'
 import { CollectionDetailPage } from './features/collections/CollectionDetailPage'
 import { CollectionEditPage } from './features/collections/CollectionEditPage'
 import { FertilizerStockListPage } from './features/fertilizer/FertilizerStockListPage'
+import { ItemPricesPage } from './features/fertilizer/ItemPricesPage'
 import { StockMovementEntryPage } from './features/fertilizer/StockMovementEntryPage'
 import { BatchDetailPage } from './features/fertilizer/BatchDetailPage'
 import { FertilizerAlertsPage } from './features/fertilizer/FertilizerAlertsPage'
@@ -37,11 +43,15 @@ import { EstateDetailPage } from './features/estates/EstateDetailPage'
 import { EstateEditPage } from './features/estates/EstateEditPage'
 import { EstateAdvanceListPage } from './features/estates/EstateAdvanceListPage'
 import { IssueAdvancePage } from './features/estates/IssueAdvancePage'
+import { EstateAdvanceDetailPage } from './features/estates/EstateAdvanceDetailPage'
 import { SettlementListPage } from './features/estates/SettlementListPage'
 import { SettlementProcessPage } from './features/estates/SettlementProcessPage'
+import { SettlementDetailPage } from './features/estates/SettlementDetailPage'
+import { UnsettledOwnersPage } from './features/estates/UnsettledOwnersPage'
 import { EstateAnalyticsPage } from './features/estates/EstateAnalyticsPage'
 import { CollectionReportPage } from './features/reports/CollectionReportPage'
-import { RevenueReportPage } from './features/reports/RevenueReportPage'
+import { LeafPurchaseReportPage } from './features/reports/LeafPurchaseReportPage'
+import { RedirectWithQuery } from './components/layout/RedirectWithQuery'
 import { ExpenseReportPage } from './features/reports/ExpenseReportPage'
 import { ExpenseEntryPage } from './features/reports/ExpenseEntryPage'
 import { FactorySetupPage } from './features/admin/FactorySetupPage'
@@ -58,7 +68,8 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
-      { path: 'dashboard', element: <DashboardPage /> },
+      // a render error shows a friendly message with Retry, inside the shell (Dashboard-Addendum)
+      { path: 'dashboard', element: <DashboardPage />, errorElement: <RouteError title="The dashboard couldn't be shown" /> },
 
       // Operations — Tea Leaf Collection (COL-01..04)
       { path: 'collections', element: <CollectionListPage /> },
@@ -72,6 +83,7 @@ export const router = createBrowserRouter([
       { path: 'fertilizer', element: <FertilizerStockListPage /> },
       { path: 'fertilizer/movement/new', element: <StockMovementEntryPage /> },
       { path: 'fertilizer/alerts', element: <FertilizerAlertsPage /> },
+      { path: 'fertilizer/prices', element: <ItemPricesPage /> },
       // Request workflow — static paths must precede fertilizer/:batchId
       { path: 'fertilizer/requests', element: <RequestQueuePage /> },
       { path: 'fertilizer/requests/new', element: <LogRequestPage /> },
@@ -83,8 +95,11 @@ export const router = createBrowserRouter([
       { path: 'estates/new', element: <EstateRegistrationPage /> },
       { path: 'estates/advances', element: <EstateAdvanceListPage /> },
       { path: 'estates/advances/new', element: <IssueAdvancePage /> },
+      { path: 'estates/advances/:id', element: <EstateAdvanceDetailPage /> },
       { path: 'estates/settlements', element: <SettlementListPage /> },
       { path: 'estates/settlements/process', element: <SettlementProcessPage /> },
+      { path: 'estates/settlements/unsettled', element: <UnsettledOwnersPage /> },
+      { path: 'estates/settlements/:id', element: <SettlementDetailPage /> },
       { path: 'estates/analytics', element: <EstateAnalyticsPage /> },
       { path: 'estates/:id', element: <EstateDetailPage /> },
       { path: 'estates/:id/edit', element: <EstateEditPage /> },
@@ -94,21 +109,28 @@ export const router = createBrowserRouter([
       { path: 'employees/new', element: <EmployeeRegistrationPage /> },
       { path: 'employees/attendance', element: <AttendanceOverviewPage /> },
       { path: 'employees/attendance/entry', element: <AttendanceEntryPage /> },
+      { path: 'holidays', element: <HolidayCalendarPage /> },
       { path: 'employees/advances', element: <AdvanceListPage /> },
       { path: 'employees/advances/new', element: <AdvanceRequestPage /> },
       { path: 'employees/advances/:id', element: <AdvanceDetailPage /> },
       { path: 'employees/payroll', element: <PayrollListPage /> },
+      { path: 'employees/pay-rates', element: <PayRatesPage /> },
+      { path: 'employees/pay-rates/change', element: <PayChangePage /> },
       { path: 'employees/payroll/process', element: <PayrollProcessingPage /> },
       { path: 'employees/payroll/:id/payslip', element: <PayslipPage /> },
       { path: 'employees/performance', element: <PerformancePage /> },
+      { path: 'employees/performance/how', element: <HowMeasuredPage /> },
       { path: 'employees/:id', element: <EmployeeDetailPage /> },
       { path: 'employees/:id/edit', element: <EmployeeEditPage /> },
 
       // Reports (RPT-01..04)
       { path: 'reports/collection', element: <CollectionReportPage /> },
-      { path: 'reports/revenue', element: <RevenueReportPage /> },
+      { path: 'reports/leaf-purchases', element: <LeafPurchaseReportPage /> },
+      // renamed 2026-11-15: what it shows is a cost (leaf bought from estate owners), not revenue
+      { path: 'reports/revenue', element: <RedirectWithQuery to="/reports/leaf-purchases" /> },
       { path: 'reports/expenses', element: <ExpenseReportPage /> },
       { path: 'reports/expenses/new', element: <ExpenseEntryPage /> },
+      { path: 'reports/expenses/:id', element: <ExpenseEntryPage /> },
       { path: 'reports', element: <Navigate to="/reports/collection" replace /> },
 
       // Administration (ADM-01..04) — Administrator-only via AdminGuard

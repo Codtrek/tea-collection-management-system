@@ -6,6 +6,9 @@
 /** The tab an agent's history lives on. */
 export const COLLECTIONS_TAB = 'collections'
 
+/** The tab an agent's fertilizer deliveries live on. */
+export const FERTILIZER_TAB = 'fertilizer'
+
 /**
  * Where "View history" on the dispatch board goes: the agent's EMPLOYEE page, opened on its
  * Collections tab (not a separate history screen on the dispatch page).

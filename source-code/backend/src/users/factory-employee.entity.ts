@@ -52,7 +52,7 @@ export class FactoryEmployee {
   @Column({ type: 'date', nullable: true })
   date_of_birth: string | null;
 
-  /** UNIQUE via `factory_employees_nic_key`. */
+  /** UNIQUE via `factory_employees_nic_key`. Salary Advances' no-self-approval check matches it to the HR record. */
   @Column({ type: 'varchar', length: 20, unique: true })
   nic: string;
 

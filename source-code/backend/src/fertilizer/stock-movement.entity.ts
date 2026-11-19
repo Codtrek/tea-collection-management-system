@@ -10,17 +10,33 @@ import {
 import { EstateEntity } from '../estates/estate.entity';
 import { FertilizerBatchEntity } from './fertilizer-batch.entity';
 import { FertilizerRequestEntity } from './fertilizer-request.entity';
-import type { DbMovementType } from './fertilizer-map';
+import type { DbMovementType, WriteOffReason } from './fertilizer-map';
 
 /**
- * FERT-02/03 — one row per stock event. `linkedRequestId` is nullable:
+ * FERT-02/03 — one row per stock event (Incoming, Outgoing, or a Write-off of stock that
+ * left the books without going to anyone). `linkedRequestId` is nullable:
  * an Outgoing movement may fulfil an approved request or be ad-hoc (resolved
  * 2026-07-27, see PLAN.md) — both draw down the same batch.
  */
 @Entity('stock_movements')
-@Check('stock_movements_type_check', `"type" IN ('Incoming', 'Outgoing')`)
+@Check(
+  'stock_movements_type_check',
+  `"type" IN ('Incoming', 'Outgoing', 'Write-off')`,
+)
 @Index('idx_stock_movements_batch', ['batchId'])
 @Index('idx_stock_movements_estate', ['estateId'])
+@Check(
+  'stock_movements_write_off_reason_check',
+  `((write_off_reason)::text = ANY ((ARRAY['expired'::character varying, 'damaged'::character varying, 'other'::character varying])::text[]))`,
+)
+@Check(
+  'stock_movements_write_off_reason_required',
+  `(((type)::text <> 'Write-off'::text) OR (write_off_reason IS NOT NULL))`,
+)
+@Check(
+  'stock_movements_unit_cost_check',
+  `((unit_cost IS NULL) OR (unit_cost > (0)::numeric))`,
+)
 export class StockMovementEntity {
   @PrimaryGeneratedColumn()
   id: number;
@@ -65,6 +81,29 @@ export class StockMovementEntity {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   supplier: string | null;
+
+  /**
+   * Incoming only: Rs per kg the factory paid (Finance-Reports-Addendum §5). Quantity × unit cost
+   * is the Expense report's "Fertilizer stock purchases". Null on stock received before costs were
+   * recorded, and on Outgoing / Write-off.
+   */
+  @Column({
+    name: 'unit_cost',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  unitCost: string | null;
+
+  /** Write-off only (expired / damaged / other); null on Incoming and Outgoing. */
+  @Column({
+    name: 'write_off_reason',
+    type: 'varchar',
+    nullable: true,
+    length: 10,
+  })
+  writeOffReason: WriteOffReason | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;

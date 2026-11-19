@@ -13,7 +13,7 @@ import { ErrorState } from '@/components/data/ErrorState'
 import { useToast } from '@/components/ui/Toast'
 import * as estatesService from '@/services/estates'
 import type { EstateOwner } from './types'
-import { estateOwnerSchema, type EstateOwnerForm, BANKS, BRANCHES } from './schema'
+import { estateOwnerSchema, type EstateOwnerForm, BANKS, BRANCHES, PAYMENT_METHOD_OPTIONS } from './schema'
 
 /* EST-04 — same fields/validation as EST-02, single pre-filled form.
    Route stays read-only; saving appends an audit trail entry (§12). */
@@ -85,6 +85,7 @@ function EditForm({ estate }: { estate: EstateOwner }) {
       address: estate.address,
       location: estate.location,
       selfDelivery: estate.selfDelivery,
+      paymentMethod: estate.paymentMethod ?? 'bank',
       bank: estate.bank.bank,
       branch: estate.bank.branch,
       account: estate.bank.account,
@@ -148,7 +149,9 @@ function EditForm({ estate }: { estate: EstateOwner }) {
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2">
-            <h3 className="text-sm font-semibold text-text-heading sm:col-span-2">Bank details</h3>
+            <h3 className="text-sm font-semibold text-text-heading sm:col-span-2">Payment &amp; bank details</h3>
+            <Select label="Paid by" options={PAYMENT_METHOD_OPTIONS} {...register('paymentMethod')} />
+            <div className="hidden sm:block" />
             <Select label="Bank" placeholder="Select bank" error={errors.bank?.message} options={BANKS.map((b) => ({ value: b, label: b }))} {...register('bank')} />
             <Select label="Branch" placeholder="Select branch" error={errors.branch?.message} options={BRANCHES.map((b) => ({ value: b, label: b }))} {...register('branch')} />
             <Input label="Account number" error={errors.account?.message} {...register('account')} />

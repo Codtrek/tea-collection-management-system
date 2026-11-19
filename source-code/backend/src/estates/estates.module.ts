@@ -4,11 +4,18 @@ import { AuditLogEntity } from '../audit/audit-log.entity';
 import { AuditModule } from '../audit/audit.module';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { SettlementAdjustmentEntity } from '../collections/settlement-adjustment.entity';
+import { FertilizerPaymentEntity } from '../fertilizer/fertilizer-payment.entity';
 import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
 import { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
 import { FertilizerRequestEntity } from '../fertilizer/fertilizer-request.entity';
 import { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import { UsersModule } from '../users/users.module';
+import { SystemSettingEntity } from '../admin/system-setting.entity';
+import { EstateAdvancePlanService } from './estate-advance-plan.service';
+import { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
+import { EstateAdvanceRescheduleEntity } from './estate-advance-reschedule.entity';
+import { EstateAdvanceSettingsService } from './estate-advance-settings.service';
+import { EstateAdvanceViewService } from './estate-advance-view.service';
 import { EstateAdvanceEntity } from './estate-advance.entity';
 import { EstateDocumentEntity } from './estate-document.entity';
 import { EstateOwnerEntity } from './estate-owner.entity';
@@ -16,8 +23,14 @@ import { EstateEntity } from './estate.entity';
 import { EstateLifetimeService } from './estate-lifetime.service';
 import { EstatesController } from './estates.controller';
 import { EstatesService } from './estates.service';
+import { TransportStatusService } from './transport-status.service';
+import { TransportRateEntity } from '../admin/transport-rate.entity';
 import { RouteEntity } from './route.entity';
 import { SettlementEntity } from './settlement.entity';
+import { SettlementViewService } from './settlement-view.service';
+import { SettlementGeneratorService } from './settlement-generator.service';
+import { SettlementDeliveryExclusionEntity } from './settlement-delivery-exclusion.entity';
+import { GradeRateEntity } from '../admin/grade-rate.entity';
 
 @Module({
   imports: [
@@ -26,7 +39,14 @@ import { SettlementEntity } from './settlement.entity';
       EstateOwnerEntity,
       EstateDocumentEntity,
       EstateAdvanceEntity,
+      EstateAdvanceRecoveryEntity,
+      EstateAdvanceRescheduleEntity,
+      SystemSettingEntity,
       SettlementEntity,
+      SettlementDeliveryExclusionEntity,
+      GradeRateEntity,
+      // transport rates (Administration-Addendum §4) — read to decide whether transport can be charged
+      TransportRateEntity,
       RouteEntity,
       // Read-only lookups for the Estate Owner Lifetime History slice
       // (EST-03 amended + EST-10, EST-01 directory) — same cross-module
@@ -39,12 +59,24 @@ import { SettlementEntity } from './settlement.entity';
       FertilizerChargeEntity,
       StockMovementEntity,
       FertilizerBatchEntity,
+      FertilizerPaymentEntity,
       AuditLogEntity,
     ]),
     UsersModule,
     AuditModule,
   ],
   controllers: [EstatesController],
-  providers: [EstatesService, EstateLifetimeService],
+  providers: [
+    EstatesService,
+    TransportStatusService,
+    EstateLifetimeService,
+    SettlementViewService,
+    SettlementGeneratorService,
+    EstateAdvanceViewService,
+    EstateAdvancePlanService,
+    EstateAdvanceSettingsService,
+  ],
+  // the Dashboard's settlement counts (Dashboard-Addendum)
+  exports: [SettlementViewService, TransportStatusService],
 })
 export class EstatesModule {}

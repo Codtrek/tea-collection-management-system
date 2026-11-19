@@ -17,6 +17,10 @@ export interface Column<T> {
   sortValue?: (row: T) => string | number
   /** shows this column in the "Columns" visibility popover (default columns not marked hideable are always shown) */
   hideable?: boolean
+  /** px — the column never squeezes below this; a narrow viewport scrolls the table instead */
+  minWidth?: number
+  /** opt-in: rendered under the header (beside, never inside, the sort button) — e.g. an (i) button and an average */
+  headerExtra?: ReactNode
 }
 
 type SortDirection = 'asc' | 'desc' | null
@@ -45,6 +49,22 @@ export interface DataTableProps<T> {
   initialHidden?: string[]
   /** rowKey of a single row to visually highlight (e.g. a deep-linked record) — same tint the bulk-select path uses */
   highlightRowKey?: string
+  /** 'top' for tables whose cells stack several lines; default 'middle' */
+  valign?: 'middle' | 'top'
+  /** keeps the first column in view while the table scrolls sideways (ignored with `selectable`) */
+  stickyFirstColumn?: boolean
+  /**
+   * server mode: `rows` is already ONE page (0-based `page`) of `total` — the table shows the
+   * pager and never slices. Opt-in; every other screen keeps client paging.
+   */
+  serverPage?: { page: number; pageSize: number; total: number; onPageChange: (page: number) => void }
+  /**
+   * opt-in totals row, rendered with the same column renderers under every page (never sorted or
+   * paged); the first column's cell should say what it is ("Total")
+   */
+  footer?: T
+  /** server mode: the sort lives in the page's URL/query — header clicks report, never sort rows */
+  serverSort?: { key: string; direction: 'asc' | 'desc' | null; onSortChange: (key: string, direction: 'asc' | 'desc' | null) => void }
 }
 
 /*
@@ -66,13 +86,25 @@ export function DataTable<T>({
   columnPrefsKey,
   initialHidden,
   highlightRowKey,
+  valign = 'middle',
+  stickyFirstColumn,
+  serverPage,
+  serverSort,
+  footer,
 }: DataTableProps<T>) {
-  const [page, setPage] = useState(0)
+  const [localPage, setLocalPage] = useState(0)
   const [compact, setCompact] = useState(() => localStorage.getItem('harboost.table.compact') === '1')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [sort, setSort] = useState<{ key: string; direction: SortDirection }>(
+  const [localSort, setLocalSort] = useState<{ key: string; direction: SortDirection }>(
     () => defaultSort ?? { key: '', direction: null },
   )
+  const sort = serverSort ? { key: serverSort.key, direction: serverSort.direction } : localSort
+  const page = serverPage ? serverPage.page : localPage
+  const setPage = (next: number | ((p: number) => number)) => {
+    const value = typeof next === 'function' ? next(page) : next
+    if (serverPage) serverPage.onPageChange(value)
+    else setLocalPage(value)
+  }
   const [hidden, setHidden] = useState<Set<string>>(() => {
     if (!columnPrefsKey) return new Set(initialHidden ?? [])
     try {
@@ -87,7 +119,7 @@ export function DataTable<T>({
   const hideableColumns = useMemo(() => columns.filter((c) => c.hideable), [columns])
 
   const sortedRows = useMemo(() => {
-    if (!sort.direction || !sort.key) return rows
+    if (serverSort || !sort.direction || !sort.key) return rows
     const col = columns.find((c) => c.key === sort.key)
     if (!col?.sortValue) return rows
     const dir = sort.direction === 'asc' ? 1 : -1
@@ -97,11 +129,15 @@ export function DataTable<T>({
       if (av === bv) return 0
       return av > bv ? dir : -dir
     })
-  }, [rows, sort, columns])
+  }, [rows, sort.key, sort.direction, columns, serverSort])
 
-  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize))
-  const start = page * pageSize
-  const pageRows = sortedRows.slice(start, start + pageSize)
+  const size = serverPage ? serverPage.pageSize : pageSize
+  const total = serverPage ? serverPage.total : sortedRows.length
+  const pageCount = Math.max(1, Math.ceil(total / size))
+  // rows can shrink under a page (a filter changed): show the last page that exists
+  const shownPage = serverPage ? page : Math.min(page, pageCount - 1)
+  const start = shownPage * size
+  const pageRows = serverPage ? rows : sortedRows.slice(start, start + size)
 
   const toggleDensity = () => {
     setCompact((c) => {
@@ -111,11 +147,10 @@ export function DataTable<T>({
   }
 
   const cycleSort = (key: string) => {
-    setSort((s) => {
-      if (s.key !== key) return { key, direction: 'asc' }
-      if (s.direction === 'asc') return { key, direction: 'desc' }
-      return { key: '', direction: null }
-    })
+    const next: { key: string; direction: SortDirection } =
+      sort.key !== key ? { key, direction: 'asc' } : sort.direction === 'asc' ? { key, direction: 'desc' } : { key: '', direction: null }
+    if (serverSort) serverSort.onSortChange(next.key, next.direction)
+    else setLocalSort(next)
     setPage(0)
   }
 
@@ -151,13 +186,15 @@ export function DataTable<T>({
 
   if (rows.length === 0 && emptyState) return <>{emptyState}</>
 
-  const rowPad = compact ? 'h-11' : 'h-[52px]'
+  // a height on a table cell is a minimum — rows still grow with multi-line content
+  const rowPad = cn(compact ? 'h-11' : 'h-[52px]', valign === 'top' && 'py-3 align-top')
+  const stickyKey = stickyFirstColumn && !selectable ? visibleColumns[0]?.key : undefined
 
   return (
     <div className="overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
         <span className="text-xs text-text-muted">
-          {selected.size > 0 ? `${selected.size} selected` : `${sortedRows.length} records`}
+          {selected.size > 0 ? `${selected.size} selected` : `${total} records`}
         </span>
         <div className="flex items-center gap-1">
           {columnPrefsKey && hideableColumns.length > 0 && (
@@ -201,7 +238,9 @@ export function DataTable<T>({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* `relative`: absolutely positioned cell content (e.g. `sr-only` text) is clipped by this scroll
+          box instead of escaping it and widening the whole page (Page-Layout-Addendum) */}
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[720px] border-collapse">
           <thead className="sticky top-0 z-10 bg-surface-sunken">
             <tr className="border-b border-border">
@@ -216,9 +255,12 @@ export function DataTable<T>({
                   <th
                     key={c.key}
                     aria-sort={isSorted ? (sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
+                    style={c.minWidth ? { minWidth: c.minWidth } : undefined}
                     className={cn(
                       'px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-text-muted',
                       c.align === 'right' ? 'text-right' : 'text-left',
+                      c.key === stickyKey && 'sticky left-0 z-[1] bg-surface-sunken',
+                      c.className,
                     )}
                   >
                     {c.sortable ? (
@@ -245,6 +287,7 @@ export function DataTable<T>({
                     ) : (
                       c.header
                     )}
+                    {c.headerExtra && <div className="mt-0.5 font-normal normal-case tracking-normal">{c.headerExtra}</div>}
                   </th>
                 )
               })}
@@ -259,7 +302,7 @@ export function DataTable<T>({
                   key={key}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={cn(
-                    'border-b border-[#eff2ed] transition-colors last:border-0',
+                    'group border-b border-[#eff2ed] transition-colors last:border-0',
                     onRowClick && 'cursor-pointer',
                     'hover:bg-surface-hover',
                     (selected.has(key) || key === highlightRowKey) && 'bg-brand-soft/50',
@@ -273,10 +316,17 @@ export function DataTable<T>({
                   {visibleColumns.map((c) => (
                     <td
                       key={c.key}
+                      style={c.minWidth ? { minWidth: c.minWidth } : undefined}
                       className={cn(
                         'px-4 text-sm text-text',
                         rowPad,
                         c.align === 'right' && 'tabular text-right',
+                        // opaque so scrolled cells pass underneath; follows the row's hover/highlight tint
+                        c.key === stickyKey &&
+                          cn(
+                            'sticky left-0 z-[1] group-hover:bg-surface-hover',
+                            key === highlightRowKey ? 'bg-brand-soft' : 'bg-surface',
+                          ),
                         c.className,
                       )}
                     >
@@ -292,29 +342,51 @@ export function DataTable<T>({
               )
             })}
           </tbody>
+          {footer && (
+            <tfoot>
+              <tr className="border-t-2 border-border bg-surface-sunken font-semibold">
+                {selectable && <td className={cn('px-4', rowPad)} />}
+                {visibleColumns.map((c) => (
+                  <td
+                    key={c.key}
+                    className={cn(
+                      'px-4 text-sm text-text-heading',
+                      rowPad,
+                      c.align === 'right' && 'tabular text-right',
+                      c.key === stickyKey && 'sticky left-0 z-[1] bg-surface-sunken',
+                      c.className,
+                    )}
+                  >
+                    {c.render ? c.render(footer) : String((footer as Record<string, unknown>)[c.key] ?? '')}
+                  </td>
+                ))}
+                {actions && <td className={cn('px-4', rowPad)} />}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
       {pageCount > 1 && (
         <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
           <span className="text-xs text-text-muted">
-            Showing {start + 1}–{Math.min(start + pageSize, sortedRows.length)} of {sortedRows.length}
+            Showing {start + 1}–{Math.min(start + size, total)} of {total}
           </span>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
+              onClick={() => setPage(Math.max(0, shownPage - 1))}
+              disabled={shownPage === 0}
               aria-label="Previous page"
               className="flex size-8 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-surface-hover disabled:opacity-40"
             >
               <ChevronLeft className="size-4" />
             </button>
             <span className="tabular px-2 text-xs text-text-muted">
-              {page + 1} / {pageCount}
+              {shownPage + 1} / {pageCount}
             </span>
             <button
-              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-              disabled={page === pageCount - 1}
+              onClick={() => setPage(Math.min(pageCount - 1, shownPage + 1))}
+              disabled={shownPage === pageCount - 1}
               aria-label="Next page"
               className="flex size-8 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-surface-hover disabled:opacity-40"
             >

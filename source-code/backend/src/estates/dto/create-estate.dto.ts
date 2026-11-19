@@ -1,11 +1,14 @@
 import {
   IsBoolean,
   IsEmail,
+  IsIn,
   IsOptional,
   IsString,
   Matches,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
+import type { OwnerPaymentMethod } from '../estate-map';
 
 /**
  * EST-02 registration. Mirrors the portal's `estateOwnerSchema` exactly.
@@ -42,14 +45,22 @@ export class CreateEstateDto {
   @IsBoolean()
   selfDelivery: boolean;
 
+  /** Defaults to 'bank'. A cash-paid owner may leave the bank fields empty. */
+  @IsOptional()
+  @IsIn(['bank', 'cash'])
+  paymentMethod?: OwnerPaymentMethod;
+
+  @ValidateIf((o: CreateEstateDto) => o.paymentMethod !== 'cash')
   @IsString()
   @MinLength(1)
   bank: string;
 
+  @ValidateIf((o: CreateEstateDto) => o.paymentMethod !== 'cash')
   @IsString()
   @MinLength(1)
   branch: string;
 
+  @ValidateIf((o: CreateEstateDto) => o.paymentMethod !== 'cash')
   @Matches(/^\d+$/, { message: 'Account number must be numeric' })
   account: string;
 }

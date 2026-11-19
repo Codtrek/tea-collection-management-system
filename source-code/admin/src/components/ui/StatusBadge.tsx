@@ -40,7 +40,8 @@ export function StatusBadge({ tone, children, icon, className }: StatusBadgeProp
   return (
     <span
       className={cn(
-        'inline-flex h-[22px] items-center gap-1 rounded-full px-2 text-xs font-medium',
+        // fixed-height pill: its text must never wrap, or the extra lines spill outside it
+        'inline-flex h-[22px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 text-xs font-medium',
         tones[tone],
         className,
       )}

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { useToast } from '@/components/ui/Toast'
+import { formatDate } from '@/lib/format'
 import * as collectionsService from '@/services/collections'
 import * as dispatchService from '@/services/dispatch'
 import * as estatesService from '@/services/estates'
@@ -141,18 +142,30 @@ export function CollectionExceptionEntryPage() {
                   <UserCheck className="size-4" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-xs text-text-muted">Today’s agent</p>
+                  <p className="text-xs text-text-muted">Agent on this date</p>
                   <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-text">
                     {routeAgent.isPending
                       ? '…'
                       : info?.selfDelivery
                         ? 'Self-delivered — no agent'
-                        : (info?.agent?.name ?? 'No agent assigned')}
+                        : info && !info.scheduled && info.routeId !== null
+                          ? 'Route doesn’t run this day'
+                          : (info?.agent?.name ?? 'No agent assigned')}
                     {info?.agent?.covering && <StatusBadge tone="warning">covering</StatusBadge>}
                   </p>
                 </div>
               </div>
-              {info && !info.selfDelivery && !info.agent && (
+              {info && !info.selfDelivery && info.routeId !== null && !info.scheduled && (
+                <p className="flex items-start gap-2 text-sm text-warning-fg sm:col-span-2">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  {info.routeName ?? 'This route'} isn’t scheduled on this date.{' '}
+                  {info.nextScheduledDate
+                    ? `Its next collection day is ${formatDate(info.nextScheduledDate)}${info.nextAgent ? `, run by ${info.nextAgent.name}${info.nextAgent.covering ? ' (covering)' : ''}` : ', with no agent assigned yet'}.`
+                    : 'It has no collection day coming up.'}{' '}
+                  The entry is still logged.
+                </p>
+              )}
+              {info && !info.selfDelivery && info.scheduled && !info.agent && (
                 <p className="flex items-start gap-2 text-sm text-warning-fg sm:col-span-2">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
                   Nobody is assigned to this route on this date. The entry is still logged, but no agent will be asked to

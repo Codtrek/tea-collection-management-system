@@ -7,6 +7,7 @@ import {
   Index,
   PrimaryColumn,
 } from 'typeorm';
+import { User } from '../users/user.entity';
 import { EmployeeEntity } from './employee.entity';
 import type { DbAdvanceStatus } from './employee-map';
 
@@ -21,6 +22,10 @@ import type { DbAdvanceStatus } from './employee-map';
   `"status" IN ('Pending', 'Approved', 'Rejected')`,
 )
 @Index('idx_salary_advances_employee', ['employeeId'])
+@Check(
+  'salary_advances_installment_months_check',
+  `((installment_months IS NULL) OR (installment_months >= 1))`,
+)
 export class SalaryAdvanceEntity {
   /** Business key, e.g. 'EMP-ADV-0231' — not a generated id. */
   @PrimaryColumn({ type: 'varchar', length: 20 })
@@ -55,6 +60,62 @@ export class SalaryAdvanceEntity {
 
   @Column({ name: 'decided_on', type: 'timestamp', nullable: true })
   decidedOn: Date | null;
+
+  /** the reason given with the decision — required to reject (Salary-Advances-Addendum) */
+  @Column({ name: 'decision_reason', type: 'text', nullable: true })
+  decisionReason: string | null;
+
+  /** the payroll month whose row deducts it — reserved at Generate so it's counted once */
+  @Column({
+    name: 'payroll_period',
+    type: 'varchar',
+    nullable: true,
+    length: 30,
+  })
+  payrollPeriod: string | null;
+
+  /** the payroll month it was recovered in — stamped at Process */
+  @Column({
+    name: 'recovered_period',
+    type: 'varchar',
+    nullable: true,
+    length: 30,
+  })
+  recoveredPeriod: string | null;
+
+  /** the repayment plan (Salary-Advances-Addendum §10) — one deduction = amount × 1 */
+  @Column({
+    name: 'installment_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
+  installmentAmount: string | null;
+
+  @Column({ name: 'installment_months', type: 'int', nullable: true })
+  installmentMonths: number | null;
+
+  /** the first payroll month that deducts it ('December 2026') */
+  @Column({ name: 'start_period', type: 'varchar', nullable: true, length: 30 })
+  startPeriod: string | null;
+
+  /** who requested it — never the person who approves it */
+  @Column({ name: 'requested_by_user_id', type: 'int', nullable: true })
+  @ForeignKey(() => User, { name: 'salary_advances_requested_by_user_id_fkey' })
+  requestedByUserId: number | null;
+
+  @Column({
+    name: 'requested_by_name',
+    type: 'varchar',
+    nullable: true,
+    length: 100,
+  })
+  requestedByName: string | null;
+
+  /** required when the approver changed the requested plan */
+  @Column({ name: 'plan_change_note', type: 'text', nullable: true })
+  planChangeNote: string | null;
 
   /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
   @CreateDateColumn({ name: 'created_at', nullable: true })

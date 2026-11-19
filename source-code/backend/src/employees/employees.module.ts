@@ -1,14 +1,33 @@
+import { HolidaysModule } from '../holidays/holidays.module';
+import { AttendanceService } from './attendance.service';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditModule } from '../audit/audit.module';
 import { DispatchModule } from '../dispatch/dispatch.module';
+import { FertilizerModule } from '../fertilizer/fertilizer.module';
 import { UsersModule } from '../users/users.module';
 import { EmployeeAttendanceEntity } from './employee-attendance.entity';
 import { EmployeeEntity } from './employee.entity';
 import { EmployeesController } from './employees.controller';
+import {
+  PayAdjustmentEntity,
+  PayAdjustmentLineEntity,
+} from './pay-adjustment.entity';
+import { PayAdjustmentService } from './pay-adjustment.service';
+import { PayRateEntity } from './pay-rate.entity';
+import { PayRatesService } from './pay-rates.service';
 import { EmployeesService } from './employees.service';
 import { PayrollRunEntity } from './payroll-run.entity';
 import { SalaryAdvanceEntity } from './salary-advance.entity';
+import { RouteEntity } from '../estates/route.entity';
+import { AdvanceViewService } from './advance-view.service';
+import { EmployeeRoutesService } from './employee-routes.service';
+import { PayrollViewService } from './payroll-view.service';
+import { AdvanceRecoveryEntity } from './advance-recovery.entity';
+import { AdvanceRescheduleEntity } from './advance-reschedule.entity';
+import { AdvancePlanService } from './advance-plan.service';
+import { PayrollSettingsService } from './payroll-settings.service';
+import { SystemSettingEntity } from '../admin/system-setting.entity';
 
 @Module({
   imports: [
@@ -17,13 +36,37 @@ import { SalaryAdvanceEntity } from './salary-advance.entity';
       EmployeeAttendanceEntity,
       SalaryAdvanceEntity,
       PayrollRunEntity,
+      RouteEntity,
+      AdvanceRecoveryEntity,
+      AdvanceRescheduleEntity,
+      SystemSettingEntity,
+      // pay history (Administration-Addendum §6)
+      PayRateEntity,
+      PayAdjustmentEntity,
+      PayAdjustmentLineEntity,
     ]),
     UsersModule,
     AuditModule,
     // agent provisioning (registering a Tea Collecting Agent) + their collection history
     DispatchModule,
+    // the holiday calendar — day types for attendance (Attendance-Leave-Addendum)
+    HolidaysModule,
+    // an agent's fertilizer delivery history
+    FertilizerModule,
   ],
   controllers: [EmployeesController],
-  providers: [EmployeesService],
+  providers: [
+    EmployeesService,
+    AdvanceViewService,
+    EmployeeRoutesService,
+    PayrollViewService,
+    PayrollSettingsService,
+    AdvancePlanService,
+    AttendanceService,
+    PayRatesService,
+    PayAdjustmentService,
+  ],
+  // the Dashboard's payroll, advance and pay-change counts (Dashboard-Addendum)
+  exports: [PayrollViewService, AdvanceViewService, PayAdjustmentService],
 })
 export class EmployeesModule {}

@@ -6,9 +6,11 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { FertilizerDeliveryEntity } from './fertilizer-delivery.entity';
 import { EstateEntity } from '../estates/estate.entity';
 import { FertilizerRequestEntity } from './fertilizer-request.entity';
 import { StockMovementEntity } from './stock-movement.entity';
+import type { PaymentMethod } from './fertilizer-map';
 
 /**
  * Estate Owner Lifetime History slice — one row per *dispatch event*, written
@@ -29,12 +31,36 @@ export class FertilizerChargeEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  /** One charge per dispatch: UNIQUE via `fertilizer_charges_stock_movement_id_key`. */
-  @Column({ name: 'stock_movement_id', type: 'int', unique: true })
+  /**
+   * The FERT-02 dispatch that billed it (legacy / ad-hoc); null for a route-stop delivery
+   * (Fertilizer-Delivery-Addendum). UNIQUE via `fertilizer_charges_stock_movement_id_key`.
+   */
+  @Column({
+    name: 'stock_movement_id',
+    type: 'int',
+    unique: true,
+    nullable: true,
+  })
   @ForeignKey(() => StockMovementEntity, {
     name: 'fertilizer_charges_stock_movement_id_fkey',
   })
-  stockMovementId: number;
+  stockMovementId: number | null;
+
+  /** the delivery attempt that billed it (Fertilizer-Delivery-Addendum: charged at delivery) */
+  @Column({ name: 'delivery_id', type: 'int', unique: true, nullable: true })
+  @ForeignKey(() => FertilizerDeliveryEntity, {
+    name: 'fertilizer_charges_delivery_id_fkey',
+  })
+  deliveryId: number | null;
+
+  /** the request's payment method at delivery; null on legacy rows (= deduct) */
+  @Column({
+    name: 'payment_method',
+    type: 'varchar',
+    length: 10,
+    nullable: true,
+  })
+  paymentMethod: PaymentMethod | null;
 
   /** Null when the dispatch isn't billable to an estate (e.g. internal use). */
   @Column({ name: 'estate_id', type: 'int', nullable: true })

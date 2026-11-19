@@ -36,7 +36,9 @@ export function ReassignRouteModal({ open, board, routeId, agentId, canApprove, 
   const picked = board.routes.find((r) => String(r.routeId) === route)
   const started = !!picked && picked.stopsDone > 0
   const alreadyHandles = !!picked && String(picked.agentId) === agent
-  const blocked = started || alreadyHandles || !route || !agent
+  // a one-day reassignment only makes sense on a day the route runs (Route-Schedule-Addendum §5)
+  const notRunningToday = !!picked && scope === 'today' && !picked.scheduled
+  const blocked = started || alreadyHandles || notRunningToday || !route || !agent
 
   const mutation = useMutation({
     mutationFn: () => dispatchService.reassignRoute(Number(route), { agentId: Number(agent), scope }),
@@ -70,7 +72,7 @@ export function ReassignRouteModal({ open, board, routeId, agentId, canApprove, 
             onChange={(e) => setRoute(e.target.value)}
             options={board.routes.map((r) => ({
               value: String(r.routeId),
-              label: `${r.name}${r.agentName ? ` · ${r.agentName}` : ''}`,
+              label: `${r.name}${r.agentName ? ` · ${r.agentName}` : ''}${r.scheduled ? '' : ' · not scheduled today'}`,
             }))}
           />
           <Select
@@ -126,6 +128,13 @@ export function ReassignRouteModal({ open, board, routeId, agentId, canApprove, 
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
             {picked?.name} has already started collecting today ({picked?.stopsDone} of {picked?.stopsTotal} stops done).
             Reassigning it now would orphan the stops already completed — try again tomorrow, or arrange a cover for what is left.
+          </p>
+        )}
+        {notRunningToday && (
+          <p className="text-sm text-text-muted">
+            {picked?.name} doesn’t run today{picked?.nextCollectionDay ? ` (next on ${picked.nextCollectionDay})` : ''}, so
+            there is nothing to hand over for today. A permanent change still works — one agent can hold routes that run on
+            different days.
           </p>
         )}
         {alreadyHandles && !started && (

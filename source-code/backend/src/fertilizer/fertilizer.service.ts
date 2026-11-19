@@ -1,6 +1,6 @@
 import {
+  BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,12 +8,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import type { AppRole } from '../auth/role-map';
-import { EstateEntity } from '../estates/estate.entity';
+import { DispatchAccessService } from '../dispatch/dispatch-access.service';
+import { localDate } from '../dispatch/dispatch-map';
 import { parseEstateId } from '../estates/estate-map';
 import { CreateBatchDto } from './dto/create-batch.dto';
-import { DecideRequestDto } from './dto/decide-request.dto';
-import { LogRequestDto } from './dto/log-request.dto';
 import { RecordMovementDto } from './dto/record-movement.dto';
+import { WriteOffDto } from './dto/write-off.dto';
+import { FertilizerAllocationEntity } from './fertilizer-allocation.entity';
 import { FertilizerBatchEntity } from './fertilizer-batch.entity';
 import { FertilizerChargeEntity } from './fertilizer-charge.entity';
 import {
@@ -21,43 +22,26 @@ import {
   formatMovementId,
   formatRequestId,
   parseBatchId,
-  parseRequestId,
-  type CoverageStatus,
   type PublicBatch,
+  type PublicExpiryAlertBatch,
+  type PublicExpiryAlerts,
   type PublicItemPosition,
   type PublicMovement,
-  type PublicRequest,
 } from './fertilizer-map';
 import { FertilizerRequestEntity } from './fertilizer-request.entity';
+import {
+  batchCover,
+  expiryBucketOf,
+  FertilizerPositionService,
+  USE_FIRST_DAYS,
+  type StockSnapshot,
+} from './fertilizer-position.service';
+import { isLive, round2 } from './fertilizer-stock-ledger.service';
 import { StockMovementEntity } from './stock-movement.entity';
 
 export interface Actor {
   name: string;
   role: AppRole;
-}
-
-/** Requests contributing to committed stock (approval commits it; §4). */
-function isCommitting(r: FertilizerRequestEntity): boolean {
-  return r.status === 'Approved' || r.status === 'Partially Dispatched';
-}
-
-/** Undispatched remainder of an approved request. */
-function remainderOf(r: FertilizerRequestEntity): number {
-  const approved =
-    r.approvedQtyKg !== null ? Number(r.approvedQtyKg) : Number(r.quantityKg);
-  return approved - Number(r.dispatchedQtyKg);
-}
-
-/** Days from today until the batch expires (negative when already past). */
-function daysToExpiry(batch: FertilizerBatchEntity): number {
-  return Math.ceil(
-    (new Date(batch.expiryDate).getTime() - Date.now()) / 86_400_000,
-  );
-}
-
-/** Non-expired, non-discarded — the only batches that count toward on-hand or FEFO. */
-function isLiveBatch(batch: FertilizerBatchEntity): boolean {
-  return !batch.discarded && daysToExpiry(batch) >= 0;
 }
 
 @Injectable()
@@ -69,27 +53,33 @@ export class FertilizerService {
     private readonly movementRepo: Repository<StockMovementEntity>,
     @InjectRepository(FertilizerRequestEntity)
     private readonly requestRepo: Repository<FertilizerRequestEntity>,
-    @InjectRepository(EstateEntity)
-    private readonly estateRepo: Repository<EstateEntity>,
     @InjectRepository(FertilizerChargeEntity)
     private readonly chargeRepo: Repository<FertilizerChargeEntity>,
+    @InjectRepository(FertilizerAllocationEntity)
+    private readonly allocationRepo: Repository<FertilizerAllocationEntity>,
+    private readonly access: DispatchAccessService,
     private readonly audit: AuditService,
+    private readonly stock: FertilizerPositionService,
   ) {}
 
   // ── Batches ──────────────────────────────────────────────────────
 
   async listBatches(): Promise<PublicBatch[]> {
-    const batches = await this.batchRepo.find({ order: { item: 'ASC' } });
-    return batches.map((b) => this.toPublicBatch(b));
+    const [batches, snap] = await Promise.all([
+      this.batchRepo.find({ order: { item: 'ASC' } }),
+      this.stock.snapshot(),
+    ]);
+    return batches.map((b) => this.toPublicBatch(b, snap));
   }
 
   async getBatch(id: string): Promise<PublicBatch> {
-    return this.toPublicBatch(await this.findBatch(id));
+    const batch = await this.findBatch(id);
+    return this.toPublicBatch(batch, await this.stock.snapshot());
   }
 
   /** FERT-01/03 — direct registration; also reached implicitly via an Incoming movement with no `batchId`. */
   async createBatch(dto: CreateBatchDto, actor: Actor): Promise<PublicBatch> {
-    this.assertCanWrite(actor);
+    await this.assertCanWrite(actor);
     const batch = await this.saveNewBatch(dto, actor);
     await this.audit.record(actor, {
       action: 'Registered fertilizer batch',
@@ -98,158 +88,161 @@ export class FertilizerService {
       recordHref: `/fertilizer/${formatBatchId(batch.id)}`,
       details: `${dto.item} — ${dto.quantityKg} kg`,
     });
-    return this.toPublicBatch(batch);
+    return this.toPublicBatch(batch, await this.stock.snapshot());
   }
 
-  /** FERT-03 — marks a batch discarded; excluded from on-hand from that point on. */
-  async discardBatch(id: string, actor: Actor): Promise<PublicBatch> {
-    this.assertCanWrite(actor);
-    const batch = await this.findBatch(id);
-    batch.discarded = true;
-    batch.lastUpdatedBy = actor.name;
-    batch.lastUpdatedOn = new Date();
-    const saved = await this.batchRepo.save(batch);
-    await this.audit.record(actor, {
-      action: 'Discarded fertilizer batch',
-      module: 'Fertilizer',
-      record: formatBatchId(saved.id),
-      recordHref: `/fertilizer/${formatBatchId(saved.id)}`,
+  /**
+   * Expiry Alerts — three non-overlapping buckets on the factory calendar (expired with stock
+   * left, live within 7 days, live within the expiring-soon window), each batch with what's
+   * still allocated on it and, while usable, how many open requests it could fully cover.
+   */
+  async expiryAlerts(now: Date = new Date()): Promise<PublicExpiryAlerts> {
+    const snap = await this.stock.snapshot(now);
+    const createdAt = new Map(snap.requests.map((r) => [r.id, r.createdAt]));
+    const summary: PublicExpiryAlerts['summary'] = {
+      expired: { count: 0, kg: 0 },
+      soon: { count: 0, kg: 0 },
+      later: { count: 0, kg: 0 },
+    };
+    const rows: PublicExpiryAlertBatch[] = [];
+    for (const b of [...snap.batches].sort(
+      (x, y) => x.expiryDate.localeCompare(y.expiryDate) || x.id - y.id,
+    )) {
+      const bucket = expiryBucketOf(b, snap.today, snap.windowDays);
+      if (!bucket) continue;
+      summary[bucket].count += 1;
+      summary[bucket].kg = round2(summary[bucket].kg + Number(b.quantityKg));
+      rows.push({
+        ...this.toPublicBatch(b, snap),
+        bucket,
+        allocatedTo: snap.active
+          .filter((a) => a.batchId === b.id)
+          .map((a) => ({
+            requestId: formatRequestId(
+              a.requestId,
+              createdAt.get(a.requestId) ?? new Date(0),
+            ),
+            kg: Number(a.qtyKg),
+          })),
+        cover:
+          bucket === 'expired'
+            ? null
+            : batchCover(
+                Number(b.quantityKg),
+                this.stock.openDemand(b.item, snap),
+              ),
+      });
+    }
+    return {
+      today: snap.today,
+      soonDays: USE_FIRST_DAYS,
+      windowDays: snap.windowDays,
+      summary,
+      batches: rows,
+    };
+  }
+
+  /**
+   * Expiry Alerts / FERT-03 — take stock off the books that never went to anyone (expired,
+   * damaged, other). Writes a Write-off movement and lowers the batch, so the batch drops out
+   * of Expired and FERT-01's "kg expired" falls by the same amount. Stock still promised to a
+   * request can't be written off: an expired batch with active allocations is refused until
+   * those requests are moved to live stock; on a live batch only the free kg may go.
+   */
+  async writeOffBatch(
+    id: string,
+    dto: WriteOffDto,
+    actor: Actor,
+    now: Date = new Date(),
+  ): Promise<PublicBatch> {
+    await this.assertCanWrite(actor);
+    const batchId = parseBatchId(id);
+    const today = localDate(now);
+    const result = await this.batchRepo.manager.transaction(async (em) => {
+      const batchRepo = em.getRepository(FertilizerBatchEntity);
+      const [batch] = Number.isNaN(batchId)
+        ? []
+        : await batchRepo.find({
+            where: { id: batchId },
+            lock: { mode: 'pessimistic_write' },
+          });
+      if (!batch) throw new NotFoundException(`No fertilizer batch "${id}".`);
+      const remaining = Number(batch.quantityKg);
+      if (remaining <= 0) {
+        throw new ConflictException(`${id} has no stock left to write off.`);
+      }
+      const qty = round2(dto.quantityKg ?? remaining);
+      if (qty > remaining) {
+        throw new ConflictException(
+          `Only ${remaining} kg is left in ${id} — write off at most that.`,
+        );
+      }
+      const active = await em
+        .getRepository(FertilizerAllocationEntity)
+        .find({ where: { batchId: batch.id, state: 'active' } });
+      const committed = round2(
+        active.reduce((sum, a) => sum + Number(a.qtyKg), 0),
+      );
+      if (!isLive(batch, today) && active.length > 0) {
+        const requests = await em.getRepository(FertilizerRequestEntity).find();
+        const list = active.map((a) => {
+          const r = requests.find((x) => x.id === a.requestId);
+          return {
+            id: r ? formatRequestId(r.id, r.createdAt) : String(a.requestId),
+            kg: Number(a.qtyKg),
+          };
+        });
+        throw new ConflictException({
+          message: `${committed} kg of ${id} is still allocated to ${list
+            .map((r) => r.id)
+            .join(
+              ', ',
+            )}. Move ${list.length === 1 ? 'that request' : 'those requests'} to live stock first.`,
+          requests: list,
+        });
+      }
+      if (qty > round2(remaining - committed)) {
+        throw new ConflictException(
+          `Only ${round2(remaining - committed)} kg of ${id} is free — the rest is committed to approved requests.`,
+        );
+      }
+      batch.quantityKg = String(round2(remaining - qty));
+      batch.lastUpdatedBy = actor.name;
+      batch.lastUpdatedOn = now;
+      await batchRepo.save(batch);
+      const movementRepo = em.getRepository(StockMovementEntity);
+      await movementRepo.save(
+        movementRepo.create({
+          batchId: batch.id,
+          type: 'Write-off',
+          writeOffReason: dto.reason,
+          quantityKg: String(qty),
+          movementDate: today,
+          destination: null,
+          estateId: null,
+          linkedRequestId: null,
+          supplier: null,
+          notes: dto.note?.trim() || null,
+          recordedBy: actor.name,
+        }),
+      );
+      return { batch, qty };
     });
-    return this.toPublicBatch(saved);
+    await this.audit.record(actor, {
+      action: 'Wrote off fertilizer batch stock',
+      module: 'Fertilizer',
+      record: formatBatchId(result.batch.id),
+      recordHref: `/fertilizer/${formatBatchId(result.batch.id)}`,
+      details: `${result.batch.item} — ${result.qty} kg (${dto.reason})${dto.note ? `: ${dto.note.trim()}` : ''}`,
+    });
+    return this.toPublicBatch(result.batch, await this.stock.snapshot(now));
   }
 
   // ── Positions (FERT-01 — the single source of stock arithmetic) ────
 
-  async listPositions(): Promise<PublicItemPosition[]> {
-    const batches = await this.batchRepo.find();
-    const requests = await this.requestRepo.find();
-    const items = [...new Set(batches.map((b) => b.item))];
-
-    return items.map((item) => {
-      const category = batches.find((b) => b.item === item)!.category;
-      const onHand = this.onHandForItem(item, batches);
-      const committed = this.committedForItem(item, requests);
-      const available = onHand - committed;
-      const pendingDemand = requests
-        .filter((r) => r.item === item && r.status === 'Submitted')
-        .reduce((sum, r) => sum + Number(r.quantityKg), 0);
-
-      return {
-        item,
-        category,
-        onHand,
-        committed,
-        available,
-        pendingDemand,
-        coverageRatio: pendingDemand > 0 ? available / pendingDemand : null,
-        status: this.coverageStatus(available, pendingDemand),
-      };
-    });
-  }
-
-  // ── Requests ─────────────────────────────────────────────────────
-
-  async listRequests(): Promise<PublicRequest[]> {
-    const requests = await this.requestRepo.find({
-      order: { createdAt: 'DESC' },
-    });
-    const estates = await this.estateRepo.find();
-    return requests.map((r) =>
-      this.toPublicRequest(
-        r,
-        estates.find((e) => e.id === r.estateId)?.name ?? 'Unknown estate',
-      ),
-    );
-  }
-
-  async getRequest(id: string): Promise<PublicRequest> {
-    const request = await this.findRequest(id);
-    const estate = await this.estateRepo.findOne({
-      where: { id: request.estateId },
-    });
-    return this.toPublicRequest(request, estate?.name ?? 'Unknown estate');
-  }
-
-  /** FERT-07 — log a phoned-in request on an estate's behalf. Officer+ (portal: `fertilizer: 'edit'`). */
-  async logRequest(dto: LogRequestDto, actor: Actor): Promise<PublicRequest> {
-    this.assertCanWrite(actor);
-    const estate = await this.estateRepo.findOne({
-      where: { id: parseEstateId(dto.estateId) },
-    });
-    if (!estate) {
-      throw new NotFoundException(`No estate "${dto.estateId}".`);
-    }
-
-    const request = this.requestRepo.create({
-      requestedBy: null,
-      estateId: estate.id,
-      ownerId: estate.ownerId,
-      item: dto.item,
-      quantityKg: String(dto.quantityKg),
-      justification: dto.reason ?? null,
-      factoryId: null,
-      origin: 'web',
-      status: 'Submitted',
-      approvedQtyKg: null,
-      dispatchedQtyKg: '0',
-      decidedBy: null,
-      decidedOn: null,
-    });
-
-    const saved = await this.requestRepo.save(request);
-    await this.audit.record(actor, {
-      action: 'Logged fertilizer request',
-      module: 'Fertilizer',
-      record: formatRequestId(saved.id, saved.createdAt),
-      details: `${estate.name} — ${dto.item} ${dto.quantityKg} kg`,
-    });
-    return this.toPublicRequest(saved, estate.name);
-  }
-
-  /**
-   * FERT-06 — Administrator only (portal: `fertilizer: 'approve'`; Officer's
-   * `edit` covers logging/dispatch but not the decision). Only a Submitted
-   * request can be decided, matching the portal's gating (`isPending`).
-   */
-  async decideRequest(
-    id: string,
-    dto: DecideRequestDto,
-    actor: Actor,
-  ): Promise<PublicRequest> {
-    this.assertIsAdmin(actor);
-    const request = await this.findRequest(id);
-    if (request.status !== 'Submitted') {
-      throw new ConflictException(`Request "${id}" has already been decided.`);
-    }
-
-    if (dto.decision === 'approve') {
-      const approvedQty = dto.approvedQtyKg ?? Number(request.quantityKg);
-      if (approvedQty <= 0 || approvedQty > Number(request.quantityKg)) {
-        throw new ConflictException(
-          'Approved quantity must be positive and cannot exceed the requested quantity.',
-        );
-      }
-      request.approvedQtyKg = String(approvedQty);
-      request.status = 'Approved';
-    } else if (dto.decision === 'reject') {
-      request.status = 'Rejected';
-    } else {
-      request.status = 'Cancelled';
-    }
-    request.decidedBy = actor.name;
-    request.decidedOn = new Date();
-
-    const saved = await this.requestRepo.save(request);
-    const estate = await this.estateRepo.findOne({
-      where: { id: saved.estateId },
-    });
-    await this.audit.record(actor, {
-      action: `${request.status} fertilizer request`,
-      module: 'Fertilizer',
-      record: formatRequestId(saved.id, saved.createdAt),
-      details: estate?.name ?? 'Unknown estate',
-    });
-    return this.toPublicRequest(saved, estate?.name ?? 'Unknown estate');
+  /** Stock figures and status come from the one stock-position service (FERT-01, cards, alerts, requests). */
+  listPositions(now: Date = new Date()): Promise<PublicItemPosition[]> {
+    return this.stock.listPositions(now);
   }
 
   // ── Movements ────────────────────────────────────────────────────
@@ -271,16 +264,15 @@ export class FertilizerService {
 
   /**
    * FERT-02/03 — Incoming restocks an existing batch or creates a new one
-   * (no `batchId`); Outgoing must target an existing batch and may
-   * optionally fulfil an approved request (`linkedRequest`) — ad-hoc
-   * dispatch (no request) is allowed alongside it (resolved 2026-07-27).
-   * Officer+ (portal: `fertilizer: 'edit'`).
+   * (no `batchId`); Outgoing must target an existing batch and is ad-hoc
+   * only — a request's fertilizer leaves through its delivery handover
+   * (Fertilizer-Delivery-Addendum §5). Needs `fertilizer: edit`.
    */
   async recordMovement(
     dto: RecordMovementDto,
     actor: Actor,
   ): Promise<PublicMovement> {
-    this.assertCanWrite(actor);
+    await this.assertCanWrite(actor);
 
     const movement =
       dto.type === 'Incoming'
@@ -291,9 +283,7 @@ export class FertilizerService {
       module: 'Fertilizer',
       record: movement.id,
       recordHref: '/fertilizer',
-      details: dto.item
-        ? `${dto.item} — ${dto.quantityKg} kg`
-        : `${dto.quantityKg} kg`,
+      details: `${dto.item ? `${dto.item} — ` : ''}${dto.quantityKg} kg${dto.type === 'Incoming' && dto.unitCost ? ` × Rs. ${dto.unitCost}/kg` : ''}`,
     });
     return movement;
   }
@@ -303,6 +293,13 @@ export class FertilizerService {
     actor: Actor,
   ): Promise<PublicMovement> {
     let batch: FertilizerBatchEntity;
+    // What the factory paid — the Expense report's fertilizer stock purchases. Required from
+    // 2026-11-15 on; older stock-ins have no cost and are reported as such.
+    if (!dto.unitCost || dto.unitCost <= 0) {
+      throw new BadRequestException(
+        'Enter the unit cost (Rs per kg) paid for this stock.',
+      );
+    }
 
     if (dto.batchId) {
       batch = await this.findBatch(dto.batchId);
@@ -344,6 +341,7 @@ export class FertilizerService {
       destination: null,
       linkedRequestId: null,
       supplier: dto.supplier ?? null,
+      unitCost: String(dto.unitCost),
       notes: dto.notes ?? null,
       recordedBy: actor.name,
     });
@@ -366,34 +364,35 @@ export class FertilizerService {
     }
 
     const batch = await this.findBatch(dto.batchId);
+    // Expired or discarded stock never leaves the factory — it is written off instead.
+    if (!isLive(batch, localDate(new Date()))) {
+      throw new ConflictException(
+        `${dto.batchId} has expired${batch.discarded ? ' or been discarded' : ''} — it can't be dispatched. Write it off from Expiry Alerts instead.`,
+      );
+    }
     if (dto.quantityKg > Number(batch.quantityKg)) {
       throw new ConflictException(
         `Cannot exceed available stock (${batch.quantityKg} kg).`,
       );
     }
 
-    let request: FertilizerRequestEntity | null = null;
+    // Request-linked stock leaves only through the delivery flow (handover), which keeps the
+    // FEFO commitment and the request in step. FERT-02 Outgoing is ad-hoc dispatch only.
     if (dto.linkedRequest) {
-      request = await this.findRequest(dto.linkedRequest);
-      if (!isCommitting(request)) {
-        throw new ConflictException(
-          `Request "${dto.linkedRequest}" has no approved remainder to dispatch against.`,
-        );
-      }
-      const remainder = remainderOf(request);
-      if (dto.quantityKg > remainder) {
-        throw new ConflictException(
-          `Cannot exceed the approved remainder (${remainder} kg).`,
-        );
-      }
-      request.dispatchedQtyKg = String(
-        Number(request.dispatchedQtyKg) + dto.quantityKg,
+      throw new ConflictException(
+        'Fertilizer for a request goes out through its delivery (Record handover on the request), not a stock movement.',
       );
-      // remainderOf reads the just-updated dispatchedQtyKg, so this is the
-      // remainder *after* this dispatch — no separate subtraction needed.
-      request.status =
-        remainderOf(request) <= 0 ? 'Dispatched' : 'Partially Dispatched';
-      await this.requestRepo.save(request);
+    }
+    // Ad-hoc stock may not dip into what's committed to approved requests.
+    const committedHere = (
+      await this.allocationRepo.find({
+        where: { batchId: batch.id, state: 'active' },
+      })
+    ).reduce((sum, a) => sum + Number(a.qtyKg), 0);
+    if (dto.quantityKg > Number(batch.quantityKg) - committedHere) {
+      throw new ConflictException(
+        `Only ${round2(Number(batch.quantityKg) - committedHere)} kg of this batch is free — the rest is committed to approved requests.`,
+      );
     }
 
     batch.quantityKg = String(Number(batch.quantityKg) - dto.quantityKg);
@@ -403,13 +402,8 @@ export class FertilizerService {
 
     // Structured estate link (Estate Owner Lifetime History slice) —
     // `destination` above stays a free-text label; this is what billing/the
-    // lifetime timeline actually reads. A linked request's estate wins over
-    // an explicitly-passed ad-hoc `estateId` (the request is authoritative).
-    const estateDbId = request
-      ? request.estateId
-      : dto.estateId
-        ? parseEstateId(dto.estateId)
-        : null;
+    // lifetime timeline actually reads.
+    const estateDbId = dto.estateId ? parseEstateId(dto.estateId) : null;
 
     const movement = this.movementRepo.create({
       batchId: batch.id,
@@ -418,7 +412,7 @@ export class FertilizerService {
       movementDate: dto.date,
       destination: dto.destination,
       estateId: estateDbId,
-      linkedRequestId: request?.id ?? null,
+      linkedRequestId: null,
       supplier: null,
       notes: dto.notes ?? null,
       recordedBy: actor.name,
@@ -431,7 +425,9 @@ export class FertilizerService {
       const charge = this.chargeRepo.create({
         stockMovementId: savedMovement.id,
         estateId: estateDbId,
-        fertilizerRequestId: request?.id ?? null,
+        fertilizerRequestId: null,
+        deliveryId: null,
+        paymentMethod: null,
         ratePerKg: String(dto.ratePerKg),
         quantityKg: String(dto.quantityKg),
         totalCharge: String(dto.ratePerKg * dto.quantityKg),
@@ -440,7 +436,7 @@ export class FertilizerService {
       await this.chargeRepo.save(charge);
     }
 
-    return this.toPublicMovement(savedMovement, request ?? undefined);
+    return this.toPublicMovement(savedMovement);
   }
 
   // ── Shared helpers ───────────────────────────────────────────────
@@ -478,64 +474,22 @@ export class FertilizerService {
     return batch;
   }
 
-  private async findRequest(
-    formattedId: string,
-  ): Promise<FertilizerRequestEntity> {
-    const id = parseRequestId(formattedId);
-    const request = Number.isNaN(id)
-      ? null
-      : await this.requestRepo.findOne({ where: { id } });
-    if (!request) {
-      throw new NotFoundException(`No fertilizer request "${formattedId}".`);
-    }
-    return request;
+  /** Data-driven (`role_permissions`): writes need `fertilizer: edit`. */
+  private async assertCanWrite(actor: Actor): Promise<void> {
+    await this.access.require(
+      actor.role,
+      'edit',
+      'change fertilizer stock',
+      'fertilizer',
+    );
   }
 
-  private onHandForItem(
-    item: string,
-    batches: FertilizerBatchEntity[],
-  ): number {
-    return batches
-      .filter((b) => b.item === item && isLiveBatch(b))
-      .reduce((sum, b) => sum + Number(b.quantityKg), 0);
-  }
-
-  private committedForItem(
-    item: string,
-    requests: FertilizerRequestEntity[],
-  ): number {
-    return requests
-      .filter((r) => r.item === item && isCommitting(r))
-      .reduce((sum, r) => sum + remainderOf(r), 0);
-  }
-
-  private coverageStatus(available: number, pending: number): CoverageStatus {
-    if (pending <= 0) return available < 0 ? 'Short' : 'Healthy';
-    if (available >= pending) return 'Healthy';
-    if (available >= pending * 0.5) return 'Tight';
-    return 'Short';
-  }
-
-  /** Officer+ (Manager is view-only — portal: `fertilizer: 'edit'` threshold). */
-  private assertCanWrite(actor: Actor): void {
-    if (actor.role === 'Manager') {
-      throw new ForbiddenException(
-        'Managers have read-only access to this resource.',
-      );
-    }
-  }
-
-  /** Administrator only (portal: `fertilizer: 'approve'`). */
-  private assertIsAdmin(actor: Actor): void {
-    if (actor.role !== 'Administrator') {
-      throw new ForbiddenException(
-        'Only an Administrator can decide a fertilizer request.',
-      );
-    }
-  }
-
-  private toPublicBatch(entity: FertilizerBatchEntity): PublicBatch {
+  private toPublicBatch(
+    entity: FertilizerBatchEntity,
+    snap: StockSnapshot,
+  ): PublicBatch {
     return {
+      ...this.stock.batchView(entity, snap),
       id: formatBatchId(entity.id),
       item: entity.item,
       category: entity.category,
@@ -555,29 +509,6 @@ export class FertilizerService {
     };
   }
 
-  private toPublicRequest(
-    entity: FertilizerRequestEntity,
-    estateName: string,
-  ): PublicRequest {
-    return {
-      id: formatRequestId(entity.id, entity.createdAt),
-      estateName,
-      item: entity.item,
-      quantityKg: Number(entity.quantityKg),
-      requestedDate: entity.createdAt.toISOString().slice(0, 10),
-      origin: entity.origin,
-      status: entity.status,
-      reason: entity.justification ?? undefined,
-      approvedQtyKg:
-        entity.approvedQtyKg !== null
-          ? Number(entity.approvedQtyKg)
-          : undefined,
-      dispatchedQtyKg: Number(entity.dispatchedQtyKg) || undefined,
-      decidedBy: entity.decidedBy ?? undefined,
-      decidedOn: entity.decidedOn ? entity.decidedOn.toISOString() : undefined,
-    };
-  }
-
   private toPublicMovement(
     entity: StockMovementEntity,
     linkedRequest?: FertilizerRequestEntity,
@@ -593,6 +524,11 @@ export class FertilizerService {
         ? formatRequestId(linkedRequest.id, linkedRequest.createdAt)
         : undefined,
       supplier: entity.supplier ?? undefined,
+      unitCost:
+        entity.unitCost === null || entity.unitCost === undefined
+          ? undefined
+          : Number(entity.unitCost),
+      writeOffReason: entity.writeOffReason ?? undefined,
       notes: entity.notes ?? undefined,
       recordedBy: entity.recordedBy ?? 'Unknown',
     };

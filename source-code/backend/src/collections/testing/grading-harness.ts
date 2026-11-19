@@ -111,6 +111,18 @@ export function makeSettlement(
     processedBy: 'A. Bandara',
     processedOn: T0,
     createdAt: T0,
+    transportStatus: null,
+    transportCharge: null,
+    transportVersionId: null,
+    transportCarriedIn: '0',
+    transportCarriedOut: '0',
+    legacyReason: null,
+    grossAmount: null,
+    calculation: null,
+    payoutMethod: null,
+    excludedReason: null,
+    preparedBy: null,
+    preparedAt: null,
     ...overrides,
   };
 }

@@ -10,7 +10,7 @@ import {
 import { EstateEntity } from './estate.entity';
 import type { DbAdvanceStatus } from './estate-map';
 
-/** EST-05/06 — money issued ahead of settlement, deducted at the next processed run. */
+/** EST-05/06 — money issued ahead of settlement, deducted by settlements per its repayment plan. */
 @Entity('estate_advances')
 @Check(
   'estate_advances_status_check',
@@ -43,6 +43,23 @@ export class EstateAdvanceEntity {
 
   @Column({ type: 'varchar', length: 20, default: 'pending_deduction' })
   status: DbAdvanceStatus;
+
+  /** Repayment plan (Estate-Owner-Advances-Addendum §4) — one installment a settlement period. */
+  @Column({
+    name: 'installment_amount',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
+  installmentAmount: string | null;
+
+  @Column({ name: 'installment_months', type: 'int', nullable: true })
+  installmentMonths: number | null;
+
+  /** 'December 2026' — the first settlement period it deducts from */
+  @Column({ name: 'start_period', type: 'varchar', nullable: true, length: 30 })
+  startPeriod: string | null;
 
   /** Nullable in the DB, but always filled by its `DEFAULT now()`. */
   @CreateDateColumn({ name: 'created_at', nullable: true })

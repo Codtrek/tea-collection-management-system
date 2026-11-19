@@ -96,7 +96,9 @@ export function CoverModal({ open, agent, onClose }: CoverModalProps) {
       confirmDisabled={!chosen || routeId === null}
       message={
         routeId === null
-          ? `${agent.name} has no route of their own to cover.`
+          ? agent.ownRoutes.length > 0
+            ? `None of ${agent.name}’s routes runs today, so nothing needs covering.`
+            : `${agent.name} has no route of their own to cover.`
           : `${agent.name} is absent. Ranked by neighbouring routes first, then least work — you choose; nobody is assigned until they accept.`
       }
     >

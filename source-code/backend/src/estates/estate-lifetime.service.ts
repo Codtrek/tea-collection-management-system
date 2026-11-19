@@ -5,14 +5,22 @@ import { AuditLogEntity } from '../audit/audit-log.entity';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { gradeKg, toAppStatus, weightSummary, type PublicCollection } from '../collections/collection-map';
 import { FertilizerBatchEntity } from '../fertilizer/fertilizer-batch.entity';
+import {
+  estateAdvanceOutstanding,
+  remainingOf,
+} from './estate-advance-balance';
+import { EstateAdvanceRecoveryEntity } from './estate-advance-recovery.entity';
+import { fertilizerOutstanding } from '../fertilizer/fertilizer-balance';
 import { FertilizerChargeEntity } from '../fertilizer/fertilizer-charge.entity';
 import { formatBatchId, formatChargeId, formatRequestId } from '../fertilizer/fertilizer-map';
+import { FertilizerPaymentEntity } from '../fertilizer/fertilizer-payment.entity';
 import { FertilizerRequestEntity } from '../fertilizer/fertilizer-request.entity';
 import { StockMovementEntity } from '../fertilizer/stock-movement.entity';
 import { EstateAdvanceEntity } from './estate-advance.entity';
 import {
   formatEstateId,
   parseEstateId,
+  settlementGross,
   settlementNet,
   toAppAdvanceStatus,
   toAppEstateStatus,
@@ -69,6 +77,7 @@ function toPublicSettlement(entity: SettlementEntity): PublicSettlement {
     fertilizerDeduction: Number(entity.fertilizerDeduction),
     advanceDeduction: Number(entity.advanceDeduction),
     adjustment: Number(entity.adjustmentAmount ?? 0),
+    ...(entity.grossAmount != null ? { grossAmount: Number(entity.grossAmount) } : {}),
     status: toAppSettlementStatus(entity.status),
     selfDelivery: entity.selfDelivery,
     missingBank: entity.missingBank || undefined,
@@ -149,6 +158,12 @@ export class EstateLifetimeService {
     private readonly batchRepo: Repository<FertilizerBatchEntity>,
     @InjectRepository(AuditLogEntity)
     private readonly auditRepo: Repository<AuditLogEntity>,
+    // Cash / bank fertilizer payments — part of the shared outstanding figure.
+    @InjectRepository(FertilizerPaymentEntity)
+    private readonly paymentRepo: Repository<FertilizerPaymentEntity>,
+    // Estate advance repayments — the advance half of Outstanding (estate-advance-balance.ts).
+    @InjectRepository(EstateAdvanceRecoveryEntity)
+    private readonly recoveryRepo: Repository<EstateAdvanceRecoveryEntity>,
   ) {}
 
   // ── §3 — the shared lifetime selector ───────────────────────────
@@ -161,7 +176,7 @@ export class EstateLifetimeService {
     const estate = await this.findEstate(formattedId);
     const now = new Date();
 
-    const [confirmed, processed, advances, requests, charges] =
+    const [confirmed, processed, advances, requests, charges, payments] =
       await Promise.all([
         this.collectionRepo.find({
           where: { estateId: estate.id, status: 'confirmed' },
@@ -172,6 +187,7 @@ export class EstateLifetimeService {
         this.advanceRepo.find({ where: { estateId: estate.id } }),
         this.requestRepo.find({ where: { estateId: estate.id } }),
         this.chargeRepo.find({ where: { estateId: estate.id } }),
+        this.paymentRepo.find({ where: { estateId: estate.id } }),
       ]);
 
     const deliveredKg = confirmed.reduce((s, c) => s + weightSummary(c).weightKg, 0);
@@ -180,20 +196,28 @@ export class EstateLifetimeService {
 
     const earnedRs = processed.reduce(
       (s, r) =>
-        s +
-        Number(r.superKg) * Number(r.superRate) +
-        Number(r.normalKg) * Number(r.normalRate),
+        s + settlementGross(r),
       0,
     );
 
     const fertilizerRs = charges.reduce((s, c) => s + Number(c.totalCharge), 0);
     const advancesRs = advances.reduce((s, a) => s + Number(a.amount), 0);
-
-    const outstandingCharges = charges.filter((c) => !c.settlementId);
-    const fertilizerUndeductedRs = outstandingCharges.reduce(
-      (s, c) => s + Number(c.totalCharge),
+    // what's still owed on them — the shared estate-advance balance rule
+    const advanceRecoveries = await this.recoveryRepo.find();
+    const openAdvances = advances.filter(
+      (a) => remainingOf(a, advanceRecoveries) > 0,
+    );
+    const advanceOwed = openAdvances.reduce(
+      (s, a) => s + remainingOf(a, advanceRecoveries),
       0,
     );
+
+    // The one fertilizer-balance rule (charges − settlement recoveries − cash/bank payments).
+    const outstandingCharges = charges.filter((c) => !c.settlementId);
+    const fertilizerUndeductedRs = fertilizerOutstanding(
+      charges,
+      payments,
+    ).outstandingRs;
 
     const lastSettlement = [...processed].sort((a, b) =>
       (b.processedOn?.toISOString() ?? '').localeCompare(
@@ -230,6 +254,8 @@ export class EstateLifetimeService {
       outstanding: {
         fertilizerUndeductedRs: Math.round(fertilizerUndeductedRs),
         undeductedDispatchCount: outstandingCharges.length,
+        advancesRs: Math.round(advanceOwed),
+        openAdvanceCount: openAdvances.length,
         lastSettlementRs: lastSettlementRs !== null ? Math.round(lastSettlementRs) : null,
         lastSettlementDate: lastSettlement?.processedOn
           ? lastSettlement.processedOn.toISOString()
@@ -327,9 +353,17 @@ export class EstateLifetimeService {
       // with the charge highlighted — `EstateDetailPage` reads `?record=` and
       // forces `showAll` so a multi-year-old charge is actually on screen
       // (the tab defaults to the last 90 days like the other paginated tabs).
-      const movement = movementById.get(c.stockMovementId);
+      // A route-stop delivery (Fertilizer-Delivery-Addendum) has no stock movement of its
+      // own — its item comes from the request.
+      const movement =
+        c.stockMovementId !== null ? movementById.get(c.stockMovementId) : undefined;
       const batch = movement ? batchById.get(movement.batchId) : undefined;
-      const itemLabel = batch ? `${batch.item} dispatched` : 'Dispatched';
+      const viaRequest = c.fertilizerRequestId ? requestById.get(c.fertilizerRequestId) : undefined;
+      const itemLabel = batch
+        ? `${batch.item} dispatched`
+        : viaRequest
+          ? `${viaRequest.item} delivered`
+          : 'Dispatched';
 
       entries.push({
         id: `fert-${c.id}`,
@@ -409,8 +443,7 @@ export class EstateLifetimeService {
     });
     const revenueByPeriod = new Map<string, number>();
     for (const s of processed) {
-      const gross =
-        Number(s.superKg) * Number(s.superRate) + Number(s.normalKg) * Number(s.normalRate);
+      const gross = settlementGross(s);
       revenueByPeriod.set(s.period, (revenueByPeriod.get(s.period) ?? 0) + gross);
     }
     const revenueTrend = [...revenueByPeriod.entries()]
@@ -450,14 +483,18 @@ export class EstateLifetimeService {
   // aggregation and shouldn't slow those down.
 
   async directory(): Promise<EstateDirectoryRow[]> {
-    const [estates, owners, confirmed, processed, charges, documents] = await Promise.all([
+    const [estates, owners, confirmed, processed, charges, documents, payments, advances, recoveries] = await Promise.all([
       this.estateRepo.find(),
       this.ownerRepo.find(),
       this.collectionRepo.find({ where: { status: 'confirmed' } }),
       this.settlementRepo.find({ where: { status: 'processed' } }),
       this.chargeRepo.find(),
       this.documentRepo.find(),
+      this.paymentRepo.find(),
+      this.advanceRepo.find(),
+      this.recoveryRepo.find(),
     ]);
+    const advanceOwed = estateAdvanceOutstanding(advances, recoveries);
 
     const now = new Date();
     const cutoff = new Date();
@@ -478,13 +515,15 @@ export class EstateLifetimeService {
       const superKg = ownDeliveries.reduce((s, c) => s + gradeKg(c, 'super'), 0);
 
       const earnedRs = ownSettlements.reduce(
-        (s, r) => s + Number(r.superKg) * Number(r.superRate) + Number(r.normalKg) * Number(r.normalRate),
+        (s, r) => s + settlementGross(r),
         0,
       );
 
-      const outstandingRs = ownCharges
-        .filter((c) => !c.settlementId)
-        .reduce((s, c) => s + Number(c.totalCharge), 0);
+      const fertilizerRs = fertilizerOutstanding(
+        ownCharges,
+        payments.filter((p) => p.estateId === estate.id),
+      ).outstandingRs;
+      const advanceRs = advanceOwed.get(estate.id) ?? 0;
 
       const lastDelivery = [...ownDeliveries].sort((a, b) => b.collectionDate.localeCompare(a.collectionDate))[0];
 
@@ -514,8 +553,10 @@ export class EstateLifetimeService {
         lastDeliveryDate: lastDelivery?.collectionDate ?? null,
         lastPaymentRs,
         lastPaymentDate: lastSettlement?.processedOn ? lastSettlement.processedOn.toISOString() : null,
-        outstandingRs: Math.round(outstandingRs),
-        hasOutstanding: outstandingRs > 0,
+        outstandingRs: Math.round(fertilizerRs) + Math.round(advanceRs),
+        fertilizerOutstandingRs: Math.round(fertilizerRs),
+        advanceOutstandingRs: Math.round(advanceRs),
+        hasOutstanding: fertilizerRs > 0 || advanceRs > 0,
         lifetimeEarnedRs: Math.round(earnedRs),
         lifetimeDeliveredKg: round1(deliveredKg),
         superPct: deliveredKg > 0 ? round1((superKg / deliveredKg) * 100) : 0,
@@ -587,13 +628,14 @@ export class EstateLifetimeService {
     return {
       ...paged,
       rows: paged.rows.map((c) => {
-        const movement = movementById.get(c.stockMovementId);
+        const movement =
+          c.stockMovementId !== null ? movementById.get(c.stockMovementId) : undefined;
         const batch = movement ? batchById.get(movement.batchId) : undefined;
         const linkedRequest = c.fertilizerRequestId ? requestById.get(c.fertilizerRequestId) : undefined;
         return {
           id: formatChargeId(c.id),
           date: c.calculatedAt.toISOString(),
-          item: batch?.item ?? 'Unknown',
+          item: batch?.item ?? linkedRequest?.item ?? 'Unknown',
           quantityKg: Number(c.quantityKg),
           ratePerKg: Number(c.ratePerKg),
           totalCharge: Number(c.totalCharge),

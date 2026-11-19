@@ -21,6 +21,36 @@
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
+## Local development setup
+
+**Requirements**
+- **Node.js** and npm.
+- **PostgreSQL**: a local dev database on port **5433** (e.g. a private cluster such as `~/tea-pg-dev`).
+- **Redis**: required. Login and registration are rate-limited through Redis (`REDIS_URL`, e.g. `redis://localhost:6379`). Without it, login fails with HTTP 500.
+
+**Ports**
+
+> Local DB = 5433. Never forward a tunnel to 5432/5433; use 15432.
+
+An ssh tunnel on 5432/5433 makes the hosted database answer on `localhost`, where it can be mistaken for the local one. To pin the local database, use `?host=::1`, as in `DATABASE_URL=postgresql://tea@localhost:5433/tea_dev?host=::1`.
+
+**`.env`** (backend): `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `REDIS_URL`, `PORT`.
+
+**A fresh database**
+
+```bash
+createdb -h localhost -p 5433 tea_dev
+npm run migration:run   # dev's Baseline + every migration in src/migrations/
+npm run seed            # staff, estates, deliveries, settlements …
+npm run seed:demo       # optional: a few months of realistic demo data
+```
+
+Both seeds refuse any database that isn't on this machine: they check the URL and the server's own address (`src/local-db-guard.ts`). Never run migrations or seeds against the hosted database; the team's pipeline does that.
+
+**Schema changes** go in a new migration class in `src/migrations/`. The entities must mirror the database exactly: `npm run migration:generate -- src/migrations/Check --dryrun` against a freshly migrated database must report no changes. The PR pipeline checks for schema drift.
+
+**Linting:** don't run `npm run lint` here. It runs `eslint --fix` over every file. Lint the files you changed with `npx eslint <files>`.
+
 ## Description
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
