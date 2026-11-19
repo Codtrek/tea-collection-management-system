@@ -1,9 +1,13 @@
-import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert,  Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { fonts } from '@/theme/fonts';
 import type { CollectorProfile } from '@/utils/collectorSession';
+
+
+
+
 
 interface DemoTeaCollectorProfileProps {
   profile?: CollectorProfile;
@@ -14,6 +18,8 @@ export default function DemoTeaCollectorProfile({
   profile,
   onLogout,
 }: DemoTeaCollectorProfileProps) {
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   return (
     <ScrollView
       style={styles.screen}
@@ -77,31 +83,76 @@ export default function DemoTeaCollectorProfile({
         <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
       </Pressable>
 
+
+
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Log out"
-        onPress={() =>
-          Alert.alert('Log out', 'Are you sure you want to log out?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Log out',
-              style: 'destructive',
-              onPress: () => {
-                void onLogout().catch(() =>
-                  Alert.alert(
-                    'Unable to log out',
-                    'Your session could not be cleared. Please try again.',
-                  ),
-                );
-              },
-            },
-          ])
-        }
-        style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}
+        onPress={() => setShowLogoutDialog(true)}
+        style={({ pressed }) => [
+          styles.logoutButton,
+          pressed && styles.pressed,
+        ]}
       >
         <Ionicons name="log-out-outline" size={20} color={colors.error} />
         <Text style={styles.logoutText}>Log out</Text>
       </Pressable>
+
+      {showLogoutDialog && (
+        <View style={styles.dialogOverlay}>
+          <View style={styles.dialogCard}>
+            <View style={styles.dialogIcon}>
+              <Ionicons
+                name="log-out-outline"
+                size={28}
+                color={colors.error}
+              />
+            </View>
+
+            <Text style={styles.dialogTitle}>Log out?</Text>
+
+            <Text style={styles.dialogMessage}>
+              Are you sure you want to log out of your account?
+            </Text>
+
+            <View style={styles.dialogActions}>
+              <Pressable
+                onPress={() => setShowLogoutDialog(false)}
+                disabled={isLoggingOut}
+                style={styles.cancelButton}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={isLoggingOut}
+                onPress={async () => {
+                  try {
+                    setIsLoggingOut(true);
+                    await onLogout();
+                    setShowLogoutDialog(false);
+                  } catch {
+                    Alert.alert(
+                      "Logout failed",
+                      "Please try again."
+                    );
+                  } finally {
+                    setIsLoggingOut(false);
+                  }
+                }}
+                style={styles.confirmLogoutButton}
+              >
+                <Text style={styles.confirmLogoutText}>
+                  {isLoggingOut ? "Logging out..." : "Log out"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
+
+
+
     </ScrollView>
   );
 }
@@ -264,4 +315,81 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.75,
   },
+
+
+
+  dialogOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 1000,
+  },
+  dialogCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+  },
+  dialogIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.errorBackground,
+    marginBottom: 16,
+  },
+  dialogTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  dialogMessage: {
+    fontSize: 14,
+    color: colors.text.tertiary,
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 24,
+    lineHeight: 21,
+  },
+  dialogActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  confirmLogoutButton: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: colors.error,
+  },
+  confirmLogoutText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.white,
+  },
+
 });
