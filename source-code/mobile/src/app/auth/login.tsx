@@ -1,5 +1,5 @@
 import { Image, StyleSheet, View, Platform } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 
 import { Screen } from "@/components/ui";
@@ -8,9 +8,21 @@ import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoGreen.png";
 import { spacing } from "@/theme/spacing";
 import { login } from "../services/api/auth.api";
 import { useCollectorAuth } from "@/context/CollectorAuthContext";
+import {
+  isPasswordRecoveryUserType,
+  type PasswordRecoveryUserType,
+} from "@/utils/passwordRecovery";
 
 export default function LogInScreen() {
   const router = useRouter();
+  const { userType: userTypeParam } = useLocalSearchParams<{
+    userType?: string;
+  }>();
+  const forgotPasswordUserType: PasswordRecoveryUserType =
+    isPasswordRecoveryUserType(userTypeParam) &&
+    userTypeParam !== "collection-agent"
+      ? userTypeParam
+      : "estate-owner";
   const {
     authenticate,
     beginPasswordChange,
@@ -77,7 +89,10 @@ export default function LogInScreen() {
           <Image source={BrandLogo} style={styles.logo} resizeMode="contain" />
         </View>
 
-        <MobileLoginForm onSubmit={handleLogIn} />
+        <MobileLoginForm
+          onSubmit={handleLogIn}
+          forgotPasswordUserType={forgotPasswordUserType}
+        />
       </View>
     </Screen>
   );

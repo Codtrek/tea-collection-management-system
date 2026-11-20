@@ -14,6 +14,7 @@ import {
   getPhoneNumberResponseError,
 } from "@/utils/phoneValidation";
 import { getErrorMessages } from "@/app/services/api/client";
+import type { PasswordRecoveryUserType } from "@/utils/passwordRecovery";
 
 type LoginFieldErrors = {
   phoneNumber?: string;
@@ -25,6 +26,7 @@ interface MobileLoginFormProps {
   submitTitle?: string;
   showForgotPassword?: boolean;
   showRegistration?: boolean;
+  forgotPasswordUserType?: PasswordRecoveryUserType;
 }
 
 export default function MobileLoginForm({
@@ -32,6 +34,7 @@ export default function MobileLoginForm({
   submitTitle = "Sign in",
   showForgotPassword = true,
   showRegistration = true,
+  forgotPasswordUserType,
 }: MobileLoginFormProps) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
@@ -113,13 +116,23 @@ export default function MobileLoginForm({
       />
 
       {showForgotPassword ? (
-        <Pressable style={styles.forgotPassword}>
-          <Link href="/auth/change-password" asChild>
+        <Link
+          href={
+            forgotPasswordUserType
+              ? {
+                  pathname: "/auth/forgot-password",
+                  params: { userType: forgotPasswordUserType },
+                }
+              : "/auth/forgot-password"
+          }
+          asChild
+        >
+          <Pressable style={styles.forgotPassword}>
             <AppText variant="bodySmall" style={styles.link}>
               Forgot password?
             </AppText>
-          </Link>
-        </Pressable>
+          </Pressable>
+        </Link>
       ) : null}
 
       {formError ? (

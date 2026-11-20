@@ -158,8 +158,8 @@ export default function CollectorChangePasswordScreen() {
       ) : session ? (
         <View style={styles.form}>
           <PasswordInput
-            label="Current password"
-            placeholder="Enter current password"
+            label="Temporary password"
+            placeholder="Enter Temporary password"
             value={currentPassword}
             error={fieldErrors.currentPassword}
             onChangeText={(value) => {

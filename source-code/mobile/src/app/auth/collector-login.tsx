@@ -35,8 +35,8 @@ export default function CollectorLoginScreen() {
 
         <MobileLoginForm
           onSubmit={handleLogin}
-          showForgotPassword={false}
           showRegistration={false}
+          forgotPasswordUserType="collection-agent"
         />
       </View>
     </Screen>
