@@ -1320,6 +1320,8 @@ Settlements are calculated from the deliveries now, not typed into the seed.
 
 ## Users & Roles rebuild (2026-11-18, `feat/users-roles`; `docs/specs/Users-Roles-Addendum.md`)
 
+**Draft PR #100** (2026-11-22; pre-check SQL for the Azure copy in its description). After-merge list: issue #101. Approved next: break-glass `admin:recover` as its own PR after #100 merges; then read-endpoint permission checks + the 5 row-less keys + rate limits (short 60/10s per user, medium/long per user when signed in, auth 5/min).
+
 Migration `1794400026000-UsersRoles` (mirrored in `init.sql`): `users.token_version / email / failed_login_count / locked_until`, `audit_logs.before / after / reason`, and a backfill of 14 permission keys a migrations-only DB never had (`ON CONFLICT DO NOTHING`). The seed no longer overwrites the matrix.
 
 - **Every portal request re-reads the user.**
