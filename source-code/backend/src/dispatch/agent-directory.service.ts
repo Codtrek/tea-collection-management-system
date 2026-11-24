@@ -68,6 +68,13 @@ export class AgentDirectoryService {
     return (await this.all()).find((a) => a.userId === userId) ?? null;
   }
 
+  async roleByUserId(userId: number): Promise<string | null> {
+    const employee = await this.employeeRepo.findOne({
+      where: { userId, status: 'Active', role: AGENT_JOB_ROLE },
+    });
+    return employee?.role ?? null;
+  }
+
   async names(): Promise<Map<number, string>> {
     return new Map((await this.all()).map((a) => [a.agentId, a.name]));
   }

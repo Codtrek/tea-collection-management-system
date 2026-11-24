@@ -383,4 +383,238 @@ The visual/form portion is reusable, but this screen cannot authenticate and ent
 - The existing screen calls `/auth/mobile/login`; Tea Collectors have a separate backend endpoint, `POST /auth/agent/login`, implemented in `source-code/backend/src/auth/auth.controller.ts` and `AuthService.agentLogin()`.
 - The agent endpoint returns `{ accessToken, agent, mustChangePassword }`, rather than the current `{ accessToken, user }` shape. It also issues an agent-specific token, and the backend has a separate agent change-password endpoint at `/auth/agent/change-password`.
 - The current success handler only routes Estate Owner and Estate Manager roles. It does not handle the agent response or navigate to the Tea Collector experience.
-- Therefore, the shared phone/password controls and much of the validation/error/loading presentation could be reused, but the API call and result 
+- Therefore, the shared phone/password controls and much of the validation/error/loading presentation could be reused, but the API call and result
+
+
+DETAILED COLLECTION AGENT CREATION AND FIRST-TIME AUTHENTICATION INVESTIGATION
+Inspection date: 2026-11-17
+Scope: Current source under source-code. This is a new appended investigation; earlier content above is preserved as-is and may describe older implementation states. No application source code was modified.
+
+EXECUTIVE FINDINGS
+
+The current end-to-end web/mobile code is more integrated than the older notes above: role selection routes Collection Agents to the shared mobile login, that screen calls POST /auth/mobile/login, and the backend's unified AuthService.mobileLogin() now supports collection_agent. A separate collector-login.tsx also exists and calls POST /auth/agent/login, but role selection does not use it.
+
+The main operational blocker is in AgentProvisioningService.provision(): it creates a User without the required name field. The checked-in TypeORM User entity and backend baseline require users.name NOT NULL, while database/init.sql omits users.name and users.nic entirely. A real PostgreSQL provisioning test is needed; current tests use fakes and do not establish that the insert succeeds against the schema.
+
+The password-change flow for the temporary Agent credential is implemented end-to-end. A separate generic “Forgot password / Change Password” screen is not implemented and logs entered passwords to the JavaScript console. After first change, the mobile app stores the token and opens the Collector screen, but that screen remains demo/static and does not make authenticated calls. There is no Collector session restoration, route guard, or functioning logout.
+
+1. COLLECTION AGENT CREATION: ADMIN FORM TO DATABASE
+
+Admin entry point and form
+
+The dashboard's New Employee quick action leads to /employees/new; the employee list has an Add Employee action to the same route. App.tsx registers EmployeeRegistrationPage at that path. The form collects the HR record fields, dynamically loads valid job titles, and treats the Tea Collecting Agent job title specially: it explains that a mobile login is created, forces the login toggle on visually, and submits the completed EmployeeForm.
+
+useEmployeeRoles() fetches GET /employees/roles. EmployeesController.roles() returns the backend role list and agentRole value, so the form does not locally define which title triggers provisioning. The server-side AGENT_JOB_ROLE constant is "Tea Collecting Agent".
+
+The form mutation calls employeesService.create(data). The frontend service POSTs JSON to /employees using the portal apiFetch wrapper. apiFetch attaches the current factory-portal JWT as Authorization: Bearer, so the create call reaches the guarded employee API as the logged-in portal user. When the returned Employee has initialPassword, the page keeps the response in component state and opens InitialPasswordModal; otherwise it navigates directly to the employee detail.
+
+Backend controller and authorization
+
+EmployeesController is guarded by JwtAuthGuard at controller level. POST /employees receives CreateEmployeeDto, resolves the actor name and role from the request JWT, and delegates to EmployeesService.create(). The same controller's PUT /employees/:id uses EmployeesService.update() for role changes to/from Tea Collecting Agent.
+
+CreateEmployeeDto validates required name/NIC/contact/address/role, date fields, bank data, employment type, login toggle and optional pay rates. It validates the contact against a Sri Lankan phone pattern and role against EMPLOYEE_ROLES. The global ValidationPipe in main.ts enables whitelist validation. Age >= 18 and non-future hire date are checked in EmployeesService rather than the DTO.
+
+EmployeesService.create():
+- Requires actor.role === Administrator via assertIsAdmin(); an Officer or Manager cannot create the roster entry.
+- Checks date constraints and duplicate employee NIC.
+- If dto.role is AGENT_JOB_ROLE, checks that dto.contact is not already attached to a User login before saving the HR record.
+- Saves an EmployeeEntity with userId initially null and status Active.
+- Calls AgentProvisioningService.provision(saved) for the agent role. If this call fails, it attempts to delete the just-saved HR row and rethrows. It records an audit event only after the save/provision succeeds.
+- Returns the public employee fields plus initialPassword only when provisioning returned a non-null password.
+
+AgentProvisioningService.provision():
+- Executes the login/dispatch identity writes in a DataSource transaction.
+- If a collection_agents identity already exists for the HR employee, it re-enables the linked User (when employee.userId is set) and returns initialPassword: null. This preserves the existing login and history; no new credential is displayed.
+- For a new identity, checks the phone again inside the transaction, selects the first Factory, and fails if no factory exists.
+- Generates and hashes the temporary password, saves a users row, inserts factory_employees with the HR employee's name/NIC and role collection_agent, creates collection_agents linked to the factory employee and HR employee, then saves employees.userId and hasLogin = true.
+- Returns the one-time plaintext password to EmployeesService. The employee response type includes optional initialPassword; ordinary employee serialization does not derive it from a stored field.
+
+2. TEMPORARY PASSWORD AND FRONTEND DISPLAY
+
+The password generation is randomBytes(9).toString('base64url') in AgentProvisioningService.provision(). Nine cryptographically random bytes represent 72 bits of entropy and encode to 12 base64url characters. The exact generated value is passed to bcrypt.hash(initialPassword, 10); bcrypt creates the salted hash at cost 10. Only the resulting string is assigned to users.password_hash. The original password is not assigned to a User/Employee/Agent database property.
+
+The plaintext follows this response path:
+AgentProvisioningService.provision() return value
+  -> EmployeesService.create() or update() includes initialPassword in PublicEmployee
+  -> EmployeesController returns JSON from POST /employees or PUT /employees/:id
+  -> employeesService.create()/update() frontend resolves the JSON as Employee
+  -> EmployeeRegistrationPage or EmployeeEditPage retains it briefly in React state
+  -> InitialPasswordModal renders and optionally copies it.
+
+Yes, the frontend displays it. InitialPasswordModal shows the phone and password, marks it as shown once, and includes a copy-to-clipboard button. The admin is expected to pass the password to the Agent; no email/SMS delivery flow was found. Once the modal/page state is discarded there is no endpoint to recover the plaintext. If an Agent is re-enabled using an existing identity, provision() returns null, so the UI does not show a new password.
+
+Security implication: the one-time password is intentionally present in the authenticated admin API response and frontend memory. It must be transmitted to the admin only over TLS in production and handed to the Agent through an approved private channel. Browser/network/proxy response-body logging, screenshots and clipboard exposure should be considered. There is no expiration timestamp or temporary-password consumption counter; the account remains in must-change state until the Agent changes it.
+
+3. FIRST-TIME LOGIN THROUGH /auth/mobile/login
+
+Navigation and frontend request
+
+The role picker uses /auth/login for Collection Agent. MobileLoginForm collects phone/password, validates that the phone looks valid and password is nonempty, and calls its onSubmit handler. login.tsx calls login(phoneNumber, password) from the mobile auth API module. That function POSTs { phone, password } to /auth/mobile/login. The response type is a union of LoginResult and AgentLoginResult; the client discriminates the Agent shape with "agent" in result.
+
+Controller and service verification
+
+AuthController.mobileLogin() accepts LoginDto and calls AuthService.mobileLogin(phone, password). AuthService.mobileLogin():
+- Finds the User by phone.
+- Rejects roles other than estate_owner, estate_manager, or collection_agent.
+- Routes collection_agent accounts to agentLoginWithUser(); other supported mobile roles use the general loginWithUser() path.
+
+agentLoginWithUser():
+- bcrypt.compare(password, user.password_hash) verifies the submitted credential; the plaintext is not queried or stored.
+- Rejects users.status = suspended.
+- Requires role collection_agent and AgentDirectoryService.byUserId(user.id) to resolve an active HR Employee with the Tea Collecting Agent title, linked user id, and collection_agents dispatch identity. An inactive employee, changed job title, missing identity, or missing link is rejected.
+- Calls UsersService.markLogin() to update users.last_login_at.
+- Signs an AgentJwtPayload with sub = the User id and role = CollectionAgent.
+- Returns accessToken, agent {id, name, phone}, and mustChangePassword copied from users.must_change_password.
+
+must_change_password behavior:
+- The initial flag is true for a new provisioned user and is returned as mustChangePassword. AuthService does not refuse to issue the JWT solely because the flag is true.
+- The mobile client sees the flag and routes to the temporary-password screen rather than the dashboard.
+- More importantly, agent data endpoints are guarded by AgentJwtGuard and their AgentSelfService methods resolve the caller through the JWT subject. AgentSelfService.me() rechecks HR active/role/link, user suspension and mustChangePassword on every protected operation. Thus the login token cannot perform dispatch actions while the password is still temporary.
+
+There are two agent login endpoints in the current tree. The role-selected main app uses /auth/mobile/login. The separate CollectorLoginScreen uses loginAgent() and /auth/agent/login, which calls AuthService.agentLogin() and then the same agentLoginWithUser() credential logic. The dedicated screen is not the route configured in userRoles.ts.
+
+4. TEMPORARY PASSWORD CHANGE
+
+The shared login screen stores the access token and agent details as a pending Collector session if mustChangePassword is true, then routes to /auth/collector-change-password. The dedicated collector-login.tsx screen does the same. The password screen loads collectorPendingSession and validates current password, new password (8–72 characters), new != current, and confirmation equality before submitting.
+
+The frontend changeAgentPassword() method POSTs currentPassword and newPassword to /auth/agent/change-password. Unlike the general mobile apiRequest() client, this one explicitly sets Authorization: Bearer <agent token>.
+
+AuthController.changeAgentPassword() is guarded by AgentJwtGuard, gets the numeric User id from the verified JWT subject, and passes the two fields to AuthService.changeAgentPassword(). ChangePasswordDto requires a string/nonempty current password and string new password of 8–72 characters. The backend does not receive a confirmation field; equality confirmation exists only in the UI.
+
+AuthService.changeAgentPassword():
+- Loads the User by JWT id and requires users.role = collection_agent.
+- Verifies currentPassword using bcrypt.compare().
+- Rejects using the same current and new plaintext password.
+- Hashes newPassword with bcrypt.hash(newPassword, 10).
+- Calls UsersService.setPassword(userId, hash).
+
+UsersService.setPassword() performs one update setting password_hash to the new bcrypt hash and must_change_password = false. It returns no password/hash to the client. The password screen then calls completeCollectorSession() and routes to /teacollector/teacollectorMobile. If the backend changed the password but writing the completed session fails, the UI instructs the user to sign in again using the new password.
+
+The endpoint is authenticated and verifies the current password, but it does not recheck user.status or current active HR-agent membership. The protected dispatch API still blocks suspended/inactive agents through AgentSelfService; the password-change endpoint itself can still change a suspended agent's password if a previously issued valid agent token and current password are presented.
+
+5. SESSION STORAGE, DASHBOARD AND FUTURE LOGINS
+
+On successful login with no forced change, or after password change, completeCollectorSession() constructs a profile with role CollectionAgent and stores:
+- accessToken under "accessToken";
+- serialized agent profile under "user";
+- removes "collectorPendingSession".
+
+Native platforms use expo-secure-store. Web uses localStorage. The pending password-change flow stores its token/profile under collectorPendingSession until completion.
+
+login.tsx replaces navigation with /teacollector/teacollectorMobile after session completion. The dashboard component currently initializes stops and fertilizer requests from hard-coded demo arrays, and even displays a fixed greeting. It does not retrieve the JWT or use authenticated /dispatch/me/* data. The mobile API client has no automatic bearer-token attachment; only the password-change function manually supplies Authorization.
+
+After changing the password, the current JWT is kept; the server does not rotate it. On a subsequent sign-in, the new password matches the new hash, AuthService returns mustChangePassword = false, the app completes the session directly and enters the dashboard. The old temporary password no longer matches. Agent JWTs use the configured shared JWT_SECRET and configured expiration (JWT_EXPIRES_IN, default 7d); the agent strategy checks the CollectionAgent role claim and expiration, but the strategy is not a revocation list. No refresh or token-revocation flow was found.
+
+6. ISSUES AND SECURITY CONCERNS
+
+P1 — provisioning User insert is incompatible with required schema:
+AgentProvisioningService.provision() creates User without name. User.name is a non-null TypeORM column; backend/src/migrations/baseline.sql also has users.name VARCHAR(32) NOT NULL. On that baseline, a new agent insert fails and the transaction rolls back. The employee create flow then attempts to delete the HR row.
+
+The fresh database schema is also inconsistent: database/init.sql creates users without name and nic, but User maps both fields. The 2026-10-10-agent-employees.sql migration adds must_change_password and collection_agents.hr_employee_id, not users.name/nic. Since AppModule configures TypeORM synchronize:false, the application will not repair this automatically. A database made only from current init.sql is incompatible with the User entity. The actual runtime database was not inspected.
+
+Even when assigning the employee name to User, EmployeeEntity permits name up to 100 characters while User.name is varchar(32); the Employee DTO has no matching max-length check. Reconcile column lengths and validation rather than simply copying arbitrary-length names.
+
+P1 — changing an existing employee to Agent can strand the record:
+EmployeesService.update() saves the HR role before provision() but unlike create() has no try/catch/transaction restoring the prior employee on failure. If provisioning fails, the employee remains Active with the Agent title. On the next update, wasAgent becomes true based on the saved role/status, so the update takes syncContact() rather than retrying provision(). This can leave an Active HR Agent with no user/dispatch identity and no normal retry path.
+
+P1 — Collector “Forgot password” is not a working recovery flow and logs credentials:
+The main role-selected login uses MobileLoginForm defaults, which show Forgot password and registration links for all roles. The Forgot password link opens the generic auth/change-password.tsx stub. Its button handler logs currentPassword, newPassword and confirmPassword to console and contains a TODO rather than calling an API. No Collector password reset/recovery endpoint or safe delivery mechanism was found. A dedicated collector-login screen hides those links, but it is not the route selected by userRoles.ts.
+
+P1 — dashboard/session lifecycle incomplete:
+The Collector dashboard remains demo/static and is not connected to agent APIs. The app lacks startup restoration/hydration of saved Collector credentials, protected navigation, central bearer injection, expiry/401 cleanup, and a real logout. The displayed demo profile logout action only presents an alert. A stored token therefore does not currently make the screen a functional authenticated Collector experience.
+
+P2 — mobile default API port differs from backend:
+mobile/src/app/services/api/client.ts defaults to port 3001; backend/src/main.ts defaults to 3000. Unless EXPO_PUBLIC_API_URL or environment configuration aligns them, the mobile auth request cannot reach the default local backend.
+
+P2 — password-change endpoint state checks and token lifecycle:
+changeAgentPassword() validates User existence/role/current password but not suspended status or active Employee linkage. A previously issued token remains usable for password change after suspension/deactivation, though agent data operations remain blocked. Password change also does not rotate/revoke existing JWTs. Consider consistent state checks and explicit session invalidation/rotation policy.
+
+P2 — JWT separation relies on role, not audience:
+AgentJwtStrategy and the portal strategy use JWT_SECRET; the agent strategy accepts role CollectionAgent and the portal strategy accepts portal roles. This guards role crossover, but there is no distinct aud claim/secret. Preserve strict role checks and consider explicit issuer/audience separation if the token boundary is a security requirement.
+
+P2 — throttling differs by endpoint:
+POST /auth/mobile/login skips short/medium/long throttler buckets but still matches the dedicated auth bucket configured for 5 attempts per 60 seconds. POST /auth/agent/login does not match that custom auth path filter and only has the general short/medium/long limits. The primary mobile route has the dedicated limit, but the alternate login endpoint should receive a deliberate equivalent policy or be retired.
+
+P2 — login response allows account/role enumeration:
+Unknown phone, wrong password, suspended account, and non-Agent account produce distinguishable responses. Review whether an external caller should be able to infer account and role state.
+
+7. FILE-BY-FILE REFERENCE LIST
+
+ADMIN DASHBOARD
+
+source-code/admin/src/App.tsx, App.tsx — route registration; line 94 maps employees/new to EmployeeRegistrationPage.
+source-code/admin/src/features/dashboard/DashboardPage.tsx, DashboardPage.tsx — dashboard quick action; line 71 navigates to /employees/new.
+source-code/admin/src/features/employees/EmployeeListPage.tsx, EmployeeListPage.tsx — roster Add Employee actions; lines 109 and 143 navigate to /employees/new.
+source-code/admin/src/features/employees/EmployeeRegistrationPage.tsx, EmployeeRegistrationPage.tsx — EmployeeRegistrationPage; lines 35–90 form state/mutation, 70–72 dynamic agent-role detection, 120–180 agent login UX/toggle, 225–231 initial-password modal.
+source-code/admin/src/features/employees/useEmployeeRoles.ts, useEmployeeRoles.ts — useEmployeeRoles() loads server role metadata; lines 8–14.
+source-code/admin/src/services/employees.ts, employees.ts — create() POST /employees; lines 13–27 input shape and 82–87 create call; GET role loader is in the same service.
+source-code/admin/src/lib/api.ts, api.ts — apiFetch() attaches admin bearer JWT and handles 401; lines 8–28 token storage and 37–75 request handling.
+source-code/admin/src/features/employees/types.ts, types.ts — frontend Employee and optional initialPassword response shape; lines 12–36.
+source-code/admin/src/features/employees/InitialPasswordModal.tsx, InitialPasswordModal.tsx — one-time credential display/copy; lines 6–11 props, 18–27 component/copy, 30–55 visible modal.
+source-code/admin/src/features/employees/EmployeeEditPage.tsx, EmployeeEditPage.tsx — role conversion update and modal; lines 21 onward, 102–117 mutation handling, 182 onward modal.
+
+BACKEND EMPLOYEE / PROVISIONING
+
+source-code/backend/src/employees/employee-roles.ts, employee-roles.ts — AGENT_JOB_ROLE and isAgentRole(); lines 7 and 18–19.
+source-code/backend/src/employees/dto/create-employee.dto.ts, create-employee.dto.ts — CreateEmployeeDto validation; lines 21–85.
+source-code/backend/src/employees/employees.controller.ts, employees.controller.ts — JwtAuthGuard at lines 39–41, GET roles at 131–134, POST create at 141–148, PUT update at 193–200, resolveActor at 210 onward.
+source-code/backend/src/employees/employees.service.ts, employees.service.ts — create() at 66–134, update() at 137–200, deactivate() at 206 onward, assertIsAdmin() at 564 onward.
+source-code/backend/src/dispatch/agent-provisioning.service.ts, agent-provisioning.service.ts — contact checks at 22 onward; provision transaction, random password, hash and linked inserts at 40–93; deprovision/suspend behavior at 101 onward; contact sync at 153 onward.
+source-code/backend/src/employees/employee-map.ts, employee-map.ts — PublicEmployee response shape and one-time initialPassword declaration; lines 40–63.
+source-code/backend/src/employees/employee.entity.ts, employee.entity.ts — HR employee name/status/userId/hasLogin properties; lines 29–57 and 120–131.
+source-code/backend/src/users/user.entity.ts, user.entity.ts — User columns including phone/name/password_hash/status/must_change_password/NIC; lines 38–73.
+source-code/backend/src/users/factory-employee.entity.ts, factory-employee.entity.ts — factory-side employee identity and role constraints; class/columns from lines 15 onward.
+source-code/backend/src/dispatch/collection-agent.entity.ts, collection-agent.entity.ts — dispatch identity links to factory employee and HR employee; lines 8–38.
+
+BACKEND AUTH / PASSWORD / JWT / PROTECTION
+
+source-code/backend/src/auth/auth.controller.ts, auth.controller.ts — agent login at lines 26–30, unified mobile login at 34–42, AgentJwtGuard password endpoint at 44–56.
+source-code/backend/src/auth/auth.service.ts, auth.service.ts — result types at 16–52, mobileLogin() at 83–113, dedicated agentLogin() at 175 onward, agentLoginWithUser() at 285–326, changeAgentPassword() at 337–361.
+source-code/backend/src/auth/dto/login.dto.ts, login.dto.ts — login phone/password validation; lines 3–10.
+source-code/backend/src/auth/dto/change-password.dto.ts, change-password.dto.ts — current/new password constraints; lines 3–12.
+source-code/backend/src/auth/jwt-payload.interface.ts, jwt-payload.interface.ts — AgentJwtPayload and AGENT_ROLE; lines 15–20.
+source-code/backend/src/auth/agent-jwt.strategy.ts, agent-jwt.strategy.ts — signature/expiration and CollectionAgent claim validation; lines 9–26.
+source-code/backend/src/auth/agent-jwt.guard.ts, agent-jwt.guard.ts — jwt-agent guard; line 5.
+source-code/backend/src/auth/auth.module.ts, auth.module.ts — JWT_SECRET, JWT_EXPIRES_IN (default 7d), and strategy providers; lines 31–52.
+source-code/backend/src/users/users.service.ts, users.service.ts — findByPhone()/findById(), setPassword() hash+flag update and markLogin(); lines 33–55.
+source-code/backend/src/dispatch/agent-directory.service.ts, agent-directory.service.ts — active HR role/link filtering and credential lookup; lines 23–83.
+source-code/backend/src/dispatch/agent-self.service.ts, agent-self.service.ts — server-side must-change and account gates in me(); lines 79–96.
+source-code/backend/src/dispatch/dispatch-agent.controller.ts, dispatch-agent.controller.ts — AgentJwtGuard on /dispatch/me and delegations to AgentSelfService; lines 25–83.
+source-code/backend/src/app.module.ts, app.module.ts — global throttler buckets and dedicated auth limit/path matching; lines 26–63 and APP_GUARD at 92–93.
+source-code/backend/src/main.ts, main.ts — ValidationPipe whitelist at line 7, backend port default 3000 at line 15.
+
+MOBILE FRONTEND
+
+source-code/mobile/src/data/userRoles.ts, userRoles.ts — role picker routes Collection Agent to /auth/login; lines 3–22.
+source-code/mobile/src/app/auth/login.tsx, login.tsx — LogInScreen, mobile login call, Agent union handling, pending password session and dashboard navigation; lines 12–66.
+source-code/mobile/src/components/auth/MobileLoginForm.tsx, MobileLoginForm.tsx — shared validation/submission and default Forgot password/registration links; lines 23–70 and 115–132.
+source-code/mobile/src/app/services/api/auth.api.ts, auth.api.ts — response union and login(), loginAgent(), changeAgentPassword(); lines 1–64.
+source-code/mobile/src/app/services/api/client.ts, client.ts — API base URL default and fetch wrapper; lines 3–17 and 44 onward. It does not centrally inject a saved agent bearer token.
+source-code/mobile/src/app/auth/collector-login.tsx, collector-login.tsx — alternate standalone Collector sign-in using loginAgent(); lines 14–30.
+source-code/mobile/src/app/auth/collector-change-password.tsx, collector-change-password.tsx — forced first-change UI, pending session loading, client validation, API submission and completion; lines 27–130.
+source-code/mobile/src/utils/collectorSession.ts, collectorSession.ts — pending/complete session persistence, SecureStore vs localStorage; lines 15–89.
+source-code/mobile/src/app/teacollector/teacollectorMobile.tsx, teacollectorMobile.tsx — current Collector dashboard and demo data; hard-coded greeting line 58, INITIAL_STOPS at 110 onward, component/state at 225 onward.
+source-code/mobile/src/app/teacollector/demo-teacollector-profile.tsx, demo-teacollector-profile.tsx — current logout action is only an alert; lines 67–78.
+source-code/mobile/src/app/auth/change-password.tsx, change-password.tsx — generic unimplemented password screen and plaintext console logging; lines 16–29.
+source-code/mobile/src/app/_layout.tsx, _layout.tsx — Expo Router stack setup; lines 1–32.
+
+DATABASE AND TEST EVIDENCE
+
+source-code/database/init.sql, init.sql — users schema at lines 5–22 omits name and nic; collection_agents table at 147–160; employees table at 526–553; HR link at 558–560.
+source-code/database/migrations/2026-10-09-agent-dispatch.sql, 2026-10-09-agent-dispatch.sql — route/dispatch schema migration; first 90 lines establish its transaction and agent dispatch additions.
+source-code/database/migrations/2026-10-10-agent-employees.sql, 2026-10-10-agent-employees.sql — HR link and must_change_password additions at lines 16–21 and existing-agent backfill at 25–50; it does not add users.name or users.nic.
+source-code/backend/src/migrations/baseline.sql, baseline.sql — captured users table at lines 1468–1479; users.name is VARCHAR(32) NOT NULL at 1477, NIC is nullable at 1476, and must_change_password at 1478.
+source-code/backend/src/dispatch/agent-provisioning.service.spec.ts, agent-provisioning.service.spec.ts — fake-repository tests for 12-character password, bcrypt hash, links and re-enable; lines 76–130. Does not verify the real DB NOT NULL or missing-column failure.
+source-code/backend/src/auth/auth.service.spec.ts, auth.service.spec.ts — agent login, suspension, password hashing/current-password/role tests; lines 35–98.
+source-code/backend/src/employees/employees.service.spec.ts, employees.service.spec.ts — create rollback and role conversion behavior; lines 212–285. Provisioning is mocked, and failure coverage at create does not prove update's role-change rollback.
+
+MISSING FUNCTIONALITY / REQUIRED CHANGES
+
+1. Make users schema sources consistent: add/migrate users.name and users.nic or align entity/schema; ensure migrations applied because synchronize is false. Supply employee.name when creating User, and resolve the Employee 100-character vs User 32-character name limit. Add a PostgreSQL-backed provisioning test that exercises the actual constraints and confirms all identity links.
+2. Make EmployeesService.update() role conversion atomic or recoverable. A failed provision must not persist a misleading Active Agent role, and retry must provision instead of only syncing contact.
+3. Remove plaintext credential console logging from generic change-password.tsx. Implement a Collector-specific forgotten-password/reset procedure and decide secure temporary-password delivery/expiry.
+4. Replace demo Collector screens and fake profile/stops with live API data. Add a mobile auth provider/session restoration, protected routes, bearer token injection, token expiry/401 cleanup and real logout.
+5. Align mobile API default port 3001 with backend port 3000 or require a validated EXPO_PUBLIC_API_URL.
+6. Enforce active/suspended checks consistently on password change; choose token rotation/revocation behavior after password changes and consider issuer/audience separation for portal vs Agent JWTs.
+7. Apply a deliberate dedicated login throttling policy to both exposed login routes and decide whether login errors should avoid disclosing account/role state.
+8. Add end-to-end coverage: admin create -> real DB provisioning -> temporary sign-in -> must-change blocking -> successful password change -> live own-agent endpoint -> subsequent new-password login and disabled/suspended rejection.

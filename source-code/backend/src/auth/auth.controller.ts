@@ -29,6 +29,17 @@ export class AuthController {
     return this.authService.agentLogin(dto.phone, dto.password);
   }
 
+
+
+  
+  @SkipThrottle({ short: true, medium: true, long: true })
+  @Post('mobile/login')
+  mobileLogin(
+    @Body() dto: LoginDto,
+  ): Promise<LoginResult | AgentLoginResult> {
+    return this.authService.mobileLogin(dto.phone, dto.password);
+  }
+
   /** The temporary password a newly registered agent was given must be changed before anything else works. */
   @UseGuards(AgentJwtGuard)
   @Post('agent/change-password')

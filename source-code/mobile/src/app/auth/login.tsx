@@ -7,6 +7,7 @@ import MobileLoginForm from "@/components/auth/MobileLoginForm";
 import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoGreen.png";
 import { spacing } from "@/theme/spacing";
 import { login } from "../services/api/auth.api";
+import { completeCollectorSession, storePendingCollectorSession, } from "@/utils/collectorSession";
 
 export default function LogInScreen() {
   const router = useRouter();
@@ -24,16 +25,39 @@ export default function LogInScreen() {
   }
 
   async function handleLogIn(phoneNumber: string, password: string) {
+    
     const result = await login(phoneNumber, password);
+
+    // Collection Agent login
+    if ("agent" in result) {
+      const session = {
+        accessToken: result.accessToken,
+        agent: result.agent,
+      };
+
+      if (result.mustChangePassword) {
+        await storePendingCollectorSession(session);
+        router.replace("./collector-change-password");
+        return;
+      }
+
+      await completeCollectorSession(session);
+      router.replace("/teacollector/teacollectorMobile");
+      return;
+    }
+
+    // Estate Owner / Estate Manager login
     await persistSession(result.accessToken, result.user);
 
     switch (result.user.role) {
       case "Estate Owner":
         router.replace("/(estate-owner)/home");
         return;
+
       case "Estate Manager":
         router.replace("/estate-manager");
         return;
+
       default:
         throw new Error("This account does not have a mobile dashboard yet.");
     }

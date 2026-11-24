@@ -58,7 +58,7 @@ export default function MobileLoginForm({
 
     try {
       setLoading(true);
-      await onSubmit(phoneNumber, password);
+      await onSubmit(phoneNumber.trim(), password);
     } catch (error) {
       const messages = getErrorMessages(error, "Unable to log in.");
       const nextFieldErrors: LoginFieldErrors = {};
