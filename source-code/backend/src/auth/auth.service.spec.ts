@@ -34,6 +34,7 @@ async function setup(userPatch: Partial<User> = {}) {
   };
   const directory = {
     byUserId: jest.fn().mockResolvedValue({ agentId: 6, name: 'P. Fernando' }),
+    roleByUserId: jest.fn().mockResolvedValue('Tea Collecting Agent'),
   };
   const svc = new AuthService(
     usersService as unknown as UsersService,
@@ -51,13 +52,25 @@ describe('AuthService — agent sign-in & first password change', () => {
     expect(res).toMatchObject({
       accessToken: 'jwt',
       mustChangePassword: true,
-      agent: { id: 6 },
+      agent: {
+        id: 6,
+        name: 'P. Fernando',
+        role: 'Tea Collecting Agent',
+      },
     });
   });
 
   it('refuses a deactivated agent (no active employee behind the login)', async () => {
     const { svc, directory } = await setup();
     directory.byUserId.mockResolvedValue(null);
+    await expect(svc.agentLogin('0777000016', 'Temp-pass-1')).rejects.toThrow(
+      /not a collection agent/,
+    );
+  });
+
+  it('refuses a login when the active employee role is unavailable', async () => {
+    const { svc, directory } = await setup();
+    directory.roleByUserId.mockResolvedValue(null);
     await expect(svc.agentLogin('0777000016', 'Temp-pass-1')).rejects.toThrow(
       /not a collection agent/,
     );

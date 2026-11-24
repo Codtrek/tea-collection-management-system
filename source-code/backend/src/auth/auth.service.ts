@@ -65,7 +65,7 @@ export function lockedMinutesLeft(
 
 export interface AgentLoginResult {
   accessToken: string;
-  agent: { id: number; name: string; phone: string };
+  agent: { id: number; name: string; phone: string; role: string };
   /** true while the one-time temporary password is still in use — the app must force a change */
   mustChangePassword: boolean;
 }
@@ -125,72 +125,55 @@ export class AuthService {
 
   async login(phone: string, password: string): Promise<LoginResult> {
     const user = await this.usersService.findByPhone(phone);
+
     if (!user) {
       throw new UnauthorizedException(
         'No account found with this phone number.',
       );
     }
-    await this.verifyPassword(user, password);
-    if (user.status === 'suspended') {
+
+    return this.loginWithUser(user, password);
+  }
+
+
+  /**
+   * Unified mobile login for Estate Owners, Estate Managers,
+   * and Collection Agents.
+   */
+
+  async mobileLogin(
+    phone: string,
+    password: string,
+  ): Promise<LoginResult | AgentLoginResult> {
+    const user = await this.usersService.findByPhone(phone);
+
+    if (!user) {
       throw new UnauthorizedException(
-        'This account has been suspended. Contact an administrator.',
+        'No account found with this phone number.',
       );
     }
 
-    await this.usersService.markLogin(user.id);
-    switch (user.role) {
-      case 'estate_owner': {
-        const estateOwnerPublicUser = await this.buildEstateOwnerPublicUser(
-          user.id,
-          user.phone,
-          user.role,
-        );
-        const payload: JwtPayload = {
-          sub: String(user.id),
-          role: estateOwnerPublicUser.role,
-        };
-        return {
-          accessToken: this.jwtService.sign(payload),
-          user: estateOwnerPublicUser,
-        };
-      }
-      case 'estate_manager': {
-        const publicUser = await this.buildEstateManagerPublicUser(
-          user.id,
-          user.phone,
-          user.role,
-        );
-        const payload: JwtPayload = {
-          sub: String(user.id),
-          role: publicUser.role,
-        };
-        return {
-          accessToken: this.jwtService.sign(payload),
-          user: publicUser,
-        };
-      }
-      default: {
-        const publicUser = await this.buildPublicUser(
-          user.id,
-          user.phone,
-          user.role,
-        );
-        const payload: JwtPayload = {
-          sub: String(user.id),
-          role: publicUser.role,
-          tv: user.token_version ?? 0,
-        };
-        return {
-          accessToken: this.jwtService.sign(payload),
-          user: {
-            ...publicUser,
-            mustChangePassword: user.must_change_password,
-          },
-          mustChangePassword: user.must_change_password,
-        };
-      }
+    // Allow only the three roles supported by the mobile app.
+    if (
+      user.role !== 'estate_owner' &&
+      user.role !== 'estate_manager' &&
+      user.role !== 'collection_agent'
+    ) {
+      throw new UnauthorizedException(
+        'This account does not have a mobile dashboard.',
+      );
     }
+
+
+
+    if (user.role === 'collection_agent') {
+      return this.agentLoginWithUser(user, password);
+    }
+
+    return this.loginWithUser(user, password);
   }
+
+
 
   async register(
     name: string,
@@ -238,37 +221,181 @@ export class AuthService {
   /**
    * Mobile sign-in for collection agents (phone + password). Issues an AGENT-role
    * token that the portal API refuses; only `/dispatch/me/*` accepts it.
+   * This is needed only if you want to retain the separate /auth/agent/login endpoint for collector-login.tsx.
    */
-  async agentLogin(phone: string, password: string): Promise<AgentLoginResult> {
+  
+  
+
+
+
+
+
+  
+   
+
+  async agentLogin(
+    phone: string,
+    password: string,
+  ): Promise<AgentLoginResult> {
     const user = await this.usersService.findByPhone(phone);
+
     if (!user) {
       throw new UnauthorizedException(
         'No account found with this phone number.',
       );
     }
+
+    return this.agentLoginWithUser(user, password);
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  private async loginWithUser(
+    user: User,
+    password: string,
+  ): Promise<LoginResult> {
     await this.verifyPassword(user, password);
+
+    if (user.status === 'suspended') {
+      throw new UnauthorizedException(
+        'This account has been suspended. Contact an administrator.',
+      );
+    }
+
+    await this.usersService.markLogin(user.id);
+
+    switch (user.role) {
+      case 'estate_owner': {
+        const publicUser = await this.buildEstateOwnerPublicUser(
+          user.id,
+          user.phone,
+          user.role,
+        );
+
+        const payload: JwtPayload = {
+          sub: String(user.id),
+          role: publicUser.role,
+        };
+
+        return {
+          accessToken: this.jwtService.sign(payload),
+          user: publicUser,
+        };
+      }
+
+      case 'estate_manager': {
+        const publicUser = await this.buildEstateManagerPublicUser(
+          user.id,
+          user.phone,
+          user.role,
+        );
+
+        const payload: JwtPayload = {
+          sub: String(user.id),
+          role: publicUser.role,
+        };
+
+        return {
+          accessToken: this.jwtService.sign(payload),
+          user: publicUser,
+        };
+      }
+
+      default: {
+        const publicUser = await this.buildPublicUser(
+          user.id,
+          user.phone,
+          user.role,
+        );
+
+        const payload: JwtPayload = {
+          sub: String(user.id),
+          role: publicUser.role,
+          tv: user.token_version ?? 0,
+        };
+
+        return {
+          accessToken: this.jwtService.sign(payload),
+          user: {
+            ...publicUser,
+            mustChangePassword: user.must_change_password,
+          },
+          mustChangePassword: user.must_change_password,
+        };
+      }
+    }
+  }
+
+
+ 
+
+
+
+
+
+
+
+  private async agentLoginWithUser(
+    user: User,
+    password: string,
+  ): Promise<AgentLoginResult> {
+    await this.verifyPassword(user, password);
+
     if (user.status === 'suspended') {
       throw new UnauthorizedException(
         'This account has been suspended. Contact your factory.',
       );
     }
+
     const agent =
       user.role === 'collection_agent'
         ? await this.agentDirectory.byUserId(user.id)
         : null;
-    if (!agent) {
+    const role = agent ? await this.agentDirectory.roleByUserId(user.id) : null;
+
+    if (!agent || !role) {
       throw new UnauthorizedException(
         'This account is not a collection agent.',
       );
     }
+
     await this.usersService.markLogin(user.id);
-    const payload: AgentJwtPayload = { sub: String(user.id), role: AGENT_ROLE };
+
+    const payload: AgentJwtPayload = {
+      sub: String(user.id),
+      role: AGENT_ROLE,
+    };
+
     return {
       accessToken: this.jwtService.sign(payload),
-      agent: { id: agent.agentId, name: agent.name, phone: user.phone },
+      agent: {
+        id: agent.agentId,
+        name: agent.name,
+        phone: user.phone,
+        role,
+      },
       mustChangePassword: user.must_change_password,
     };
   }
+ 
+
+
+
+
+
+
+
 
   /** First sign-in: swap the one-time temporary password for the agent's own. */
   async changeAgentPassword(
