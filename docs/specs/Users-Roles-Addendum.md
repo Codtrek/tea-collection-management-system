@@ -1,7 +1,7 @@
 # Users & Roles — Addendum
 
 **Decided:** 2026-11-18
-**Status:** built on `feat/users-roles` (from `dev`), local only. Migration `1794400026000-UsersRoles`.
+**Status:** merged to dev as PR #100 (2026-11-25); migration `1794400026000-UsersRoles` applied on Azure dev. §10 break-glass: `feat/admin-recover`.
 **Amends:** ADM-02 Users & Roles (both tabs), portal sign-in, the audit log (ADM-04), and how every portal request is authenticated.
 
 ## 1. Why
@@ -156,3 +156,46 @@ Every portal request re-reads the user (`JwtStrategy.validate`, then `auth/sessi
 6. **E2E note:** the API's per-user throttle (15 requests / 10 s) is shared by every Playwright worker using the one admin token.
    - Parallel runs hit 429s, and before this branch a 429 on `/auth/me` signed the page out. This is the likely cause of the known "~8 flaky 30-second timeouts per run".
    - Session hydration now retries transient errors and signs out only on a 401. Running e2e with `--workers=1`, or one account per worker, avoids the rest.
+
+## 10. Break-glass recovery (`npm run admin:recover`)
+
+**Added:** 2026-11-25, `feat/admin-recover`. Code: `source-code/backend/src/scripts/admin-recover.ts`.
+
+**When to use it:** only when no Administrator can sign in, for example when every Administrator is suspended, locked or has lost their password. If any Administrator can sign in, use Users & Roles in the portal instead.
+
+**Command.** Run it on the server, in an interactive shell, against the database the backend uses (`DATABASE_URL`):
+
+```sh
+# in the backend container
+docker exec -it -e BREAK_GLASS=1 <backend-container> npm run admin:recover -- --phone 07XXXXXXXX [--promote]
+# or from a checkout, after `npm run build`
+BREAK_GLASS=1 npm run admin:recover -- --phone 07XXXXXXXX [--promote]
+```
+
+It runs the compiled `dist/scripts/admin-recover.js`. The production image has no ts-node.
+
+**Refusals.** Each one happens before anything is written:
+- `BREAK_GLASS=1` is not set. In that case it doesn't even connect to the database.
+- The shell is not a terminal (a pipe, cron or CI).
+- No user has that phone number.
+- The user doesn't have a factory-portal role (Administrator, Manager or Officer).
+- The user has no factory staff profile. Portal sign-in needs one, so the new password would be useless.
+- The re-typed phone number doesn't match, or the operator cancels (Ctrl+D).
+- `--promote` is given while an active (not suspended) Administrator exists.
+
+**What it changes.** All in one transaction: if any step fails, including the audit row, nothing changes.
+- `status = 'active'`, `failed_login_count = 0`, `locked_until = NULL`.
+- A new temporary password (12 characters, the same generator as Reset password, bcrypt cost 10) with `must_change_password = true`.
+- `token_version + 1`, so every existing session ends.
+- `--promote` also sets `role = 'factory_admin'`.
+
+**Audit.** One row:
+- user "System (break-glass)", role "System", module "Administration", action "Break-glass recovery";
+- record `USR-nnnn`;
+- `before`/`after` cover status, locked and role, plus a reason.
+
+The password is never in the audit row, a log or a file. It is printed once, after the commit.
+
+**Handling the password.** Give it to the person face to face or by phone. Never put it in chat, email or a ticket. They must change it at sign-in (§6).
+
+**Tests:** `admin-recover.spec.ts` covers every refusal, rollback when the audit row fails, the audit id retry, and that the password appears only in the output. A manual run on a scratch PostgreSQL checked the real SQL end to end, finishing with a sign-in that returned `mustChangePassword: true`.

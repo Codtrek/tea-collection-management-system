@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "ts-node -r tsconfig-paths/register src/seed.ts",
     "seed:demo": "ts-node -r tsconfig-paths/register src/demo/seed-demo.ts",
+    "admin:recover": "node dist/scripts/admin-recover.js",
     "seed:demo:reset": "ts-node -r tsconfig-paths/register src/demo/seed-demo.ts --reset",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/data-source.ts",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/data-source.ts",
