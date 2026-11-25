@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -12,6 +13,7 @@ import { EmployeeEntity } from '../employees/employee.entity';
 import { User } from '../users/user.entity';
 import { UsersModule } from '../users/users.module';
 import { AgentJwtStrategy } from './agent-jwt.strategy';
+import { AgentSessionInterceptor } from './agent-session.interceptor';
 import { AuthController } from './auth.controller';
 import { AuthMobileController } from './auth.mobile.controller';
 import { AuthService } from './auth.service';
@@ -51,6 +53,8 @@ import { JwtStrategy } from './jwt.strategy';
     JwtStrategy,
     AgentJwtStrategy,
     AgentDirectoryService,
+    // sliding 30-day agent sessions: renews a day-old agent token on a successful call
+    { provide: APP_INTERCEPTOR, useClass: AgentSessionInterceptor },
   ],
   exports: [AuthService, JwtModule],
 })

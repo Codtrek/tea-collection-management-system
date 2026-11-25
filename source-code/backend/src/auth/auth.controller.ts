@@ -47,12 +47,23 @@ export class AuthController {
   async changeAgentPassword(
     @Body() dto: ChangePasswordDto,
     @Req() req: Request & { user: AgentJwtPayload },
-  ): Promise<{ ok: true }> {
-    await this.authService.changeAgentPassword(
+  ): Promise<{ ok: true; accessToken: string }> {
+    const { accessToken } = await this.authService.changeAgentPassword(
       Number(req.user.sub),
       dto.currentPassword,
       dto.newPassword,
     );
+    // The change ends every other session; this device continues with the new token.
+    return { ok: true, accessToken };
+  }
+
+  /** Agent sign-out: the current token (and any other for this login) stops working. */
+  @UseGuards(AgentJwtGuard)
+  @Post('agent/logout')
+  async agentLogout(
+    @Req() req: Request & { user: AgentJwtPayload },
+  ): Promise<{ ok: true }> {
+    await this.authService.agentLogout(Number(req.user.sub));
     return { ok: true };
   }
 
