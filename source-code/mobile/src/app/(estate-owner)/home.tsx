@@ -1,7 +1,10 @@
+import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import { getSignedInOwnerName } from "../services/api/estate-owner.api";
+import { getOwnerCollectionRequests, type OwnerCollectionRequest } from "../services/api/collection-request.api";
 
-import { Screen, Header, EstateOwnerBottomTab, GeneralHeader } from "@/components/ui";
+import { AppText, Screen, Header, EstateOwnerBottomTab, GeneralHeader } from "@/components/ui";
 import type { BottomTabItem } from "@/components/ui/BottomTab";
 import {
   MonthSummaryCard,
@@ -31,6 +34,29 @@ export default function EstateOwnerHome() {
   //   }
   // };
 
+  const [signedInOwnerName, setSignedInOwnerName] = useState("");
+  const [openRequests, setOpenRequests] = useState<OwnerCollectionRequest[] | null>(null);
+  const [requestError, setRequestError] = useState("");
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    setSignedInOwnerName("");
+    setOpenRequests(null);
+    setRequestError("");
+    void getOwnerCollectionRequests()
+      .then((requests) => {
+        if (active) setOpenRequests(requests.filter((request) => request.status === "open"));
+      })
+      .catch((error: unknown) => {
+        if (active) setRequestError(error instanceof Error ? error.message : "Could not load collection requests.");
+      });
+
+    void getSignedInOwnerName()
+      .then((name) => { if (active) setSignedInOwnerName(name); })
+      .catch(() => { if (active) setSignedInOwnerName(""); });
+    return () => { active = false; };
+  }, []));
+
   return (
     <>
       {/* <Header
@@ -48,7 +74,7 @@ export default function EstateOwnerHome() {
         header={
           <GeneralHeader
             title="Home"
-            description="Welcome Back!"
+            description={signedInOwnerName ? `Welcome back, ${signedInOwnerName}!` : "Welcome back!"}
             notificationCount={3}
             onNotificationPress={() => {
               // TODO: navigate to notifications once the route exists
@@ -90,15 +116,21 @@ export default function EstateOwnerHome() {
 
           <SectionHeader
             title="Pending Requests"
-            count={pendingRequests.length}
-            onViewAll={() => {}}
+            count={openRequests?.length}
           />
           <View style={styles.list}>
-            {pendingRequests.map((request) => (
+            {requestError ? <AppText>{requestError}</AppText>
+              : openRequests === null ? <AppText>Loading requests…</AppText>
+              : openRequests.length === 0 && <AppText>No pending collection requests.</AppText>}
+            {openRequests?.map((request) => (
               <RequestListItem
                 key={request.id}
-                request={request}
-                onPress={() => {}}
+                request={{
+                  id: String(request.id),
+                  estateName: request.estate.name,
+                  requestedAt: new Date(request.createdAt).toLocaleString(),
+                  status: "pending",
+                }}
               />
             ))}
           </View>
