@@ -17,6 +17,8 @@ import { colors } from "@/theme/colors";
 
 interface AppInputProps extends TextInputProps {
 	label?: string;
+	floatingLabel?: boolean;
+	compact?: boolean;
 	helperText?: string;
 	error?: string;
 	containerStyle?: StyleProp<ViewStyle>;
@@ -29,6 +31,8 @@ interface AppInputProps extends TextInputProps {
 
 export default function AppInput({
 	label,
+	floatingLabel = false,
+	compact = false,
 	helperText,
 	error,
 	containerStyle,
@@ -39,10 +43,12 @@ export default function AppInput({
 	onFocus,
 	onBlur,
 	leftIcon,
+	placeholderTextColor = colors.text.placeholder,
 	rightAccessory,
 	...props
 }: AppInputProps) {
 	const [isFocused, setIsFocused] = useState(false);
+	const raised = floatingLabel && (isFocused || Boolean(props.value));
 	const iconColor = error
 		? colors.error
 		: isFocused
@@ -51,12 +57,14 @@ export default function AppInput({
 
 	return (
 		<View style={[styles.container, containerStyle]}>
-			{label ? <Text style={[styles.label, labelStyle]}>{label}</Text> : null}
+			{label && !floatingLabel ? <Text style={[styles.label, labelStyle]}>{label}</Text> : null}
 
 			<View
 				style={[
 					styles.inputWrapper,
-					isFocused && styles.focused,
+					floatingLabel && styles.portalField,
+					compact && styles.compactField,
+					isFocused && (floatingLabel ? styles.portalFocus : styles.focused),
 					error && styles.errorInput,
 				]}
 			>
@@ -69,8 +77,11 @@ export default function AppInput({
 					/>
 				) : null}
 
+				{raised && <Text pointerEvents="none" accessible={false} style={styles.raisedLabel}>{label}</Text>}
 				<TextInput
 					{...props}
+					accessibilityLabel={props.accessibilityLabel ?? label}
+					placeholder={floatingLabel && !raised ? label : props.placeholder}
 					underlineColorAndroid="transparent"
 					selectionColor={colors.primary}
 					onFocus={(event) => {
@@ -81,8 +92,8 @@ export default function AppInput({
 						setIsFocused(false);
 						onBlur?.(event);
 					}}
-					placeholderTextColor={colors.text.placeholder}
-					style={[styles.input, style]}
+					placeholderTextColor={placeholderTextColor}
+					style={[styles.input, compact && styles.compactInput, raised && styles.raisedInput, style]}
 				/>
 
 				{rightAccessory ? (
@@ -124,6 +135,13 @@ const styles = StyleSheet.create({
 		minHeight: 56,
 		paddingHorizontal: 14,
 	},
+
+	portalField: { minHeight: 60, borderRadius: 9 },
+	compactField: { minHeight: 52 },
+	compactInput: { paddingVertical: 12 },
+	portalFocus: { borderColor: "#AA873D", backgroundColor: colors.white },
+	raisedLabel: { position: "absolute", top: 5, left: 14, color: colors.text.secondary, fontSize: 12, lineHeight: 16 },
+	raisedInput: { paddingTop: 22, paddingBottom: 6 },
 
 	label: {
 		marginBottom: 7,

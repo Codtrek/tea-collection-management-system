@@ -4,10 +4,10 @@ import {
   StyleSheet,
   ViewProps,
   ScrollView,
+  type ScrollViewProps,
   Platform,
 } from "react-native";
 
-import {SafeAreaView} from "react-native-safe-area-context";
 import AppText from "./AppText";
 
 interface ScreenProps extends ViewProps {
@@ -15,6 +15,8 @@ interface ScreenProps extends ViewProps {
   scroll?: boolean;
   header?: React.ReactNode;
   pageTitle?: string;
+  keyboardShouldPersistTaps?: ScrollViewProps["keyboardShouldPersistTaps"];
+  automaticallyAdjustKeyboardInsets?: ScrollViewProps["automaticallyAdjustKeyboardInsets"];
 }
 
 export default function Screen({
@@ -22,10 +24,11 @@ export default function Screen({
   scroll = false,
   header,
   pageTitle,
+  keyboardShouldPersistTaps,
+  automaticallyAdjustKeyboardInsets,
   style,
   ...props
 }: ScreenProps) {
-  // const Container = header ? View : SafeAreaView;
 const TopSection = header ? (
   header
 ) : pageTitle ? (
@@ -45,6 +48,8 @@ const TopSection = header ? (
               style,
             ]}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+            automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
           >
             {children}
           </ScrollView>
