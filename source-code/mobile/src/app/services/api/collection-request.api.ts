@@ -23,6 +23,31 @@ export interface OwnerCollectionRequest extends CollectionRequest {
   estate: { id: number; name: string };
 }
 
+interface CollectionRequestInput {
+  estateId: number;
+  notes?: string | null;
+}
+
+type CollectionRequestPatch = CollectionRequestInput | { notes: string | null };
+
+async function sendRequestUpdate(id: number, method: "PUT" | "PATCH", fields: CollectionRequestPatch) {
+  const token = await readSessionValue("accessToken");
+  if (!token) throw new Error("Sign in to edit your collection request.");
+  return apiRequest<{ id: number }>(`/collection-request/${id}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(fields),
+  });
+}
+
+export function replaceCollectionRequest(id: number, fields: CollectionRequestInput) {
+  return sendRequestUpdate(id, "PUT", fields);
+}
+
+export function patchCollectionRequest(id: number, fields: CollectionRequestPatch) {
+  return sendRequestUpdate(id, "PATCH", fields);
+}
+
 export async function deletePendingCollectionRequest(id: number) {
   const token = await readSessionValue("accessToken");
   if (!token) throw new Error("Sign in to delete your collection request.");
