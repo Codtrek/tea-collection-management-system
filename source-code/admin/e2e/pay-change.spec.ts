@@ -54,7 +54,9 @@ test('an Officer can’t prepare pay changes', async ({ page }) => {
   await actAs(page, process.env.E2E_OFFICER ?? '0771234568')
   await page.goto('/employees/pay-rates/change')
   await page.locator('main').waitFor()
-  await expect(page.getByText('Your role can’t prepare pay changes')).toBeVisible()
+  // the route guard (AccessGuard, payRates) answers before the page renders; the API refuses too
+  await expect(page.getByRole('heading', { name: 'You don’t have access to this page' })).toBeVisible()
+  await expect(page.getByText('Pay rates and pay changes')).toBeVisible()
 })
 
 test('capture pay-change screenshots for review', async ({ page, browser }) => {
