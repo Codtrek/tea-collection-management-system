@@ -133,6 +133,8 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.heading,
+    alignSelf: "stretch",
+    textAlign: "left",
     color: colors.black,
     marginBottom: spacing.xl,
 
