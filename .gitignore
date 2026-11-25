@@ -3,6 +3,8 @@ report.*
 projectProposal.*
 database-migration-dev-procedure.*
 !database-migration-dev-procedure.tex
+harboost-admin-recovery.*
+!harboost-admin-recovery.tex
 .env
 .env.demo
 node_modules
