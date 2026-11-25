@@ -45,6 +45,8 @@ export interface User {
    * DEFAULT_PERMISSIONS constant when absent (e.g. an unseeded backend).
    */
   permissions?: Record<ModuleKey, PermissionLevel>
+  /** a temporary password is in use: the portal sends the user to change it before anything else */
+  mustChangePassword?: boolean
 }
 
 export type NotificationTone = 'success' | 'warning' | 'danger' | 'info'

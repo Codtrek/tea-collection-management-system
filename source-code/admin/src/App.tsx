@@ -3,6 +3,7 @@ import { RouteError } from './components/data/RouteError'
 import { AppShell } from './components/layout/AppShell'
 import { DesignFoundationsPage } from './pages/design-foundations/DesignFoundationsPage'
 import { LoginPage } from './features/auth/LoginPage'
+import { ChangePasswordPage } from './features/auth/ChangePasswordPage'
 import { DashboardPage } from './features/dashboard/DashboardPage'
 import { NotificationCenterPage } from './features/notifications/NotificationCenterPage'
 import { SearchResultsPage } from './features/search/SearchResultsPage'
@@ -62,6 +63,8 @@ import { AuditLogsPage } from './features/admin/AuditLogsPage'
 /* Route map — all six modules built. Static paths precede :id params. */
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  // outside the shell: a temporary password must be replaced before any portal page opens
+  { path: '/change-password', element: <ChangePasswordPage /> },
   { path: '/design-foundations', element: <DesignFoundationsPage /> },
   {
     path: '/',
