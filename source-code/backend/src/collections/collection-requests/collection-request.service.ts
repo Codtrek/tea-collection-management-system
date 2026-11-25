@@ -17,6 +17,19 @@ export class CollectionRequestService {
     private readonly estates: Repository<EstateEntity>,
   ) {}
 
+  async listOwnerEstates(userId: number, role: AppRole) {
+    if (role !== 'Estate Owner') {
+      throw new ForbiddenException('Only estate owners can view this list.');
+    }
+    return this.estates.createQueryBuilder('estate')
+      .select(['estate.id', 'estate.name', 'estate.location', 'estate.ytdDeliveriesKg'])
+      .innerJoin(EstateOwnerEntity, 'owner', 'owner.id = estate.ownerId')
+      .where('owner.userId = :userId', { userId })
+      .orderBy('estate.name', 'ASC')
+      .addOrderBy('estate.id', 'ASC')
+      .getMany();
+  }
+
   async listForOwner(userId: number, role: AppRole) {
     if (role !== 'Estate Owner') {
       throw new ForbiddenException('Only estate owners can view this list.');
@@ -57,6 +70,27 @@ export class CollectionRequestService {
     const request = await query.getOne();
     if (!request) throw new NotFoundException('Collection request not found.');
     return request;
+  }
+
+  async deletePending(id: number, userId: number, role: AppRole) {
+    if (role !== 'Estate Owner') {
+      throw new ForbiddenException('Only estate owners can delete collection requests.');
+    }
+
+    const ownedEstates = this.estates.createQueryBuilder('estate')
+      .select('estate.id')
+      .innerJoin(EstateOwnerEntity, 'owner', 'owner.id = estate.ownerId')
+      .where('owner.userId = :userId', { userId });
+
+    const result = await this.requests.createQueryBuilder()
+      .delete()
+      .where('id = :id AND status = :status', { id, status: 'open' })
+      .andWhere(`estate_id IN (${ownedEstates.getQuery()})`, ownedEstates.getParameters())
+      .execute();
+    if (!result.affected) {
+      throw new NotFoundException('This request is no longer available to delete.');
+    }
+    return { id };
   }
 
   async create(
