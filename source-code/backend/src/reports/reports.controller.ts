@@ -33,6 +33,7 @@ import type { ExpenseReport } from './finance-rules';
 import { FinanceService, type ExpenseReportQuery } from './finance.service';
 import type { PublicExpenseCategory, PublicExpenseEntry } from './reports-map';
 import { type Actor, ReportsService } from './reports.service';
+import { RequirePermission } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -52,6 +53,7 @@ export class ReportsController {
    * `thisMonth=1`; omitted → the last complete month. Filters: routeId, agentId, estateId, grade
    * (super|normal), demo=0 to hide demo rows; groupBy estate|route|agent|day.
    */
+  @RequirePermission('reports')
   @Get('collection')
   collectionReport(
     @Query() q: Record<string, string | undefined>,
@@ -76,6 +78,7 @@ export class ReportsController {
    * for green leaf, valued at the grade rates in force on each delivery date. Same period and
    * filter params as RPT-01; groupBy estate|route|month.
    */
+  @RequirePermission('reports')
   @Get('leaf-purchases')
   leafPurchaseReport(
     @Query() q: Record<string, string | undefined>,
@@ -98,6 +101,7 @@ export class ReportsController {
    * RPT-03 Expense report (Finance-Reports-Addendum). Same period params as RPT-01 (omitted → the
    * last complete month); groupBy category|month|entry; category= filters to one category.
    */
+  @RequirePermission('expenses', 'reports')
   @Get('expenses')
   expenseReport(
     @Query() q: Record<string, string | undefined>,
@@ -115,6 +119,7 @@ export class ReportsController {
   /* ── RPT-04 daily expense entries (Finance-Reports-Addendum §6–7) ── */
 
   /** The category list (inactive ones included, for old entries and ADM-01). */
+  @RequirePermission('expenses', 'reports')
   @Get('expense-categories')
   listCategories(): Promise<PublicExpenseCategory[]> {
     return this.reportsService.listCategories();
@@ -156,6 +161,7 @@ export class ReportsController {
   }
 
   /** One entry, with what the viewer may do with it. `expenses: view`. */
+  @RequirePermission('expenses', 'reports')
   @Get('expenses/:id')
   async getExpense(
     @Param('id') id: string,

@@ -29,9 +29,11 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
     ThrottlerModule.forRoot({
       throttlers: [
         {
+          // per signed-in user (identity-throttler.guard.ts); a portal page fires several
+          // requests at once, and the dashboard more — 60 / 10 s (Users-Roles-Addendum §4a)
           name : 'short',
           ttl : seconds(10),
-          limit : 15,
+          limit : 60,
         },
         {
           name : 'medium',

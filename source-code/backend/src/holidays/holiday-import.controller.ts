@@ -18,6 +18,7 @@ import {
 } from './dto/holiday-import.dto';
 import { HolidayImportService } from './holiday-import.service';
 import type { HolidayActor } from './holiday.service';
+import { RequirePermission } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -30,6 +31,7 @@ export class HolidayImportController {
     private readonly users: UsersService,
   ) {}
 
+  @RequirePermission('holidayStatutory')
   @Get('google')
   async google(@Query('year') year: string, @Req() req: AuthedRequest) {
     return this.imports.previewGoogle(yearOf(year), await this.actor(req));
@@ -50,6 +52,7 @@ export class HolidayImportController {
     return this.imports.confirm(dto, await this.actor(req));
   }
 
+  @RequirePermission('holidayStatutory')
   @Get('resync')
   async resync(@Query('year') year: string, @Req() req: AuthedRequest) {
     return this.imports.resync(yearOf(year), await this.actor(req));

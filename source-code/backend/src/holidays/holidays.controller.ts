@@ -30,6 +30,7 @@ import {
   WeeklyRuleDto,
 } from './dto/holiday.dto';
 import { type HolidayActor, HolidayService } from './holiday.service';
+import { RequirePermission } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -47,6 +48,7 @@ export class HolidaysController {
     private readonly users: UsersService,
   ) {}
 
+  @RequirePermission('holidayCalendar', 'holidayStatutory', 'attendance')
   @Get()
   async year(@Query('year') year: string, @Req() req: AuthedRequest) {
     await this.view(req);
@@ -55,6 +57,7 @@ export class HolidaysController {
   }
 
   /** The day drawer: holidays, requests, day type per category and the impact. */
+  @RequirePermission('holidayCalendar', 'holidayStatutory', 'attendance')
   @Get('day/:date')
   async day(@Param('date') date: string, @Req() req: AuthedRequest) {
     await this.view(req);
@@ -73,6 +76,7 @@ export class HolidaysController {
   }
 
   /** Requests and emergency reviews (pending first) — the Administrator's "Pending approvals". */
+  @RequirePermission('holidayCalendar', 'holidayStatutory', 'attendance')
   @Get('requests')
   async requests(@Req() req: AuthedRequest) {
     await this.view(req);
@@ -108,6 +112,7 @@ export class HolidaysController {
   }
 
   /** Last year's Poya / public names, dates blank — the template for a new year. */
+  @RequirePermission('holidayCalendar', 'holidayStatutory', 'attendance')
   @Get('template')
   async template(@Query('from') from: string, @Req() req: AuthedRequest) {
     await this.view(req);

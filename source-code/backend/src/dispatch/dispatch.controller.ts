@@ -30,6 +30,7 @@ import { DispatchAccessService } from './dispatch-access.service';
 import { localDate } from './dispatch-map';
 import { DispatchService, type DispatchActor } from './dispatch.service';
 import { RouteScheduleService } from './route-schedule.service';
+import { RequirePermission } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -45,6 +46,7 @@ export class DispatchController {
   ) {}
 
   /** `?date=YYYY-MM-DD` shows the board for another day (default today). */
+  @RequirePermission('dispatch')
   @Get('board')
   async board(
     @Query('date') date: string | undefined,
@@ -58,12 +60,14 @@ export class DispatchController {
     return this.dispatch.board(now, date ?? localDate(now));
   }
 
+  @RequirePermission('dispatch')
   @Get('alerts/missed-checkins')
   async missedCheckins(@Req() req: AuthedRequest) {
     await this.access.require(req.user.role, 'view', 'view dispatch alerts');
     return this.dispatch.missedCheckins();
   }
 
+  @RequirePermission('dispatch')
   @Get('routes/:id/cover-candidates')
   async candidates(
     @Param('id', ParseIntPipe) routeId: number,
@@ -74,6 +78,7 @@ export class DispatchController {
   }
 
   /** COL-02 helper: who handles a route on a date (cover wins). Needs only Collection view. */
+  @RequirePermission('dispatch')
   @Get('routes/:id/agent')
   async agentForRoute(
     @Param('id', ParseIntPipe) routeId: number,
@@ -98,6 +103,7 @@ export class DispatchController {
   }
 
   /** COL-02: an estate's route + today's agent (cover-aware). `:id` is 'EST-0002' or a bare number. */
+  @RequirePermission('dispatch', 'estateOwners', 'collection')
   @Get('estates/:id/route-agent')
   async routeAgentForEstate(
     @Param('id') id: string,
@@ -172,6 +178,7 @@ export class DispatchController {
 
   /* ── Route schedule (Route-Schedule-Addendum §6) ──────────────── */
 
+  @RequirePermission('dispatch')
   @Get('routes/:id/schedule')
   async routeSchedule(
     @Param('id', ParseIntPipe) routeId: number,

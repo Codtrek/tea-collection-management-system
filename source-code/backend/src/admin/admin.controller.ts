@@ -50,6 +50,7 @@ import {
   SystemUsersService,
 } from './system-users.service';
 import type { PortalRole } from './admin-map';
+import { RequirePermission } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -65,6 +66,7 @@ export class AdminController {
   ) {}
 
   // ── ADM-01 grade rates ──
+  @RequirePermission('administration')
   @Get('grade-rates')
   listGradeRates(): Promise<PublicGradeRate[]> {
     return this.adminService.listGradeRates();
@@ -93,12 +95,14 @@ export class AdminController {
   }
 
   // ── ADM-01 transport: a fixed monthly charge per estate (Administration-Addendum §4) ──
+  @RequirePermission('administration')
   @Get('transport-rates')
   listTransportRates(): Promise<TransportRatesView> {
     return this.transportRates.list();
   }
 
   /** "Last month this would have charged N estates, total Rs Y" — before publishing. */
+  @RequirePermission('administration')
   @Get('transport-rates/preview')
   previewTransportCharge(
     @Query('amount') amount?: string,
@@ -128,6 +132,7 @@ export class AdminController {
   }
 
   // ── ADM-01 factory profile (Administration-Addendum §2) ──
+  @RequirePermission('administration')
   @Get('factory-profile')
   async getFactoryProfile(
     @Req() req: AuthedRequest,
@@ -147,6 +152,7 @@ export class AdminController {
   }
 
   // ── ADM-02 permission matrix ──
+  @RequirePermission('administration')
   @Get('permissions')
   async getPermissions(@Req() req: AuthedRequest): Promise<PermissionMatrix> {
     await this.access.require(
@@ -170,6 +176,7 @@ export class AdminController {
   }
 
   // ── ADM-03 system settings ──
+  @RequirePermission('administration')
   @Get('settings')
   async getSettings(
     @Req() req: AuthedRequest,
@@ -192,6 +199,7 @@ export class AdminController {
   }
 
   // ── ADM-02 system users (Users-Roles-Addendum §5) ──
+  @RequirePermission('administration')
   @Get('users')
   async listUsers(@Req() req: AuthedRequest): Promise<PublicSystemUser[]> {
     await this.access.require(
@@ -204,6 +212,7 @@ export class AdminController {
   }
 
   /** HR employees who can be given a portal login, plus the roles the caller may assign. */
+  @RequirePermission('administration')
   @Get('users/eligible-employees')
   async eligibleEmployees(
     @Req() req: AuthedRequest,
@@ -212,6 +221,7 @@ export class AdminController {
   }
 
   /** NIC matches between unlinked portal users and HR employees — for confirmation, never applied. */
+  @RequirePermission('administration')
   @Get('users/link-suggestions')
   async linkSuggestions(@Req() req: AuthedRequest): Promise<LinkSuggestion[]> {
     return this.systemUsers.linkSuggestions(await this.resolveActor(req));

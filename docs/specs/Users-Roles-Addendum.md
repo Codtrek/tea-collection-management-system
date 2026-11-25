@@ -42,7 +42,7 @@ ADM-02 was a thin editor, and the access model behind it had real holes:
 
 **Levels:** None < View < Edit < Approve, each including the one before. They are always shown by full name, never blank.
 
-**Keys in the code with no row yet** (not added, pending a decision): `dashboard`, `payroll`, `advances` (salary advances), `attendance` (incl. leave), `performance`.
+**Added as rows (2026-11-25, §4a):** Dashboard (`dashboard`, Operations), Payroll (`payroll`) and Salary advances (employees) (`advances`) under Finance, Attendance and leave (`attendance`) and Performance (`performance`) under People. Every key in the code is now a matrix row.
 
 **Modules with no key of their own:** settlements (borrow `estateOwners`), pay changes (`payRates`), Users & Roles / Audit Logs / System Settings / Factory Setup (`administration`), holiday import (`holidayStatutory`), agent mobile logins (none; handled in Employees). Leave doesn't exist as a module.
 
@@ -83,7 +83,58 @@ Every portal request re-reads the user (`JwtStrategy.validate`, then `auth/sessi
 | Portal UI | Re-reads `/auth/me` when the window regains focus (at most every 30 s) and after any 403, so menus catch up without a sign-out |
 
 - Tokens issued before this release carry no `tv`. They match `token_version = 0` until it is first bumped.
-- **Caveat:** keys the server never checks (`payroll`, `advances`, `estateOwners`, `estateAdvances`, `reports`, most of `employees`) still change only the UI. See §9.
+- **Reads:** every portal GET checks its key (§4a), so a matrix change applies to reads on the next request.
+- **Caveat (writes):** about 32 write endpoints still use hard-coded role rules, so for them a matrix change affects only the UI. See §9.
+
+## 4a. Server checks on reads, rate limits and agent sessions (2026-11-25, `feat/read-permissions`)
+
+### Read permissions
+- Every portal GET carries `@RequirePermission(...keys)` or `@PortalOnly()` (`backend/src/auth/permissions.ts`). After authentication, `JwtAuthGuard` reads `role_permissions` for the caller's role (from the DB) on every request, with no cache. Too low a level gives 403: "Your role can't view Payroll. Ask your Factory Administrator if you need access."
+- Several keys mean **any of them** is enough. This is for lookups that several pages share.
+- `permissions.coverage.spec.ts` fails if a portal GET has neither decorator.
+- The portal mirrors it: `AccessGuard` (`admin/src/components/layout/AccessGuard.tsx`) wraps every route in `App.tsx` with the same keys, so a typed URL shows "You don't have access to this page".
+
+| Endpoints | Key(s), View or higher |
+|---|---|
+| `admin/*`, `audit` | administration |
+| `collections/*` | collection |
+| `dispatch/*` (portal) | dispatch; `estates/:id/route-agent`: + estateOwners, collection |
+| `employees`, `employees/:id`, `employees/roles` | employees, attendance, payroll, advances, payRates, performance |
+| `employees/:id/collections`, `/fertilizer-deliveries` | employees |
+| `employees/attendance*` | attendance |
+| `employees/advances*`, `employees/:id/advances` | advances |
+| `employees/payroll*` | payroll |
+| `employees/pay-rates`, `pay-adjustments` | payRates; `employees/:id/pay`: payRates, payroll |
+| `estates`, `estates/directory` | estateOwners, estateAdvances, collection, dispatch, fertilizer |
+| `estates/:id/*`, `estates/settlements*` | estateOwners; `:id/lifetime`: + fertilizer |
+| `estates/advances*`, `estates/:id/advances`, `:id/advance-context` | estateAdvances |
+| `fertilizer/*` | fertilizer; `prices`: itemPrices, fertilizer; `prices/costs`: itemPrices |
+| `holidays/*` | holidayCalendar, holidayStatutory, attendance; `holidays/import/*`: holidayStatutory |
+| `performance/*` | performance |
+| `reports/collection`, `reports/leaf-purchases` | reports |
+| `reports/expenses*`, `reports/expense-categories` | expenses, reports |
+| `dashboard/summary` | dashboard |
+| `auth/me`, `auth/mobile/me`, `auth/change-password` | any signed-in portal user |
+
+With the default matrix only the Officer has None on any key (`administration`, `payRates`, `performance`), so default roles lose nothing they used.
+
+### Rate limits (`app.module.ts`, `auth/identity-throttler.guard.ts`)
+| Limit | Value | Counted per |
+|---|---|---|
+| short | 60 / 10 s (was 15) | signed-in user; before sign-in IP + account, or IP |
+| medium | 120 / min | signed-in user (was IP); IP before sign-in |
+| long | 600 / 10 min | signed-in user (was IP); IP before sign-in |
+| auth | 5 / min | IP + account, on the sign-in and register routes |
+
+### Agent sessions (`auth/agent-session.ts`)
+- Agent tokens carry `tv` (`users.token_version`) and **expire in 30 days**.
+- `AgentJwtStrategy` re-reads the user on every request:
+  - missing, not an agent or suspended → 401;
+  - a `tv` mismatch → 401 "Your session has ended. Please sign in again.";
+  - a temporary password → 403 everywhere except `/auth/agent/change-password` and `/auth/agent/logout`.
+- **Sliding:** once a token is over a day old, every **successful** agent response carries a fresh 30-day token in `X-Session-Token` (`AgentSessionInterceptor`, exposed via CORS). Refused, revoked or failed calls never get one.
+- **Revocation:** `token_version` is bumped by the password change (`POST /auth/agent/change-password` returns `{ ok, accessToken }` for this device), by the new `POST /auth/agent/logout`, and by deactivation.
+- Tokens from before this release have no `tv` (it counts as 0) and expire after 7 days as before. Nobody is signed out by the deploy, and the first successful call after a day upgrades the token.
 
 ## 5. System users
 
@@ -146,16 +197,21 @@ Every portal request re-reads the user (`JwtStrategy.validate`, then `auth/sessi
 
 ## 9. Open items
 
-1. **Read endpoints with no permission check (report C2).** Any portal token can read `GET /employees` (with NICs), `/employees/payroll*`, estate and settlement GETs, report GETs, collection GETs, and fertilizer requests and batches.
-   - In the portal, about 13 pages have no `can()` call and no route guard; they are only hidden from the sidebar.
-   - This branch gates `/admin/users`, `/admin/permissions` and `/admin/settings` only. A follow-up PR should gate the rest by their keys.
-2. **Keys the server never checks:** `payroll`, `advances`, `estateOwners`, `estateAdvances`, `reports`, and most of `employees` and `administration`. Many writes still use hard-coded "Administrator only" / "Manager denied" rules.
-3. The 5 row-less keys (§3), and whether `advances` / `attendance` become separated keys.
+1. ~~Read endpoints with no permission check~~: done in §4a (2026-11-25).
+2. **Writes on hard-coded role rules (the next PR).** All 95 portal write endpoints have *some* check, but about 32 ignore the matrix:
+   - Collections (8: update, exception entry, grade lines, finalize, correction request/approve/reject, resend notification): "Managers are read-only".
+   - Estates and settlements (10: create, update, deactivate, issue advance, repayment, reschedule request/decision, prepare, exclude delivery, process): "Managers are read-only".
+   - Employees (11: create, update, deactivate, mark attendance, salary advance request/decide/repay/reschedule, payroll generate/process): "Managers are read-only".
+   - Admin (5: grade rates and transport rates create/cancel, factory profile): "Administrator only".
+   - Already matrix-driven: fertilizer, dispatch, holidays, pay rates/changes, expenses, performance notes, users/permissions/settings.
+   - Moving these needs the right level per endpoint (edit vs approve), and some current rules differ from the matrix defaults. For example, the Manager has `attendance: approve` but the code blocks Managers.
+3. Whether `advances` / `attendance` become separated keys.
 4. The "Mobile (agents)" tab (§5).
 5. Login error messages still say whether a phone number is registered. `/auth/mobile/register` is public: please confirm that's intended.
-6. **E2E note:** the API's per-user throttle (15 requests / 10 s) is shared by every Playwright worker using the one admin token.
-   - Parallel runs hit 429s, and before this branch a 429 on `/auth/me` signed the page out. This is the likely cause of the known "~8 flaky 30-second timeouts per run".
-   - Session hydration now retries transient errors and signs out only on a 401. Running e2e with `--workers=1`, or one account per worker, avoids the rest.
+6. **E2E note:** every Playwright worker shares the one admin token. The short limit is now 60 / 10 s (§4a), and session hydration signs out only on a 401.
+   - On 2026-11-25, two of three full `users-roles` + `layout` runs (2 workers) still had 4 timeouts each, on different pages each time (holidays, then payroll). In each case the page had been signed out.
+   - In a monitored green run, the admin's `token_version` and status never changed. The source of that 401 isn't found yet; it's tracked in issue #101.
+7. `GET /auth/mobile/me` sits behind the portal guard, which refuses estate owner/manager tokens (since #100). Check whether the mobile app relies on it.
 
 ## 10. Break-glass recovery (`npm run admin:recover`)
 
