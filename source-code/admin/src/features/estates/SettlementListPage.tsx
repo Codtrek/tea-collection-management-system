@@ -39,7 +39,9 @@ export function SettlementListPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { can } = useAuth()
-  const canProcess = can('estateOwners', 'edit')
+  // Edit prepares drafts; Approve processes them (the server checks the same keys)
+  const canEdit = can('estateOwners', 'edit')
+  const canApprove = can('estateOwners', 'approve')
   const queryClient = useQueryClient()
 
   const thisMonth = currentMonth()
@@ -81,9 +83,9 @@ export function SettlementListPage() {
   const periodLabel = all ? 'all periods' : periodOf(filters.month)
   const options = monthOptionsFor(thisMonth, data.months)
   // a period with nothing pending (all processed) is read-only
-  const canRunProcess = canProcess && !all && summary.pending > 0
+  const canRunProcess = canApprove && !all && summary.pending > 0
   const willPrepare = summary.willPrepare ?? 0
-  const canPrepare = canProcess && !all && willPrepare > 0
+  const canPrepare = canEdit && !all && willPrepare > 0
 
   const exportCsv = async () => {
     try {
