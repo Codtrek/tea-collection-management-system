@@ -12,6 +12,7 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { AgentJwtPayload, JwtPayload } from './jwt-payload.interface';
 import { SkipThrottle } from '@nestjs/throttler';
+import { PortalOnly } from './permissions';
 
 @Controller('auth')
 export class AuthController {
@@ -59,6 +60,7 @@ export class AuthController {
    * Portal password change (and the forced change after a temporary password). Returns a fresh
    * token: the change bumps the token version, which ends every other session.
    */
+  @PortalOnly()
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
   changePassword(
@@ -72,6 +74,7 @@ export class AuthController {
     );
   }
 
+  @PortalOnly()
   @UseGuards(JwtAuthGuard)
   @Get('me')
   me(@Req() req: Request & { user: JwtPayload }): Promise<PublicUser > {

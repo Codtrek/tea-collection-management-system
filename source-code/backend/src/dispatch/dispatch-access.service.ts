@@ -3,8 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import type { PermissionLevel } from '../admin/admin-map';
 import { RolePermissionEntity } from '../admin/role-permission.entity';
-
-const ORDER: PermissionLevel[] = ['none', 'view', 'edit', 'approve'];
+import { LEVEL_ORDER, levelAtLeast } from '../auth/permissions';
 
 /**
  * Data-driven gate on the `dispatch` module — reads the same `role_permissions`
@@ -21,7 +20,7 @@ export class DispatchAccessService {
   async levelFor(role: string, module = 'dispatch'): Promise<PermissionLevel> {
     const row = await this.perms.findOne({ where: { role, module } });
     const level = row?.level as PermissionLevel | undefined;
-    return level && ORDER.includes(level) ? level : 'none';
+    return level && LEVEL_ORDER.includes(level) ? level : 'none';
   }
 
   async require(
@@ -31,7 +30,7 @@ export class DispatchAccessService {
     module = 'dispatch',
   ): Promise<void> {
     const have = await this.levelFor(role, module);
-    if (ORDER.indexOf(have) < ORDER.indexOf(needed)) {
+    if (!levelAtLeast(have, needed)) {
       throw new ForbiddenException(`Your role may not ${what}.`);
     }
   }

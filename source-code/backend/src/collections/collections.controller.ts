@@ -26,6 +26,7 @@ import { DecideCorrectionDto } from './dto/decide-correction.dto';
 import { RequestCorrectionDto } from './dto/request-correction.dto';
 import { SetGradeLinesDto } from './dto/set-grade-lines.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
+import { RequirePermission } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -40,6 +41,7 @@ export class CollectionsController {
   ) {}
 
   /** Every record; `pendingCorrectionId` marks the ones a Manager has a correction to decide on. */
+  @RequirePermission('collection')
   @Get()
   async findAll(): Promise<PublicCollection[]> {
     const [rows, pending] = await Promise.all([
@@ -51,22 +53,26 @@ export class CollectionsController {
     );
   }
 
+  @RequirePermission('collection')
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<PublicCollection> {
     return this.grading.decorate(await this.collectionsService.findById(id));
   }
 
   /** Estate weight, tolerance, usual range — what the grading review step warns against. */
+  @RequirePermission('collection')
   @Get(':id/grading-context')
   gradingContext(@Param('id') id: string): Promise<GradingContext> {
     return this.grading.context(id);
   }
 
+  @RequirePermission('collection')
   @Get(':id/revisions')
   revisions(@Param('id') id: string): Promise<PublicRevision[]> {
     return this.grading.listRevisions(id);
   }
 
+  @RequirePermission('collection')
   @Get(':id/corrections')
   corrections(@Param('id') id: string): Promise<PublicCorrectionRequest[]> {
     return this.grading.listCorrections(id);
