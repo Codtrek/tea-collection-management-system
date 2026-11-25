@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditModule } from '../audit/audit.module';
+import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 import { DispatchModule } from '../dispatch/dispatch.module';
 import { SystemSettingEntity } from '../admin/system-setting.entity';
@@ -19,6 +20,8 @@ import { GradingNotificationEntity } from './grading-notification.entity';
 import { GradingNotificationService } from './grading-notification.service';
 import { GradingNotificationTasks } from './grading-notification.tasks';
 import { GradingService } from './grading.service';
+import { CollectionRequestController } from './collection-requests/collection-request.controller';
+import { CollectionRequestService } from './collection-requests/collection-request.service';
 import { CollectionRequestEntity } from './collection-requests/tea-collection-request.entity';
 import { CollectionRequestAssignmentEntity } from './collection-requests/tea-collection-request-assignment.entity';
 import { TeaCollectionVerificationEntity } from './collection-requests/tea-collection-verification.entity';
@@ -47,10 +50,12 @@ import { TeaCollectionDiscrepancyEntity } from './collection-requests/tea-collec
     DispatchModule,
     UsersModule,
     AuditModule,
+    AuthModule,
   ],
-  controllers: [CollectionsController],
+  controllers: [CollectionsController, CollectionRequestController],
   providers: [
     CollectionsService,
+    CollectionRequestService,
     CollectionSettingsService,
     GradingService,
     GradingNotificationService,
