@@ -29,7 +29,6 @@ export default function Screen({
   style,
   ...props
 }: ScreenProps) {
-  // const Container = header ? View : SafeAreaView;
 const TopSection = header ? (
   header
 ) : pageTitle ? (

@@ -13,6 +13,8 @@ export default function EstateOwnerLayout() {
             ? "estates"
             : "home";
 
+    const showBottomTab = !pathname.includes("/estate/") && !pathname.includes("/workers/");
+
     useEffect(() => {
         router.prefetch("/(estate-owner)/home");
         router.prefetch("/(estate-owner)/estates");
@@ -44,14 +46,14 @@ export default function EstateOwnerLayout() {
                 />
             </View>
 
-            <View style={[styles.bottomTab, { paddingBottom: insets.bottom }]}>
+            {showBottomTab && <View style={[styles.bottomTab, { paddingBottom: insets.bottom }]}>
 
                 <EstateOwnerBottomTab
                     activeTab={activeTab}
                     onTabPress={handleTabPress}
                     style={styles.bottomTab}
                 />
-            </View>
+            </View>}
         </View>
     );
 }
