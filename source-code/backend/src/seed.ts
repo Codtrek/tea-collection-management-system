@@ -3300,8 +3300,9 @@ async function seed() {
     for (const [role, mods] of Object.entries(PERMISSION_MATRIX)) {
       for (const [module, level] of Object.entries(mods)) {
         await client.query(
+          // DO NOTHING: re-seeding never overwrites a factory's own choices (Users-Roles-Addendum §4)
           `INSERT INTO role_permissions (role, module, level) VALUES ($1, $2, $3)
-           ON CONFLICT (role, module) DO UPDATE SET level = EXCLUDED.level`,
+           ON CONFLICT (role, module) DO NOTHING`,
           [role, module, level],
         );
         permCount++;

@@ -14,7 +14,9 @@ export function AppShell() {
   // A new page starts at the top. Without this, a page rendered from the query cache opened at the
   // previous page's scroll position, with its title hidden under the sticky top bar.
   const { pathname } = useLocation()
-  useEffect(() => window.scrollTo(0, 0), [pathname])
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
   // collapsed to icons by default below 1280px; the user's choice is remembered per user and mode
   const mode = useMediaQuery(NARROW_QUERY) ? 'narrow' : 'wide'
   const key = sidebarKey(user?.id ?? 'anonymous', mode)
@@ -37,6 +39,8 @@ export function AppShell() {
   }
 
   if (!user) return <Navigate to="/login" replace />
+  // the server refuses every route but /auth/me and change-password until this is done
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />
 
   return (
     <div className="flex min-h-screen bg-background">

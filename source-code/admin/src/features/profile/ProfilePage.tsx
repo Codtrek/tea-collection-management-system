@@ -13,6 +13,7 @@ import { AvatarUploader } from './AvatarUploader'
 import { NOTIFICATION_TYPES } from '@/data/notifications'
 import { useState } from 'react'
 import type { ModuleKey, Role } from '@/types'
+import { LEVEL_LABELS, labelOf } from '@/features/admin/permission-catalog'
 
 const roleTone: Record<Role, BadgeTone> = {
   Administrator: 'gradeNormal',
@@ -20,30 +21,6 @@ const roleTone: Record<Role, BadgeTone> = {
   Manager: 'approved',
 }
 
-const MODULE_LABELS: Record<ModuleKey, string> = {
-  dashboard: 'Dashboard',
-  collection: 'Collection',
-  fertilizer: 'Fertilizer',
-  estateOwners: 'Estate Owners',
-  estateAdvances: 'Estate Owner Advances',
-  holidayCalendar: 'Holiday Calendar',
-  holidayStatutory: 'Poya & Public Holidays',
-  payroll: 'Payroll',
-  advances: 'Advances',
-  employees: 'Employees',
-  attendance: 'Attendance',
-  performance: 'Performance',
-  reports: 'Reports',
-  expenses: 'Daily Expenses',
-  itemPrices: 'Item Prices',
-  payRates: 'Pay Rates',
-  dispatch: 'Agent Dispatch',
-  grading: 'Grading',
-  gradingApproval: 'Grading Corrections',
-  fertilizerApproval: 'Fertilizer Approval',
-  fertilizerManagerApproval: 'Fertilizer Approval (over limit)',
-  administration: 'Administration',
-}
 
 export function ProfilePage() {
   const { user, logout } = useAuth()
@@ -54,7 +31,8 @@ export function ProfilePage() {
   )
 
   if (!user) return null
-  const perms = DEFAULT_PERMISSIONS[user.role]
+  // what the server actually grants (DEFAULT_PERMISSIONS only when the server sent none)
+  const perms = { ...DEFAULT_PERMISSIONS[user.role], ...user.permissions }
 
   return (
     <div>
@@ -119,10 +97,10 @@ export function ProfilePage() {
               Role is assigned by a Factory Administrator and isn't self-editable.
             </p>
             <ul className="flex flex-col gap-2">
-              {(Object.keys(MODULE_LABELS) as ModuleKey[]).map((m) => (
+              {(Object.keys(perms) as ModuleKey[]).map((m) => (
                 <li key={m} className="flex items-center justify-between text-sm">
-                  <span className="text-text">{MODULE_LABELS[m]}</span>
-                  <span className="text-xs capitalize text-text-muted">{perms[m]}</span>
+                  <span className="text-text">{labelOf(m)}</span>
+                  <span className="text-xs text-text-muted">{LEVEL_LABELS[perms[m]]}</span>
                 </li>
               ))}
             </ul>

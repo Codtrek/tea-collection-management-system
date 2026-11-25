@@ -1,0 +1,158 @@
+# Users & Roles — Addendum
+
+**Decided:** 2026-11-18
+**Status:** built on `feat/users-roles` (from `dev`), local only. Migration `1794400026000-UsersRoles`.
+**Amends:** ADM-02 Users & Roles (both tabs), portal sign-in, the audit log (ADM-04), and how every portal request is authenticated.
+
+## 1. Why
+
+ADM-02 was a thin editor, and the access model behind it had real holes:
+
+| What was wrong | Effect |
+|---|---|
+| The portal JWT (7 days) was trusted as-is: no DB check per request; the role came from the token claim | A suspended user, or one whose role changed, kept full access until the token expired |
+| No create / edit / reactivate; "Reset password" only wrote an audit row saying a link was sent | Users could only be made with SQL; a suspension was one-way; the audit trail said something that didn't happen |
+| The Administrator could set itself to Approve on the separation-of-duties keys | It could grant itself the duty it is meant to audit |
+| The matrix save took any `module` string, had no transaction, and audited only "N cell(s) saved" | No record of what changed, from what, or why |
+| The matrix was roles × 17 columns, with "No Access" / "View + Edit" labels | Unreadable at laptop widths; nothing said why a cell was locked |
+| A database built from migrations alone had no rows for 14 keys | Every server check on them answered `none` |
+| No lockout; `/auth/agent/login` was outside the 5/min sign-in limit; the throttler logged raw phone numbers | Password guessing was cheap; phones in stdout |
+
+## 2. Data (migration `1794400026000-UsersRoles`, mirrored in `database/init.sql`)
+
+- `users.token_version INT NOT NULL DEFAULT 0`: bumped on deactivate, role change, password reset and password change.
+- `users.email VARCHAR(120)`: optional, unique case-insensitively (`users_email_lower_key` on `lower(email)`, an expression index the entity marks `synchronize: false`).
+- `users.failed_login_count INT NOT NULL DEFAULT 0` and `users.locked_until TIMESTAMPTZ`: the lockout (§7).
+- `audit_logs.before JSONB`, `after JSONB`, `reason TEXT`.
+- **Backfill:** `role_permissions` rows for dashboard, collection, fertilizer, estateOwners, estateAdvances, payroll, advances, employees, attendance, reports, dispatch, grading, gradingApproval and administration, at the seed defaults, `ON CONFLICT DO NOTHING`. Existing choices are never changed.
+  - **Pre-check on a live DB:** `SELECT module, count(*) FROM role_permissions GROUP BY module ORDER BY 1;`. Modules that already have their rows are untouched.
+- `seed.ts` now inserts the matrix with `ON CONFLICT DO NOTHING` (it used to overwrite a factory's own choices on every re-seed).
+
+## 3. The permission matrix
+
+**Keys and labels** live in one place: `admin/src/features/admin/permission-catalog.ts`. The matrix, its review list and the Profile page all read them.
+
+| Section | Rows (label → key) |
+|---|---|
+| Operations | Tea leaf collections (`collection`) · Agent dispatch (`dispatch`) · Grade deliveries (`grading`) · Approve grading corrections (`gradingApproval`) · Fertilizer stock and requests (`fertilizer`) · Approve fertilizer requests (`fertilizerApproval`) · Approve fertilizer requests above the quantity limit (`fertilizerManagerApproval`) |
+| Finance | Estate owners and settlements (`estateOwners`) · Estate owner advances (`estateAdvances`) · Daily expenses (`expenses`) · Fertilizer item prices (`itemPrices`) · Pay rates and pay changes (`payRates`) |
+| People | Employee records (`employees`) · Holiday calendar (`holidayCalendar`) · Poya and public holidays (`holidayStatutory`) |
+| Reports | Reports (`reports`) |
+| Administration | Factory administration (`administration`) |
+
+**Levels:** None < View < Edit < Approve, each including the one before. They are always shown by full name, never blank.
+
+**Keys in the code with no row yet** (not added, pending a decision): `dashboard`, `payroll`, `advances` (salary advances), `attendance` (incl. leave), `performance`.
+
+**Modules with no key of their own:** settlements (borrow `estateOwners`), pay changes (`payRates`), Users & Roles / Audit Logs / System Settings / Factory Setup (`administration`), holiday import (`holidayStatutory`), agent mobile logins (none; handled in Employees). Leave doesn't exist as a module.
+
+**Locks** (server: `cellLock` in `backend/src/admin/admin-map.ts`; the portal mirrors it):
+- **Pinned:** the Administrator column on every key except the separated ones. It is always Approve and not editable, because the factory must always have one unrestricted account. The portal shows a lock and a tooltip.
+- **Capped:** the Administrator column on the **separated keys** (`grading`, `gradingApproval`, `fertilizerApproval`, `fertilizerManagerApproval`, `expenses`). Only None or View is allowed: the Administrator audits these duties and never performs them.
+  - To move a duty, set the Manager or Officer cell, or give someone the Manager role (Add user / Edit user).
+  - Nobody can change their own role, and one person can hold only one login (§5), so the Administrator can't route around the cap.
+- **Candidates reported but not changed:** `advances` (Officer and Administrator both default to Approve) and `attendance` (the Manager approves leave). Decide whether they join the separated list.
+
+**Saving** (`PUT /admin/permissions`, `AdminService.updatePermissions`):
+- `module` must be a known key (400 otherwise).
+- A locked cell is refused with 403, even when unchanged. The portal never sends locked cells.
+- The request is diffed against the DB; only changes are written, in one transaction.
+- **A reason is required** when any change has `approve` on either side, or touches a finance key: payroll, advances, estateOwners, estateAdvances, expenses, itemPrices, payRates, reports.
+- One audit row per save: `details` = "Officer · dispatch: view → edit; …", plus `before`, `after` and `reason`.
+
+**Portal** (`PermissionMatrixTab.tsx`):
+- Rows are keys grouped by section, with a search box.
+- The header row and the first column are sticky.
+- Selects are at least 120px wide. A Playwright check at 1280, 1366 and 1440 px confirms no level name is clipped.
+- Each row has an info tooltip and a one-line description, plus a legend.
+- Changed cells are tinted and say "was View".
+- A sticky bar shows "N changes not saved", with Discard and Review changes.
+- The review modal lists "Officer · Daily expenses: Edit → View" and requires the reason when needed.
+- Below 1024 px, role tabs show one role column at a time.
+
+## 4. How fast a change takes effect
+
+Every portal request re-reads the user (`JwtStrategy.validate`, then `auth/session-check.ts` `checkPortalSession`). This is one primary-key lookup per request, deliberately not cached.
+
+| Change | Takes effect |
+|---|---|
+| Matrix reduction (or raise) on a key the server checks | **The user's next request.** Matrix checks read `role_permissions` live; nothing is cached |
+| Role change | Next request: the role handed to controllers comes from the DB, not the token. `token_version` is also bumped, so the user signs in again |
+| Deactivate / reset password / change password | Next request: `token_version` is bumped, and a token whose `tv` differs gets a 401 |
+| Temporary password | Every route except `/auth/me` and `/auth/change-password` returns 403 `PASSWORD_CHANGE_REQUIRED` |
+| Portal UI | Re-reads `/auth/me` when the window regains focus (at most every 30 s) and after any 403, so menus catch up without a sign-out |
+
+- Tokens issued before this release carry no `tv`. They match `token_version = 0` until it is first bumped.
+- **Caveat:** keys the server never checks (`payroll`, `advances`, `estateOwners`, `estateAdvances`, `reports`, most of `employees`) still change only the UI. See §9.
+
+## 5. System users
+
+**Endpoints:** all `/admin/users…`, in `SystemUsersService` with pure rules in `admin/user-rules.ts`.
+
+| Endpoint | What |
+|---|---|
+| `GET /admin/users` (`administration: view`) | Portal logins (factory_admin / officer / manager only). Each row has name, phone, email, role, linked employee, status (Active / Inactive / Locked), last login, `isSelf`, and per-action refusal reasons |
+| `GET /admin/users/eligible-employees` | HR employees who can get a login (Active, no `user_id`, not a Tea Collecting Agent, NIC not already a login), plus the roles the caller may assign |
+| `POST /admin/users` | Create from an HR employee: name and NIC come from the record, the phone defaults to its contact. Writes `users`, `factory_employees` and `employees.user_id` in one transaction. Returns the temporary password **once** |
+| `PATCH /admin/users/:id` | Name, phone, email, role (with an optional reason). A role change bumps `token_version` |
+| `POST /admin/users/:id/deactivate` (`/suspend` is kept as an alias) | Optional reason; bumps `token_version` |
+| `POST /admin/users/:id/reactivate` | |
+| `POST /admin/users/:id/reset-password` | New temporary password, returned once; forces a change; bumps `token_version`; clears any lock |
+| `POST /admin/users/:id/unlock` | Clears a lockout early |
+| `GET /admin/users/link-suggestions`, `POST` / `DELETE /admin/users/:id/link` | NIC-matched proposals. A link is only made on confirmation, and only when the NICs match |
+
+**Rules** (server-side; the portal disables the control and shows the server's reason in a tooltip):
+- Nobody can change their own role or status, or reset their own password here (they use change-password instead).
+- The last active Administrator can't be deactivated or demoted.
+  - **Honest note:** with per-request checks, only an active Administrator can act, and acting on yourself is already refused. So this rule can't be reached today. It stays as defence in depth (e.g. if user management is ever delegated) and is unit-tested.
+- Only an Administrator manages users and assigns or changes the Administrator role. No new permission key was added for user management.
+- **One person, one login:** `factory_employees.nic` and `employees.user_id` are both unique, and Add user also refuses (409) an employee whose NIC already has a login. Nobody can hold a second account, e.g. a Manager login, that would get around the NIC-based no-self-approval checks.
+
+**Temporary passwords:**
+- 12 characters from `randomBytes(9)` as base64url (about 72 bits), bcrypt cost 10.
+- Never stored or logged in plain text, and never in the audit trail.
+- The portal shows it once in a dialog with Copy. The mutation uses `gcTime: 0`, so the query cache never keeps it.
+- First sign-in goes to `/change-password`. The server refuses everything else until the change is made.
+
+**Agents' mobile logins:**
+- Same `users` table, `role = 'collection_agent'`. They are provisioned by `AgentProvisioningService` from Employees.
+- They aren't listed because the list keeps only the three portal roles.
+- **Proposal, not built:** a read-only "Mobile (agents)" tab with name, phone, linked employee, route, status, last login and the must-change flag. Actions would be Reset password and Open employee. Deactivate and reactivate stay in Employees, so the HR status and the login can't drift.
+
+## 6. Passwords
+
+- `POST /auth/change-password` (portal): current password + new (8–72 characters, different from the current one).
+  - Bumps `token_version`, so every other session ends.
+  - Returns a fresh token for this session.
+  - Audited.
+- The login and `/auth/me` responses carry `user.mustChangePassword`. The portal routes to `/change-password` (outside the shell) while it is set.
+
+## 7. Lockout
+
+- 5 wrong passwords in a row set `locked_until = now + 15 min` and reset the count. The lock is audited as the actor "System".
+- While locked, even the right password is refused ("Try again in N minutes").
+- It unlocks automatically when the time is up.
+- A successful sign-in resets the count.
+- An Administrator can unlock early (audited).
+- The same gate covers portal, mobile and agent sign-in. The 5/min sign-in throttle stays, and now covers `/auth/agent/login` too.
+- A lock blocks sign-in only. It doesn't end existing sessions; deactivation does.
+- The status shows Locked while `locked_until > now`.
+
+## 8. Audit
+
+- `AuditService.record` accepts `before`, `after` and `reason`. ADM-04 shows the reason under the details.
+- Ids still come from `count()+1`, but a primary-key clash (23505) now retries with the next id instead of losing the row.
+- **Newly audited:** user created / edited / role changed / deactivated / reactivated / unlocked / linked / unlinked, password reset (the real one), own password changed, automatic lock.
+
+## 9. Open items
+
+1. **Read endpoints with no permission check (report C2).** Any portal token can read `GET /employees` (with NICs), `/employees/payroll*`, estate and settlement GETs, report GETs, collection GETs, and fertilizer requests and batches.
+   - In the portal, about 13 pages have no `can()` call and no route guard; they are only hidden from the sidebar.
+   - This branch gates `/admin/users`, `/admin/permissions` and `/admin/settings` only. A follow-up PR should gate the rest by their keys.
+2. **Keys the server never checks:** `payroll`, `advances`, `estateOwners`, `estateAdvances`, `reports`, and most of `employees` and `administration`. Many writes still use hard-coded "Administrator only" / "Manager denied" rules.
+3. The 5 row-less keys (§3), and whether `advances` / `attendance` become separated keys.
+4. The "Mobile (agents)" tab (§5).
+5. Login error messages still say whether a phone number is registered. `/auth/mobile/register` is public: please confirm that's intended.
+6. **E2E note:** the API's per-user throttle (15 requests / 10 s) is shared by every Playwright worker using the one admin token.
+   - Parallel runs hit 429s, and before this branch a 429 on `/auth/me` signed the page out. This is the likely cause of the known "~8 flaky 30-second timeouts per run".
+   - Session hydration now retries transient errors and signs out only on a 401. Running e2e with `--workers=1`, or one account per worker, avoids the rest.

@@ -10,13 +10,19 @@ const TOKEN_KEY = 'harboost.token'
 
 export class ApiError extends Error {
   status: number
+  /** machine-readable reason, when the server sends one (e.g. PASSWORD_CHANGE_REQUIRED) */
+  code?: string
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
+
+/** The server refuses everything but /auth/me and change-password while a temporary password is in use. */
+export const PASSWORD_CHANGE_REQUIRED = 'PASSWORD_CHANGE_REQUIRED'
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
@@ -28,10 +34,20 @@ export function setToken(token: string | null): void {
 }
 
 let onUnauthorized: (() => void) | null = null
+let onForbidden: ((code: string | undefined) => void) | null = null
 
 /** Registered once by AuthContext so a 401 anywhere logs the session out. */
 export function setUnauthorizedHandler(handler: () => void): void {
   onUnauthorized = handler
+}
+
+/**
+ * Registered once by AuthContext: a 403 means the user's access changed under them (a permission
+ * was reduced, or a temporary password must be changed) — AuthContext re-reads /auth/me so the
+ * UI matches what the server now allows.
+ */
+export function setForbiddenHandler(handler: (code: string | undefined) => void): void {
+  onForbidden = handler
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -60,7 +76,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       body && typeof body === 'object' && 'message' in body && typeof body.message === 'string'
         ? body.message
         : res.statusText
-    throw new ApiError(res.status, message)
+    const code =
+      body && typeof body === 'object' && 'code' in body && typeof body.code === 'string' ? body.code : undefined
+    if (res.status === 403 && path !== '/auth/me') onForbidden?.(code)
+    throw new ApiError(res.status, message, code)
   }
 
   // A void endpoint (e.g. markAttendance) returns 201/200 with an empty body;

@@ -55,6 +55,23 @@ export class AuthController {
     return { ok: true };
   }
 
+  /**
+   * Portal password change (and the forced change after a temporary password). Returns a fresh
+   * token: the change bumps the token version, which ends every other session.
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(
+    @Body() dto: ChangePasswordDto,
+    @Req() req: Request & { user: JwtPayload },
+  ): Promise<LoginResult> {
+    return this.authService.changePortalPassword(
+      Number(req.user.sub),
+      dto.currentPassword,
+      dto.newPassword,
+    );
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   me(@Req() req: Request & { user: JwtPayload }): Promise<PublicUser > {
