@@ -38,6 +38,18 @@ async function expectNoSidewaysScroll(page: Page) {
   expect(scroll, 'page scrolls sideways').toBeLessThanOrEqual(width)
 }
 
+test('logout works when scrolling returns a promise', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.scrollTo = () => Promise.resolve()
+  })
+
+  await page.goto('/profile')
+  await expect(page.getByRole('heading', { name: 'Profile & Settings' })).toBeVisible()
+  await page.getByRole('button', { name: 'Logout', exact: true }).click()
+  await expect(page).toHaveURL(/\/login$/)
+  await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeVisible()
+})
+
 for (const p of PAGES) {
   for (const width of WIDTHS) {
     test.describe(`${p.name} @ ${width}px`, () => {
