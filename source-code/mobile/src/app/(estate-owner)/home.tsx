@@ -22,6 +22,7 @@ import {
   todayLabel,
 } from "@/data/estateOwnerHome";
 import { colors, spacing } from "@/theme";
+import { CollectionRequestDetailsModal } from "@/components/collection-request/CollectionRequestDetailsModal";
 
 export default function EstateOwnerHome() {
   // const router = useRouter();
@@ -37,11 +38,13 @@ export default function EstateOwnerHome() {
   const [signedInOwnerName, setSignedInOwnerName] = useState("");
   const [openRequests, setOpenRequests] = useState<OwnerCollectionRequest[] | null>(null);
   const [requestError, setRequestError] = useState("");
+  const [selectedRequest, setSelectedRequest] = useState<OwnerCollectionRequest | null>(null);
 
   useFocusEffect(useCallback(() => {
     let active = true;
     setSignedInOwnerName("");
     setOpenRequests(null);
+    setSelectedRequest(null);
     setRequestError("");
     void getOwnerCollectionRequests()
       .then((requests) => {
@@ -125,6 +128,7 @@ export default function EstateOwnerHome() {
             {openRequests?.map((request) => (
               <RequestListItem
                 key={request.id}
+                onPress={() => setSelectedRequest(request)}
                 request={{
                   id: String(request.id),
                   estateName: request.estate.name,
@@ -138,6 +142,16 @@ export default function EstateOwnerHome() {
               
         
       </Screen>
+      {selectedRequest && (
+        <CollectionRequestDetailsModal
+          request={selectedRequest}
+          onDeleted={(id) => {
+            setOpenRequests((requests) => requests?.filter((request) => request.id !== id) ?? null);
+            setSelectedRequest(null);
+          }}
+          onClose={() => setSelectedRequest(null)}
+        />
+      )}
     </>
   );
 }
