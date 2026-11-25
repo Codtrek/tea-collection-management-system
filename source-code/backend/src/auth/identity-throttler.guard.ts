@@ -110,8 +110,12 @@ export class IdentityThrottlerGuard extends ThrottlerGuard {
       return `identity:short:ip:${tracker.ip}`;
     }
 
-    // Broader network-level safety limits.
+    // Broader limits: per signed-in user (a whole factory can sit behind one NAT address),
+    // per IP before sign-in.
     if (throttlerName === 'medium' || throttlerName === 'long') {
+      if (tracker.userId) {
+        return `identity:${throttlerName}:user:${tracker.userId}`;
+      }
       return `identity:${throttlerName}:ip:${tracker.ip}`;
     }
 
