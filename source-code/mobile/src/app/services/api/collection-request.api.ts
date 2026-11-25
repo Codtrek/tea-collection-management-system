@@ -23,6 +23,15 @@ export interface OwnerCollectionRequest extends CollectionRequest {
   estate: { id: number; name: string };
 }
 
+export async function deletePendingCollectionRequest(id: number) {
+  const token = await readSessionValue("accessToken");
+  if (!token) throw new Error("Sign in to delete your collection request.");
+  return apiRequest<{ id: number }>(`/collection-request/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export async function getOwnerCollectionRequests() {
   const token = await readSessionValue("accessToken");
   if (!token) throw new Error("Sign in to view your collection requests.");
