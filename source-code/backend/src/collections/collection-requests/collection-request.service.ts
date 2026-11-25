@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import type { AppRole } from '../../auth/role-map';
@@ -6,6 +6,7 @@ import { EstateOwnerEntity } from '../../estates/estate-owner.entity';
 import { EstateEntity } from '../../estates/estate.entity';
 import { EstateManager } from '../../users/estate-manager.entity';
 import type { CollectionRequestDto } from './dto/create-collection-request.dto';
+import type { PatchCollectionRequestDto } from './dto/patch-collection-request.dto';
 import { CollectionRequestEntity } from './tea-collection-request.entity';
 
 @Injectable()
@@ -72,15 +73,45 @@ export class CollectionRequestService {
     return request;
   }
 
+  private ownedEstateIds(userId: number) {
+    return this.estates.createQueryBuilder('estate')
+      .select('estate.id')
+      .innerJoin(EstateOwnerEntity, 'owner', 'owner.id = estate.ownerId')
+      .where('owner.userId = :userId', { userId });
+  }
+
+  async updatePending(id: number, dto: PatchCollectionRequestDto, userId: number, role: AppRole) {
+    if (role !== 'Estate Owner') {
+      throw new ForbiddenException('Only estate owners can edit collection requests.');
+    }
+    if (dto.estateId === undefined && dto.notes === undefined) {
+      throw new BadRequestException('Provide estateId or notes.');
+    }
+
+    const changes: PatchCollectionRequestDto = {};
+    if (dto.estateId !== undefined) changes.estateId = dto.estateId;
+    if (dto.notes !== undefined) changes.notes = dto.notes?.trim() || null;
+
+    const estates = this.ownedEstateIds(userId);
+    const update = this.requests.createQueryBuilder().update().set(changes)
+      .where('id = :id AND status = :status', { id, status: 'open' })
+      .andWhere(`estate_id IN (${estates.getQuery()})`, estates.getParameters());
+    if (dto.estateId !== undefined) {
+      update.andWhere(`:destination IN (${estates.getQuery()})`, { destination: dto.estateId });
+    }
+    const result = await update.execute();
+    if (!result.affected) {
+      throw new NotFoundException('The pending request or selected estate is unavailable.');
+    }
+    return { id };
+  }
+
   async deletePending(id: number, userId: number, role: AppRole) {
     if (role !== 'Estate Owner') {
       throw new ForbiddenException('Only estate owners can delete collection requests.');
     }
 
-    const ownedEstates = this.estates.createQueryBuilder('estate')
-      .select('estate.id')
-      .innerJoin(EstateOwnerEntity, 'owner', 'owner.id = estate.ownerId')
-      .where('owner.userId = :userId', { userId });
+    const ownedEstates = this.ownedEstateIds(userId);
 
     const result = await this.requests.createQueryBuilder()
       .delete()
