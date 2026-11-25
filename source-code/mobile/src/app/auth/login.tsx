@@ -1,16 +1,18 @@
 import { Image, StyleSheet, View, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Screen } from "@/components/ui";
 import MobileLoginForm from "@/components/auth/MobileLoginForm";
-import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoGreen.png";
+import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoWhite.png";
 import { spacing } from "@/theme/spacing";
 import { login } from "../services/api/auth.api";
 import { completeCollectorSession, storePendingCollectorSession, } from "@/utils/collectorSession";
 
 export default function LogInScreen() {
   const router = useRouter();
+  const { top } = useSafeAreaInsets();
 
   async function persistSession(accessToken: string, user: object) {
     const serializedUser = JSON.stringify(user);
@@ -64,13 +66,17 @@ export default function LogInScreen() {
   }
 
   return (
-    <Screen scroll style={styles.screen}>
+    <Screen
+      scroll
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+      style={[styles.screen, { paddingTop: top + spacing.xl }]}
+    >
       <View style={styles.page}>
-        <View style={styles.header}>
-          <Image source={BrandLogo} style={styles.logo} resizeMode="contain" />
+        <Image source={BrandLogo} accessibilityLabel="Harboost" style={styles.logo} resizeMode="contain" />
+        <View style={styles.card}>
+          <MobileLoginForm portalStyle onSubmit={handleLogIn} />
         </View>
-
-        <MobileLoginForm onSubmit={handleLogIn} />
       </View>
     </Screen>
   );
@@ -81,9 +87,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     width: "100%",
     maxWidth: "100%",
-    backgroundColor: "transparent",
-    paddingTop: spacing.xl,
-    paddingBottom: 40,
+    backgroundColor: "#103D26",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: spacing.xl,
   },
 
   page: {
@@ -92,15 +99,17 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 
-  header: {
-    alignItems: "center",
-    marginBottom: 28,
-    width: "100%",
+  card: {
+    backgroundColor: "white",
+    borderRadius: 22,
+    padding: spacing.lg,
+    paddingTop: 30,
   },
 
   logo: {
-    width: 178,
-    height: 38,
-    marginBottom: 20,
+    width: 198,
+    height: 44,
+    alignSelf: "center",
+    marginBottom: spacing.xl,
   },
 });
