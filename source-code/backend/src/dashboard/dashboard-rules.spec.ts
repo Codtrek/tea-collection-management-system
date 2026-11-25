@@ -132,7 +132,7 @@ describe('needs your action: the work queue', () => {
     expect(officer.map((i) => [i.group, i.key])).toEqual([
       ['urgent', 'estatesNoBank'],
       ['urgent', 'payrollDue'],
-      ['dueSoon', 'settlementsToProcess'],
+      // settlementsToProcess needs Approve: the Officer (Edit) only prepares drafts
       ['dueSoon', 'expiredStock'],
       ['toDecide', 'salaryAdvances'],
       ['toDecide', 'fertilizerToDecide'],
@@ -147,6 +147,13 @@ describe('needs your action: the work queue', () => {
     expect(canAct(OFFICER, 'gradingCorrections')).toBe(false);
     expect(canAct(MANAGER, 'gradingCorrections')).toBe(true);
     expect(canAct(MANAGER, 'settlementsToProcess')).toBe(false);
+    // processing needs Approve: an Officer (Edit) prepares drafts but isn't asked to process
+    expect(canAct({ estateOwners: 'edit' }, 'settlementsToProcess')).toBe(
+      false,
+    );
+    expect(canAct({ estateOwners: 'approve' }, 'settlementsToProcess')).toBe(
+      true,
+    );
     expect(canAct({ payRates: 'approve' }, 'payChanges')).toBe(true);
     expect(canAct(MANAGER, 'payChanges')).toBe(false);
   });

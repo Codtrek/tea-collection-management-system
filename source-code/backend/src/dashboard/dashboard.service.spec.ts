@@ -378,12 +378,7 @@ describe('DashboardService.summary', () => {
         1,
         '/collections?grade=Ungraded&status=Collected&olderThan=7',
       ],
-      [
-        'dueSoon',
-        'settlementsToProcess',
-        3,
-        '/estates/settlements?month=all&status=Pending',
-      ],
+      // no settlementsToProcess: processing needs estateOwners Approve
       [
         'dueSoon',
         'staleAllocations',
@@ -401,7 +396,6 @@ describe('DashboardService.summary', () => {
     ]);
     const reason = (k: string) => s.actions.find((a) => a.key === k)?.reason;
     expect(reason('estatesNoBank')).toBe('Blocks 1 of 3 pending settlements');
-    expect(reason('settlementsToProcess')).toBe('1 blocked: no bank details');
     expect(reason('ungradedOld')).toBe(
       "Oldest delivered 01 Nov 2026; ungraded leaf can't be settled",
     );
@@ -542,7 +536,8 @@ describe('DashboardService.summary', () => {
   });
 
   it('settlements while a month has no transport amount: blocked, no ready count', async () => {
-    const { service, actor } = build('Officer', DEFAULTS.Officer, {
+    // the Administrator (Approve) is the one asked to process settlements
+    const { service, actor } = build('Administrator', DEFAULTS.Administrator, {
       transport: false,
     });
     const s = await service.summary(actor, NOW);

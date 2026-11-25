@@ -127,9 +127,10 @@ export const ACTION_RULES: Record<
     urgency: 13,
     action: 'Grade deliveries',
   },
+  // processing a settlement run needs Approve (write permissions); Edit only prepares drafts
   settlementsToProcess: {
     module: 'estateOwners',
-    level: 'edit',
+    level: 'approve',
     group: 'dueSoon',
     urgency: 20,
     action: 'Review settlements',
