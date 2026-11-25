@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -34,10 +35,22 @@ export class CollectionRequestController {
     return this.collectionRequests.listForOwner(userId, role);
   }
 
+  @Get('estates')
+  async listOwnerEstates(@Req() req: Request) {
+    const { userId, role } = await this.authenticate(req);
+    return this.collectionRequests.listOwnerEstates(userId, role);
+  }
+
   @Get(':id')
   async getOne(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
     const { userId, role } = await this.authenticate(req);
     return this.collectionRequests.getOne(id, userId, role);
+  }
+
+  @Delete(':id')
+  async deletePending(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    const { userId, role } = await this.authenticate(req);
+    return this.collectionRequests.deletePending(id, userId, role);
   }
 
   private async authenticate(req: Request) {
