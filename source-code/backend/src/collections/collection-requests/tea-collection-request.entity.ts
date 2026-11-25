@@ -36,6 +36,11 @@ export type CollectionRequestStatus =
   ['requestedByUserId'],
 )
 
+@Check(
+  'chk_collection_requests_tea_weight_kg',
+  `"tea_weight_kg" > 0 AND "tea_weight_kg" <> 'NaN'::numeric`,
+)
+
 // Request status constraint
 @Check(
   'chk_collection_requests_status',
@@ -100,6 +105,9 @@ export class CollectionRequestEntity {
       'fk_collection_requests_requested_by',
   })
   requestedBy!: User;
+
+  @Column({ name: 'tea_weight_kg', type: 'numeric', precision: 10, scale: 2, nullable: true })
+  teaWeightKg!: string | null;
 
   // Optional request notes
   @Column({
