@@ -1,5 +1,5 @@
 // app/teacollector/teacollectorMobile.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ScrollView,
   View,
@@ -29,6 +29,10 @@ import DemoTeaCollectorFertilizer from '@/app/teacollector/demo-teacollector-fer
 import DemoTeaCollectorAlerts from '@/app/teacollector/demo-teacollector-alerts';
 import DemoTeaCollectorProfile from '@/app/teacollector/demo-teacollector-profile';
 import {
+  getCollectorProfile,
+  type CollectorProfile,
+} from '@/utils/collectorSession';
+import {
   FertilizerRequestFilter,
   RequestFilter,
 } from '@/components/ui/demo-teacollector-requestfilter';
@@ -55,7 +59,7 @@ import {
 const TITLES: Record<string, any> = {
   home: {
     eyebrow: "Wed, 04 Jul",
-    title: "Good morning, Sunil",
+    title: "Good morning",
   },
 
   collect: {
@@ -225,6 +229,8 @@ const NOTIFICATIONS: React.ComponentProps<typeof DemoTeaCollectorAlerts>['notifi
 export default function TeaCollectorMobile() {
   const router = useRouter();
   const [tab, setTab] = useState("home");
+  const [collectorProfile, setCollectorProfile] = useState<CollectorProfile>();
+  const [profileUnavailable, setProfileUnavailable] = useState(false);
   const [filter, setFilter] = useState<RequestFilter>("all");
   const [fertilizerFilter, setFertilizerFilter] =
     useState<FertilizerRequestFilter>("all");
@@ -245,6 +251,35 @@ export default function TeaCollectorMobile() {
   const [collectedWeight, setCollectedWeight] = useState(0);
   const [officer, setOfficer] = useState("");
   const [sheet, setSheet] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void getCollectorProfile().then(
+      (profile) => {
+        if (active) {
+          setCollectorProfile(profile);
+        }
+      },
+      () => {
+        if (active) {
+          setProfileUnavailable(true);
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const nameParts = collectorProfile?.name?.trim().split(/\s+/).filter(Boolean);
+  const lastName = nameParts?.[nameParts.length - 1];
+  const appBarTitle =
+    tab === "home"
+      ? {
+          ...TITLES.home,
+          title: lastName ? `Good morning, ${lastName}` : "Good morning",
+        }
+      : TITLES[tab];
 
   const updateStop = (id: number, patch: any) => setStops((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const updateFert = (id: number, patch: any) => setFertRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -780,7 +815,12 @@ export default function TeaCollectorMobile() {
       case "notif":
         return <DemoTeaCollectorAlerts notifications={notifications} />;
       case "profile":
-        return <DemoTeaCollectorProfile />;
+        return (
+          <DemoTeaCollectorProfile
+            profile={collectorProfile}
+            profileUnavailable={profileUnavailable}
+          />
+        );
       default:
         return null;
     }
@@ -800,7 +840,7 @@ export default function TeaCollectorMobile() {
       }}>
         
         <AppBar
-          {...TITLES[tab]}
+          {...appBarTitle}
           onProfilePress={tab === 'profile' ? undefined : () => setTab('profile')}
         />
         <View

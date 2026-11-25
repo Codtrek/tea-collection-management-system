@@ -4,6 +4,7 @@ import {
   StyleSheet,
   ViewStyle,
   ActivityIndicator,
+  type TextStyle,
 } from "react-native";
 
 import AppText from "./AppText";
@@ -17,6 +18,7 @@ interface AppButtonProps {
   loading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
+  labelStyle?: TextStyle;
 }
 
 export default function AppButton({
@@ -27,6 +29,7 @@ export default function AppButton({
   loading = false,
   disabled = false,
   style,
+  labelStyle,
 }: AppButtonProps) {
   const isDisabled = disabled || loading;
 
@@ -60,9 +63,9 @@ export default function AppButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={colors.text} />
+        <ActivityIndicator color={colors.text.primary} />
       ) : (
-        <AppText variant="bodySmall">{title}</AppText>
+        <AppText variant="bodySmall" style={labelStyle}>{title}</AppText>
       )}
     </Pressable>
   );

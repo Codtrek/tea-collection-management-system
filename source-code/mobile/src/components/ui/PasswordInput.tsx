@@ -15,22 +15,28 @@ import AppInput from "./AppInput";
 
 interface PasswordInputProps extends TextInputProps {
 	label?: string;
+	showLockIcon?: boolean;
+	floatingLabel?: boolean;
+	compact?: boolean;
 	helperText?: string;
 	error?: string;
 	containerStyle?: StyleProp<ViewStyle>;
 	LabelStyle?: StyleProp<TextStyle>;
 	helperTextStyle?: StyleProp<TextStyle>;
 	errorStyle?: StyleProp<TextStyle>;
+	visibilityButtonStyle?: StyleProp<ViewStyle>;
 }
 
 export default function PasswordInput({
 	label,
+	showLockIcon = true,
 	helperText,
 	error,
 	containerStyle,
 	LabelStyle,
 	helperTextStyle,
 	errorStyle,
+	visibilityButtonStyle,
 	...props
 }: PasswordInputProps) {
 	const [isPasswordVisible, setIsPasswordVisible] = useState(false)
@@ -44,7 +50,7 @@ export default function PasswordInput({
 		<AppInput
 			{...props}
 			label={label}
-			leftIcon="lock-outline"
+			leftIcon={showLockIcon ? "lock-outline" : undefined}
 			secureTextEntry={!isPasswordVisible}
 			helperText={helperText}
 			error={error}
@@ -60,6 +66,7 @@ export default function PasswordInput({
 					hitSlop={4}
 					style={({ pressed }) => [
 						styles.visibilityButton,
+						visibilityButtonStyle,
 						pressed && styles.visibilityButtonPressed,
 					]}
 				>

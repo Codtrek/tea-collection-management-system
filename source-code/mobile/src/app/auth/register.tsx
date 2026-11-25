@@ -1,7 +1,8 @@
-import { useState  } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useState } from "react";
 import { Image, StyleSheet, View, Platform, Pressable } from "react-native";
 import * as SecureStore from "expo-secure-store";
-import { Link , useRouter} from "expo-router";
+import { Link, useRouter } from "expo-router";
 
 import {
   Screen,
@@ -16,7 +17,7 @@ import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { register } from "../services/api/auth.api";
 import { getErrorMessages } from "../services/api/client";
-import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoGreen.png";
+import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoWhite.png";
 import {
   getPhoneNumberError,
   getPhoneNumberResponseError,
@@ -32,15 +33,18 @@ type RegisterFieldErrors = {
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const { top, bottom } = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [NIC, setNIC] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmPasswordTouched, setConfirmPasswordTouched] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [formError, setFormError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<RegisterFieldErrors>({});
   const [loading, setLoading] = useState(false);
+  const passwordsMismatch = confirmPassword !== "" && confirmPassword !== password;
 
   //this function won't be necessary when running on mobile
     async function persistSession(accessToken: string, user: object) {
@@ -57,18 +61,21 @@ export default function SignUpScreen() {
   async function handleRegister() {
     setFormError("");
     setFieldErrors({});
+    setConfirmPasswordTouched(true);
 
+    const normalizedPhoneNumber = phoneNumber.replace(/\s/g, "");
+    const normalizedNIC = NIC.trim().toUpperCase();
     const validationErrors: RegisterFieldErrors = {};
-    const phoneError = getPhoneNumberError(phoneNumber);
+    const phoneError = getPhoneNumberError(normalizedPhoneNumber);
     if (phoneError) {
       validationErrors.phoneNumber = phoneError;
     }
     if (!name.trim()) {
       validationErrors.name = "Enter your full name.";
     }
-    if (!NIC.trim()) {
+    if (!normalizedNIC) {
       validationErrors.NIC = "Enter your NIC number.";
-    } else if (!/^(?:\d{12}|\d{9}[VX])$/.test(NIC.trim())) {
+    } else if (!/^(?:\d{12}|\d{9}[VX])$/.test(normalizedNIC)) {
       validationErrors.NIC = "Enter a valid old or new NIC number.";
     }
     if (!password) {
@@ -78,10 +85,8 @@ export default function SignUpScreen() {
     }
     if (!confirmPassword) {
       validationErrors.confirmPassword = "Confirm your password.";
-    } else if (password !== confirmPassword) {
-      validationErrors.confirmPassword = "Passwords do not match.";
     }
-    if (Object.keys(validationErrors).length > 0) {
+    if (passwordsMismatch || Object.keys(validationErrors).length > 0) {
       setFieldErrors(validationErrors);
       return;
     }
@@ -91,8 +96,8 @@ export default function SignUpScreen() {
 
       await register(
         name,
-        phoneNumber,
-        NIC,
+        normalizedPhoneNumber,
+        normalizedNIC,
         password,
         confirmPassword
       );
@@ -143,118 +148,131 @@ export default function SignUpScreen() {
   }
 
   return (
-    <Screen scroll style={styles.screen}>
+    <Screen
+      scroll
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+      style={[styles.screen, { paddingTop: top + spacing.lg, paddingBottom: bottom + spacing.lg }]}
+    >
       <View style={styles.page}>
-        <View style={styles.header}>
-          <Image source={BrandLogo} style={styles.logo} resizeMode="contain" />
-          <View style={styles.eyebrowRow}>
-            <View style={styles.eyebrowDot} />
-            <AppText variant="caption" style={styles.eyebrow}>
-              ESTATE OWNER PROFILE
-            </AppText>
-          </View>
-        </View>
+        <Image source={BrandLogo} accessibilityLabel="Harboost" style={styles.logo} resizeMode="contain" />
+        <View style={styles.card}>
 
-        <View style={styles.formCard}>
-          <View style={styles.form}>
-            <AppInput
-              label="Full name"
-              placeholder="Eg: Kasun Perera"
-              leftIcon="account-outline"
-              autoComplete="name"
-              textContentType="name"
-              maxLength={32}
-              value={name}
-              error={fieldErrors.name}
-              onChangeText={(value) => {
-                setName(value);
-                setFieldErrors((current) => ({ ...current, name: undefined }));
-              }}
-            />
 
-            <AppInput
-              label="Phone number"
-              placeholder="Eg: 0712345678"
-              leftIcon="phone-outline"
-              keyboardType="phone-pad"
-              autoComplete="tel"
-              textContentType="telephoneNumber"
-              maxLength={10}
-              value={phoneNumber}
-              error={fieldErrors.phoneNumber}
-              onChangeText={(value) => {
-                setPhoneNumber(value);
-                setFieldErrors((current) => ({ ...current, phoneNumber: undefined }));
-              }}
-            />
+          <AppInput
+            floatingLabel
+            placeholderTextColor={colors.text.tertiary}
+            label="Full name"
+            placeholder="Kasun Perera"
+            autoComplete="name"
+            textContentType="name"
+            maxLength={32}
+            value={name}
+            error={fieldErrors.name}
+            onChangeText={(value) => {
+              setName(value);
+              setFieldErrors((current) => ({ ...current, name: undefined }));
+            }}
+          />
 
-            <AppInput
-              label="NIC number"
-              placeholder="Eg: 20XXXXXXXXXX or 123456789V"
-              leftIcon="card-account-details-outline"
-              keyboardType="default"
-              autoCapitalize="characters"
-              maxLength={12}
-              value={NIC}
-              helperText="Use your 12-digit or legacy 9-digit NIC."
-              error={fieldErrors.NIC}
-              onChangeText={(text) => {
-                setNIC(text.toUpperCase());
-                setFieldErrors((current) => ({ ...current, NIC: undefined }));
-              }}
-            />
+          <AppInput
+            floatingLabel
+            placeholderTextColor={colors.text.tertiary}
+            label="Phone number"
+            placeholder="077 123 4567"
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            textContentType="telephoneNumber"
+            value={phoneNumber}
+            error={fieldErrors.phoneNumber}
+            onChangeText={(value) => {
+              setPhoneNumber(value);
+              setFieldErrors((current) => ({ ...current, phoneNumber: undefined }));
+            }}
+          />
 
-            <PasswordInput
-              label="Password"
-              placeholder="Create a password"
-              autoComplete="new-password"
-              textContentType="newPassword"
-              value={password}
-              error={fieldErrors.password}
-              onChangeText={(value) => {
-                setPassword(value);
-                setFieldErrors((current) => ({ ...current, password: undefined }));
-              }}
-              onFocus={() => setPasswordFocused(true)}
-              onBlur={() => setPasswordFocused(false)}
-            />
+          <AppInput
+            floatingLabel
+            placeholderTextColor={colors.text.tertiary}
+            label="NIC number"
+            placeholder="Enter your NIC"
+            keyboardType="default"
+            autoCapitalize="characters"
+            value={NIC}
+            helperText="Enter 12 digits, or 9 digits followed by V or X."
+            helperTextStyle={styles.helperText}
+            error={fieldErrors.NIC}
+            onChangeText={(text) => {
+              setNIC(text.toUpperCase());
+              setFieldErrors((current) => ({ ...current, NIC: undefined }));
+            }}
+          />
 
-            {passwordFocused ? <PasswordStrengthMeter password={password} /> : null}
+          <PasswordInput
+            floatingLabel
+            showLockIcon={false}
+            placeholderTextColor={colors.text.tertiary}
+            label="Password"
+            placeholder="Create a password"
+            autoComplete="new-password"
+            textContentType="newPassword"
+            value={password}
+            helperText="At least 8 characters"
+            helperTextStyle={styles.helperText}
+            error={fieldErrors.password}
+            onChangeText={(value) => {
+              setPassword(value);
+              setFieldErrors((current) => ({ ...current, password: undefined }));
+            }}
+            onFocus={() => setPasswordFocused(true)}
+            onBlur={() => setPasswordFocused(false)}
+          />
 
-            <PasswordInput
-              label="Confirm password"
-              placeholder="Re-enter your password"
-              autoComplete="new-password"
-              textContentType="newPassword"
-              value={confirmPassword}
-              error={fieldErrors.confirmPassword}
-              onChangeText={(value) => {
-                setConfirmPassword(value);
-                setFieldErrors((current) => ({ ...current, confirmPassword: undefined }));
-              }}
-            />
+          {passwordFocused ? <PasswordStrengthMeter password={password} /> : null}
 
-            {formError ? (
-              <View style={styles.errorBox}>
-                <AppText variant="bodySmall" style={styles.error}>
-                  {formError}
-                </AppText>
-              </View>
-            ) : null}
+          <PasswordInput
+            floatingLabel
+            showLockIcon={false}
+            placeholderTextColor={colors.text.tertiary}
+            label="Confirm password"
+            placeholder="Re-enter your password"
+            autoComplete="new-password"
+            textContentType="newPassword"
+            value={confirmPassword}
+            error={fieldErrors.confirmPassword ?? (
+              confirmPasswordTouched && passwordsMismatch ? "Passwords do not match" : undefined
+            )}
+            onBlur={() => {
+              if (confirmPassword) setConfirmPasswordTouched(true);
+            }}
+            onChangeText={(value) => {
+              setConfirmPassword(value);
+              setFieldErrors((current) => ({ ...current, confirmPassword: undefined }));
+            }}
+          />
 
-            <AppButton
-              title="Create account"
-              onPress={handleRegister}
-              loading={loading}
-            />
-          </View>
+          {formError ? (
+            <View style={styles.errorBox}>
+              <AppText variant="bodySmall" style={styles.error}>
+                {formError}
+              </AppText>
+            </View>
+          ) : null}
+
+          <AppButton
+            title="Create account"
+            onPress={handleRegister}
+            loading={loading}
+            style={styles.submitButton}
+            labelStyle={styles.submitLabel}
+          />
 
           <View style={styles.signinContainer}>
             <AppText variant="bodySmall" style={styles.mutedText}>
               Already have an account?
             </AppText>
             <Link href="/auth/login" asChild>
-              <Pressable>
+              <Pressable style={styles.signinLink}>
                 <AppText variant="bodySmall" style={styles.link}>
                   Sign in
                 </AppText>
@@ -262,10 +280,6 @@ export default function SignUpScreen() {
             </Link>
           </View>
         </View>
-
-        <AppText variant="caption" style={styles.footerNote}>
-          Your information is securely protected.
-        </AppText>
       </View>
     </Screen>
   );
@@ -276,9 +290,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     width: "100%",
     maxWidth: "100%",
-    backgroundColor: "transparent",
-    paddingTop: spacing.xl,
-    paddingBottom: 48,
+    backgroundColor: "#103D26",
+    justifyContent: "center",
+    paddingHorizontal: 20,
   },
 
   page: {
@@ -287,96 +301,42 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 
-  header: {
-    width: "100%",
-    alignItems: "center",
-    marginBottom: 28,
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: 22,
+    padding: spacing.lg,
   },
 
   logo: {
-    width: 178,
-    height: 38,
-    marginBottom: 20,
-  },
-
-  eyebrowRow: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-
-  eyebrowDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-    marginRight: 7,
-  },
-
-  eyebrow: {
-    color: colors.primary,
-    fontWeight: "700",
-    letterSpacing: 1.2,
+    width: 198,
+    height: 44,
+    alignSelf: "center",
+    marginBottom: spacing.lg,
   },
 
   title: {
     color: colors.text.primary,
-    textAlign: "center",
-    marginBottom: 6,
-  },
-
-  subtitle: {
-    color: colors.text.secondary,
-    textAlign: "center",
-    maxWidth: 320,
-  },
-
-  formCard: {
+    marginBottom: spacing.lg,
+    fontSize: 28,
+    lineHeight: 34,
     width: "100%",
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: "#E5ECE7",
-    shadowColor: "#193322",
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
   },
 
-  formHeadingRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: 22,
-  },
-
-  formTitle: {
-    color: colors.text.primary,
-    marginBottom: 5,
-  },
-
-  formSubtitle: {
+  helperText: {
     color: colors.text.secondary,
+    fontSize: 14,
+    lineHeight: 20,
   },
 
-  stepBadge: {
-    backgroundColor: "#EAF8EF",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginLeft: 12,
+  submitButton: {
+    backgroundColor: "#1D6839",
+    borderRadius: 9,
   },
 
-  stepText: {
-    color: colors.primary,
-    fontWeight: "700",
-  },
-
-  form: {
-    width: "100%",
+  submitLabel: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: "600",
   },
 
   errorBox: {
@@ -397,11 +357,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexWrap: "wrap",
     gap: 4,
-    marginTop: 22,
+    marginTop: 12,
+  },
+
+  signinLink: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
   },
 
   link: {
-    color: colors.primary,
+    color: "#1D6839",
     fontWeight: "700",
   },
 
@@ -409,16 +377,4 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
 
-  terms: {
-    color: colors.text.tertiary,
-    textAlign: "center",
-    lineHeight: 17,
-    marginTop: 14,
-  },
-
-  footerNote: {
-    color: colors.text.tertiary,
-    textAlign: "center",
-    marginTop: 20,
-  },
 });

@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import type { SignOptions } from 'jsonwebtoken';
 import { RolePermissionEntity } from '../admin/role-permission.entity';
+import { AuditModule } from '../audit/audit.module';
 import { CollectionAgentEntity } from '../dispatch/collection-agent.entity';
 import { AgentDirectoryService } from '../dispatch/agent-directory.service';
 import { EmployeeEntity } from '../employees/employee.entity';
@@ -19,6 +20,8 @@ import { JwtStrategy } from './jwt.strategy';
 @Module({
   imports: [
     UsersModule,
+    // lockout + password-change audit rows
+    AuditModule,
     // Read-only binding so login/`/auth/me` can attach the role's permission
     // map (the AdminModule owns writes to this table).
     TypeOrmModule.forFeature([

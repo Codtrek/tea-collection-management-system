@@ -28,6 +28,9 @@ export interface PublicAuditEntry {
   record?: string;
   recordHref?: string;
   details?: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  reason?: string;
 }
 
 /** 'AUD-00001' — formatted from a running sequence. */

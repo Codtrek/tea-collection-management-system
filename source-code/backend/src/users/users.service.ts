@@ -38,11 +38,37 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { id } });
   }
 
-  /** Sets a new password and clears the temporary-password flag. */
-  async setPassword(userId: number, passwordHash: string): Promise<void> {
+  /**
+   * Sets a new password and clears the temporary-password flag. With `bumpTokenVersion`, every
+   * existing portal token is refused from the next request; returns the new token version.
+   */
+  async setPassword(
+    userId: number,
+    passwordHash: string,
+    opts: { bumpTokenVersion?: boolean } = {},
+  ): Promise<number> {
+    const user = await this.findById(userId);
+    const tv = (user?.token_version ?? 0) + (opts.bumpTokenVersion ? 1 : 0);
     await this.usersRepository.update(
       { id: userId },
-      { password_hash: passwordHash, must_change_password: false },
+      {
+        password_hash: passwordHash,
+        must_change_password: false,
+        ...(opts.bumpTokenVersion ? { token_version: tv } : {}),
+      },
+    );
+    return tv;
+  }
+
+  /** Lockout bookkeeping (AuthService.verifyPassword). */
+  async setLoginFailures(
+    userId: number,
+    count: number,
+    lockedUntil: Date | null,
+  ): Promise<void> {
+    await this.usersRepository.update(
+      { id: userId },
+      { failed_login_count: count, locked_until: lockedUntil },
     );
   }
 

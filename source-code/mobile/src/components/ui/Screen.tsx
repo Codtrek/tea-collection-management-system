@@ -4,6 +4,7 @@ import {
   StyleSheet,
   ViewProps,
   ScrollView,
+  type ScrollViewProps,
   Platform,
 } from "react-native";
 
@@ -14,7 +15,8 @@ interface ScreenProps extends ViewProps {
   scroll?: boolean;
   header?: React.ReactNode;
   pageTitle?: string;
-  keyboardShouldPersistTaps?: "never" | "always" | "handled";
+  keyboardShouldPersistTaps?: ScrollViewProps["keyboardShouldPersistTaps"];
+  automaticallyAdjustKeyboardInsets?: ScrollViewProps["automaticallyAdjustKeyboardInsets"];
 }
 
 export default function Screen({
@@ -23,6 +25,7 @@ export default function Screen({
   header,
   pageTitle,
   keyboardShouldPersistTaps,
+  automaticallyAdjustKeyboardInsets,
   style,
   ...props
 }: ScreenProps) {
@@ -46,6 +49,7 @@ const TopSection = header ? (
             ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+            automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
           >
             {children}
           </ScrollView>
