@@ -5,7 +5,9 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
+  Put,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -15,6 +17,7 @@ import { ExtractJwt } from 'passport-jwt';
 import type { JwtPayload } from '../../auth/jwt-payload.interface';
 import { CollectionRequestService } from './collection-request.service';
 import { CollectionRequestDto } from './dto/create-collection-request.dto';
+import { PatchCollectionRequestDto } from './dto/patch-collection-request.dto';
 
 @Controller('collection-request')
 export class CollectionRequestController {
@@ -45,6 +48,18 @@ export class CollectionRequestController {
   async getOne(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
     const { userId, role } = await this.authenticate(req);
     return this.collectionRequests.getOne(id, userId, role);
+  }
+
+  @Put(':id')
+  async replace(@Param('id', ParseIntPipe) id: number, @Body() dto: CollectionRequestDto, @Req() req: Request) {
+    const { userId, role } = await this.authenticate(req);
+    return this.collectionRequests.updatePending(id, { estateId: dto.estateId, notes: dto.notes ?? null }, userId, role);
+  }
+
+  @Patch(':id')
+  async patch(@Param('id', ParseIntPipe) id: number, @Body() dto: PatchCollectionRequestDto, @Req() req: Request) {
+    const { userId, role } = await this.authenticate(req);
+    return this.collectionRequests.updatePending(id, dto, userId, role);
   }
 
   @Delete(':id')
