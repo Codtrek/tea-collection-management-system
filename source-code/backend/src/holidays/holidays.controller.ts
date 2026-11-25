@@ -30,7 +30,7 @@ import {
   WeeklyRuleDto,
 } from './dto/holiday.dto';
 import { type HolidayActor, HolidayService } from './holiday.service';
-import { RequirePermission } from '../auth/permissions';
+import { RequirePermission, ServiceChecked } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -67,6 +67,9 @@ export class HolidaysController {
     return this.holidays.day(date, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Patch('settings')
   async settings(@Body() dto: CalendarSettingsDto, @Req() req: AuthedRequest) {
     await this.holidays.setWeekStartsOn(
@@ -83,6 +86,9 @@ export class HolidaysController {
     return this.holidays.listRequests();
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Post('requests/:id/approve')
   async approve(
     @Param('id', ParseIntPipe) id: number,
@@ -97,6 +103,9 @@ export class HolidaysController {
     );
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Post('requests/:id/reject')
   async reject(
     @Param('id', ParseIntPipe) id: number,
@@ -119,11 +128,17 @@ export class HolidaysController {
     return this.holidays.template(Number(from));
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Post()
   async create(@Body() dto: HolidayDto, @Req() req: AuthedRequest) {
     return this.holidays.create(dto, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Put(':id')
   async update(
     @Param('id', ParseIntPipe) id: number,
@@ -133,6 +148,9 @@ export class HolidaysController {
     return this.holidays.update(id, dto, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Delete(':id')
   async cancel(
     @Param('id', ParseIntPipe) id: number,
@@ -142,6 +160,9 @@ export class HolidaysController {
     await this.holidays.cancel(id, dto?.reason, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Patch('types/:type')
   async updateType(
     @Param('type') type: 'poya' | 'public' | 'weekly' | 'closure',
@@ -151,11 +172,17 @@ export class HolidaysController {
     await this.holidays.updateType(type, dto, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Post('weekly')
   async weekly(@Body() dto: WeeklyRuleDto, @Req() req: AuthedRequest) {
     return this.holidays.setWeeklyRule(dto, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Post('rest-days/:employeeId')
   async restDay(
     @Param('employeeId') employeeId: string,
@@ -170,6 +197,9 @@ export class HolidaysController {
   }
 
   /** What declaring would touch (attendance already marked, route days) — before confirming. */
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Post('declare/preview')
   async declarePreview(
     @Body() dto: DeclareHolidayDto,
@@ -184,11 +214,17 @@ export class HolidaysController {
     return this.holidays.declarePreview(dto);
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Post('declare')
   async declare(@Body() dto: DeclareHolidayDto, @Req() req: AuthedRequest) {
     return this.holidays.declare(dto, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'holidayCalendar / holidayStatutory rules incl. the approval flow (HolidayService.gate)',
+  )
   @Delete('declared/:group')
   async cancelDeclared(
     @Param('group') group: string,

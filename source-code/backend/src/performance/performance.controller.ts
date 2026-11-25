@@ -17,7 +17,7 @@ import { parseEmployeeId } from '../employees/employee-map';
 import { UsersService } from '../users/users.service';
 import type { MeasureKey } from './performance-rules';
 import { lastCompleteMonth, PerformanceService } from './performance.service';
-import { RequirePermission } from '../auth/permissions';
+import { RequirePermission, ServiceChecked } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -111,6 +111,7 @@ export class PerformanceController {
   }
 
   /** A note from a conversation — performance: edit; audited. */
+  @ServiceChecked('performance: Edit (PerformanceService.addNote)')
   @Post('employees/:id/notes')
   async addNote(
     @Param('id') id: string,

@@ -50,7 +50,11 @@ import {
   SystemUsersService,
 } from './system-users.service';
 import type { PortalRole } from './admin-map';
-import { RequirePermission } from '../auth/permissions';
+import {
+  RequirePermission,
+  RequirePermissionLevel,
+  ServiceChecked,
+} from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -72,6 +76,7 @@ export class AdminController {
     return this.adminService.listGradeRates();
   }
 
+  @RequirePermissionLevel('edit', 'administration')
   @Post('grade-rates')
   async createGradeRate(
     @Body() dto: CreateGradeRateDto,
@@ -81,6 +86,7 @@ export class AdminController {
   }
 
   /** Cancel a scheduled version before it starts (reason required, audited). */
+  @RequirePermissionLevel('edit', 'administration')
   @Post('grade-rates/:id/cancel')
   async cancelGradeRate(
     @Param('id') id: string,
@@ -110,6 +116,7 @@ export class AdminController {
     return this.transportRates.preview(Number(amount));
   }
 
+  @RequirePermissionLevel('edit', 'administration')
   @Post('transport-rates')
   async createTransportRate(
     @Body() dto: CreateTransportChargeDto,
@@ -118,6 +125,7 @@ export class AdminController {
     return this.transportRates.create(dto, await this.resolveActor(req));
   }
 
+  @RequirePermissionLevel('edit', 'administration')
   @Post('transport-rates/:id/cancel')
   async cancelTransportRate(
     @Param('id', ParseIntPipe) id: number,
@@ -140,6 +148,7 @@ export class AdminController {
     return this.adminService.getFactoryProfile(await this.resolveActor(req));
   }
 
+  @RequirePermissionLevel('edit', 'administration')
   @Put('factory-profile')
   async updateFactoryProfile(
     @Body() dto: UpdateFactoryProfileDto,
@@ -164,6 +173,9 @@ export class AdminController {
     return this.adminService.getPermissionMatrix();
   }
 
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Put('permissions')
   async updatePermissions(
     @Body() dto: UpdatePermissionsDto,
@@ -190,6 +202,9 @@ export class AdminController {
     return this.adminService.getSettings();
   }
 
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Put('settings')
   async updateSettings(
     @Body() dto: UpdateSettingsDto,
@@ -227,6 +242,9 @@ export class AdminController {
     return this.systemUsers.linkSuggestions(await this.resolveActor(req));
   }
 
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Post('users')
   async createUser(
     @Body() dto: CreateSystemUserDto,
@@ -235,6 +253,9 @@ export class AdminController {
     return this.systemUsers.create(dto, await this.resolveActor(req));
   }
 
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Patch('users/:id')
   async updateUser(
     @Param('id') id: string,
@@ -244,6 +265,9 @@ export class AdminController {
     return this.systemUsers.update(id, dto, await this.resolveActor(req));
   }
 
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Post('users/:id/deactivate')
   async deactivateUser(
     @Param('id') id: string,
@@ -258,6 +282,9 @@ export class AdminController {
   }
 
   /** Kept for older portal builds — same as deactivate. */
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Post('users/:id/suspend')
   async suspendUser(
     @Param('id') id: string,
@@ -270,6 +297,9 @@ export class AdminController {
     );
   }
 
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Post('users/:id/reactivate')
   async reactivateUser(
     @Param('id') id: string,
@@ -279,6 +309,9 @@ export class AdminController {
   }
 
   /** Returns the new temporary password ONCE; the user must change it at next sign-in. */
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Post('users/:id/reset-password')
   async resetPassword(
     @Param('id') id: string,
@@ -287,6 +320,9 @@ export class AdminController {
     return this.systemUsers.resetPassword(id, await this.resolveActor(req));
   }
 
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Post('users/:id/unlock')
   async unlockUser(
     @Param('id') id: string,
@@ -295,6 +331,9 @@ export class AdminController {
     return this.systemUsers.unlock(id, await this.resolveActor(req));
   }
 
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Post('users/:id/link')
   async linkUser(
     @Param('id') id: string,
@@ -308,6 +347,9 @@ export class AdminController {
     );
   }
 
+  @ServiceChecked(
+    'Users & Roles rules (user-rules.ts) or the administration key; Administrator-only by design',
+  )
   @Delete('users/:id/link')
   async unlinkUser(
     @Param('id') id: string,

@@ -75,7 +75,6 @@ export class EstateAdvancePlanService {
     dto: RescheduleAdvanceDto,
     actor: Actor,
   ): Promise<PublicEstateReschedule> {
-    this.estates.assertCanWrite(actor);
     const { advance, recoveries } = await this.open(id);
     const pending = (
       await this.rescheduleRepo.find({ where: { advanceId: id } })
@@ -125,7 +124,6 @@ export class EstateAdvancePlanService {
     dto: DecideRescheduleDto,
     actor: Actor,
   ): Promise<PublicEstateReschedule> {
-    this.estates.assertCanWrite(actor);
     const { advance, recoveries } = await this.open(id);
     const r = (
       await this.rescheduleRepo.find({ where: { advanceId: id } })
@@ -184,7 +182,6 @@ export class EstateAdvancePlanService {
     dto: EstateRepaymentDto,
     actor: Actor,
   ): Promise<{ remaining: number }> {
-    this.estates.assertCanWrite(actor);
     const { advance, recoveries } = await this.open(id);
     const payable = earlyRepayable(advance, recoveries);
     if (dto.amount > payable) {

@@ -56,6 +56,17 @@ export const PortalOnly = () =>
     level: 'view',
   } satisfies PermissionRequirement);
 
+export const SERVICE_CHECKED_META = 'portal:service-checked';
+
+/**
+ * A portal write whose permission check lives in its service, because it depends on more than a
+ * key + level (a time window, the record's state, separated duties, Users & Roles rules). The
+ * reason says which key / rule — the write coverage test requires it, so no write is unchecked
+ * by accident (Users-Roles-Addendum §4a).
+ */
+export const ServiceChecked = (reason: string) =>
+  SetMetadata(SERVICE_CHECKED_META, reason);
+
 /** Human labels for the 403 message (mirrors the portal's permission-catalog labels). */
 export const KEY_LABELS: Record<ModuleKey, string> = {
   dashboard: 'Dashboard',

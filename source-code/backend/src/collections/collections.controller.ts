@@ -26,7 +26,11 @@ import { DecideCorrectionDto } from './dto/decide-correction.dto';
 import { RequestCorrectionDto } from './dto/request-correction.dto';
 import { SetGradeLinesDto } from './dto/set-grade-lines.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
-import { RequirePermission } from '../auth/permissions';
+import {
+  RequirePermission,
+  RequirePermissionLevel,
+  ServiceChecked,
+} from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -78,6 +82,7 @@ export class CollectionsController {
     return this.grading.listCorrections(id);
   }
 
+  @RequirePermissionLevel('edit', 'collection')
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -91,6 +96,7 @@ export class CollectionsController {
     );
   }
 
+  @RequirePermissionLevel('edit', 'collection')
   @Post()
   async createException(
     @Body() dto: CreateExceptionDto,
@@ -106,6 +112,9 @@ export class CollectionsController {
    * Factory-side grading — grade lines are never written by agents or owners. The first save
    * grades + confirms; while the delivery is OPEN the same call edits it (a reason is required).
    */
+  @ServiceChecked(
+    'grading / gradingApproval keys, the grading window and record state (GradingService)',
+  )
   @Put(':id/grade-lines')
   async setGradeLines(
     @Param('id') id: string,
@@ -117,6 +126,9 @@ export class CollectionsController {
   }
 
   /** End the OPEN window now (also releases the held owner notification). */
+  @ServiceChecked(
+    'grading / gradingApproval keys, the grading window and record state (GradingService)',
+  )
   @Post(':id/finalize')
   async finalize(
     @Param('id') id: string,
@@ -126,6 +138,9 @@ export class CollectionsController {
     return this.findOne(id);
   }
 
+  @ServiceChecked(
+    'grading / gradingApproval keys, the grading window and record state (GradingService)',
+  )
   @Post(':id/corrections')
   async requestCorrection(
     @Param('id') id: string,
@@ -135,6 +150,9 @@ export class CollectionsController {
     return this.grading.requestCorrection(id, dto, await this.resolveActor(req));
   }
 
+  @ServiceChecked(
+    'grading / gradingApproval keys, the grading window and record state (GradingService)',
+  )
   @Post('corrections/:requestId/approve')
   async approveCorrection(
     @Param('requestId', ParseIntPipe) requestId: number,
@@ -145,6 +163,9 @@ export class CollectionsController {
     return this.findOne(id);
   }
 
+  @ServiceChecked(
+    'grading / gradingApproval keys, the grading window and record state (GradingService)',
+  )
   @Post('corrections/:requestId/reject')
   async rejectCorrection(
     @Param('requestId', ParseIntPipe) requestId: number,
@@ -156,6 +177,9 @@ export class CollectionsController {
   }
 
   /** Officer resend of a failed owner notification. */
+  @ServiceChecked(
+    'grading / gradingApproval keys, the grading window and record state (GradingService)',
+  )
   @Post(':id/notification/resend')
   async resendNotification(
     @Param('id') id: string,
