@@ -1,6 +1,9 @@
 import {
   Body,
   Controller,
+  Get,
+  Param,
+  ParseIntPipe,
   Post,
   Req,
   UnauthorizedException,
@@ -21,6 +24,23 @@ export class CollectionRequestController {
 
   @Post('create')
   async create(@Body() dto: CollectionRequestDto, @Req() req: Request) {
+    const { userId, role } = await this.authenticate(req);
+    return this.collectionRequests.create(dto, userId, role);
+  }
+
+  @Get()
+  async listForOwner(@Req() req: Request) {
+    const { userId, role } = await this.authenticate(req);
+    return this.collectionRequests.listForOwner(userId, role);
+  }
+
+  @Get(':id')
+  async getOne(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    const { userId, role } = await this.authenticate(req);
+    return this.collectionRequests.getOne(id, userId, role);
+  }
+
+  private async authenticate(req: Request) {
     const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
     if (!token) throw new UnauthorizedException();
 
@@ -34,6 +54,6 @@ export class CollectionRequestController {
       throw new UnauthorizedException();
     }
 
-    return this.collectionRequests.create(dto, userId, actor.role);
+    return { userId, role: actor.role };
   }
 }
