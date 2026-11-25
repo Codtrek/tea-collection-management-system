@@ -1550,3 +1550,65 @@ ALTER TABLE settlements
     ADD COLUMN transport_version_id   INTEGER REFERENCES transport_rates(id),
     ADD COLUMN transport_carried_in   DECIMAL(10,2) NOT NULL DEFAULT 0,
     ADD COLUMN transport_carried_out  DECIMAL(10,2) NOT NULL DEFAULT 0;
+
+-- Settlement generator (Settlement-Addendum, 2026-11-16 — migration 1794400025000). 'legacy' =
+-- a seeded snapshot kept read-only and never processed. `calculation` is the generator's whole
+-- line-by-line calculation, frozen when processed; `gross_amount` is the gross it priced (rate
+-- periods make kg × one rate wrong). One live settlement per estate per period.
+ALTER TABLE settlements DROP CONSTRAINT settlements_status_check;
+ALTER TABLE settlements ADD CONSTRAINT settlements_status_check
+    CHECK (status IN ('pending', 'processed', 'legacy'));
+ALTER TABLE settlements
+    ADD COLUMN legacy_reason   TEXT,
+    ADD COLUMN gross_amount    DECIMAL(12,2),
+    ADD COLUMN calculation     JSONB,
+    ADD COLUMN payout_method   VARCHAR(4) CONSTRAINT settlements_payout_method_check CHECK (payout_method IN ('bank', 'cash')),
+    ADD COLUMN excluded_reason TEXT,
+    ADD COLUMN prepared_by     VARCHAR(100),
+    ADD COLUMN prepared_at     TIMESTAMPTZ;
+CREATE UNIQUE INDEX settlements_estate_period_live_key
+    ON settlements (estate_id, period) WHERE status <> 'legacy';
+
+-- A delivery left out of a settlement month, with the reason; it rolls into the next month the
+-- estate is settled for. `auto` = left out by the system (still inside the grading window).
+CREATE TABLE settlement_delivery_exclusions (
+    id           SERIAL PRIMARY KEY,
+    delivery_id  VARCHAR(20) NOT NULL UNIQUE REFERENCES tea_collection_records(id),
+    month        VARCHAR(7) NOT NULL CHECK (month ~ '^[0-9]{4}-[0-9]{2}$'),
+    reason       TEXT NOT NULL,
+    auto         BOOLEAN NOT NULL DEFAULT FALSE,
+    excluded_by  VARCHAR(100) NOT NULL,
+    excluded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Users & Roles (Users-Roles-Addendum, 2026-11-18 — migration 1794400026000). token_version is
+-- carried in the portal JWT (tv) and checked on every request; 5 wrong passwords lock a login for
+-- 15 minutes; audit rows can carry before / after / reason. The permission backfill fills the keys
+-- the baseline never inserted (ON CONFLICT DO NOTHING: existing choices are kept).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(120);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_key ON users (lower(email));
+
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS before JSONB;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS after JSONB;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS reason TEXT;
+
+INSERT INTO role_permissions (role, module, level) VALUES
+    ('Administrator', 'dashboard', 'approve'),   ('Officer', 'dashboard', 'view'),       ('Manager', 'dashboard', 'view'),
+    ('Administrator', 'collection', 'approve'),  ('Officer', 'collection', 'edit'),      ('Manager', 'collection', 'view'),
+    ('Administrator', 'fertilizer', 'approve'),  ('Officer', 'fertilizer', 'edit'),      ('Manager', 'fertilizer', 'view'),
+    ('Administrator', 'estateOwners', 'approve'),('Officer', 'estateOwners', 'edit'),    ('Manager', 'estateOwners', 'view'),
+    -- 1794400008000 copied estateAdvances from estateOwners, which had no rows on a migrations-only DB
+    ('Administrator', 'estateAdvances', 'approve'),('Officer', 'estateAdvances', 'edit'),('Manager', 'estateAdvances', 'view'),
+    ('Administrator', 'payroll', 'approve'),     ('Officer', 'payroll', 'edit'),         ('Manager', 'payroll', 'view'),
+    ('Administrator', 'advances', 'approve'),    ('Officer', 'advances', 'approve'),     ('Manager', 'advances', 'view'),
+    ('Administrator', 'employees', 'approve'),   ('Officer', 'employees', 'view'),       ('Manager', 'employees', 'view'),
+    ('Administrator', 'attendance', 'approve'),  ('Officer', 'attendance', 'edit'),      ('Manager', 'attendance', 'approve'),
+    ('Administrator', 'reports', 'approve'),     ('Officer', 'reports', 'edit'),         ('Manager', 'reports', 'view'),
+    ('Administrator', 'dispatch', 'approve'),    ('Officer', 'dispatch', 'edit'),        ('Manager', 'dispatch', 'approve'),
+    ('Administrator', 'grading', 'view'),        ('Officer', 'grading', 'edit'),         ('Manager', 'grading', 'view'),
+    ('Administrator', 'gradingApproval', 'view'),('Officer', 'gradingApproval', 'view'), ('Manager', 'gradingApproval', 'approve'),
+    ('Administrator', 'administration', 'approve'),('Officer', 'administration', 'none'),('Manager', 'administration', 'none')
+ON CONFLICT (role, module) DO NOTHING;

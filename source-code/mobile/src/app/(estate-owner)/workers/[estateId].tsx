@@ -1,471 +1,127 @@
 import { useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  Pressable,
-  Platform,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Alert, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 
-import { FormCheckbox } from "@/components/forms";
-import { AppButton, AppInput, AppText, Avatar, Screen } from "@/components/ui";
+import { EstateIcon, EstatePage, estateStyles as ui } from "@/components/estate-owner/EstatePage";
+import { AppInput, AppText, Avatar } from "@/components/ui";
+import { addEstateWorker, useSavedEstateWorkers } from "@/data/estateWorkers";
 import { useEstateStore } from "@/store/estateStore";
-import {
-  getEstateWorkers,
-  saveEstateWorkers,
-} from "@/data/estateWorkers";
-import type { EstateWorker } from "@/data/estateWorkers";
-import { colors, spacing } from "@/theme";
+import { colors } from "@/theme";
 
 export default function EstateWorkers() {
-  const estateProfiles = useEstateStore((state) => state.estates);
   const { estateId } = useLocalSearchParams<{ estateId: string }>();
-  const estate = estateProfiles.find((profile) => profile.id === estateId);
-  const [workers, setWorkers] = useState<EstateWorker[]>(() =>
-    estate ? getEstateWorkers(estate.id) : []
-  );
-  const [isAddWorkerVisible, setIsAddWorkerVisible] = useState(false);
-  const [workerName, setWorkerName] = useState("");
-  const [workerContact, setWorkerContact] = useState("");
-  const goBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace("/(estate-owner)/estates");
-    }
-  };
-  const screenHeader = (
-    <View style={styles.screenHeader}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-        onPress={goBack}
-        hitSlop={8}
-      >
-        <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-      </Pressable>
-      <AppText variant="subHeading" style={styles.screenTitle}>
-        Estate workers
-      </AppText>
-    </View>
-  );
+  const estate = useEstateStore((state) => state.estates.find((item) => item.id === estateId));
+  const workers = useSavedEstateWorkers(estateId);
+  const [query, setQuery] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [contact, setContact] = useState("");
+  const [error, setError] = useState("");
+  const search = query.trim().toLowerCase();
+  const phoneSearch = /^[+\d ()-]+$/.test(search) ? search.replace(/\D/g, "") : "";
+  const matches = workers?.filter((worker) =>
+    worker.name.toLowerCase().includes(search) ||
+    (phoneSearch !== "" && worker.contactNumber.replace(/\D/g, "").includes(phoneSearch))
+  ) ?? [];
 
-  if (!estate) {
-    return (
-      <Screen header={screenHeader}>
-        <View style={styles.notFound}>
-          <AppText variant="bodySmall">Estate not found.</AppText>
-          <AppButton
-            title="Back to estates"
-            onPress={() => router.replace("/(estate-owner)/estates")}
-          />
-        </View>
-      </Screen>
+  function openAddWorker() {
+    Keyboard.dismiss();
+    setName("");
+    setContact("");
+    setError("");
+    setAdding(true);
+  }
+
+  function saveWorker() {
+    const workerName = name.trim();
+    const number = contact.trim();
+    if (!workerName || !number) {
+      setError("Enter the worker's name and contact number.");
+      return;
+    }
+    if (!/^\+?[\d ()-]+$/.test(number) || !/\d/.test(number)) {
+      setError("Enter a valid contact number.");
+      return;
+    }
+    addEstateWorker(estateId, workerName, number);
+    setQuery("");
+    setAdding(false);
+  }
+
+  function callWorker(number: string) {
+    const dialNumber = number.replace(/[ ()-]/g, "");
+    void Linking.openURL(`tel:${dialNumber}`).catch(() =>
+      Alert.alert("Unable to call", "Calling is unavailable on this device.")
     );
   }
 
-  const updateWorker = (
-    workerId: string,
-    update: Partial<EstateWorker>
-  ) => {
-    setWorkers((currentWorkers) =>
-      currentWorkers.map((worker) =>
-        worker.id === workerId ? { ...worker, ...update } : worker
-      )
-    );
-  };
-
-  const openAddWorker = () => {
-    setWorkerName("");
-    setWorkerContact("");
-    setIsAddWorkerVisible(true);
-  };
-
-  const addWorker = () => {
-    const name = workerName.trim();
-    const contactNumber = workerContact.trim();
-
-    if (!name || !contactNumber) {
-      Alert.alert(
-        "Worker details required",
-        "Enter the worker's name and contact number."
-      );
-      return;
-    }
-
-    setWorkers((currentWorkers) => [
-      ...currentWorkers,
-      {
-        id: `worker-${Date.now()}-${currentWorkers.length}`,
-        name,
-        role: "Tea plucker",
-        contactNumber,
-        present: false,
-      },
-    ]);
-    setIsAddWorkerVisible(false);
-  };
-
-  const callWorker = (worker: EstateWorker) => {
-    Alert.alert(
-      worker.name,
-      worker.contactNumber,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Call",
-          onPress: () => {
-            void Linking.openURL(`tel:${worker.contactNumber}`).catch(() => {
-              Alert.alert(
-                "Unable to call",
-                "Calling is not available on this device."
-              );
-            });
-          },
-        },
-      ]
-    );
-  };
-
-  const saveAttendance = () => {
-    const hasIncompleteWorker = workers.some(
-      (worker) =>
-        !worker.name.trim() ||
-        !worker.contactNumber.trim()
-    );
-
-    if (hasIncompleteWorker) {
-      Alert.alert(
-        "Worker details required",
-        "Each worker needs a name and contact number."
-      );
-      return;
-    }
-
-    saveEstateWorkers(
-      estate.id,
-      workers.map((worker) => ({
-        ...worker,
-        name: worker.name.trim(),
-        contactNumber: worker.contactNumber.trim(),
-      }))
-    );
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace({
-        pathname: "/(estate-owner)/estate/[estateId]",
-        params: { estateId: estate.id },
-      });
-    }
-  };
-
-  const presentCount = workers.filter((worker) => worker.present).length;
-
   return (
-    <Screen header={screenHeader}>
-      <View style={styles.content}>
-        <View style={styles.intro}>
-          <AppText variant="sectionHeading" style={styles.estateName}>
-            {estate.name}
-          </AppText>
-          <AppText variant="bodySmall" style={styles.subtitle}>
-            Add worker details and mark who is present today.
-          </AppText>
+    <EstatePage title="Estate workers">
+      {estate ? <>
+        {/* <AppText variant="heading" style={ui.bold}>{estate.name}</AppText> */}
+        <View style={ui.row}>
+          <AppInput accessibilityLabel="Search workers" placeholder="Search by name or number"
+            leftIcon="magnify" containerStyle={[ui.grow, styles.searchInput]} value={query} onChangeText={setQuery}
+            autoCorrect={false} returnKeyType="search" />
+          <Pressable accessibilityRole="button" accessibilityLabel="Add worker" style={styles.addButton} onPress={openAddWorker}>
+            <Ionicons name="add" size={25} color={colors.text.inverse} />
+          </Pressable>
         </View>
-
-        <View style={styles.attendanceSummary}>
-          <Ionicons name="people-outline" size={18} color={colors.brandDark} />
-          <AppText variant="bodySmall" style={styles.summaryText}>
-            {presentCount} of {workers.length} workers present
-          </AppText>
-        </View>
-
-        {workers.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="people-outline" size={32} color={colors.text.tertiary} />
-            <AppText variant="bodySmall" style={styles.emptyText}>
-              No workers added yet. Add a worker to get started.
-            </AppText>
-          </View>
-        ) : (
-          workers.map((worker) => (
-            <View key={worker.id} style={styles.workerCard}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Call options for ${worker.name}`}
-                onPress={() => callWorker(worker)}
-                style={({ pressed }) => [
-                  styles.workerDetails,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Avatar name={worker.name} size={48} />
-                <View style={styles.workerInfo}>
-                  <AppText variant="bodySmall" style={styles.workerName}>
-                    {worker.name}
-                  </AppText>
-                  <AppText variant="caption" style={styles.workerContact}>
-                    {worker.contactNumber}
-                  </AppText>
-                </View>
-                <Ionicons
-                  name="call-outline"
-                  size={18}
-                  color={colors.brandDark}
-                />
-              </Pressable>
-              <FormCheckbox
-                label="Present"
-                checked={worker.present}
-                onValueChange={(present) =>
-                  updateWorker(worker.id, { present })
-                }
-                containerStyle={styles.workerCheckbox}
-                labelStyle={styles.checkboxLabel}
-              />
+        <AppText variant="caption" style={ui.muted}>{matches.length} {matches.length === 1 ? "worker" : "workers"}</AppText>
+        {matches.length ? matches.map((worker) => (
+          <View key={worker.id} style={[ui.card, ui.row]}>
+            <Avatar name={worker.name} size={42} />
+            <View style={ui.grow}>
+              <AppText variant="bodySmall" style={ui.bold}>{worker.name}</AppText>
+              <AppText variant="caption" style={ui.muted}>{worker.contactNumber}</AppText>
             </View>
-          ))
+            <Pressable accessibilityRole="button" accessibilityLabel={`Call ${worker.name}`}
+              style={styles.callButton} onPress={() => callWorker(worker.contactNumber)}>
+              <EstateIcon name="call-outline" size={20} />
+            </Pressable>
+          </View>
+        )) : (
+          <View style={[ui.card, styles.empty]}>
+            <EstateIcon name="people-outline" size={26} />
+            <AppText variant="bodySmall" style={ui.muted}>{workers?.length ? "No workers match your search." : "No workers added yet."}</AppText>
+          </View>
         )}
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={openAddWorker}
-          style={({ pressed }) => [
-            styles.addWorkerButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Ionicons name="add-circle-outline" size={20} color={colors.brandDark} />
-          <AppText variant="label" style={styles.addWorkerText}>
-            Add worker
-          </AppText>
-        </Pressable>
-
-        <AppButton
-          title="Save attendance"
-          onPress={saveAttendance}
-          style={styles.saveButton}
-        />
-      </View>
-      <Modal
-        visible={isAddWorkerVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsAddWorkerVisible(false)}
-      >
-        <View style={styles.modalRoot}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close add worker form"
-            onPress={() => setIsAddWorkerVisible(false)}
-            style={styles.modalBackdrop}
-          />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.keyboardAvoiding}
-          >
-            <View style={styles.addWorkerModal}>
-              <View style={styles.modalHeading}>
-                <AppText variant="sectionHeading" style={styles.workerTitle}>
-                  Add worker
-                </AppText>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Close add worker form"
-                  onPress={() => setIsAddWorkerVisible(false)}
-                  hitSlop={8}
-                >
-                  <Ionicons name="close" size={22} color={colors.text.secondary} />
-                </Pressable>
-              </View>
-              <AppInput
-                label="Name"
-                placeholder="Enter worker's name"
-                value={workerName}
-                onChangeText={setWorkerName}
-                autoCapitalize="words"
-                returnKeyType="next"
-                containerStyle={styles.modalInput}
-              />
-              <AppInput
-                label="Contact number"
-                placeholder="Enter contact number"
-                value={workerContact}
-                onChangeText={setWorkerContact}
-                keyboardType="phone-pad"
-                returnKeyType="done"
-                containerStyle={styles.modalInput}
-              />
-              <AppButton title="Add worker" onPress={addWorker} />
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-    </Screen>
+        {adding && (
+          <Modal visible transparent animationType="fade" onRequestClose={() => setAdding(false)}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.backdrop}>
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.modalContent}>
+                <View accessibilityViewIsModal style={[ui.card, styles.form]}>
+                  <AppText variant="subHeading" style={ui.bold}>Add worker</AppText>
+                  <AppInput label="Name" accessibilityLabel="Worker name" value={name} onChangeText={setName} autoCapitalize="words" />
+                  <AppInput label="Contact number" accessibilityLabel="Contact number" value={contact} onChangeText={setContact} keyboardType="phone-pad" />
+                  {!!error && <AppText accessibilityRole="alert" variant="bodySmall" style={styles.error}>{error}</AppText>}
+                  <View style={ui.row}>
+                    <Pressable accessibilityRole="button" style={[ui.action, ui.outline, ui.grow]} onPress={() => setAdding(false)}>
+                      <AppText variant="bodySmall" style={ui.bold}>Cancel</AppText>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" style={[ui.action, ui.grow]} onPress={saveWorker}>
+                      <AppText variant="bodySmall" style={ui.white}>Add worker</AppText>
+                    </Pressable>
+                  </View>
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          </Modal>
+        )}
+      </> : <AppText>Estate not found.</AppText>}
+    </EstatePage>
   );
 }
 
 const styles = StyleSheet.create({
-  screenHeader: {
-    minHeight: 92,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingTop: 36,
-    backgroundColor: colors.white,
-  },
-  screenTitle: {
-    color: colors.text.primary,
-  },
-  content: {
-    flex: 1,
-    paddingBottom: spacing.xl,
-  },
-  intro: {
-    marginBottom: spacing.md,
-  },
-  estateName: {
-    color: colors.text.primary,
-  },
-  subtitle: {
-    marginTop: spacing.xs,
-    color: colors.text.secondary,
-  },
-  attendanceSummary: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    borderRadius: 14,
-    backgroundColor: colors.brandSurface,
-  },
-  summaryText: {
-    color: colors.brandDark,
-    fontWeight: "600",
-  },
-  workerCard: {
-    minHeight: 82,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 18,
-    backgroundColor: colors.white,
-  },
-  workerDetails: {
-    minHeight: 62,
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginRight: spacing.sm,
-  },
-  workerTitle: {
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  workerInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  workerName: {
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  workerContact: {
-    color: colors.text.secondary,
-  },
-  workerCheckbox: {
-    flexDirection: "column-reverse",
-    gap: 4,
-  },
-  checkboxLabel: {
-    marginLeft: 0,
-    fontSize: 11,
-  },
-  emptyState: {
-    alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-  },
-  emptyText: {
-    color: colors.text.secondary,
-    textAlign: "center",
-  },
-  addWorkerButton: {
-    minHeight: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.brandBorder,
-    borderRadius: 14,
-    backgroundColor: colors.brandSurface,
-  },
-  addWorkerText: {
-    color: colors.brandDark,
-  },
-  saveButton: {
-    maxHeight: 54,
-  },
-  pressed: {
-    opacity: 0.75,
-  },
-  notFound: {
-    flex: 1,
-    justifyContent: "center",
-    gap: spacing.md,
-  },
-  modalRoot: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    backgroundColor: "rgba(16, 24, 7, 0.35)",
-  },
-  keyboardAvoiding: {
-    flex: 1,
-    width: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFill,
-  },
-  addWorkerModal: {
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 24,
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-  },
-  modalInput: {
-    marginBottom: spacing.sm,
-  },
-  modalHeading: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.md,
-  },
+  searchInput: { marginBottom: 0 },
+  addButton: { width: 56, alignSelf: "stretch", borderRadius: 14, backgroundColor: colors.brandDark, alignItems: "center", justifyContent: "center" },
+  callButton: { width: 44, height: 44, borderRadius: 9, backgroundColor: colors.brandSurface, alignItems: "center", justifyContent: "center" },
+  empty: { gap: 8, alignItems: "center", padding: 18 },
+  backdrop: { flex: 1, backgroundColor: colors.overlay },
+  modalContent: { flexGrow: 1, justifyContent: "center", padding: 20 },
+  form: { width: "100%", maxWidth: 420, alignSelf: "center", padding: 18, gap: 12 },
+  error: { color: colors.error },
 });

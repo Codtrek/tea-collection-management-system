@@ -1,13 +1,19 @@
 import { apiFetch } from '@/lib/api'
+import type { Role } from '@/types'
 import type {
   AuditEntry,
+  CreateSystemUserInput,
+  EligibleEmployee,
   FactoryProfile,
   GradeRate,
+  IssuedPassword,
+  LinkSuggestion,
   PermissionEntry,
   PermissionMatrix,
   SystemUser,
   TransportPreview,
   TransportRates,
+  UpdateSystemUserInput,
 } from '@/features/admin/types'
 
 /* ── ADM-01 grade rates ─────────────────────────────────────────── */
@@ -97,25 +103,61 @@ export function getPermissionMatrix(): Promise<PermissionMatrix> {
   return apiFetch<PermissionMatrix>('/admin/permissions')
 }
 
-export function updatePermissions(entries: PermissionEntry[]): Promise<PermissionMatrix> {
+/** Only changed, editable cells; `reason` is required (server-checked) for approve / finance changes. */
+export function updatePermissions(entries: PermissionEntry[], reason?: string): Promise<PermissionMatrix> {
   return apiFetch<PermissionMatrix>('/admin/permissions', {
     method: 'PUT',
-    body: JSON.stringify({ entries }),
+    body: JSON.stringify({ entries, ...(reason ? { reason } : {}) }),
   })
 }
 
-/* ── ADM-02 system users ────────────────────────────────────────── */
+/* ── ADM-02 system users (Users-Roles-Addendum §5) ──────────────── */
 
 export function getSystemUsers(): Promise<SystemUser[]> {
   return apiFetch<SystemUser[]>('/admin/users')
 }
 
-export function suspendUser(id: string): Promise<SystemUser> {
-  return apiFetch<SystemUser>(`/admin/users/${id}/suspend`, { method: 'POST' })
+export function getEligibleEmployees(): Promise<{ employees: EligibleEmployee[]; assignableRoles: Role[] }> {
+  return apiFetch('/admin/users/eligible-employees')
 }
 
-export function resetPassword(id: string): Promise<{ ok: true }> {
-  return apiFetch<{ ok: true }>(`/admin/users/${id}/reset-password`, { method: 'POST' })
+export function getLinkSuggestions(): Promise<LinkSuggestion[]> {
+  return apiFetch<LinkSuggestion[]>('/admin/users/link-suggestions')
+}
+
+export function createSystemUser(input: CreateSystemUserInput): Promise<IssuedPassword> {
+  return apiFetch<IssuedPassword>('/admin/users', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function updateSystemUser(id: string, input: UpdateSystemUserInput): Promise<SystemUser> {
+  return apiFetch<SystemUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(input) })
+}
+
+export function deactivateUser(id: string, reason?: string): Promise<SystemUser> {
+  return apiFetch<SystemUser>(`/admin/users/${id}/deactivate`, {
+    method: 'POST',
+    body: JSON.stringify(reason ? { reason } : {}),
+  })
+}
+
+export function reactivateUser(id: string): Promise<SystemUser> {
+  return apiFetch<SystemUser>(`/admin/users/${id}/reactivate`, { method: 'POST' })
+}
+
+export function resetPassword(id: string): Promise<IssuedPassword> {
+  return apiFetch<IssuedPassword>(`/admin/users/${id}/reset-password`, { method: 'POST' })
+}
+
+export function unlockUser(id: string): Promise<SystemUser> {
+  return apiFetch<SystemUser>(`/admin/users/${id}/unlock`, { method: 'POST' })
+}
+
+export function linkUser(id: string, employeeId: number): Promise<SystemUser> {
+  return apiFetch<SystemUser>(`/admin/users/${id}/link`, { method: 'POST', body: JSON.stringify({ employeeId }) })
+}
+
+export function unlinkUser(id: string): Promise<SystemUser> {
+  return apiFetch<SystemUser>(`/admin/users/${id}/link`, { method: 'DELETE' })
 }
 
 /* ── ADM-03 system settings ─────────────────────────────────────── */

@@ -113,6 +113,7 @@ export class FinanceService {
       fertilizerDeduction: Number(s.fertilizerDeduction),
       advanceDeduction: Number(s.advanceDeduction),
       adjustmentAmount: Number(s.adjustmentAmount ?? 0),
+      grossAmount: s.grossAmount == null ? null : Number(s.grossAmount),
     }));
   }
 

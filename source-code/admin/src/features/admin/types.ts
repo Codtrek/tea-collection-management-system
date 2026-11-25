@@ -76,13 +76,68 @@ export interface FactoryProfile {
   bank: { bank: string; branch: string; accountName: string; accountNumberMasked: string }
 }
 
+export type SystemUserStatus = 'Active' | 'Inactive' | 'Locked'
+
+/** Per-row action → null when allowed, else why not (server-computed; the UI disables and explains). */
+export interface SystemUserActions {
+  edit: string | null
+  changeRole: string | null
+  deactivate: string | null
+  reactivate: string | null
+  resetPassword: string | null
+  unlock: string | null
+}
+
 export interface SystemUser {
   id: string // 'USR-0005'
   name: string
   role: Role
   phone: string
-  status: 'Active' | 'Suspended'
+  email: string | null
+  status: SystemUserStatus
   lastLogin: string | null // ISO or null
+  lockedUntil: string | null
+  linkedEmployee: { id: number; name: string } | null
+  isSelf: boolean
+  actions: SystemUserActions
+}
+
+/** HR employees who can be given a portal login (active, unlinked, not a collection agent). */
+export interface EligibleEmployee {
+  id: number
+  name: string
+  nic: string
+  contact: string | null
+  jobTitle: string
+}
+
+export interface LinkSuggestion {
+  userId: string
+  userName: string
+  employeeId: number
+  employeeName: string
+  nic: string
+}
+
+/** The temporary password comes back exactly once; it is never stored or cached. */
+export interface IssuedPassword {
+  user: SystemUser
+  temporaryPassword: string
+}
+
+export interface CreateSystemUserInput {
+  employeeId: number
+  role: Role
+  phone?: string
+  email?: string
+}
+
+export interface UpdateSystemUserInput {
+  name?: string
+  phone?: string
+  email?: string
+  role?: Role
+  reason?: string
 }
 
 export interface AuditEntry {
@@ -95,6 +150,9 @@ export interface AuditEntry {
   record?: string
   recordHref?: string
   details?: string
+  before?: Record<string, unknown>
+  after?: Record<string, unknown>
+  reason?: string
 }
 
 export type PermissionMatrix = Record<Role, Record<ModuleKey, PermissionLevel>>

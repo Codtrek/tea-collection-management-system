@@ -15,7 +15,7 @@ export const userRoles: UserRole[] = [
   },
   {
     id: '3',
-    role: 'Factory Collector',
+    role: 'Collection Agent',
     description: 'Collect tea leaves from the fields.',
     route: '/auth/login'
   }

@@ -43,9 +43,26 @@ export class FakeRepo<T extends object> {
     const items = (Array.isArray(entity) ? entity : [entity]) as T[];
     for (const item of items) {
       const rec = item as Record<keyof T, unknown>;
-      if (this.idKey && rec[this.idKey] === undefined)
-        rec[this.idKey] = this.seq++;
+      if (this.idKey && rec[this.idKey] === undefined) {
+        // never hand out an id a seeded row already uses
+        const key = this.idKey;
+        while (
+          this.rows.some(
+            (r) => (r as Record<keyof T, unknown>)[key] === this.seq,
+          )
+        )
+          this.seq++;
+        rec[key] = this.seq++;
+      }
       if (!this.rows.includes(item)) this.rows.push(item);
+    }
+    return Promise.resolve(entity);
+  }
+
+  remove<E extends T | T[]>(entity: E): Promise<E> {
+    for (const item of (Array.isArray(entity) ? entity : [entity]) as T[]) {
+      const i = this.rows.indexOf(item);
+      if (i >= 0) this.rows.splice(i, 1);
     }
     return Promise.resolve(entity);
   }

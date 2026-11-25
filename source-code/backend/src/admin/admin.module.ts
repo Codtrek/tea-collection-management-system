@@ -14,6 +14,9 @@ import { TransportRatesService } from './transport-rates.service';
 import { SettlementEntity } from '../estates/settlement.entity';
 import { CollectionRecordEntity } from '../collections/collection-record.entity';
 import { EstateEntity } from '../estates/estate.entity';
+import { EmployeeEntity } from '../employees/employee.entity';
+import { DispatchAccessService } from '../dispatch/dispatch-access.service';
+import { SystemUsersService } from './system-users.service';
 
 @Module({
   imports: [
@@ -27,6 +30,8 @@ import { EstateEntity } from '../estates/estate.entity';
       // Reports uses for its read-only lookups).
       User,
       FactoryEmployee,
+      // Users & Roles: an HR employee is the source of a portal login (and its link)
+      EmployeeEntity,
       // transport (Administration-Addendum §4): the first version's earliest month and the preview
       SettlementEntity,
       CollectionRecordEntity,
@@ -36,6 +41,12 @@ import { EstateEntity } from '../estates/estate.entity';
     AuditModule,
   ],
   controllers: [AdminController],
-  providers: [AdminService, TransportRatesService],
+  providers: [
+    AdminService,
+    TransportRatesService,
+    SystemUsersService,
+    // the matrix-driven read gate (administration:view), same check every module uses
+    DispatchAccessService,
+  ],
 })
 export class AdminModule {}

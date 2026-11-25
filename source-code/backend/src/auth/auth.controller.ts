@@ -29,6 +29,17 @@ export class AuthController {
     return this.authService.agentLogin(dto.phone, dto.password);
   }
 
+
+
+  
+  @SkipThrottle({ short: true, medium: true, long: true })
+  @Post('mobile/login')
+  mobileLogin(
+    @Body() dto: LoginDto,
+  ): Promise<LoginResult | AgentLoginResult> {
+    return this.authService.mobileLogin(dto.phone, dto.password);
+  }
+
   /** The temporary password a newly registered agent was given must be changed before anything else works. */
   @UseGuards(AgentJwtGuard)
   @Post('agent/change-password')
@@ -42,6 +53,23 @@ export class AuthController {
       dto.newPassword,
     );
     return { ok: true };
+  }
+
+  /**
+   * Portal password change (and the forced change after a temporary password). Returns a fresh
+   * token: the change bumps the token version, which ends every other session.
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(
+    @Body() dto: ChangePasswordDto,
+    @Req() req: Request & { user: JwtPayload },
+  ): Promise<LoginResult> {
+    return this.authService.changePortalPassword(
+      Number(req.user.sub),
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

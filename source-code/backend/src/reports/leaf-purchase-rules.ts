@@ -256,6 +256,8 @@ export interface SettlementInput {
   fertilizerDeduction: number;
   advanceDeduction: number;
   adjustmentAmount: number;
+  /** a generated settlement's priced gross (rate periods); null on seeded rows = kg × rate */
+  grossAmount?: number | null;
 }
 
 /**
@@ -279,7 +281,7 @@ export function settledPayments(
   const sum = (f: (s: SettlementInput) => number) =>
     r2(list.reduce((acc, s) => acc + f(s), 0));
   const grossRs = sum(
-    (s) => s.superKg * s.superRate + s.normalKg * s.normalRate,
+    (s) => s.grossAmount ?? s.superKg * s.superRate + s.normalKg * s.normalRate,
   );
   const transportRs = sum((s) => s.transportCost);
   const fertilizerRs = sum((s) => s.fertilizerDeduction);

@@ -1,6 +1,6 @@
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Banknote, Download, FileDown, Loader2, Play } from 'lucide-react'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Banknote, Calculator, Download, FileDown, Loader2, Play } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DataTable, type Column } from '@/components/data/DataTable'
 import { EmptyState } from '@/components/data/EmptyState'
@@ -29,16 +29,18 @@ import type { SettlementRow, SettlementSummary } from './types'
 import { formatCurrency } from '@/lib/format'
 
 /*
-  EST-07 — Payment Settlements by period (Settlement-Period-View-Addendum). Opens on last month
-  (settlements are processed after a month ends); `?month=YYYY-MM` or `all`. Filters, sort and
-  page live in the URL and run server-side; the summary is always the whole period. Processed
-  periods are read-only. Viewing only — how a settlement is calculated is unchanged.
+  EST-07 — Payment Settlements by period (Settlement-Period-View-Addendum, Settlement-Addendum).
+  Opens on last month (settlements are processed after a month ends); `?month=YYYY-MM` or `all`.
+  Filters, sort and page live in the URL and run server-side; the summary is always the whole
+  period and never counts Legacy (seed) rows. "Prepare settlements" makes the month's drafts from
+  the deliveries; processed periods are read-only.
 */
 export function SettlementListPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { can } = useAuth()
   const canProcess = can('estateOwners', 'edit')
+  const queryClient = useQueryClient()
 
   const thisMonth = currentMonth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -51,6 +53,15 @@ export function SettlementListPage() {
     queryKey: ['estates', 'settlements', settlementQuery(filters)],
     queryFn: () => estatesService.listSettlements(settlementQuery(filters)),
     placeholderData: keepPreviousData,
+  })
+
+  const prepare = useMutation({
+    mutationFn: () => estatesService.prepareSettlements(filters.month),
+    onSuccess: (run) => {
+      toast(`${run.prepared} draft settlement${run.prepared === 1 ? '' : 's'} ready for ${run.period}`)
+      void queryClient.invalidateQueries({ queryKey: ['estates', 'settlements'] })
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : 'Could not prepare settlements', 'danger'),
   })
 
   if (isPending) {
@@ -71,6 +82,8 @@ export function SettlementListPage() {
   const options = monthOptionsFor(thisMonth, data.months)
   // a period with nothing pending (all processed) is read-only
   const canRunProcess = canProcess && !all && summary.pending > 0
+  const willPrepare = summary.willPrepare ?? 0
+  const canPrepare = canProcess && !all && willPrepare > 0
 
   const exportCsv = async () => {
     try {
@@ -83,10 +96,10 @@ export function SettlementListPage() {
           { header: 'Owner', value: (r) => r.ownerName },
           { header: 'Route', value: (r) => r.route },
           { header: 'Payment method', value: (r) => r.paymentMethod },
-          { header: 'Gross revenue (Rs)', value: (r) => r.gross },
+          { header: 'Gross leaf value (Rs)', value: (r) => r.gross },
+          { header: 'Transport (Rs)', value: (r) => r.deductions.transport },
           { header: 'Fertilizer (Rs)', value: (r) => r.deductions.fertilizer },
           { header: 'Advances (Rs)', value: (r) => r.deductions.advances },
-          { header: 'Other / transport (Rs)', value: (r) => r.deductions.other },
           { header: 'Adjustment (Rs)', value: (r) => r.adjustment },
           { header: 'Net payable (Rs)', value: (r) => r.net },
           { header: 'Status', value: (r) => r.status },
@@ -116,7 +129,7 @@ export function SettlementListPage() {
     },
     { key: 'route', header: 'Route', render: (s) => s.route || '—' },
     { key: 'period', header: 'Period', ...sortable('period') },
-    { key: 'gross', header: 'Gross Revenue', align: 'right', ...sortable('gross'), render: (s) => formatCurrency(s.gross) },
+    { key: 'gross', header: 'Gross Leaf Value', align: 'right', ...sortable('gross'), render: (s) => formatCurrency(s.gross) },
     {
       key: 'deductions',
       header: 'Deductions',
@@ -124,7 +137,7 @@ export function SettlementListPage() {
       ...sortable('deductions'),
       render: (s) => (
         <span
-          title={`Fertilizer ${formatCurrency(s.deductions.fertilizer)} · Advances ${formatCurrency(s.deductions.advances)} · Other (transport) ${formatCurrency(s.deductions.other)}`}
+          title={`Transport ${formatCurrency(s.deductions.transport)} · Fertilizer ${formatCurrency(s.deductions.fertilizer)} · Advances ${formatCurrency(s.deductions.advances)}`}
         >
           {formatCurrency(s.deductionsTotal)}
         </span>
@@ -142,7 +155,7 @@ export function SettlementListPage() {
       header: 'Status',
       render: (s) => (
         <div className="flex flex-col items-start gap-1">
-          <StatusBadge tone={s.status === 'Processed' ? 'success' : 'warning'}>{s.status}</StatusBadge>
+          <StatusBadge tone={statusTone(s.status)}>{statusLabel(s)}</StatusBadge>
           <span className="text-xs text-text-muted">{s.paymentMethod === 'cash' ? 'Cash' : 'Bank'}</span>
         </div>
       ),
@@ -164,11 +177,26 @@ export function SettlementListPage() {
             <span title="Coming soon — the bank payment file isn't built yet">
               <Button variant="secondary" disabled aria-label="Generate Bank Payment File (coming soon)">
                 <FileDown className="size-4" /> Generate Bank Payment File
+                <span className="rounded-full bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium uppercase">Coming soon</span>
               </Button>
             </span>
+            {canPrepare && (
+              <Button
+                variant={canRunProcess ? 'secondary' : 'primary'}
+                onClick={() => prepare.mutate()}
+                loading={prepare.isPending}
+                title={`Makes or recalculates a draft for each of ${willPrepare} estate${willPrepare === 1 ? '' : 's'} with payable deliveries`}
+              >
+                <Calculator className="size-4" />
+                {summary.pending > 0 ? 'Recalculate' : 'Prepare'} settlements for {periodLabel}
+                <span className="tabular text-xs opacity-80">
+                  · {willPrepare} estate{willPrepare === 1 ? '' : 's'}
+                </span>
+              </Button>
+            )}
             {canRunProcess && (
               <Button onClick={() => navigate(`/estates/settlements/process?month=${filters.month}`)}>
-                <Play className="size-4" /> Process {summary.pending} Settlement{summary.pending === 1 ? '' : 's'}
+                <Play className="size-4" /> Review &amp; process {summary.pending} draft{summary.pending === 1 ? '' : 's'}
               </Button>
             )}
           </div>
@@ -183,7 +211,7 @@ export function SettlementListPage() {
           allOption
           ariaLabel="Settlement period"
           badge={
-            !all && summary.ownersSettled > 0 ? (
+            !all && summary.prepared > 0 ? (
               <StatusBadge tone={summary.pending > 0 ? 'warning' : 'success'}>
                 {summary.pending > 0 ? `${summary.pending} pending` : 'Processed'}
               </StatusBadge>
@@ -195,7 +223,7 @@ export function SettlementListPage() {
 
       <SummaryCards summary={summary} month={filters.month} />
 
-      {!all && summary.ownersSettled > 0 && summary.pending === 0 && (
+      {!all && summary.prepared > 0 && summary.pending === 0 && (
         <p className="mb-4 text-xs text-text-muted">Processed — this period is read-only.</p>
       )}
 
@@ -219,8 +247,9 @@ export function SettlementListPage() {
           value={filters.status}
           onChange={(e) => setFilters({ status: e.target.value })}
           options={[
-            { value: 'Pending', label: 'Pending' },
+            { value: 'Pending', label: 'Draft' },
             { value: 'Processed', label: 'Processed' },
+            { value: 'Legacy', label: 'Legacy (seed)' },
           ]}
         />
         <Select
@@ -249,7 +278,7 @@ export function SettlementListPage() {
 
       {hasActiveFilters(filters) && (
         <p className="mb-2 text-xs text-text-muted">
-          Showing {data.total} of {summary.processed + summary.pending} settlements for{' '}
+          Showing {data.total} of {summary.prepared + summary.legacy} settlements for{' '}
           {periodLabel} ·{' '}
           <button className="text-primary hover:underline" onClick={() => setSearchParams(settlementParams({ ...filters, search: '', route: '', status: '', method: '', nonPositive: false, noBank: false, page: 0 }, thisMonth), { replace: true })}>
             Clear filters
@@ -298,57 +327,74 @@ export function SettlementListPage() {
   )
 }
 
-/** The whole period's figures — never the filtered rows. */
+const statusTone = (status: SettlementRow['status']) =>
+  status === 'Processed' ? 'success' : status === 'Legacy' ? 'neutral' : 'warning'
+
+/** "Draft" for a generated pending row; "Legacy (seed)" for a seeded snapshot kept read-only. */
+const statusLabel = (s: SettlementRow) =>
+  s.status === 'Legacy' ? 'Legacy (seed)' : s.status === 'Pending' && s.generated ? 'Draft' : s.status
+
+/** The whole period's figures — never the filtered rows; Legacy (seed) rows never count. */
 function SummaryCards({ summary, month }: { summary: SettlementSummary; month: string }) {
   const tile = 'rounded-[var(--radius-lg)] bg-surface p-4 shadow-[var(--shadow-1)]'
   const label = 'text-xs uppercase tracking-wide text-text-muted'
   const value = 'tabular mt-1 text-lg font-semibold text-text-heading'
+  const d = summary.deductions
+  const signed = (n: number) => `${n < 0 ? '−' : '+'} ${formatCurrency(Math.abs(n))}`
   return (
     <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <div className={tile}>
-        <p className={label}>Owners settled</p>
+        <p className={label}>Prepared</p>
         <p className={value}>
-          {summary.ownersSettled} / {summary.activeOwners}
+          {summary.prepared}
+          {summary.eligible !== null && <span className="text-text-muted"> / {summary.eligible}</span>}
+          <span className="text-sm font-medium text-text-muted"> · Processed {summary.processed}</span>
         </p>
-        <p className="tabular text-xs text-text-muted">
-          {summary.processed} processed · {summary.pending} pending
-        </p>
+        {summary.legacy > 0 && (
+          <p className="text-xs text-text-muted">
+            {summary.legacy} Legacy (seed) row{summary.legacy === 1 ? '' : 's'} not counted
+          </p>
+        )}
       </div>
       <div className={tile}>
-        <p className={label}>Gross revenue</p>
+        <p className={label}>Gross leaf value</p>
         <p className={value}>{formatCurrency(summary.gross)}</p>
       </div>
       <div className={tile}>
         <p className={label}>Deductions</p>
         <p className={value}>{formatCurrency(summary.deductionsTotal)}</p>
-        <details className="text-xs text-text-muted">
-          <summary className="cursor-pointer select-none hover:text-text">Breakdown</summary>
-          <dl className="tabular mt-1 grid grid-cols-[1fr_auto] gap-x-3">
-            <dt>Fertilizer</dt>
-            <dd className="text-right">{formatCurrency(summary.deductions.fertilizer)}</dd>
-            <dt>Advances</dt>
-            <dd className="text-right">{formatCurrency(summary.deductions.advances)}</dd>
-            <dt>Other (transport)</dt>
-            <dd className="text-right">{formatCurrency(summary.deductions.other)}</dd>
-          </dl>
-        </details>
+        <dl className="tabular mt-1 grid grid-cols-[1fr_auto] gap-x-3 text-xs text-text-muted">
+          <dt>Transport</dt>
+          <dd className="text-right">{formatCurrency(d.transport)}</dd>
+          <dt>Fertilizer</dt>
+          <dd className="text-right">{formatCurrency(d.fertilizer)}</dd>
+          <dt>Advances</dt>
+          <dd className="text-right">{formatCurrency(d.advances)}</dd>
+          {d.adjustments !== 0 && (
+            <>
+              <dt>Adjustments</dt>
+              <dd className="text-right">{signed(d.adjustments)}</dd>
+            </>
+          )}
+        </dl>
       </div>
       <div className={tile}>
         <p className={label}>Net payable</p>
         <p className={value}>{formatCurrency(summary.net)}</p>
       </div>
-      <div className={cn(tile, (summary.notYetSettled ?? 0) > 0 && 'ring-1 ring-warning-fg/20')}>
-        <p className={label}>Owners not yet settled</p>
-        {summary.notYetSettled === null ? (
+      <div className={cn(tile, (summary.notPrepared ?? 0) > 0 && 'ring-1 ring-warning-fg/20')}>
+        <p className={label}>Not yet prepared</p>
+        {summary.notPrepared === null ? (
           <p className="mt-1 text-sm text-text-muted">Pick a month</p>
-        ) : summary.notYetSettled > 0 ? (
-          <Link to={`/estates/settlements/unsettled?month=${month}`} className={cn(value, 'block text-primary hover:underline')}>
-            {summary.notYetSettled} →
-          </Link>
         ) : (
-          <p className={value}>0</p>
+          <Link
+            to={`/estates/settlements/unsettled?month=${month}`}
+            className={cn(value, 'block text-primary hover:underline')}
+          >
+            {summary.notPrepared} owner{summary.notPrepared === 1 ? '' : 's'} →
+          </Link>
         )}
-        <p className="text-xs text-text-muted">delivered this month, no settlement</p>
+        <p className="text-xs text-text-muted">payable deliveries, no draft yet</p>
       </div>
     </div>
   )

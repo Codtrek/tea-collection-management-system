@@ -20,6 +20,7 @@ import { EstateAdvanceEntity } from './estate-advance.entity';
 import {
   formatEstateId,
   parseEstateId,
+  settlementGross,
   settlementNet,
   toAppAdvanceStatus,
   toAppEstateStatus,
@@ -76,6 +77,7 @@ function toPublicSettlement(entity: SettlementEntity): PublicSettlement {
     fertilizerDeduction: Number(entity.fertilizerDeduction),
     advanceDeduction: Number(entity.advanceDeduction),
     adjustment: Number(entity.adjustmentAmount ?? 0),
+    ...(entity.grossAmount != null ? { grossAmount: Number(entity.grossAmount) } : {}),
     status: toAppSettlementStatus(entity.status),
     selfDelivery: entity.selfDelivery,
     missingBank: entity.missingBank || undefined,
@@ -194,9 +196,7 @@ export class EstateLifetimeService {
 
     const earnedRs = processed.reduce(
       (s, r) =>
-        s +
-        Number(r.superKg) * Number(r.superRate) +
-        Number(r.normalKg) * Number(r.normalRate),
+        s + settlementGross(r),
       0,
     );
 
@@ -443,8 +443,7 @@ export class EstateLifetimeService {
     });
     const revenueByPeriod = new Map<string, number>();
     for (const s of processed) {
-      const gross =
-        Number(s.superKg) * Number(s.superRate) + Number(s.normalKg) * Number(s.normalRate);
+      const gross = settlementGross(s);
       revenueByPeriod.set(s.period, (revenueByPeriod.get(s.period) ?? 0) + gross);
     }
     const revenueTrend = [...revenueByPeriod.entries()]
@@ -516,7 +515,7 @@ export class EstateLifetimeService {
       const superKg = ownDeliveries.reduce((s, c) => s + gradeKg(c, 'super'), 0);
 
       const earnedRs = ownSettlements.reduce(
-        (s, r) => s + Number(r.superKg) * Number(r.superRate) + Number(r.normalKg) * Number(r.normalRate),
+        (s, r) => s + settlementGross(r),
         0,
       );
 

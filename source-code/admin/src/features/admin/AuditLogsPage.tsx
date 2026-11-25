@@ -44,7 +44,8 @@ export function AuditLogsPage() {
         return (
           (l.action.toLowerCase().includes(q) ||
             (l.record ?? '').toLowerCase().includes(q) ||
-            (l.details ?? '').toLowerCase().includes(q)) &&
+            (l.details ?? '').toLowerCase().includes(q) ||
+            (l.reason ?? '').toLowerCase().includes(q)) &&
           (!module || l.module === module) &&
           (!user || l.user === user)
         )
@@ -71,6 +72,7 @@ export function AuditLogsPage() {
         <div>
           <p className="text-sm text-text">{l.action}</p>
           {l.details && <p className="text-xs text-text-muted">{l.details}</p>}
+          {l.reason && <p className="text-xs text-text-muted">Reason: {l.reason}</p>}
         </div>
       ),
     },

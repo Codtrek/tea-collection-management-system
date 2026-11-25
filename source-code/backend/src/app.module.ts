@@ -55,7 +55,7 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
             .split('?')[0]
             .toLowerCase();
 
-          return !/\/auth\/(?:mobile\/)?(?:login|register)\/?$/.test(
+          return !/\/auth\/(?:mobile\/|agent\/)?(?:login|register)\/?$/.test(
             path,
           );
           },

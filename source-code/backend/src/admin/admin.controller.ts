@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Put,
   Query,
@@ -34,6 +36,20 @@ import {
 } from './transport-rates.service';
 import { UpdatePermissionsDto } from './dto/update-permissions.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
+import {
+  CreateSystemUserDto,
+  LinkEmployeeDto,
+  UpdateSystemUserDto,
+  UserReasonDto,
+} from './dto/system-user.dto';
+import { DispatchAccessService } from '../dispatch/dispatch-access.service';
+import {
+  type EligibleEmployee,
+  type IssuedPassword,
+  type LinkSuggestion,
+  SystemUsersService,
+} from './system-users.service';
+import type { PortalRole } from './admin-map';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -44,6 +60,8 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly usersService: UsersService,
     private readonly transportRates: TransportRatesService,
+    private readonly systemUsers: SystemUsersService,
+    private readonly access: DispatchAccessService,
   ) {}
 
   // ── ADM-01 grade rates ──
@@ -130,7 +148,13 @@ export class AdminController {
 
   // ── ADM-02 permission matrix ──
   @Get('permissions')
-  getPermissions(): Promise<PermissionMatrix> {
+  async getPermissions(@Req() req: AuthedRequest): Promise<PermissionMatrix> {
+    await this.access.require(
+      req.user.role,
+      'view',
+      'see the permission matrix',
+      'administration',
+    );
     return this.adminService.getPermissionMatrix();
   }
 
@@ -147,7 +171,15 @@ export class AdminController {
 
   // ── ADM-03 system settings ──
   @Get('settings')
-  getSettings(): Promise<Record<string, unknown>> {
+  async getSettings(
+    @Req() req: AuthedRequest,
+  ): Promise<Record<string, unknown>> {
+    await this.access.require(
+      req.user.role,
+      'view',
+      'see system settings',
+      'administration',
+    );
     return this.adminService.getSettings();
   }
 
@@ -159,26 +191,119 @@ export class AdminController {
     return this.adminService.updateSettings(dto, await this.resolveActor(req));
   }
 
-  // ── ADM-02 system users ──
+  // ── ADM-02 system users (Users-Roles-Addendum §5) ──
   @Get('users')
-  listUsers(): Promise<PublicSystemUser[]> {
-    return this.adminService.listUsers();
+  async listUsers(@Req() req: AuthedRequest): Promise<PublicSystemUser[]> {
+    await this.access.require(
+      req.user.role,
+      'view',
+      'see system users',
+      'administration',
+    );
+    return this.systemUsers.list(await this.resolveActor(req));
   }
 
+  /** HR employees who can be given a portal login, plus the roles the caller may assign. */
+  @Get('users/eligible-employees')
+  async eligibleEmployees(
+    @Req() req: AuthedRequest,
+  ): Promise<{ employees: EligibleEmployee[]; assignableRoles: PortalRole[] }> {
+    return this.systemUsers.eligibleEmployees(await this.resolveActor(req));
+  }
+
+  /** NIC matches between unlinked portal users and HR employees — for confirmation, never applied. */
+  @Get('users/link-suggestions')
+  async linkSuggestions(@Req() req: AuthedRequest): Promise<LinkSuggestion[]> {
+    return this.systemUsers.linkSuggestions(await this.resolveActor(req));
+  }
+
+  @Post('users')
+  async createUser(
+    @Body() dto: CreateSystemUserDto,
+    @Req() req: AuthedRequest,
+  ): Promise<IssuedPassword> {
+    return this.systemUsers.create(dto, await this.resolveActor(req));
+  }
+
+  @Patch('users/:id')
+  async updateUser(
+    @Param('id') id: string,
+    @Body() dto: UpdateSystemUserDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicSystemUser> {
+    return this.systemUsers.update(id, dto, await this.resolveActor(req));
+  }
+
+  @Post('users/:id/deactivate')
+  async deactivateUser(
+    @Param('id') id: string,
+    @Body() dto: UserReasonDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicSystemUser> {
+    return this.systemUsers.deactivate(
+      id,
+      dto.reason,
+      await this.resolveActor(req),
+    );
+  }
+
+  /** Kept for older portal builds — same as deactivate. */
   @Post('users/:id/suspend')
   async suspendUser(
     @Param('id') id: string,
     @Req() req: AuthedRequest,
   ): Promise<PublicSystemUser> {
-    return this.adminService.suspendUser(id, await this.resolveActor(req));
+    return this.systemUsers.deactivate(
+      id,
+      undefined,
+      await this.resolveActor(req),
+    );
   }
 
+  @Post('users/:id/reactivate')
+  async reactivateUser(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicSystemUser> {
+    return this.systemUsers.reactivate(id, await this.resolveActor(req));
+  }
+
+  /** Returns the new temporary password ONCE; the user must change it at next sign-in. */
   @Post('users/:id/reset-password')
   async resetPassword(
     @Param('id') id: string,
     @Req() req: AuthedRequest,
-  ): Promise<{ ok: true }> {
-    return this.adminService.resetPassword(id, await this.resolveActor(req));
+  ): Promise<IssuedPassword> {
+    return this.systemUsers.resetPassword(id, await this.resolveActor(req));
+  }
+
+  @Post('users/:id/unlock')
+  async unlockUser(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicSystemUser> {
+    return this.systemUsers.unlock(id, await this.resolveActor(req));
+  }
+
+  @Post('users/:id/link')
+  async linkUser(
+    @Param('id') id: string,
+    @Body() dto: LinkEmployeeDto,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicSystemUser> {
+    return this.systemUsers.link(
+      id,
+      dto.employeeId,
+      await this.resolveActor(req),
+    );
+  }
+
+  @Delete('users/:id/link')
+  async unlinkUser(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest,
+  ): Promise<PublicSystemUser> {
+    return this.systemUsers.unlink(id, await this.resolveActor(req));
   }
 
   /** Resolves the JWT's `sub` to the acting user's name + role (+ id) for stamping. */

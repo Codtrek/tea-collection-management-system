@@ -28,6 +28,9 @@ import { TransportRateEntity } from '../admin/transport-rate.entity';
 import { RouteEntity } from './route.entity';
 import { SettlementEntity } from './settlement.entity';
 import { SettlementViewService } from './settlement-view.service';
+import { SettlementGeneratorService } from './settlement-generator.service';
+import { SettlementDeliveryExclusionEntity } from './settlement-delivery-exclusion.entity';
+import { GradeRateEntity } from '../admin/grade-rate.entity';
 
 @Module({
   imports: [
@@ -40,6 +43,8 @@ import { SettlementViewService } from './settlement-view.service';
       EstateAdvanceRescheduleEntity,
       SystemSettingEntity,
       SettlementEntity,
+      SettlementDeliveryExclusionEntity,
+      GradeRateEntity,
       // transport rates (Administration-Addendum §4) — read to decide whether transport can be charged
       TransportRateEntity,
       RouteEntity,
@@ -66,6 +71,7 @@ import { SettlementViewService } from './settlement-view.service';
     TransportStatusService,
     EstateLifetimeService,
     SettlementViewService,
+    SettlementGeneratorService,
     EstateAdvanceViewService,
     EstateAdvancePlanService,
     EstateAdvanceSettingsService,

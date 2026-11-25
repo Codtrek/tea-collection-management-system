@@ -3,8 +3,17 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { fonts } from '@/theme/fonts';
+import type { CollectorProfile } from '@/utils/collectorSession';
 
-export default function DemoTeaCollectorProfile() {
+interface DemoTeaCollectorProfileProps {
+  profile?: CollectorProfile;
+  profileUnavailable?: boolean;
+}
+
+export default function DemoTeaCollectorProfile({
+  profile,
+  profileUnavailable = false,
+}: DemoTeaCollectorProfileProps) {
   return (
     <ScrollView
       style={styles.screen}
@@ -18,8 +27,10 @@ export default function DemoTeaCollectorProfile() {
             <Ionicons name="camera" size={13} color={colors.text.inverse} />
           </View>
         </View>
-        <Text style={styles.name}>Sunil Ranasinghe</Text>
-        <Text style={styles.role}>Tea Collection Agent</Text>
+        <Text style={styles.name}>
+          {profile?.name || (profileUnavailable ? "Profile unavailable" : "Collector")}
+        </Text>
+        <Text style={styles.role}>{profile?.role || "Role unavailable"}</Text>
         <Text style={styles.employeeId}>EMP-2291 · Kotmale MPT Factory</Text>
       </View>
 
@@ -31,7 +42,9 @@ export default function DemoTeaCollectorProfile() {
           </View>
           <View style={styles.detailText}>
             <Text style={styles.detailLabel}>Mobile number</Text>
-            <Text style={styles.detailValue}>071 234 5678</Text>
+            <Text style={styles.detailValue}>
+              {profile?.phone || "Mobile number unavailable"}
+            </Text>
           </View>
         </View>
 
@@ -43,7 +56,9 @@ export default function DemoTeaCollectorProfile() {
           </View>
           <View style={styles.detailText}>
             <Text style={styles.detailLabel}>Email address</Text>
-            <Text style={styles.detailValue}>sunil.ranasinghe@kotmalempt.com</Text>
+            <Text style={styles.detailValue}>
+              {profile?.email || "Not provided"}
+            </Text>
           </View>
         </View>
       </View>

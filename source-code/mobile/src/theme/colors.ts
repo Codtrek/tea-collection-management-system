@@ -12,6 +12,7 @@ export const colors = {
   backgroundGray: "#eeeeee",
   surface: "#F9FAFB",
   ImageBackground: "#d8dde2",
+  overlay: "#00000080",
 
   // Text
   text: {

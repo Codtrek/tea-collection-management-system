@@ -67,21 +67,64 @@ export const MODULE_KEYS: ModuleKey[] = [
 ];
 
 /**
- * Modules where the Administrator row IS editable. Every other module keeps the Administrator
- * pinned to `approve` (the factory always has one unrestricted account), but grading is a
- * separation-of-duties control: the Administrator audits it, an Officer grades, a Manager approves.
+ * Separation-of-duties keys (Users-Roles-Addendum §3). Everywhere else the Administrator is pinned
+ * to `approve` (the factory always keeps one unrestricted account). On these the Administrator
+ * audits: its cell may only be None or View, so it can never grant itself the duty it oversees.
+ * - grading: an Officer grades; gradingApproval: a Manager approves corrections (Grading addendum)
+ * - fertilizerApproval / fertilizerManagerApproval: Officer, then Manager above the limit
+ *   (Fertilizer-Delivery-Addendum §4)
+ * - expenses: Officers log, the Manager corrects (Finance-Reports-Addendum §7)
  */
-export const ADMIN_EDITABLE_MODULES: ModuleKey[] = [
+export const SEPARATED_KEYS: ModuleKey[] = [
   'grading',
   'gradingApproval',
-  // Fertilizer approval is the same kind of control: the Officer approves, a Manager signs off
-  // above the limit, the Administrator audits (Fertilizer-Delivery-Addendum §4).
   'fertilizerApproval',
   'fertilizerManagerApproval',
-  // Daily expenses (Finance-Reports-Addendum §7): Officers log, the Manager corrects, the
-  // Administrator audits (view) and manages the category list.
   'expenses',
 ];
+
+/** Levels the Administrator may hold on a separated key. */
+export const SEPARATED_ADMIN_LEVELS: PermissionLevel[] = ['none', 'view'];
+
+/** Keys that move money; any change to them needs a reason (as does any change touching `approve`). */
+export const FINANCE_KEYS: ModuleKey[] = [
+  'payroll',
+  'advances',
+  'estateOwners',
+  'estateAdvances',
+  'expenses',
+  'itemPrices',
+  'payRates',
+  'reports',
+];
+
+export type CellLock = 'pinned' | 'capped' | null;
+
+/**
+ * Whether a matrix cell is locked: `pinned` = never editable (the Administrator's full access);
+ * `capped` = editable only within SEPARATED_ADMIN_LEVELS. Server-enforced in updatePermissions.
+ */
+export function cellLock(role: PortalRole, module: ModuleKey): CellLock {
+  if (role !== 'Administrator') return null;
+  return SEPARATED_KEYS.includes(module) ? 'capped' : 'pinned';
+}
+
+export interface PermissionChange {
+  role: PortalRole;
+  module: ModuleKey;
+  from: PermissionLevel;
+  to: PermissionLevel;
+}
+
+/** A reason is required when any change touches an approval level or a finance key. */
+export function needsReason(changes: PermissionChange[]): boolean {
+  return changes.some(
+    (c) =>
+      c.from === 'approve' ||
+      c.to === 'approve' ||
+      FINANCE_KEYS.includes(c.module),
+  );
+}
 
 export type PermissionMatrix = Record<
   PortalRole,
@@ -206,13 +249,31 @@ export function formatGradeRateId(year: number, seq: number): string {
 
 /* ── ADM-02 system users ──────────────────────────────────────────── */
 
+export type SystemUserStatus = 'Active' | 'Inactive' | 'Locked';
+
+/** Per-row action → null when allowed, else the reason it isn't (the portal disables + explains). */
+export interface SystemUserActions {
+  edit: string | null;
+  changeRole: string | null;
+  deactivate: string | null;
+  reactivate: string | null;
+  resetPassword: string | null;
+  unlock: string | null;
+}
+
 export interface PublicSystemUser {
   id: string; // 'USR-0005'
   name: string;
   role: PortalRole;
   phone: string;
-  status: 'Active' | 'Suspended';
+  email: string | null;
+  status: SystemUserStatus;
   lastLogin: string | null; // ISO or null
+  /** until when a Locked account stays locked (ISO) */
+  lockedUntil: string | null;
+  linkedEmployee: { id: number; name: string } | null;
+  isSelf: boolean;
+  actions: SystemUserActions;
 }
 
 export function formatUserId(id: number): string {
