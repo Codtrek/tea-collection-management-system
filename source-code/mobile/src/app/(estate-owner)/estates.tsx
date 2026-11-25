@@ -1,20 +1,33 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { ScrollView, StyleSheet, View } from "react-native";
 
 import { EstateCard } from "@/components/estate-owner";
+import { teaGardenImage } from "@/data/estateOwnerEstates";
 import { AppButton, AppText, GeneralHeader, Screen, SearchBar } from "@/components/ui";
-import { useEstateStore } from "@/store/estateStore";
+import { getOwnedEstates, type OwnedEstate } from "../services/api/estate-owner.api";
 import { colors, spacing } from "@/theme";
 
 export default function Estates() {
-  const estateProfiles = useEstateStore((state) => state.estates);
+  const [estateProfiles, setEstates] = useState<OwnedEstate[] | null>(null);
+  const [error, setError] = useState("");
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    setEstates(null);
+    setError("");
+    void getOwnedEstates()
+      .then((estates) => { if (active) setEstates(estates); })
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : "Could not load estates.");
+      });
+    return () => { active = false; };
+  }, []));
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
   const filteredEstates = query
-    ? estateProfiles.filter((estate) =>
-        [estate.name, estate.location, estate.managerName, estate.grade].some(
+    ? estateProfiles?.filter((estate) =>
+        [estate.name, estate.location].some(
           (value) => value.toLowerCase().includes(query)
         )
       )
@@ -71,29 +84,26 @@ export default function Estates() {
         <View style={styles.searchInput}>
           <SearchBar
           value={search}
-          placeholder="Search by name, location or manager"
+          placeholder="Search by name or location"
           onChangeText={setSearch}
           />
         </View>
           <AppButton title="+ Add estate" width="auto" style={styles.addButton} onPress={() => router.push("/(estate-owner)/add-estate")} />
         </View>
 
-        {filteredEstates.length > 0 ? (
+        {error ? <AppText accessibilityRole="alert">{error}</AppText> : !filteredEstates ? (
+          <AppText>Loading estates…</AppText>
+        ) : filteredEstates.length > 0 ? (
           filteredEstates.map((estate) => (
             <EstateCard
               key={estate.id}
-              imageSrc={estate.imageSrc}
+              imageSrc={teaGardenImage}
               name={estate.name}
               location={estate.location}
-              managerName={estate.managerName}
-              areaAcres={estate.areaAcres}
-              grade={estate.grade}
-              onPress={() =>
-                router.push({
-                  pathname: "/(estate-owner)/estate/[estateId]",
-                  params: { estateId: estate.id },
-                })
-              }
+              onPress={() => router.push({
+                pathname: "./estate/[estateId]/dashboard",
+                params: { estateId: String(estate.id) },
+              })}
             />
           ))
         ) : (
@@ -109,7 +119,7 @@ export default function Estates() {
               No estates found
             </AppText>
             <AppText variant="bodySmall" style={styles.emptyCopy}>
-              Try another name, location or manager.
+              {query ? "Try another name or location." : "No estates are registered to your account."}
             </AppText>
           </View>
         )}
