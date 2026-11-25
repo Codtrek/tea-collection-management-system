@@ -76,7 +76,7 @@ export const PERMISSION_CATALOG: PermissionKeyInfo[] = [
     key: 'estateOwners',
     section: 'Finance',
     label: 'Estate owners and settlements',
-    description: 'Owner records and their monthly settlements: Edit prepares, Approve processes.',
+    description: 'See estates and settlements; Edit edits details and prepares settlements; Approve registers or deactivates an estate and processes settlements.',
   },
   {
     key: 'estateAdvances',
@@ -106,7 +106,7 @@ export const PERMISSION_CATALOG: PermissionKeyInfo[] = [
     key: 'payroll',
     section: 'Finance',
     label: 'Payroll',
-    description: 'See monthly payroll; Edit generates it; Approve processes it.',
+    description: 'See payroll; Edit prepares it; Approve processes it.',
   },
   {
     key: 'advances',

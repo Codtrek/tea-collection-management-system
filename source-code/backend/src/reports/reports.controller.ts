@@ -33,7 +33,7 @@ import type { ExpenseReport } from './finance-rules';
 import { FinanceService, type ExpenseReportQuery } from './finance.service';
 import type { PublicExpenseCategory, PublicExpenseEntry } from './reports-map';
 import { type Actor, ReportsService } from './reports.service';
-import { RequirePermission } from '../auth/permissions';
+import { RequirePermission, ServiceChecked } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -126,6 +126,7 @@ export class ReportsController {
   }
 
   /** ADM-01 — add a category. `administration: edit`. */
+  @ServiceChecked('expenses key + edit window (ReportsService)')
   @Post('expense-categories')
   async createCategory(
     @Body() dto: ExpenseCategoryDto,
@@ -138,6 +139,7 @@ export class ReportsController {
   }
 
   /** ADM-01 — rename / reorder / deactivate a category. `administration: edit`. */
+  @ServiceChecked('expenses key + edit window (ReportsService)')
   @Patch('expense-categories/:id')
   async updateCategory(
     @Param('id', ParseIntPipe) id: number,
@@ -152,6 +154,7 @@ export class ReportsController {
   }
 
   /** Log a daily expense. `expenses: edit`. */
+  @ServiceChecked('expenses key + edit window (ReportsService)')
   @Post('expenses')
   async createExpense(
     @Body() dto: CreateExpenseDto,
@@ -171,6 +174,7 @@ export class ReportsController {
   }
 
   /** Change an entry: the creator within the window, else `expenses: approve` with a reason. */
+  @ServiceChecked('expenses key + edit window (ReportsService)')
   @Patch('expenses/:id')
   async updateExpense(
     @Param('id') id: string,

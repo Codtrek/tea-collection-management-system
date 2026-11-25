@@ -84,7 +84,7 @@ Every portal request re-reads the user (`JwtStrategy.validate`, then `auth/sessi
 
 - Tokens issued before this release carry no `tv`. They match `token_version = 0` until it is first bumped.
 - **Reads:** every portal GET checks its key (§4a), so a matrix change applies to reads on the next request.
-- **Caveat (writes):** about 32 write endpoints still use hard-coded role rules, so for them a matrix change affects only the UI. See §9.
+- **Writes** check the matrix too (§4a, "Write permissions"), except the Administrator-only matrix, settings and Users & Roles actions.
 
 ## 4a. Server checks on reads, rate limits and agent sessions (2026-11-25, `feat/read-permissions`)
 
@@ -117,6 +117,32 @@ Every portal request re-reads the user (`JwtStrategy.validate`, then `auth/sessi
 | `auth/me`, `auth/mobile/me`, `auth/change-password` | any signed-in portal user |
 
 With the default matrix only the Officer has None on any key (`administration`, `payRates`, `performance`), so default roles lose nothing they used.
+
+### Write permissions (2026-11-25, `feat/write-permissions`)
+- Every portal write carries one of:
+  - `@RequirePermissionLevel(level, key)`, checked by `JwtAuthGuard` like reads;
+  - `@PortalOnly()` for own-account actions;
+  - `@ServiceChecked(reason)` when the service checks the matrix itself, because the rule depends on more than a key and level (a time window, the record's state, separated duties, Users & Roles rules).
+- `permissions.coverage.spec.ts` fails on a portal write with none of these.
+- **Moved from hard-coded rules to the matrix** (27 endpoints; `write-permissions.spec.ts` pins them):
+
+| Endpoint | Key: level | Default roles |
+|---|---|---|
+| `PUT /collections/:id`, `POST /collections` | collection: Edit | Administrator, Officer |
+| `POST /estates`, `PATCH /estates/:id/deactivate` | estateOwners: Approve | Administrator |
+| `PUT /estates/:id`, `POST /estates/settlements/prepare` | estateOwners: Edit | Administrator, Officer |
+| `POST /estates/settlements/process` | estateOwners: **Approve** | Administrator (**changed**: the Officer could before) |
+| `POST /estates/settlements/deliveries/:id/exclude` | gradingApproval: **Approve** | Manager (**changed**: the Administrator could before; that key is a separated duty) |
+| `POST /estates/advances`, `…/repayments`, `…/reschedules` | estateAdvances: Edit | Administrator, Officer |
+| `PATCH /estates/advances/:aid/reschedules/:rid` | estateAdvances: **Approve** | Administrator (**changed**: the Officer could, server-side) |
+| `POST /employees`, `PUT /employees/:id`, `PATCH /employees/:id/deactivate` | employees: Approve | Administrator |
+| `POST /employees/advances`, `…/repayments`, `…/reschedules` | advances: Edit | Administrator, Officer |
+| `PATCH /employees/advances/:id/decide`, `…/reschedules/:rid/decide` | advances: Approve | Administrator, Officer |
+| `POST /employees/payroll/generate` | payroll: Edit | Administrator, Officer |
+| `POST /employees/payroll/process` | payroll: **Approve** | Administrator (**changed**: the Officer could before) |
+| Grade rates and transport rates (create, cancel), `PUT /admin/factory-profile` | administration: Edit | Administrator |
+
+- **Still hard-coded:** saving the permission matrix and system settings (`PUT /admin/permissions`, `PUT /admin/settings`) and Users & Roles stay Administrator-only by design (`user-rules.ts`). System Settings Part 2 moves settings to its own key.
 
 ### Rate limits (`app.module.ts`, `auth/identity-throttler.guard.ts`)
 | Limit | Value | Counted per |
@@ -198,13 +224,7 @@ With the default matrix only the Officer has None on any key (`administration`, 
 ## 9. Open items
 
 1. ~~Read endpoints with no permission check~~: done in §4a (2026-11-25).
-2. **Writes on hard-coded role rules (the next PR).** All 95 portal write endpoints have *some* check, but about 32 ignore the matrix:
-   - Collections (8: update, exception entry, grade lines, finalize, correction request/approve/reject, resend notification): "Managers are read-only".
-   - Estates and settlements (10: create, update, deactivate, issue advance, repayment, reschedule request/decision, prepare, exclude delivery, process): "Managers are read-only".
-   - Employees (11: create, update, deactivate, mark attendance, salary advance request/decide/repay/reschedule, payroll generate/process): "Managers are read-only".
-   - Admin (5: grade rates and transport rates create/cancel, factory profile): "Administrator only".
-   - Already matrix-driven: fertilizer, dispatch, holidays, pay rates/changes, expenses, performance notes, users/permissions/settings.
-   - Moving these needs the right level per endpoint (edit vs approve), and some current rules differ from the matrix defaults. For example, the Manager has `attendance: approve` but the code blocks Managers.
+2. ~~Writes on hard-coded role rules~~: done in §4a, "Write permissions" (2026-11-25). The earlier count of ~32 included the 6 grading writes, which were already matrix-driven; 27 moved.
 3. Whether `advances` / `attendance` become separated keys.
 4. The "Mobile (agents)" tab (§5).
 5. Login error messages still say whether a phone number is registered. `/auth/mobile/register` is public: please confirm that's intended.

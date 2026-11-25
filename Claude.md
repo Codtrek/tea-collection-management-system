@@ -1325,7 +1325,7 @@ Settlements are calculated from the deliveries now, not typed into the seed.
 **Read permissions, rate limits, agent sessions (2026-11-25, `feat/read-permissions`; addendum §4a).**
 - Every portal GET carries `@RequirePermission(...keys)` (any of) or `@PortalOnly()` (`src/auth/permissions.ts`). `JwtAuthGuard` checks `role_permissions` live after authentication. `permissions.coverage.spec.ts` fails on an unlabelled GET, so **label every new portal GET**.
 - The portal's `AccessGuard` wraps every route with the same keys.
-- **Writes** keep hard-coded role rules in ~32 endpoints (Collections, Estates/Settlements, Employees, Admin rates): that's the next PR.
+- **Writes (2026-11-25, `feat/write-permissions`):** every portal write carries `@RequirePermissionLevel(level, key)`, `@PortalOnly()` or `@ServiceChecked(reason)`, and the coverage test enforces it. **Label every new portal write.** Processing payroll and settlement runs needs Approve; excluding a delivery needs gradingApproval Approve.
 - **Throttle:** short 60/10 s per user; medium and long per user once signed in.
 - **Agent tokens:** `tv` + 30 days, sliding via `X-Session-Token` once over a day old (`auth/agent-session.ts`). Password change, `POST /auth/agent/logout` and deactivation revoke them.
 - The bell and Notification Center show an empty state; there is no mock data.

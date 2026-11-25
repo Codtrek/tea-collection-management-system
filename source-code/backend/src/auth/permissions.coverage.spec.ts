@@ -7,7 +7,7 @@ import {
 import { readdirSync } from 'fs';
 import { join, relative } from 'path';
 import { JwtAuthGuard } from './jwt-auth.guard';
-import { PERMISSION_META } from './permissions';
+import { PERMISSION_META, SERVICE_CHECKED_META } from './permissions';
 
 /**
  * Every portal route (anything behind JwtAuthGuard) that READS data must say who may read it:
@@ -53,6 +53,9 @@ describe('portal read permissions — coverage', () => {
           labelled:
             Reflect.getMetadata(PERMISSION_META, handler) !== undefined ||
             Reflect.getMetadata(PERMISSION_META, ctor) !== undefined,
+          serviceChecked:
+            typeof Reflect.getMetadata(SERVICE_CHECKED_META, handler) ===
+            'string',
         };
       })
       .filter((r) => r.isRoute && r.portal);
@@ -62,6 +65,17 @@ describe('portal read permissions — coverage', () => {
     expect(
       routes.filter((r) => r.method === RequestMethod.GET).length,
     ).toBeGreaterThan(80);
+  });
+
+  it('every portal write has a matrix permission, @PortalOnly, or a documented @ServiceChecked', () => {
+    const writes = routes.filter(
+      (r) => r.method !== undefined && r.method !== RequestMethod.GET,
+    );
+    expect(writes.length).toBeGreaterThan(90);
+    const missing = writes
+      .filter((r) => !r.labelled && !r.serviceChecked)
+      .map((r) => r.where);
+    expect(missing).toEqual([]);
   });
 
   it('every portal GET route has @RequirePermission or @PortalOnly', () => {

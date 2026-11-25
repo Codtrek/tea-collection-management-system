@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -148,7 +147,6 @@ export class TransportRatesService {
     actor: Actor,
     now: Date = new Date(),
   ): Promise<TransportRatesView> {
-    this.assertIsAdmin(actor);
     const rows = await this.rates.find();
     const today = localDate(now);
     const effectiveDate = `${dto.effectiveMonth}-01`;
@@ -210,7 +208,6 @@ export class TransportRatesService {
     actor: Actor,
     now: Date = new Date(),
   ): Promise<TransportRatesView> {
-    this.assertIsAdmin(actor);
     const row = await this.rates.findOne({ where: { id } });
     if (!row) {
       throw new NotFoundException(`Transport version ${id} not found.`);
@@ -256,13 +253,5 @@ export class TransportRatesService {
       ...(lastProcessed ? [firstChargedMonth(`${lastProcessed}-02`)] : []),
     ].sort();
     return candidates[0] ?? null;
-  }
-
-  private assertIsAdmin(actor: Actor): void {
-    if (actor.role !== 'Administrator') {
-      throw new ForbiddenException(
-        'Only an Administrator can change the transport charge.',
-      );
-    }
   }
 }

@@ -30,7 +30,7 @@ import { DispatchAccessService } from './dispatch-access.service';
 import { localDate } from './dispatch-map';
 import { DispatchService, type DispatchActor } from './dispatch.service';
 import { RouteScheduleService } from './route-schedule.service';
-import { RequirePermission } from '../auth/permissions';
+import { RequirePermission, ServiceChecked } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -129,6 +129,9 @@ export class DispatchController {
     );
   }
 
+  @ServiceChecked(
+    'dispatch key, edit vs approve per action (DispatchAccessService)',
+  )
   @Post('agents/:id/absence')
   async markAbsent(
     @Param('id', ParseIntPipe) agentId: number,
@@ -139,6 +142,9 @@ export class DispatchController {
     return this.dispatch.markAbsent(agentId, dto.reason, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'dispatch key, edit vs approve per action (DispatchAccessService)',
+  )
   @Delete('agents/:id/absence')
   async markAvailable(
     @Param('id', ParseIntPipe) agentId: number,
@@ -148,6 +154,9 @@ export class DispatchController {
     return this.dispatch.markAvailable(agentId, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'dispatch key, edit vs approve per action (DispatchAccessService)',
+  )
   @Post('cover-requests')
   async createCover(
     @Body() dto: CreateCoverRequestDto,
@@ -157,6 +166,9 @@ export class DispatchController {
     return this.dispatch.createCoverRequest(dto, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'dispatch key, edit vs approve per action (DispatchAccessService)',
+  )
   @Post('routes/:id/reassign')
   async reassign(
     @Param('id', ParseIntPipe) routeId: number,
@@ -189,6 +201,9 @@ export class DispatchController {
   }
 
   /** The weekly pattern is a standing decision, like a permanent reassignment. */
+  @ServiceChecked(
+    'dispatch key, edit vs approve per action (DispatchAccessService)',
+  )
   @Put('routes/:id/schedule/weekdays')
   async setWeekdays(
     @Param('id', ParseIntPipe) routeId: number,
@@ -207,6 +222,9 @@ export class DispatchController {
     );
   }
 
+  @ServiceChecked(
+    'dispatch key, edit vs approve per action (DispatchAccessService)',
+  )
   @Post('routes/:id/schedule/overrides')
   async addOverride(
     @Param('id', ParseIntPipe) routeId: number,
@@ -221,6 +239,9 @@ export class DispatchController {
     return this.schedule.addOverride(routeId, dto, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'dispatch key, edit vs approve per action (DispatchAccessService)',
+  )
   @Post('routes/:id/schedule/move')
   async moveDate(
     @Param('id', ParseIntPipe) routeId: number,
@@ -235,6 +256,9 @@ export class DispatchController {
     return this.schedule.moveDate(routeId, dto, await this.actor(req));
   }
 
+  @ServiceChecked(
+    'dispatch key, edit vs approve per action (DispatchAccessService)',
+  )
   @Delete('routes/:id/schedule/overrides/:overrideId')
   async removeOverride(
     @Param('id', ParseIntPipe) routeId: number,

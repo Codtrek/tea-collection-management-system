@@ -85,7 +85,11 @@ import {
   AdvanceViewService,
   type EmployeeAdvances,
 } from './advance-view.service';
-import { RequirePermission } from '../auth/permissions';
+import {
+  RequirePermission,
+  RequirePermissionLevel,
+  ServiceChecked,
+} from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -168,6 +172,7 @@ export class EmployeesController {
   }
 
   /** Roll-call for one date — no future dates, the edit window, payroll lock, holiday rules. */
+  @ServiceChecked('attendance key + past-day edit window (AttendanceService)')
   @Post('attendance')
   async markAttendance(
     @Body() dto: MarkAttendanceDto,
@@ -236,6 +241,7 @@ export class EmployeesController {
   }
 
   /** Ask to change an approved plan — someone else approves (Salary-Advances-Addendum §10). */
+  @RequirePermissionLevel('edit', 'advances')
   @Post('advances/:id/reschedules')
   async requestReschedule(
     @Param('id') id: string,
@@ -249,6 +255,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermissionLevel('approve', 'advances')
   @Patch('advances/:id/reschedules/:rid/decide')
   async decideReschedule(
     @Param('id') id: string,
@@ -265,6 +272,7 @@ export class EmployeesController {
   }
 
   /** An early repayment in cash, recorded by an officer. */
+  @RequirePermissionLevel('edit', 'advances')
   @Post('advances/:id/repayments')
   async recordRepayment(
     @Param('id') id: string,
@@ -278,6 +286,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermissionLevel('edit', 'advances')
   @Post('advances')
   async requestAdvance(
     @Body() dto: RequestAdvanceDto,
@@ -289,6 +298,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermissionLevel('approve', 'advances')
   @Patch('advances/:id/decide')
   async decideAdvance(
     @Param('id') id: string,
@@ -359,6 +369,7 @@ export class EmployeesController {
     });
   }
 
+  @RequirePermissionLevel('edit', 'payroll')
   @Post('payroll/generate')
   async generatePayroll(
     @Body() dto: GeneratePayrollDto,
@@ -370,6 +381,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermissionLevel('approve', 'payroll')
   @Post('payroll/process')
   async processPayroll(
     @Body() dto: ProcessPayrollDto,
@@ -401,6 +413,7 @@ export class EmployeesController {
   }
 
   /** What a change would do, per employee, before it is prepared — nothing is saved. */
+  @ServiceChecked('payRates key (PayRatesService); preview, nothing saved')
   @Post('pay-adjustments/preview')
   async previewPayAdjustment(
     @Body() dto: PayAdjustmentDto,
@@ -409,6 +422,7 @@ export class EmployeesController {
     return this.payAdjustments_.preview(dto, await this.resolveActor(req));
   }
 
+  @ServiceChecked('payRates key (PayRatesService)')
   @Post('pay-adjustments')
   async preparePayAdjustment(
     @Body() dto: PayAdjustmentDto,
@@ -417,6 +431,7 @@ export class EmployeesController {
     return this.payAdjustments_.prepare(dto, await this.resolveActor(req));
   }
 
+  @ServiceChecked('payRates key; Administrator approves (PayRatesService)')
   @Patch('pay-adjustments/:aid/decide')
   async decidePayAdjustment(
     @Param('aid', ParseIntPipe) aid: number,
@@ -458,6 +473,7 @@ export class EmployeesController {
     return this.employeesService.findAll();
   }
 
+  @RequirePermissionLevel('approve', 'employees')
   @Post()
   async create(
     @Body() dto: CreateEmployeeDto,
@@ -574,6 +590,7 @@ export class EmployeesController {
     });
   }
 
+  @RequirePermissionLevel('approve', 'employees')
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -583,6 +600,7 @@ export class EmployeesController {
     return this.employeesService.update(id, dto, await this.resolveActor(req));
   }
 
+  @RequirePermissionLevel('approve', 'employees')
   @Patch(':id/deactivate')
   async deactivate(
     @Param('id') id: string,

@@ -73,7 +73,7 @@ import {
   SettlementViewService,
   type UnsettledOwner,
 } from './settlement-view.service';
-import { RequirePermission } from '../auth/permissions';
+import { RequirePermission, RequirePermissionLevel } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -150,6 +150,7 @@ export class EstatesController {
   }
 
   /** §4 — ask to change the plan; someone else approves. Processed periods never change. */
+  @RequirePermissionLevel('edit', 'estateAdvances')
   @Post('advances/:aid/reschedules')
   async requestReschedule(
     @Param('aid') aid: string,
@@ -163,6 +164,7 @@ export class EstatesController {
     );
   }
 
+  @RequirePermissionLevel('approve', 'estateAdvances')
   @Patch('advances/:aid/reschedules/:rid')
   async decideReschedule(
     @Param('aid') aid: string,
@@ -179,6 +181,7 @@ export class EstatesController {
   }
 
   /** §4 — an early repayment in cash or by bank transfer. */
+  @RequirePermissionLevel('edit', 'estateAdvances')
   @Post('advances/:aid/repayments')
   async recordRepayment(
     @Param('aid') aid: string,
@@ -192,6 +195,7 @@ export class EstatesController {
     );
   }
 
+  @RequirePermissionLevel('edit', 'estateAdvances')
   @Post('advances')
   async issueAdvance(
     @Body() dto: IssueAdvanceDto,
@@ -269,6 +273,7 @@ export class EstatesController {
   }
 
   /** "Prepare settlements for <month>": create or recalculate the drafts. */
+  @RequirePermissionLevel('edit', 'estateOwners')
   @Post('settlements/prepare')
   async prepareSettlements(
     @Body() dto: PrepareSettlementsDto,
@@ -278,6 +283,7 @@ export class EstatesController {
   }
 
   /** A Manager leaves an ungraded delivery out of a month, with a reason (it rolls on). */
+  @RequirePermissionLevel('approve', 'gradingApproval')
   @Post('settlements/deliveries/:deliveryId/exclude')
   async excludeDelivery(
     @Param('deliveryId') deliveryId: string,
@@ -318,6 +324,7 @@ export class EstatesController {
   }
 
   /** Processes the month's ready drafts in one run — freezing each calculation. */
+  @RequirePermissionLevel('approve', 'estateOwners')
   @Post('settlements/process')
   async processSettlements(
     @Body() dto: ProcessSettlementsDto,
@@ -342,6 +349,7 @@ export class EstatesController {
     return this.estatesService.findAll();
   }
 
+  @RequirePermissionLevel('approve', 'estateOwners')
   @Post()
   async create(
     @Body() dto: CreateEstateDto,
@@ -356,6 +364,7 @@ export class EstatesController {
     return this.estatesService.findById(id);
   }
 
+  @RequirePermissionLevel('edit', 'estateOwners')
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -365,6 +374,7 @@ export class EstatesController {
     return this.estatesService.update(id, dto, await this.resolveActor(req));
   }
 
+  @RequirePermissionLevel('approve', 'estateOwners')
   @Patch(':id/deactivate')
   async deactivate(
     @Param('id') id: string,

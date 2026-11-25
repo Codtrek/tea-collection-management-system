@@ -98,7 +98,6 @@ export class EmployeesService {
 
   /** EMP-02 — Administrator only (portal: `employees: 'approve'`, Officer is view-only on the roster). */
   async create(dto: CreateEmployeeDto, actor: Actor): Promise<PublicEmployee> {
-    this.assertIsAdmin(actor);
     this.assertAge18(dto.dob);
     this.assertHireDateNotFuture(dto.hireDate);
 
@@ -186,7 +185,6 @@ export class EmployeesService {
     dto: UpdateEmployeeDto,
     actor: Actor,
   ): Promise<PublicEmployee> {
-    this.assertIsAdmin(actor);
     this.assertAge18(dto.dob);
     this.assertHireDateNotFuture(dto.hireDate);
     const employee = await this.findEntity(id);
@@ -262,7 +260,6 @@ export class EmployeesService {
 
   /** Administrator only (portal: `employees: 'approve'`). */
   async deactivate(id: string, actor: Actor): Promise<PublicEmployee> {
-    this.assertIsAdmin(actor);
     const employee = await this.findEntity(id);
     const wasAgent = isAgentRole(employee.role);
     employee.status = 'Inactive';
@@ -320,7 +317,6 @@ export class EmployeesService {
     dto: RequestAdvanceDto,
     actor: Actor,
   ): Promise<PublicAdvance> {
-    this.assertCanWrite(actor);
     const employee = await this.findEntity(dto.employeeId);
     const plan = await this.resolvePlan(
       dto.amount,
@@ -370,7 +366,6 @@ export class EmployeesService {
     },
     actor: Actor,
   ): Promise<PublicAdvance> {
-    this.assertCanWrite(actor);
     const { decision } = input;
     const why = input.reason?.trim() ?? '';
     if (decision === 'reject' && !why) {
@@ -517,8 +512,6 @@ export class EmployeesService {
     dto: GeneratePayrollDto,
     actor: Actor,
   ): Promise<PublicPayrollRow[]> {
-    this.assertCanWrite(actor);
-
     const employees = await this.employeeRepo.find();
     const attendance = await this.attendanceRepo.find();
     const advances = await this.advanceRepo.find();
@@ -670,8 +663,6 @@ export class EmployeesService {
     dto: ProcessPayrollDto,
     actor: Actor,
   ): Promise<PublicPayrollRow[]> {
-    this.assertCanWrite(actor);
-
     const all = await this.payrollRepo.find();
     const employees = new Map(
       (await this.employeeRepo.find()).map((e) => [e.id, e]),
@@ -800,24 +791,6 @@ export class EmployeesService {
       throw new NotFoundException(`No employee "${formattedId}".`);
     }
     return employee;
-  }
-
-  /** Roster create/update/deactivate are Administrator-only (portal: `employees: 'approve'`, Officer is view-only). */
-  private assertIsAdmin(actor: Actor): void {
-    if (actor.role !== 'Administrator') {
-      throw new ForbiddenException(
-        'Only an Administrator can manage the employee roster.',
-      );
-    }
-  }
-
-  /** Manager has read-only access to attendance/advances/payroll (Administrator/Officer can write). */
-  private assertCanWrite(actor: Actor): void {
-    if (actor.role === 'Manager') {
-      throw new ForbiddenException(
-        'Managers have read-only access to this resource.',
-      );
-    }
   }
 
   private assertAge18(dob: string): void {
