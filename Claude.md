@@ -1318,6 +1318,46 @@ Settlements are calculated from the deliveries now, not typed into the seed.
   - The e2e finds the panels by `#today-title` / `#month-title`, because activity has its own "Today" heading.
   - `source-code/admin/PRODUCT.md` + `DESIGN.md` ("The Factory Ledger") are the design record. Read them before UI work in the portal.
 
+## Users & Roles rebuild (2026-11-18, `feat/users-roles`; `docs/specs/Users-Roles-Addendum.md`)
+
+**Draft PR #100** (2026-11-22; pre-check SQL for the Azure copy in its description). After-merge list: issue #101. Approved next: break-glass `admin:recover` as its own PR after #100 merges; then read-endpoint permission checks + the 5 row-less keys + rate limits (short 60/10s per user, medium/long per user when signed in, auth 5/min).
+
+Migration `1794400026000-UsersRoles` (mirrored in `init.sql`): `users.token_version / email / failed_login_count / locked_until`, `audit_logs.before / after / reason`, and a backfill of 14 permission keys a migrations-only DB never had (`ON CONFLICT DO NOTHING`). The seed no longer overwrites the matrix.
+
+- **Every portal request re-reads the user.**
+  - `JwtStrategy.validate` → `auth/session-check.ts` `checkPortalSession`: a suspended account → 401; a JWT `tv` ≠ `users.token_version` → 401.
+  - **`req.user.role` now comes from the DB, not the token claim.**
+  - `must_change_password` → 403 `PASSWORD_CHANGE_REQUIRED` everywhere except `/auth/me` and `/auth/change-password`.
+  - Deactivate, role change, reset password and change password all bump `token_version`.
+  - Matrix checks (`DispatchAccessService`) were already live DB reads; keep them uncached.
+- **Matrix rules** live in `backend/src/admin/admin-map.ts` (`cellLock`, `SEPARATED_KEYS`, `FINANCE_KEYS`, `needsReason`) and are mirrored in `admin/src/features/admin/permission-catalog.ts`.
+  - The Administrator is pinned to Approve, except on the separated keys (grading, gradingApproval, both fertilizer approvals, expenses), where it is **capped at None/View**.
+  - Locked cells get a 403 even when unchanged.
+  - A reason is required for approve or finance changes.
+  - One audit row per save, with before/after.
+  - **`ADMIN_EDITABLE_MODULES` is gone; use `SEPARATED_KEYS`.**
+- **System users:** `admin/system-users.service.ts`, with the pure rules in `admin/user-rules.ts`.
+  - Add user always picks an HR employee (one person = one NIC = one login).
+  - Edit, deactivate, reactivate, unlock and confirmed NIC links are all available.
+  - **Reset password is real now:** a temporary password is shown once, with a forced change.
+  - These replace the "reset stub / one-way suspend" seams noted under the Administration slice below.
+  - The list row carries per-action refusal reasons; the portal disables the control and shows the reason in a tooltip.
+- **Lockout:** 5 wrong passwords → 15 minutes (`AuthService.verifyPassword`, shared by portal, mobile and agent sign-in), audited as "System". Agent login is now in the 5/min sign-in throttle, and the throttler no longer logs phone numbers.
+- **Portal:**
+  - New `components/ui/Tooltip.tsx`: accessible, opens on hover and focus, rendered in a portal.
+  - `Modal` is now named by its title (`aria-labelledby`).
+  - `/change-password` sits outside the shell.
+  - `AuthContext` re-reads `/auth/me` on window focus and after any 403. Session hydration retries transient errors (429/0/5xx) and **signs out only on a 401**.
+  - `api.ts` `ApiError.code`.
+- **Tests:** jest (`system-users`, `user-rules`, `session-check`, auth lockout, audit retry); vitest (`permission-catalog.test.ts`); Playwright `e2e/users-roles.spec.ts`, 10 tests.
+  - The Playwright tests cover: no clipped level names at 1280/1366/1440 px, locked cells in the UI and the API, dirty state with review and reason, a reduced permission blocking the next request, own-row and API refusals, add user with a one-time hashed password and forced change, and deactivation ending the session.
+  - The e2e helpers wait out the API's per-user throttle. That throttle is shared by every worker using the admin token, and it is the likely cause of the old "~8 flaky 30 s timeouts".
+- **Open (addendum §9):**
+  - Most read endpoints still have no permission check (C2), and several keys are UI-only on the server.
+  - The 5 row-less keys (dashboard, payroll, advances, attendance, performance).
+  - The "Mobile (agents)" tab proposal.
+  - `e2e/factory-setup.spec.ts` "transport" fails on dev since #97: the "Transport: not configured" note now appears once per estate, so the test needs `.first()`.
+
 ## Newcomer's guide (2026-10-18)
 
 `docs/guide/index.html` (+ `docs/guide/img/`) is a self-contained, styled field guide for new teammates: architecture, TypeScript/React

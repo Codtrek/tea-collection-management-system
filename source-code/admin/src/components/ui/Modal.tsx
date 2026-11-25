@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -19,6 +19,7 @@ const sizes = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl' }
 /** Accessible modal: focus-trapped, Esc-to-close, backdrop, shadow-4 (foundations §3). */
 export function Modal({ open, onClose, title, children, footer, size = 'sm', hideClose }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
 
   useEffect(() => {
     if (!open) return
@@ -45,6 +46,8 @@ export function Modal({ open, onClose, title, children, footer, size = 'sm', hid
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
+        // the title names the dialog for screen readers (and getByRole('dialog', { name }))
+        aria-labelledby={title ? titleId : undefined}
         className={cn(
           'animate-fade-up relative w-full rounded-[var(--radius-xl)] bg-surface shadow-[var(--shadow-4)] focus:outline-none',
           sizes[size],
@@ -52,7 +55,11 @@ export function Modal({ open, onClose, title, children, footer, size = 'sm', hid
       >
         {(title || !hideClose) && (
           <div className="flex items-start justify-between gap-4 px-6 pt-6">
-            {title && <h2 className="text-lg font-semibold text-text-heading">{title}</h2>}
+            {title && (
+              <h2 id={titleId} className="text-lg font-semibold text-text-heading">
+                {title}
+              </h2>
+            )}
             {!hideClose && (
               <button
                 onClick={onClose}
