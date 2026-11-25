@@ -1,5 +1,21 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import { apiRequest } from "./client";
+
+export interface OwnedEstate {
+  id: number;
+  name: string;
+  location: string;
+  ytdDeliveriesKg: string;
+}
+
+export async function getOwnedEstates() {
+  const token = await readSessionValue("accessToken");
+  if (!token) throw new Error("Sign in to view your estates.");
+  return apiRequest<OwnedEstate[]>("/collection-request/estates", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
 
 export function readSessionValue(key: string) {
   return Platform.OS === "web"
