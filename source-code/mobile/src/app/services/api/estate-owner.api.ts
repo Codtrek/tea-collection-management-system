@@ -23,6 +23,22 @@ export function readSessionValue(key: string) {
     : SecureStore.getItemAsync(key);
 }
 
+export interface CreateEstateInMobile {
+  name: string;
+  address: string;
+  areaAcres: number;
+}
+
+export async function registerOwnedEstate(details: CreateEstateInMobile) {
+  const token = await readSessionValue("accessToken");
+  if (!token) throw new Error("Sign in to register an estate.");
+  return apiRequest<Pick<OwnedEstate, "id" | "name" | "location">>("/mobile/estates", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(details),
+  });
+}
+
 export interface ManagerRegistration {
   estateId: number;
   name: string;

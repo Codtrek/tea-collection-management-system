@@ -175,7 +175,7 @@ export class AuthService {
 
 
 
-  async registerEstateManager(token: string | null, dto: RegisterEstateManagerDto) {
+  async requireEstateOwner(token: string | null) {
     if (!token) throw new UnauthorizedException();
     const actor = await this.jwtService.verifyAsync<JwtPayload>(token).catch(() => {
       throw new UnauthorizedException();
@@ -185,6 +185,11 @@ export class AuthService {
     if (actor.role !== 'Estate Owner') throw new ForbiddenException();
     const owner = await this.usersService.findById(ownerId);
     if (owner?.role !== 'estate_owner' || owner.status !== 'active') throw new ForbiddenException();
+    return ownerId;
+  }
+
+  async registerEstateManager(token: string | null, dto: RegisterEstateManagerDto) {
+    const ownerId = await this.requireEstateOwner(token);
     if (dto.dateOfBirth > new Date().toISOString().slice(0, 10)) {
       throw new BadRequestException('Date of birth cannot be in the future.');
     }

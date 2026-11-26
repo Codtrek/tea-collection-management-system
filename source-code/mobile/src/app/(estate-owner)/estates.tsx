@@ -5,11 +5,13 @@ import { ScrollView, StyleSheet, View } from "react-native";
 
 import { EstateCard } from "@/components/estate-owner";
 import { teaGardenImage } from "@/data/estateOwnerEstates";
+import { useEstateStore } from "@/store/estateStore";
 import { AppButton, AppText, GeneralHeader, Screen, SearchBar } from "@/components/ui";
 import { getOwnedEstates, type OwnedEstate } from "../services/api/estate-owner.api";
 import { colors, spacing } from "@/theme";
 
 export default function Estates() {
+  const localEstates = useEstateStore(state => state.estates);
   const [estateProfiles, setEstates] = useState<OwnedEstate[] | null>(null);
   const [error, setError] = useState("");
   useFocusEffect(useCallback(() => {
@@ -97,7 +99,7 @@ export default function Estates() {
           filteredEstates.map((estate) => (
             <EstateCard
               key={estate.id}
-              imageSrc={teaGardenImage}
+              imageSrc={localEstates.find(item => item.id === String(estate.id))?.imageSrc ?? teaGardenImage}
               name={estate.name}
               location={estate.location}
               onPress={() => router.push({

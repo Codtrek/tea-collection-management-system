@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { AppButton, AppInput, AppText, Dropdown, PasswordInput, Screen } from "@/components/ui";
 import { colors } from "@/theme/colors";
 import { getOwnedEstates, registerEstateManager, type OwnedEstate } from "../services/api/estate-owner.api";
@@ -8,6 +9,7 @@ import { getErrorMessages } from "../services/api/client";
 const emptyForm = { name: "", phone: "", nic: "", dateOfBirth: "", password: "", confirmPassword: "" };
 
 export default function Employees() {
+  const { estateId: requestedEstate } = useLocalSearchParams<{ estateId?: string }>();
   const [estates, setEstates] = useState<OwnedEstate[]>([]);
   const [estateId, setEstateId] = useState("");
   const [form, setForm] = useState(emptyForm);
@@ -25,12 +27,13 @@ export default function Employees() {
     getOwnedEstates().then((items) => {
       if (!active) return;
       setEstates(items);
-      if (items.length === 1) setEstateId(String(items[0].id));
+      if (requestedEstate && items.some(item => String(item.id) === requestedEstate)) setEstateId(requestedEstate);
+      else if (items.length === 1) setEstateId(String(items[0].id));
     }).catch((cause) => {
       if (active) setLoadError(getErrorMessages(cause, "Could not load estates.").join("\n"));
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [attempt]);
+  }, [attempt, requestedEstate]);
 
   function field(key: keyof typeof form) {
     return {
