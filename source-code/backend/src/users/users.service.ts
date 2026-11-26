@@ -119,12 +119,16 @@ export class UsersService {
     try {
       return await this.usersRepository.manager.transaction(async (tx) => {
         const owner = await tx.findOneBy(EstateOwnerEntity, { userId: ownerUserId });
+        if (!owner) throw new NotFoundException('Estate owner profile not found.');
+        // The employee's estate links them to this owner even before assignment.
         const estate = owner && await tx.findOne(EstateEntity, {
-          where: { id: dto.estateId, ownerId: owner.id },
+          where: { ...(dto.estateId != null ? { id: dto.estateId } : {}), ownerId: owner.id },
+          order: { id: 'ASC' },
           lock: { mode: 'pessimistic_write' },
         });
         if (!estate) throw new NotFoundException('Estate not found.');
-        if (estate.managerId != null || await tx.existsBy(EstateManager, { estate_id: estate.id })) {
+        const assignNow = dto.estateId != null;
+        if (assignNow && (estate.managerId != null || await tx.existsBy(EstateManager, { estate_id: estate.id }))) {
           throw new ConflictException('This estate already has a manager.');
         }
         const name = dto.name.trim();
@@ -135,9 +139,13 @@ export class UsersService {
           user_id: user.id, estate_id: estate.id, name, nic: dto.nic,
           date_of_birth: dto.dateOfBirth, role: 'manager',
         });
-        const manager = await tx.save(EstateManager, { employee_id: employee.id, estate_id: estate.id });
-        await tx.update(EstateEntity, estate.id, { managerId: manager.id });
-        return { id: manager.id, name, estateName: estate.name };
+        const manager = await tx.save(EstateManager, {
+          employee_id: employee.id,
+          estate_id: assignNow ? estate.id : null,
+          assigned_at: assignNow ? new Date() : null,
+        });
+        if (assignNow) await tx.update(EstateEntity, estate.id, { managerId: manager.id });
+        return { id: manager.id, name, estateName: assignNow ? estate.name : null };
       });
     } catch (error) {
       if (error instanceof QueryFailedError && error.driverError.code === '23505') {

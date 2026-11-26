@@ -40,7 +40,7 @@ export async function registerOwnedEstate(details: CreateEstateInMobile) {
 }
 
 export interface ManagerRegistration {
-  estateId: number;
+  estateId?: number;
   name: string;
   phone: string;
   nic: string;
@@ -78,7 +78,7 @@ export function changeManagerAssignment(employeeId: number, estateId: number, as
 export async function registerEstateManager(details: ManagerRegistration) {
   const token = await readSessionValue("accessToken");
   if (!token) throw new Error("Sign in to register a manager.");
-  return apiRequest<{ id: number; name: string; estateName: string }>("/auth/mobile/estate-managers", {
+  return apiRequest<{ id: number; name: string; estateName: string | null }>("/auth/mobile/estate-managers", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(details),
