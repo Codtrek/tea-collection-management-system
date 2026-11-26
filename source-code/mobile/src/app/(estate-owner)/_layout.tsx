@@ -11,7 +11,7 @@ export default function EstateOwnerLayout() {
     const activeTab =
         pathname.endsWith("/estates") || pathname.endsWith("/add-estate") || pathname.includes("/estate/")
             ? "estates"
-            : "home";
+            : pathname.endsWith("/employees") ? "employees" : "home";
 
     const showBottomTab = !pathname.includes("/estate/") && !pathname.includes("/workers/");
 
@@ -25,6 +25,8 @@ export default function EstateOwnerLayout() {
             router.replace("/(estate-owner)/home");
         }else if (tab.key === "estates") {
             router.replace("/(estate-owner)/estates");
+        }else if (tab.key === "employees") {
+            router.replace("/(estate-owner)/employees");
         }else if (tab.key === "profile") {
             router.replace("/(estate-owner)/profile");
         }else if (tab.key === "requests") {

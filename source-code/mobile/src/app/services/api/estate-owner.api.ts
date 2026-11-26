@@ -23,6 +23,26 @@ export function readSessionValue(key: string) {
     : SecureStore.getItemAsync(key);
 }
 
+export interface ManagerRegistration {
+  estateId: number;
+  name: string;
+  phone: string;
+  nic: string;
+  dateOfBirth: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export async function registerEstateManager(details: ManagerRegistration) {
+  const token = await readSessionValue("accessToken");
+  if (!token) throw new Error("Sign in to register a manager.");
+  return apiRequest<{ id: number; name: string; estateName: string }>("/auth/mobile/estate-managers", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(details),
+  });
+}
+
 /** Reads the owner profile returned by mobile sign-in or registration. */
 export async function getSignedInOwnerName(): Promise<string> {
   const [token, storedUser] = await Promise.all([
