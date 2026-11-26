@@ -38,7 +38,7 @@ function Meta({ icon, text }: { icon: IconName; text: string }) {
 
 interface RequestListItemProps {
   request: Omit<PickupRequest, "factory" | "estimatedWeightKg"> &
-    Partial<Pick<PickupRequest, "factory" | "estimatedWeightKg">>;
+    Partial<Pick<PickupRequest, "factory" | "estimatedWeightKg">> & { teaWeightKg?: string | null };
   title?: string;
   showFactory?: boolean;
   highlight?: boolean;
@@ -75,7 +75,9 @@ export default function RequestListItem({
         {showFactory && request.factory ? (
           <Meta icon="business-outline" text={request.factory} />
         ) : null}
-        {request.estimatedWeightKg != null && <Meta
+        {request.teaWeightKg != null ? (
+          <Meta icon="scale-outline" text={formatKg(Number(request.teaWeightKg), 2)} />
+        ) : request.estimatedWeightKg != null && <Meta
           icon="scale-outline"
           text={formatKg(request.estimatedWeightKg)}
         />}
