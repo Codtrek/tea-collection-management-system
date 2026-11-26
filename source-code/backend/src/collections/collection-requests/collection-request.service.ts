@@ -150,7 +150,9 @@ export class CollectionRequestService {
       estate
         .innerJoin(EstateManager, 'manager', 'manager.estate_id = estate.id')
         .innerJoin('manager.employee', 'employee')
-        .andWhere('employee.user_id = :userId', { userId });
+        .andWhere('employee.user_id = :userId', { userId })
+        .andWhere('employee.is_active = true')
+        .andWhere('(estate.managerId IS NULL OR estate.managerId = manager.id)');
     } else {
       throw new ForbiddenException(
         'Only estate owners and managers can request collection.',

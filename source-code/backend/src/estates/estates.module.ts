@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { OwnedEstatesController } from './owned-estates.controller';
+import { OwnerEmployeesService } from './owner-employees.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditLogEntity } from '../audit/audit-log.entity';
 import { AuditModule } from '../audit/audit.module';
@@ -70,6 +71,7 @@ import { GradeRateEntity } from '../admin/grade-rate.entity';
   ],
   controllers: [EstatesController, OwnedEstatesController],
   providers: [
+    OwnerEmployeesService,
     EstatesService,
     TransportStatusService,
     EstateLifetimeService,

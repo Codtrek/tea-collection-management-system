@@ -49,6 +49,32 @@ export interface ManagerRegistration {
   confirmPassword: string;
 }
 
+export interface OwnerEmployee {
+  id: number;
+  name: string;
+  estateId: number | null;
+  estateName: string | null;
+}
+
+export interface EmployeeDirectory {
+  employees: OwnerEmployee[];
+  availableEstates: Pick<OwnedEstate, "id" | "name">[];
+}
+
+async function ownerEmployeeRequest<T>(path: string, method = "GET") {
+  const token = await readSessionValue("accessToken");
+  if (!token) throw new Error("Sign in to manage employees.");
+  return apiRequest<T>(path, { method, headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function getOwnerEmployees() {
+  return ownerEmployeeRequest<EmployeeDirectory>("/mobile/estates/employees");
+}
+
+export function changeManagerAssignment(employeeId: number, estateId: number, assign: boolean) {
+  return ownerEmployeeRequest<{ ok: boolean }>(`/mobile/estates/${estateId}/managers/${employeeId}`, assign ? "PUT" : "DELETE");
+}
+
 export async function registerEstateManager(details: ManagerRegistration) {
   const token = await readSessionValue("accessToken");
   if (!token) throw new Error("Sign in to register a manager.");

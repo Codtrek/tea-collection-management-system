@@ -210,10 +210,10 @@ export class UsersService {
       .where('employee.user_id = :userId', { userId })
       .getOne();
     if (!estateManager) return null;
-    if (!estateManager.employee || !estateManager.estate) return null;
+    if (!estateManager.employee) return null;
     return {
       name: estateManager.employee.name,
-      estate: estateManager.estate.name,
+      estate: estateManager.estate?.name,
     };
   }
 }
