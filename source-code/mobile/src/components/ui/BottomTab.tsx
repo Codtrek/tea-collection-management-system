@@ -37,6 +37,9 @@ export default function BottomTab({
         return (
           <Pressable
             key={tab.key}
+            role="button"
+            aria-current={isActive ? "page" : undefined}
+            accessibilityLabel={tab.label}
             style={styles.tab}
             onPress={() => onTabPress(tab)}
           >
@@ -83,6 +86,8 @@ const styles = StyleSheet.create({
   },
 
   tab: {
+    minWidth: 44,
+    minHeight: 44,
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -95,7 +100,7 @@ const styles = StyleSheet.create({
   },
 
   activeLabel: {
-    color: colors.primary,
+    color: colors.charcoal,
     fontWeight: "600",
   },
 

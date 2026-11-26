@@ -3,6 +3,16 @@ import { ImageBackground } from "react-native";
 export const colors = {
   // Brand
   primary: "#53CF81",
+  charcoal: "#111827",
+  charcoalSecondary: "#4B5563",
+  successTint: "#EAF8EF",
+  errorTint: "#FEF2F2",
+  assignedTint: "#F3F4F6",
+  unassignedTint: "#FEF3C7",
+  pressedGreen: "#4BC779",
+  focusOffset: "#FFFFFF",
+  toastRadius: 16,
+  toastShadow: "rgba(17,24,39,0.10)",
   brandDark: "#1B8B4E",
   brandSurface: "#EDF8F1",
   brandBorder: "#CAEBD5",

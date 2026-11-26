@@ -1,4 +1,5 @@
 
+import { useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -31,6 +32,7 @@ export default function AppButton({
   style,
   labelStyle,
 }: AppButtonProps) {
+  const [focused, setFocused] = useState(false);
   const isDisabled = disabled || loading;
 
   const buttonWidth: ViewStyle["width"] =
@@ -47,6 +49,8 @@ export default function AppButton({
   return (
     <Pressable
       onPress={onPress}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={title}
@@ -54,12 +58,14 @@ export default function AppButton({
         disabled: isDisabled,
         busy: loading,
       }}
-      style={[
+      style={({ pressed }) => [
         styles.container,
         styles[variant],
         buttonSizingStyle,
         isDisabled && styles.disabled,
         style,
+        focused && { borderWidth: 2, borderColor: colors.text.primary },
+        pressed && { opacity: 0.75 },
       ]}
     >
       {loading ? (
