@@ -4,6 +4,9 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
 import { EstatePage, estateStyles as ui } from "@/components/estate-owner/EstatePage";
 import { AppText } from "@/components/ui";
+import { Ionicons } from "@expo/vector-icons";
+import { colors } from "@/theme";
+import { formatKg } from "@/utils/format";
 import { CollectionRequestDetailsModal } from "@/components/collection-request/CollectionRequestDetailsModal";
 import { teaGardenImage } from "@/data/estateOwnerEstates";
 import { getOwnedEstates, type OwnedEstate } from "@/app/services/api/estate-owner.api";
@@ -77,6 +80,12 @@ export default function EstateDashboard() {
                     <View style={ui.grow}>
                       <AppText variant="label">Request #{request.id}</AppText>
                       <AppText variant="caption">{new Date(request.createdAt).toLocaleDateString()}</AppText>
+                      {request.teaWeightKg != null && (
+                        <View style={ui.row}>
+                          <Ionicons name="scale-outline" size={14} color={colors.text.tertiary} />
+                          <AppText variant="caption">{formatKg(Number(request.teaWeightKg), 2)}</AppText>
+                        </View>
+                      )}
                     </View>
                     <AppText>{request.status === "open" ? "Pending" : request.status.charAt(0).toUpperCase() + request.status.slice(1)}</AppText>
                   </Pressable>
@@ -86,6 +95,10 @@ export default function EstateDashboard() {
           {selectedRequest && (
             <CollectionRequestDetailsModal
               request={selectedRequest}
+              onUpdated={(updated) => {
+                setRequests((items) => items?.map((item) => item.id === updated.id ? updated : item) ?? null);
+                setSelectedRequest(updated);
+              }}
               onClose={() => setSelectedRequest(null)}
               onDeleted={(id) => {
                 setRequests((items) => items?.filter((item) => item.id !== id) ?? null);
