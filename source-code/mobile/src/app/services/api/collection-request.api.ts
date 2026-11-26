@@ -5,6 +5,7 @@ export interface CollectionRequest {
   id: number;
   estateId: number;
   requestedByUserId: number;
+  teaWeightKg: string | null;
   notes: string | null;
   status: "open" | "accepted" | "collected" | "delivered" | "cancelled";
   createdAt: string;
@@ -21,6 +22,7 @@ export function getCollectionRequest(id: number, accessToken: string) {
 
 export interface OwnerCollectionRequest extends CollectionRequest {
   estate: { id: number; name: string };
+  requestedBy: { name: string } | null;
 }
 
 interface CollectionRequestInput {
@@ -28,7 +30,7 @@ interface CollectionRequestInput {
   notes?: string | null;
 }
 
-type CollectionRequestPatch = CollectionRequestInput | { notes: string | null };
+type CollectionRequestPatch = CollectionRequestInput | { notes: string | null } | { teaWeightKg: number };
 
 async function sendRequestUpdate(id: number, method: "PUT" | "PATCH", fields: CollectionRequestPatch) {
   const token = await readSessionValue("accessToken");
