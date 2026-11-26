@@ -5,6 +5,7 @@ import type { AppRole } from '../../auth/role-map';
 import { EstateOwnerEntity } from '../../estates/estate-owner.entity';
 import { EstateEntity } from '../../estates/estate.entity';
 import { EstateManager } from '../../users/estate-manager.entity';
+import { EstateEmployee } from '../../users/estate-employee.entity';
 import type { CollectionRequestDto } from './dto/create-collection-request.dto';
 import type { PatchCollectionRequestDto } from './dto/patch-collection-request.dto';
 import { CollectionRequestEntity } from './tea-collection-request.entity';
@@ -36,15 +37,24 @@ export class CollectionRequestService {
       throw new ForbiddenException('Only estate owners can view this list.');
     }
 
-    return this.requests
+    const { raw, entities } = await this.requests
       .createQueryBuilder('request')
       .innerJoin('request.estate', 'estate')
       .addSelect(['estate.id', 'estate.name'])
+      .leftJoin('request.requestedBy', 'requester')
+      .leftJoin(EstateOwnerEntity, 'requestOwner', "requestOwner.userId = requester.id AND requester.role = 'estate_owner'")
+      .leftJoin(EstateEmployee, 'requestEmployee', "requestEmployee.user_id = requester.id AND requester.role = 'estate_manager'")
+      .addSelect("COALESCE(NULLIF(TRIM(requestOwner.name), ''), NULLIF(TRIM(requestEmployee.name), ''), requester.name)", 'requester_name')
       .innerJoin(EstateOwnerEntity, 'owner', 'owner.id = estate.ownerId')
       .where('owner.userId = :userId', { userId })
       .orderBy('request.createdAt', 'DESC')
       .addOrderBy('request.id', 'DESC')
-      .getMany();
+      .getRawAndEntities<{ request_id: number; requester_name: string | null }>();
+    const names = new Map(raw.map(row => [row.request_id, row.requester_name]));
+    return entities.map(request => {
+      const name = names.get(request.id);
+      return { ...request, requestedBy: name ? { name } : null };
+    });
   }
 
   async getOne(id: number, userId: number, role: AppRole) {
@@ -84,11 +94,12 @@ export class CollectionRequestService {
     if (role !== 'Estate Owner') {
       throw new ForbiddenException('Only estate owners can edit collection requests.');
     }
-    if (dto.estateId === undefined && dto.notes === undefined) {
-      throw new BadRequestException('Provide estateId or notes.');
+    if (dto.estateId === undefined && dto.notes === undefined && dto.teaWeightKg === undefined) {
+      throw new BadRequestException('Provide estateId, notes or teaWeightKg.');
     }
 
-    const changes: PatchCollectionRequestDto = {};
+    const changes: Partial<Pick<CollectionRequestEntity, 'estateId' | 'notes' | 'teaWeightKg'>> = {};
+    if (dto.teaWeightKg !== undefined) changes.teaWeightKg = dto.teaWeightKg.toFixed(2);
     if (dto.estateId !== undefined) changes.estateId = dto.estateId;
     if (dto.notes !== undefined) changes.notes = dto.notes?.trim() || null;
 
@@ -139,7 +150,9 @@ export class CollectionRequestService {
       estate
         .innerJoin(EstateManager, 'manager', 'manager.estate_id = estate.id')
         .innerJoin('manager.employee', 'employee')
-        .andWhere('employee.user_id = :userId', { userId });
+        .andWhere('employee.user_id = :userId', { userId })
+        .andWhere('employee.is_active = true')
+        .andWhere('(estate.managerId IS NULL OR estate.managerId = manager.id)');
     } else {
       throw new ForbiddenException(
         'Only estate owners and managers can request collection.',

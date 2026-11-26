@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { estateProfiles } from "@/data/estateOwnerEstates";
 import type { EstateProfile } from "@/types/estateOwner";
 
-type NewEstate = Pick<EstateProfile, "name" | "imageSrc" | "location" | "areaAcres" | "managerName" | "managerPhone">;
+type NewEstate = Pick<EstateProfile, "name" | "imageSrc" | "location" | "areaAcres" | "managerName" | "managerPhone"> & { id?: string };
 export type PluckingRecord = {
   id: number;
   weightKg: number;
@@ -25,7 +25,7 @@ export const useEstateStore = create<{
   addEstate: (estate) => set((state) => ({
     estates: [{
       ...estate,
-      id: String(Date.now()),
+      id: estate.id ?? String(Date.now()),
       grade: "Not graded",
       factories: [],
       workersActive: 0,

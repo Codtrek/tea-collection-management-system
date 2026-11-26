@@ -1,5 +1,7 @@
 import {
   ConflictException,
+  BadRequestException,
+  ForbiddenException,
   Injectable,
   Optional,
   UnauthorizedException,
@@ -20,6 +22,7 @@ import { UsersService } from '../users/users.service';
 import { AgentDirectoryService } from '../dispatch/agent-directory.service';
 import { signAgentToken } from './agent-session';
 import type { JwtPayload } from './jwt-payload.interface';
+import type { RegisterEstateManagerDto } from './dto/register-estate-manager.dto';
 import { toAppRole, toPortalRole, type AppRole } from './role-map';
 
 export interface PublicUser {
@@ -171,6 +174,28 @@ export class AuthService {
   }
 
 
+
+  async requireEstateOwner(token: string | null) {
+    if (!token) throw new UnauthorizedException();
+    const actor = await this.jwtService.verifyAsync<JwtPayload>(token).catch(() => {
+      throw new UnauthorizedException();
+    });
+    const ownerId = Number(actor.sub);
+    if (!Number.isSafeInteger(ownerId) || ownerId < 1) throw new UnauthorizedException();
+    if (actor.role !== 'Estate Owner') throw new ForbiddenException();
+    const owner = await this.usersService.findById(ownerId);
+    if (owner?.role !== 'estate_owner' || owner.status !== 'active') throw new ForbiddenException();
+    return ownerId;
+  }
+
+  async registerEstateManager(token: string | null, dto: RegisterEstateManagerDto) {
+    const ownerId = await this.requireEstateOwner(token);
+    if (dto.dateOfBirth > new Date().toISOString().slice(0, 10)) {
+      throw new BadRequestException('Date of birth cannot be in the future.');
+    }
+    const hash = await bcrypt.hash(dto.password, 10);
+    return this.usersService.createEstateManager(ownerId, dto, hash);
+  }
 
   async register(
     name: string,

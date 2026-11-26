@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
+import type { RegisterOwnedEstateDto } from './dto/register-owned-estate.dto';
 import { TransportStatusService } from './transport-status.service';
 import type { AppRole } from '../auth/role-map';
 import { UsersService } from '../users/users.service';
@@ -379,10 +380,29 @@ export class EstatesService {
     return estate;
   }
 
+  async registerForOwner(userId: number, dto: RegisterOwnedEstateDto) {
+    const owner = await this.ownerRepo.findOneBy({ userId });
+    if (!owner) throw new NotFoundException('Estate owner profile not found.');
+    const route = await this.assignRoute();
+    const saved = await this.estateRepo.save(this.estateRepo.create({
+      ownerId: owner.id,
+      name: dto.name.trim(),
+      address: dto.address.trim(),
+      location: dto.address.trim(),
+      areaAcres: String(dto.areaAcres),
+      routeId: route.id,
+      routeName: route.name,
+      paymentMethod: 'cash',
+      lastUpdatedBy: owner.name,
+      lastUpdatedOn: new Date(),
+    }));
+    return { id: saved.id, name: saved.name, location: saved.location };
+  }
+
   /**
    * System route assignment (EST-02: "auto-assigned by the system", never
    * manually picked). No geo data exists to route by location yet, so this
-   * picks the least-loaded route — deterministic and keeps routes balanced.
+   * picks the least-loaded route - deterministic and keeps routes balanced.
    */
   private async assignRoute(): Promise<RouteEntity> {
     const routes = await this.routeRepo.find();

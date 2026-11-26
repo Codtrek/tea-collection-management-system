@@ -18,10 +18,8 @@ export function formatLKR(amount: number): string {
  * Formats a weight in kilograms with thousand separators,
  * e.g. 34250 -> "34,250 kg".
  */
-export function formatKg(kg: number): string {
-  const grouped = Math.round(kg)
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+export function formatKg(kg: number, maximumFractionDigits = 0): string {
+  const grouped = kg.toLocaleString("en-US", { maximumFractionDigits });
 
   return `${grouped} kg`;
 }

@@ -3,6 +3,8 @@ import type { Request } from 'express';
 import { AuthService, type LoginResult, type PublicUser } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RegisterEstateManagerDto } from './dto/register-estate-manager.dto';
+import { ExtractJwt } from 'passport-jwt';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { JwtPayload } from './jwt-payload.interface';
 import { SkipThrottle } from '@nestjs/throttler';
@@ -27,6 +29,11 @@ export class AuthMobileController {
       dto.nic,
       dto.password,
     );
+  }
+
+  @Post('estate-managers')
+  registerManager(@Req() req: Request, @Body() dto: RegisterEstateManagerDto) {
+    return this.authService.registerEstateManager(ExtractJwt.fromAuthHeaderAsBearerToken()(req), dto);
   }
 
   @PortalOnly()

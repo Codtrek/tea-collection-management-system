@@ -132,6 +132,7 @@ export default function EstateOwnerHome() {
                 request={{
                   id: String(request.id),
                   estateName: request.estate.name,
+                  teaWeightKg: request.teaWeightKg,
                   requestedAt: new Date(request.createdAt).toLocaleString(),
                   status: "pending",
                 }}
@@ -145,6 +146,10 @@ export default function EstateOwnerHome() {
       {selectedRequest && (
         <CollectionRequestDetailsModal
           request={selectedRequest}
+          onUpdated={(updated) => {
+            setOpenRequests((items) => items?.map((item) => item.id === updated.id ? updated : item) ?? null);
+            setSelectedRequest(updated);
+          }}
           onDeleted={(id) => {
             setOpenRequests((requests) => requests?.filter((request) => request.id !== id) ?? null);
             setSelectedRequest(null);
