@@ -9,6 +9,7 @@ import {
 
 import AppText from "@/components/ui/AppText";
 import { colors } from "@/theme/colors";
+import { spacing } from "@/theme/spacing";
 
 export interface BottomTabItem {
   key: string;
@@ -21,6 +22,13 @@ interface BottomTabProps {
   activeTab: string;
   onTabPress: (tab: BottomTabItem) => void;
   style?: ViewStyle;
+
+  /**
+   * Controls the appearance of the active tab.
+   * "underline" keeps the existing design.
+   * "pill" is used by the Estate Manager design.
+   */
+  activeStyle?: "underline" | "pill";
 }
 
 export default function BottomTab({
@@ -28,6 +36,7 @@ export default function BottomTab({
   activeTab,
   onTabPress,
   style,
+  activeStyle = "underline",
 }: BottomTabProps) {
   return (
     <View style={[styles.container, style]}>
@@ -37,12 +46,17 @@ export default function BottomTab({
         return (
           <Pressable
             key={tab.key}
-            style={styles.tab}
+            style={[
+              styles.tab,
+              isActive &&
+                activeStyle === "pill" &&
+                styles.activeTabPill,
+            ]}
             onPress={() => onTabPress(tab)}
           >
             <Ionicons
               name={tab.icon}
-              size={24}
+              size={20}
               color={
                 isActive
                   ? colors.primary
@@ -59,13 +73,14 @@ export default function BottomTab({
               {tab.label}
             </AppText>
 
-            <View
-              style={[
-                styles.indicator,
-                isActive &&
-                  styles.activeIndicator,
-              ]}
-            />
+            {activeStyle === "underline" && (
+              <View
+                style={[
+                  styles.indicator,
+                  isActive && styles.activeIndicator,
+                ]}
+              />
+            )}
           </Pressable>
         );
       })}
@@ -77,19 +92,26 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     height: 72,
-    backgroundColor: "#fff",
+    backgroundColor: colors.white,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: colors.border.light,
   },
 
   tab: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    marginVertical: spacing.sm,
+    marginHorizontal: spacing.xs,
+    borderRadius: 12,
+  },
+
+  activeTabPill: {
+    backgroundColor: "#E8F8EE",
   },
 
   label: {
-    marginTop: 4,
+    marginTop: spacing.xs,
     fontSize: 12,
     color: colors.text.secondary,
   },
@@ -100,7 +122,7 @@ const styles = StyleSheet.create({
   },
 
   indicator: {
-    marginTop: 6,
+    marginTop: spacing.xs,
     width: 28,
     height: 3,
     borderRadius: 99,
