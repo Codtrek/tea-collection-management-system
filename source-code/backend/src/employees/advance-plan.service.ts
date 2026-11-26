@@ -76,7 +76,6 @@ export class AdvancePlanService {
     dto: RescheduleAdvanceDto,
     actor: Actor,
   ): Promise<PublicReschedule> {
-    this.assertCanWrite(actor);
     const { advance, recoveries } = await this.approved(id);
     const remaining = remainingOf(advance, recoveries);
     if (remaining <= 0) {
@@ -130,7 +129,6 @@ export class AdvancePlanService {
     dto: DecideRescheduleDto,
     actor: Actor,
   ): Promise<PublicAdvance> {
-    this.assertCanWrite(actor);
     const { advance, recoveries } = await this.approved(id);
     const r = (
       await this.rescheduleRepo.find({ where: { advanceId: id } })
@@ -196,7 +194,6 @@ export class AdvancePlanService {
     dto: CashRepaymentDto,
     actor: Actor,
   ): Promise<PublicAdvance> {
-    this.assertCanWrite(actor);
     const { advance, recoveries } = await this.approved(id);
     // what isn't already earmarked by a Pending payroll month
     const payable = earlyRepayable(advance, recoveries);
@@ -249,14 +246,6 @@ export class AdvancePlanService {
       await this.recoveryRepo.find({ where: { advanceId: id } })
     ).filter((r) => r.advanceId === id);
     return { advance, recoveries };
-  }
-
-  private assertCanWrite(actor: Actor): void {
-    if (actor.role === 'Manager') {
-      throw new ForbiddenException(
-        'Managers have read-only access to salary advances.',
-      );
-    }
   }
 }
 

@@ -9,15 +9,15 @@ import {
   LEVEL_LABELS,
   needsReason,
   PERMISSION_CATALOG,
-  UNLISTED_KEYS,
   type Matrix,
 } from './permission-catalog'
 
 const ALL_KEYS = Object.keys(DEFAULT_PERMISSIONS.Administrator) as ModuleKey[]
 
 describe('permission catalog', () => {
-  it('every permission key is either a matrix row or on the explicit "not listed yet" list', () => {
-    const listed = new Set([...PERMISSION_CATALOG.map((i) => i.key), ...UNLISTED_KEYS.map((i) => i.key)])
+  it('every permission key is a matrix row, exactly once', () => {
+    const listed = new Set(PERMISSION_CATALOG.map((i) => i.key))
+    expect(listed.size).toBe(PERMISSION_CATALOG.length)
     expect(ALL_KEYS.filter((k) => !listed.has(k))).toEqual([])
     expect(PERMISSION_CATALOG.every((i) => i.label && i.description)).toBe(true)
   })

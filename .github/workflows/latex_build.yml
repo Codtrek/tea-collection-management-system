@@ -6,6 +6,7 @@ on:
     paths:
       - 'project-docs/project-proposal/**'
       - 'project-docs/developers guide/**'
+      - 'project-docs/harboost-admin-recovery/**'
       - '.github/workflows/latex_build.yml'
 
   workflow_dispatch:
@@ -45,3 +46,15 @@ jobs:
           path: 'project-docs/developers guide/database-migration-dev-procedure.pdf'
           if-no-files-found: error
 
+      - name: Compile harboost-admin-recovery.pdf
+        uses: xu-cheng/latex-action@v4
+        with:
+          working_directory: 'project-docs/harboost-admin-recovery'
+          root_file: harboost-admin-recovery.tex
+
+      - name: Upload harboost-admin-recovery PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: harboost-admin-recovery.pdf
+          path: 'project-docs/harboost-admin-recovery/harboost-admin-recovery.pdf'
+          if-no-files-found: error

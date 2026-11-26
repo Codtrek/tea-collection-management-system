@@ -25,7 +25,9 @@ import { cn } from '@/lib/cn'
 export function PayrollProcessingPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { user } = useAuth()
+  const { user, can } = useAuth()
+  // processing payroll needs Approve on payroll (the server refuses it otherwise)
+  const canProcess = can('payroll', 'approve')
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -230,14 +232,20 @@ export function PayrollProcessingPage() {
 
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="secondary" onClick={() => navigate(backHref)}>Cancel</Button>
-        <Button
-          size="lg"
-          onClick={() => setConfirming(true)}
-          disabled={needsReason || negative.length > 0 || (included.length === 0 && excluded.length === 0)}
-          title={needsReason ? 'Give a reason for excluding the employees with no bank details' : undefined}
-        >
-          Process {included.length} Payslips
-        </Button>
+        {canProcess ? (
+          <Button
+            size="lg"
+            onClick={() => setConfirming(true)}
+            disabled={needsReason || negative.length > 0 || (included.length === 0 && excluded.length === 0)}
+            title={needsReason ? 'Give a reason for excluding the employees with no bank details' : undefined}
+          >
+            Process {included.length} Payslips
+          </Button>
+        ) : (
+          <p className="self-center text-[13px] text-text-muted">
+            Processing payroll needs Approve on Payroll. Ask your Factory Administrator.
+          </p>
+        )}
       </div>
 
       <HighStakesConfirmFlow

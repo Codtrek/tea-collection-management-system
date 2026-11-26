@@ -1320,7 +1320,15 @@ Settlements are calculated from the deliveries now, not typed into the seed.
 
 ## Users & Roles rebuild (2026-11-18, `feat/users-roles`; `docs/specs/Users-Roles-Addendum.md`)
 
-**Draft PR #100** (2026-11-22; pre-check SQL for the Azure copy in its description). After-merge list: issue #101. Approved next: break-glass `admin:recover` as its own PR after #100 merges; then read-endpoint permission checks + the 5 row-less keys + rate limits (short 60/10s per user, medium/long per user when signed in, auth 5/min).
+**PR #100 merged 2026-11-25** (`0d8ac99`; Azure dev at 33 migrations). After-merge list: issue #101. **Break-glass** `npm run admin:recover -- --phone … [--promote]` (`src/scripts/admin-recover.ts`, addendum §10) on `feat/admin-recover`: server-only, compiled (`dist/`), `BREAK_GLASS=1` + TTY + re-typed phone, one transaction incl. the audit row (not the best-effort `AuditService.record`). Next: read-endpoint permission checks + the 5 row-less keys + rate limits (short 60/10s per user, medium/long per user when signed in, auth 5/min).
+
+**Read permissions, rate limits, agent sessions (2026-11-25, `feat/read-permissions`; addendum §4a).**
+- Every portal GET carries `@RequirePermission(...keys)` (any of) or `@PortalOnly()` (`src/auth/permissions.ts`). `JwtAuthGuard` checks `role_permissions` live after authentication. `permissions.coverage.spec.ts` fails on an unlabelled GET, so **label every new portal GET**.
+- The portal's `AccessGuard` wraps every route with the same keys.
+- **Writes (2026-11-25, `feat/write-permissions`):** every portal write carries `@RequirePermissionLevel(level, key)`, `@PortalOnly()` or `@ServiceChecked(reason)`, and the coverage test enforces it. **Label every new portal write.** Processing payroll and settlement runs needs Approve; excluding a delivery needs gradingApproval Approve.
+- **Throttle:** short 60/10 s per user; medium and long per user once signed in.
+- **Agent tokens:** `tv` + 30 days, sliding via `X-Session-Token` once over a day old (`auth/agent-session.ts`). Password change, `POST /auth/agent/logout` and deactivation revoke them.
+- The bell and Notification Center show an empty state; there is no mock data.
 
 Migration `1794400026000-UsersRoles` (mirrored in `init.sql`): `users.token_version / email / failed_login_count / locked_until`, `audit_logs.before / after / reason`, and a backfill of 14 permission keys a migrations-only DB never had (`ON CONFLICT DO NOTHING`). The seed no longer overwrites the matrix.
 

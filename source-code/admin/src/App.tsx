@@ -57,6 +57,7 @@ import { ExpenseReportPage } from './features/reports/ExpenseReportPage'
 import { ExpenseEntryPage } from './features/reports/ExpenseEntryPage'
 import { FactorySetupPage } from './features/admin/FactorySetupPage'
 import { UsersRolesPage } from './features/admin/UsersRolesPage'
+import { AccessGuard } from './components/layout/AccessGuard'
 import { SystemSettingsPage } from './features/admin/SystemSettingsPage'
 import { AuditLogsPage } from './features/admin/AuditLogsPage'
 
@@ -72,68 +73,68 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
       // a render error shows a friendly message with Retry, inside the shell (Dashboard-Addendum)
-      { path: 'dashboard', element: <DashboardPage />, errorElement: <RouteError title="The dashboard couldn't be shown" /> },
+      { path: 'dashboard', element: <AccessGuard module={'dashboard'}><DashboardPage /></AccessGuard>, errorElement: <RouteError title="The dashboard couldn't be shown" /> },
 
       // Operations — Tea Leaf Collection (COL-01..04)
-      { path: 'collections', element: <CollectionListPage /> },
-      { path: 'collections/new', element: <CollectionExceptionEntryPage /> },
+      { path: 'collections', element: <AccessGuard module={'collection'}><CollectionListPage /></AccessGuard> },
+      { path: 'collections/new', element: <AccessGuard module={'collection'}><CollectionExceptionEntryPage /></AccessGuard> },
       // Agent Dispatch (COL-05) — static path, before collections/:id
-      { path: 'collections/dispatch', element: <DispatchBoardPage /> },
-      { path: 'collections/:id', element: <CollectionDetailPage /> },
-      { path: 'collections/:id/edit', element: <CollectionEditPage /> },
+      { path: 'collections/dispatch', element: <AccessGuard module={'dispatch'}><DispatchBoardPage /></AccessGuard> },
+      { path: 'collections/:id', element: <AccessGuard module={'collection'}><CollectionDetailPage /></AccessGuard> },
+      { path: 'collections/:id/edit', element: <AccessGuard module={'collection'}><CollectionEditPage /></AccessGuard> },
 
       // Operations — Fertilizer Inventory (FERT-01..07)
-      { path: 'fertilizer', element: <FertilizerStockListPage /> },
-      { path: 'fertilizer/movement/new', element: <StockMovementEntryPage /> },
-      { path: 'fertilizer/alerts', element: <FertilizerAlertsPage /> },
-      { path: 'fertilizer/prices', element: <ItemPricesPage /> },
+      { path: 'fertilizer', element: <AccessGuard module={'fertilizer'}><FertilizerStockListPage /></AccessGuard> },
+      { path: 'fertilizer/movement/new', element: <AccessGuard module={'fertilizer'}><StockMovementEntryPage /></AccessGuard> },
+      { path: 'fertilizer/alerts', element: <AccessGuard module={'fertilizer'}><FertilizerAlertsPage /></AccessGuard> },
+      { path: 'fertilizer/prices', element: <AccessGuard module={['itemPrices', 'fertilizer']}><ItemPricesPage /></AccessGuard> },
       // Request workflow — static paths must precede fertilizer/:batchId
-      { path: 'fertilizer/requests', element: <RequestQueuePage /> },
-      { path: 'fertilizer/requests/new', element: <LogRequestPage /> },
-      { path: 'fertilizer/requests/:id', element: <RequestDetailPage /> },
-      { path: 'fertilizer/:batchId', element: <BatchDetailPage /> },
+      { path: 'fertilizer/requests', element: <AccessGuard module={'fertilizer'}><RequestQueuePage /></AccessGuard> },
+      { path: 'fertilizer/requests/new', element: <AccessGuard module={'fertilizer'}><LogRequestPage /></AccessGuard> },
+      { path: 'fertilizer/requests/:id', element: <AccessGuard module={'fertilizer'}><RequestDetailPage /></AccessGuard> },
+      { path: 'fertilizer/:batchId', element: <AccessGuard module={'fertilizer'}><BatchDetailPage /></AccessGuard> },
 
       // Finance — Tea Estate Owner (EST-01..09)
-      { path: 'estates', element: <EstateListPage /> },
-      { path: 'estates/new', element: <EstateRegistrationPage /> },
-      { path: 'estates/advances', element: <EstateAdvanceListPage /> },
-      { path: 'estates/advances/new', element: <IssueAdvancePage /> },
-      { path: 'estates/advances/:id', element: <EstateAdvanceDetailPage /> },
-      { path: 'estates/settlements', element: <SettlementListPage /> },
-      { path: 'estates/settlements/process', element: <SettlementProcessPage /> },
-      { path: 'estates/settlements/unsettled', element: <UnsettledOwnersPage /> },
-      { path: 'estates/settlements/:id', element: <SettlementDetailPage /> },
-      { path: 'estates/analytics', element: <EstateAnalyticsPage /> },
-      { path: 'estates/:id', element: <EstateDetailPage /> },
-      { path: 'estates/:id/edit', element: <EstateEditPage /> },
+      { path: 'estates', element: <AccessGuard module={'estateOwners'}><EstateListPage /></AccessGuard> },
+      { path: 'estates/new', element: <AccessGuard module={'estateOwners'}><EstateRegistrationPage /></AccessGuard> },
+      { path: 'estates/advances', element: <AccessGuard module={'estateAdvances'}><EstateAdvanceListPage /></AccessGuard> },
+      { path: 'estates/advances/new', element: <AccessGuard module={'estateAdvances'}><IssueAdvancePage /></AccessGuard> },
+      { path: 'estates/advances/:id', element: <AccessGuard module={'estateAdvances'}><EstateAdvanceDetailPage /></AccessGuard> },
+      { path: 'estates/settlements', element: <AccessGuard module={'estateOwners'}><SettlementListPage /></AccessGuard> },
+      { path: 'estates/settlements/process', element: <AccessGuard module={'estateOwners'}><SettlementProcessPage /></AccessGuard> },
+      { path: 'estates/settlements/unsettled', element: <AccessGuard module={'estateOwners'}><UnsettledOwnersPage /></AccessGuard> },
+      { path: 'estates/settlements/:id', element: <AccessGuard module={'estateOwners'}><SettlementDetailPage /></AccessGuard> },
+      { path: 'estates/analytics', element: <AccessGuard module={'estateOwners'}><EstateAnalyticsPage /></AccessGuard> },
+      { path: 'estates/:id', element: <AccessGuard module={'estateOwners'}><EstateDetailPage /></AccessGuard> },
+      { path: 'estates/:id/edit', element: <AccessGuard module={'estateOwners'}><EstateEditPage /></AccessGuard> },
 
       // People / Finance — Employee module (EMP-01..14)
-      { path: 'employees', element: <EmployeeListPage /> },
-      { path: 'employees/new', element: <EmployeeRegistrationPage /> },
-      { path: 'employees/attendance', element: <AttendanceOverviewPage /> },
-      { path: 'employees/attendance/entry', element: <AttendanceEntryPage /> },
-      { path: 'holidays', element: <HolidayCalendarPage /> },
-      { path: 'employees/advances', element: <AdvanceListPage /> },
-      { path: 'employees/advances/new', element: <AdvanceRequestPage /> },
-      { path: 'employees/advances/:id', element: <AdvanceDetailPage /> },
-      { path: 'employees/payroll', element: <PayrollListPage /> },
-      { path: 'employees/pay-rates', element: <PayRatesPage /> },
-      { path: 'employees/pay-rates/change', element: <PayChangePage /> },
-      { path: 'employees/payroll/process', element: <PayrollProcessingPage /> },
-      { path: 'employees/payroll/:id/payslip', element: <PayslipPage /> },
-      { path: 'employees/performance', element: <PerformancePage /> },
-      { path: 'employees/performance/how', element: <HowMeasuredPage /> },
-      { path: 'employees/:id', element: <EmployeeDetailPage /> },
-      { path: 'employees/:id/edit', element: <EmployeeEditPage /> },
+      { path: 'employees', element: <AccessGuard module={'employees'}><EmployeeListPage /></AccessGuard> },
+      { path: 'employees/new', element: <AccessGuard module={'employees'}><EmployeeRegistrationPage /></AccessGuard> },
+      { path: 'employees/attendance', element: <AccessGuard module={'attendance'}><AttendanceOverviewPage /></AccessGuard> },
+      { path: 'employees/attendance/entry', element: <AccessGuard module={'attendance'}><AttendanceEntryPage /></AccessGuard> },
+      { path: 'holidays', element: <AccessGuard module={['holidayCalendar', 'holidayStatutory', 'attendance']}><HolidayCalendarPage /></AccessGuard> },
+      { path: 'employees/advances', element: <AccessGuard module={'advances'}><AdvanceListPage /></AccessGuard> },
+      { path: 'employees/advances/new', element: <AccessGuard module={'advances'}><AdvanceRequestPage /></AccessGuard> },
+      { path: 'employees/advances/:id', element: <AccessGuard module={'advances'}><AdvanceDetailPage /></AccessGuard> },
+      { path: 'employees/payroll', element: <AccessGuard module={'payroll'}><PayrollListPage /></AccessGuard> },
+      { path: 'employees/pay-rates', element: <AccessGuard module={'payRates'}><PayRatesPage /></AccessGuard> },
+      { path: 'employees/pay-rates/change', element: <AccessGuard module={'payRates'}><PayChangePage /></AccessGuard> },
+      { path: 'employees/payroll/process', element: <AccessGuard module={'payroll'}><PayrollProcessingPage /></AccessGuard> },
+      { path: 'employees/payroll/:id/payslip', element: <AccessGuard module={'payroll'}><PayslipPage /></AccessGuard> },
+      { path: 'employees/performance', element: <AccessGuard module={'performance'}><PerformancePage /></AccessGuard> },
+      { path: 'employees/performance/how', element: <AccessGuard module={'performance'}><HowMeasuredPage /></AccessGuard> },
+      { path: 'employees/:id', element: <AccessGuard module={'employees'}><EmployeeDetailPage /></AccessGuard> },
+      { path: 'employees/:id/edit', element: <AccessGuard module={'employees'}><EmployeeEditPage /></AccessGuard> },
 
       // Reports (RPT-01..04)
-      { path: 'reports/collection', element: <CollectionReportPage /> },
-      { path: 'reports/leaf-purchases', element: <LeafPurchaseReportPage /> },
+      { path: 'reports/collection', element: <AccessGuard module={'reports'}><CollectionReportPage /></AccessGuard> },
+      { path: 'reports/leaf-purchases', element: <AccessGuard module={'reports'}><LeafPurchaseReportPage /></AccessGuard> },
       // renamed 2026-11-15: what it shows is a cost (leaf bought from estate owners), not revenue
       { path: 'reports/revenue', element: <RedirectWithQuery to="/reports/leaf-purchases" /> },
-      { path: 'reports/expenses', element: <ExpenseReportPage /> },
-      { path: 'reports/expenses/new', element: <ExpenseEntryPage /> },
-      { path: 'reports/expenses/:id', element: <ExpenseEntryPage /> },
+      { path: 'reports/expenses', element: <AccessGuard module={['expenses', 'reports']}><ExpenseReportPage /></AccessGuard> },
+      { path: 'reports/expenses/new', element: <AccessGuard module={['expenses', 'reports']}><ExpenseEntryPage /></AccessGuard> },
+      { path: 'reports/expenses/:id', element: <AccessGuard module={['expenses', 'reports']}><ExpenseEntryPage /></AccessGuard> },
       { path: 'reports', element: <Navigate to="/reports/collection" replace /> },
 
       // Administration (ADM-01..04) — Administrator-only via AdminGuard

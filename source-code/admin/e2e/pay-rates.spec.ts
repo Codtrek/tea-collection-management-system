@@ -49,7 +49,8 @@ test('the Manager sees Pay Rates under People; an Officer doesn’t', async ({ b
   await actAs(officer, OFFICER)
   await officer.goto('/employees/pay-rates')
   await officer.locator('main').waitFor()
-  await expect(officer.getByText('Your role can’t view pay rates')).toBeVisible()
+  // the route guard (AccessGuard, payRates) answers before the page renders; the API refuses too
+  await expect(officer.getByRole('heading', { name: 'You don’t have access to this page' })).toBeVisible()
   await expect(officer.getByRole('link', { name: 'Pay Rates' })).toHaveCount(0)
 })
 

@@ -6,6 +6,7 @@ import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { JwtPayload } from './jwt-payload.interface';
 import { SkipThrottle } from '@nestjs/throttler';
+import { PortalOnly } from './permissions';
 
 @Controller('auth/mobile')
 export class AuthMobileController {
@@ -28,6 +29,7 @@ export class AuthMobileController {
     );
   }
 
+  @PortalOnly()
   @UseGuards(JwtAuthGuard)
   @Get('me')
   me(@Req() req: Request & { user: JwtPayload }): Promise<PublicUser> {

@@ -98,7 +98,6 @@ export class AdminService {
     actor: Actor,
     now: Date = new Date(),
   ): Promise<PublicGradeRate> {
-    this.assertIsAdmin(actor);
     const rows = await this.gradeRateRepo.find();
     const before = versionBefore(rows, dto.effectiveDate);
     refuse(
@@ -153,7 +152,6 @@ export class AdminService {
     actor: Actor,
     now: Date = new Date(),
   ): Promise<PublicGradeRate[]> {
-    this.assertIsAdmin(actor);
     const row = await this.gradeRateRepo.findOne({ where: { id } });
     if (!row)
       throw new NotFoundException(`Grade-rate version ${id} not found.`);
@@ -187,7 +185,6 @@ export class AdminService {
     dto: UpdateFactoryProfileDto,
     actor: Actor,
   ): Promise<PublicFactoryProfile> {
-    this.assertIsAdmin(actor);
     const before = await this.readProfile();
     const accountNumber =
       dto.accountNumber === undefined

@@ -18,6 +18,7 @@ import {
 } from './dto/holiday-import.dto';
 import { HolidayImportService } from './holiday-import.service';
 import type { HolidayActor } from './holiday.service';
+import { RequirePermission, ServiceChecked } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -30,11 +31,13 @@ export class HolidayImportController {
     private readonly users: UsersService,
   ) {}
 
+  @RequirePermission('holidayStatutory')
   @Get('google')
   async google(@Query('year') year: string, @Req() req: AuthedRequest) {
     return this.imports.previewGoogle(yearOf(year), await this.actor(req));
   }
 
+  @ServiceChecked('holidayStatutory key (HolidayImportService)')
   @Post('file')
   async file(@Body() dto: ImportFileDto, @Req() req: AuthedRequest) {
     return this.imports.previewFile(
@@ -45,16 +48,19 @@ export class HolidayImportController {
     );
   }
 
+  @ServiceChecked('holidayStatutory key (HolidayImportService)')
   @Post('confirm')
   async confirm(@Body() dto: ImportConfirmDto, @Req() req: AuthedRequest) {
     return this.imports.confirm(dto, await this.actor(req));
   }
 
+  @RequirePermission('holidayStatutory')
   @Get('resync')
   async resync(@Query('year') year: string, @Req() req: AuthedRequest) {
     return this.imports.resync(yearOf(year), await this.actor(req));
   }
 
+  @ServiceChecked('holidayStatutory key (HolidayImportService)')
   @Post('resync/accept')
   async accept(@Body() dto: ResyncItemDto, @Req() req: AuthedRequest) {
     await this.imports.acceptDiff(
@@ -66,6 +72,7 @@ export class HolidayImportController {
     );
   }
 
+  @ServiceChecked('holidayStatutory key (HolidayImportService)')
   @Post('resync/ignore')
   async ignore(@Body() dto: ResyncItemDto, @Req() req: AuthedRequest) {
     await this.imports.ignoreDiff(dto.year, dto.uid, await this.actor(req));

@@ -18,11 +18,8 @@ import { AuditService, SYSTEM_ACTOR } from '../audit/audit.service';
 import type { DbRole, User } from '../users/user.entity';
 import { UsersService } from '../users/users.service';
 import { AgentDirectoryService } from '../dispatch/agent-directory.service';
-import {
-  AGENT_ROLE,
-  type AgentJwtPayload,
-  type JwtPayload,
-} from './jwt-payload.interface';
+import { signAgentToken } from './agent-session';
+import type { JwtPayload } from './jwt-payload.interface';
 import { toAppRole, toPortalRole, type AppRole } from './role-map';
 
 export interface PublicUser {
@@ -372,13 +369,13 @@ export class AuthService {
 
     await this.usersService.markLogin(user.id);
 
-    const payload: AgentJwtPayload = {
-      sub: String(user.id),
-      role: AGENT_ROLE,
-    };
-
     return {
-      accessToken: this.jwtService.sign(payload),
+      // 30 days, sliding; carries the token version (agent-session.ts)
+      accessToken: signAgentToken(
+        this.jwtService,
+        user.id,
+        user.token_version ?? 0,
+      ),
       agent: {
         id: agent.agentId,
         name: agent.name,
@@ -398,11 +395,15 @@ export class AuthService {
 
 
   /** First sign-in: swap the one-time temporary password for the agent's own. */
+  /**
+   * Bumps `token_version`, so every other agent session (another phone, a stolen token) ends on
+   * its next request; returns a fresh token for this device, which the app must save.
+   */
   async changeAgentPassword(
     userId: number,
     currentPassword: string,
     newPassword: string,
-  ): Promise<void> {
+  ): Promise<{ accessToken: string }> {
     const user = await this.usersService.findById(userId);
     if (!user || user.role !== 'collection_agent') {
       throw new UnauthorizedException(
@@ -417,10 +418,17 @@ export class AuthService {
         'Choose a new password different from the current one.',
       );
     }
-    await this.usersService.setPassword(
+    const tv = await this.usersService.setPassword(
       userId,
       await bcrypt.hash(newPassword, 10),
+      { bumpTokenVersion: true },
     );
+    return { accessToken: signAgentToken(this.jwtService, userId, tv) };
+  }
+
+  /** Agent sign-out: ends this login's sessions (the version bump refuses every agent token). */
+  async agentLogout(userId: number): Promise<void> {
+    await this.usersService.bumpTokenVersion(userId);
   }
 
   /**

@@ -1,0 +1,73 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[margin=25mm]{geometry}
+\usepackage{xcolor,listings,sectsty}
+\usepackage{hyperref}
+\definecolor{navy}{HTML}{19324F}
+\definecolor{teal}{HTML}{087F8C}
+\definecolor{pale}{HTML}{F4F7FA}
+\definecolor{graytext}{HTML}{526477}
+\definecolor{lightborder}{HTML}{DAE4EC}
+\definecolor{amber}{HTML}{A66915}
+\definecolor{red}{HTML}{9B3A38}
+\hypersetup{colorlinks=true,linkcolor=teal,urlcolor=teal}
+\sectionfont{\color{navy}}
+\subsectionfont{\color{teal}}
+\lstset{basicstyle=\ttfamily\small,backgroundcolor=\color{pale},
+  frame=single,rulecolor=\color{lightborder},framesep=4pt,
+  columns=fullflexible,keepspaces=true,showstringspaces=false}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\begin{document}
+{\small\color{graytext} HARBOOST \hfill OPERATIONS RUNBOOK}\par
+{\color{lightborder}\hrule}
+\section*{Administrator account recovery}
+Since \href{https://github.com/Codtrek/tea-collection-management-system/pull/100}{pull request \#100}, only an Administrator can manage users. If any Administrator can sign in, use \textbf{Users \& Roles} in the portal. Use server-side recovery when every Administrator is suspended, locked out or has lost their password.
+
+\textbf{Authorized SSH operator on the Azure VM}\quad \texttt{sandaruruwaneka}
+
+\subsection*{Run recovery in an interactive SSH session}
+\textcolor{amber}{\textbf{Run the command by hand.}} CI jobs and pipelines can retain the printed temporary password in their logs. Set \verb|BREAK_GLASS=1| on this invocation only. Keep it out of \texttt{.env}, persistent container settings and pipeline variables.
+
+\textbf{1. Identify the backend container.}
+\begin{lstlisting}
+docker ps --format '{{.Names}}' | grep -i backend
+\end{lstlisting}
+
+\textbf{2. Recover the account.} Replace \verb|<backend-container>| with the container name and \verb|07XXXXXXXX| with the user's phone number.
+\begin{lstlisting}
+docker exec -it -e BREAK_GLASS=1 <backend-container> \
+  npm run admin:recover -- --phone 07XXXXXXXX
+\end{lstlisting}
+To grant the Administrator role during recovery, append \verb|--promote|. This option requires that no active Administrator exists. To reset an existing Administrator's password, use the command as shown.
+
+\textbf{3. Confirm the phone number.} Re-type the target user's number when prompted. A mismatch or \texttt{Ctrl+D} stops recovery before any changes are written.
+
+\textbf{4. Hand over the temporary password.} After the transaction commits, the command displays the password once. Give it to the user face to face or by phone. Keep it out of chat, email and tickets. The user must change it at their next sign-in. Run \texttt{clear} and close the SSH session.
+
+\newpage
+\section*{Recovery behavior}
+\subsection*{When the command refuses to proceed}
+Each of the following conditions stops recovery before any write.
+\begin{itemize}
+\item \verb|BREAK_GLASS=1| is missing. The command exits before connecting to the database.
+\item The shell is non-interactive.
+\item The phone number is unknown.
+\item The user lacks a portal role. Eligible roles are Administrator, Manager and Officer.
+\item The user lacks the factory staff profile required for sign-in.
+\item The re-typed phone number differs from the target, or the operator presses \texttt{Ctrl+D}.
+\item The operator supplies \verb|--promote| while an active Administrator exists.
+\end{itemize}
+
+\subsection*{Changes committed together}
+In one database transaction, the command reactivates and unlocks the account, sets a new 12-character temporary password and requires a change at the next sign-in. It increments \verb|token_version| to end the user's existing sessions. With \verb|--promote|, it also grants the Administrator role when no active Administrator exists.
+
+The transaction records the before and after values in one audit row attributed to \textbf{System (break-glass)}. If any step fails, including the audit write, the entire transaction rolls back. The command writes the password to terminal output only, after commit. It never writes the password to an audit row, log or file.
+
+\subsection*{Deployment and reported test results}
+The production image runs \verb|dist/scripts/admin-recover.js| because it has no \texttt{ts-node}. This change requires no migration, API change, portal change or Azure test.
+
+\textbf{Automated tests.} The 15 recovery unit tests cover every refusal, rollback on audit failure, retry after an audit ID collision and password disclosure only in output. The full backend suite reported 800 passing tests.
+
+\textbf{Local PostgreSQL test.} A manual run against a throwaway database with all 33 migrations exercised every refusal. Promotion was refused while an Administrator was active and succeeded when none was active. The recovered user signed in as Administrator with \verb|mustChangePassword: true|.
+\end{document}

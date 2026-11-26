@@ -34,7 +34,9 @@ export function SettlementProcessPage() {
   const { toast } = useToast()
   const { user, can } = useAuth()
   const queryClient = useQueryClient()
-  const canProcess = can('estateOwners', 'edit')
+  // Edit prepares and recalculates drafts; Approve processes (the server checks the same keys)
+  const canPrepare = can('estateOwners', 'edit')
+  const canProcess = can('estateOwners', 'approve')
   // excluding an ungraded delivery is the Manager's call (grading approval)
   const canExclude = can('gradingApproval', 'approve')
   const [confirming, setConfirming] = useState(false)
@@ -121,7 +123,7 @@ export function SettlementProcessPage() {
             until a monthly charge covers {run.period} — transport is never deducted as Rs. 0.
           </Warning>
         )}
-        {changed > 0 && canProcess && (
+        {changed > 0 && canPrepare && (
           <Warning tone="warning">
             {changed} draft{changed === 1 ? '' : 's'} changed since prepared (rates, charges or deliveries). The figures
             below are current; processing uses them.{' '}
@@ -133,7 +135,7 @@ export function SettlementProcessPage() {
         {notPrepared > 0 && (
           <Warning tone="warning">
             {notPrepared} estate{notPrepared === 1 ? ' has' : 's have'} payable deliveries but no draft yet.{' '}
-            {canProcess && (
+            {canPrepare && (
               <Button size="sm" variant="secondary" onClick={() => prepare.mutate()} loading={prepare.isPending}>
                 <Calculator className="size-3.5" /> Prepare them
               </Button>

@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { AGENT_JOB_ROLE } from './employee-roles';
 import type { Repository } from 'typeorm';
 import type { EmployeeAttendanceEntity } from './employee-attendance.entity';
@@ -10,7 +6,6 @@ import type { EmployeeEntity } from './employee.entity';
 import { type Actor, EmployeesService } from './employees.service';
 import type { PayRatesService } from './pay-rates.service';
 import type { CreateEmployeeDto } from './dto/create-employee.dto';
-import type { MarkAttendanceDto } from './dto/mark-attendance.dto';
 import type { PayrollRunEntity } from './payroll-run.entity';
 import type { SalaryAdvanceEntity } from './salary-advance.entity';
 import type { AdvanceRecoveryEntity } from './advance-recovery.entity';
@@ -217,7 +212,6 @@ describe('EmployeesService', () => {
 
   const admin: Actor = { name: 'A. Bandara', role: 'Administrator' };
   const officer: Actor = { name: 'S. Fernando', role: 'Officer' };
-  const manager: Actor = { name: 'R. Jayasuriya', role: 'Manager' };
 
   beforeEach(() => {
     employeeRepo = new FakeRepository();
@@ -383,37 +377,11 @@ describe('EmployeesService', () => {
   });
 
   describe('roster — Administrator only', () => {
-    it('rejects Officer on create', async () => {
-      await expect(service.create(validEmployeeDto, officer)).rejects.toThrow(
-        ForbiddenException,
-      );
-    });
-
-    it('rejects Manager on create', async () => {
-      await expect(service.create(validEmployeeDto, manager)).rejects.toThrow(
-        ForbiddenException,
-      );
-    });
-
     it('allows Administrator to create', async () => {
       const result = await service.create(validEmployeeDto, admin);
       expect(result.name).toBe('N. Silva');
       expect(result.status).toBe('Active');
       expect(result.hasLogin).toBe(false);
-    });
-
-    it('rejects Officer on update', async () => {
-      employeeRepo.seed(makeEmployee());
-      await expect(
-        service.update('EMP-0001', validEmployeeDto, officer),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('rejects Officer on deactivate', async () => {
-      employeeRepo.seed(makeEmployee());
-      await expect(service.deactivate('EMP-0001', officer)).rejects.toThrow(
-        ForbiddenException,
-      );
     });
 
     it('allows Administrator to deactivate', async () => {
@@ -473,16 +441,6 @@ describe('EmployeesService', () => {
   });
 
   describe('advances — request + decide', () => {
-    it('rejects Manager on request', async () => {
-      employeeRepo.seed(makeEmployee());
-      await expect(
-        service.requestAdvance(
-          { employeeId: 'EMP-0001', amount: 5000, reason: 'x' },
-          manager,
-        ),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
     it('allows Officer to decide (approve)', async () => {
       advanceRepo.seed(makeAdvance());
       const result = await service.decideAdvance(
@@ -525,13 +483,6 @@ describe('EmployeesService', () => {
         ),
       ).rejects.toThrow(BadRequestException);
       expect((await advanceRepo.find())[0].status).toBe('Pending');
-    });
-
-    it('rejects Manager on decide', async () => {
-      advanceRepo.seed(makeAdvance());
-      await expect(
-        service.decideAdvance('EMP-ADV-0001', { decision: 'approve' }, manager),
-      ).rejects.toThrow(ForbiddenException);
     });
 
     it('rejects deciding an already-decided advance', async () => {
@@ -701,13 +652,6 @@ describe('EmployeesService', () => {
       );
       expect(rows).toHaveLength(0);
     });
-
-    it('rejects Manager', async () => {
-      employeeRepo.seed(makeEmployee());
-      await expect(
-        service.generatePayroll({ period: 'July 2026' }, manager),
-      ).rejects.toThrow(ForbiddenException);
-    });
   });
 
   describe('processPayroll — missing-bank exclusion, advance deduction flip', () => {
@@ -841,13 +785,6 @@ describe('EmployeesService', () => {
         service.processPayroll({ period: 'July 2026' }, officer),
       ).rejects.toThrow(/below Rs\. 0.*recalculate/);
       expect((await payrollRepo.find())[0].status).toBe('Pending');
-    });
-
-    it('rejects Manager', async () => {
-      payrollRepo.seed(makePayroll());
-      await expect(service.processPayroll({}, manager)).rejects.toThrow(
-        ForbiddenException,
-      );
     });
 
     it('rejects when there is nothing eligible to process', async () => {

@@ -1,4 +1,3 @@
-import { ForbiddenException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import type { AuditService } from '../audit/audit.service';
 import type { CollectionRecordEntity } from '../collections/collection-record.entity';
@@ -39,7 +38,6 @@ class Fake<T extends object> {
 }
 
 const admin: Actor = { name: 'A. Bandara', role: 'Administrator', sub: 1 };
-const officer: Actor = { name: 'S. Fernando', role: 'Officer', sub: 2 };
 // Colombo 2026-11-15
 const NOV = new Date('2026-11-15T04:00:00Z');
 
@@ -197,14 +195,12 @@ describe('TransportRatesService — monthly charge per estate (Administration-Ad
     );
   });
 
-  it('a reason is required and only an Administrator may publish', async () => {
+  // who may publish is the route's permission (administration: Edit), checked by JwtAuthGuard
+  it('a reason is required', async () => {
     const { service } = build();
     await expect(
       service.create(charge(5000, '2026-12', ' '), admin, NOV),
     ).rejects.toThrow(/reason/);
-    await expect(
-      service.create(charge(5000, '2026-12'), officer, NOV),
-    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('preview: last month’s delivering estates, once each, self-delivery left out', async () => {
