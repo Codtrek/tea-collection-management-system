@@ -24,6 +24,12 @@ export interface PermissionKeyInfo {
 export const PERMISSION_CATALOG: PermissionKeyInfo[] = [
   // Operations
   {
+    key: 'dashboard',
+    section: 'Operations',
+    label: 'Dashboard',
+    description: 'See the home dashboard: work waiting for you, today’s figures and recent activity.',
+  },
+  {
     key: 'collection',
     section: 'Operations',
     label: 'Tea leaf collections',
@@ -70,7 +76,7 @@ export const PERMISSION_CATALOG: PermissionKeyInfo[] = [
     key: 'estateOwners',
     section: 'Finance',
     label: 'Estate owners and settlements',
-    description: 'Owner records and their monthly settlements: Edit prepares, Approve processes.',
+    description: 'See estates and settlements; Edit edits details and prepares settlements; Approve registers or deactivates an estate and processes settlements.',
   },
   {
     key: 'estateAdvances',
@@ -96,12 +102,36 @@ export const PERMISSION_CATALOG: PermissionKeyInfo[] = [
     label: 'Pay rates and pay changes',
     description: 'Edit prepares an effective-dated pay change; Approve puts it into force.',
   },
+  {
+    key: 'payroll',
+    section: 'Finance',
+    label: 'Payroll',
+    description: 'See payroll; Edit prepares it; Approve processes it.',
+  },
+  {
+    key: 'advances',
+    section: 'Finance',
+    label: 'Salary advances (employees)',
+    description: 'See employee salary advances; Edit records requests and repayments; Approve decides them.',
+  },
   // People
   {
     key: 'employees',
     section: 'People',
     label: 'Employee records',
     description: 'The HR roster: register, edit and deactivate employees.',
+  },
+  {
+    key: 'attendance',
+    section: 'People',
+    label: 'Attendance and leave',
+    description: 'See attendance; Edit marks attendance and leave; Approve signs off leave and past-day changes.',
+  },
+  {
+    key: 'performance',
+    section: 'People',
+    label: 'Performance',
+    description: 'See performance figures; Edit adds private notes from conversations with an employee.',
   },
   {
     key: 'holidayCalendar',
@@ -129,18 +159,6 @@ export const PERMISSION_CATALOG: PermissionKeyInfo[] = [
     label: 'Factory administration',
     description: 'Factory setup, users and roles, system settings and the audit log.',
   },
-]
-
-/**
- * Keys that exist in the code (and are checked) but have no row in the matrix yet — listed in the
- * Users-Roles-Addendum for a decision; not editable until then.
- */
-export const UNLISTED_KEYS: Array<{ key: ModuleKey; label: string }> = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'payroll', label: 'Payroll' },
-  { key: 'advances', label: 'Salary advances' },
-  { key: 'attendance', label: 'Attendance and leave' },
-  { key: 'performance', label: 'Performance' },
 ]
 
 export const ROLES: Role[] = ['Administrator', 'Manager', 'Officer']
@@ -233,7 +251,6 @@ export function needsReason(changes: MatrixChange[]): boolean {
 export function labelOf(key: ModuleKey): string {
   return (
     PERMISSION_CATALOG.find((i) => i.key === key)?.label ??
-    UNLISTED_KEYS.find((i) => i.key === key)?.label ??
     key
   )
 }

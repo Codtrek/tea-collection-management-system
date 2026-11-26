@@ -8,6 +8,7 @@ import {
   type DashboardSummary,
   DashboardService,
 } from './dashboard.service';
+import { RequirePermission } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -24,6 +25,7 @@ export class DashboardController {
    * string, so `?role=` cannot widen what is returned; the role's `role_permissions` decide every
    * section and item.
    */
+  @RequirePermission('dashboard')
   @Get('summary')
   async summary(@Req() req: AuthedRequest): Promise<DashboardSummary> {
     const sub = Number(req.user.sub);

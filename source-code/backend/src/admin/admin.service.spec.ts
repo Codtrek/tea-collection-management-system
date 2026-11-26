@@ -104,13 +104,6 @@ describe('AdminService — grade rates (ADM-01)', () => {
     effectiveDate: string,
   ) => ({ superRate, normalRate, effectiveDate, reason: 'Board decision' });
 
-  it('rejects a non-Administrator', async () => {
-    const { service } = build();
-    await expect(
-      service.createGradeRate(rate(190, 98, '2026-08-01'), officer, MARCH),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
   it('refuses a version that would start in the past — it would reprice leaf already delivered', async () => {
     const { service, gradeRepo } = build();
     await expect(

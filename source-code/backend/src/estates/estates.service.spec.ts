@@ -2,7 +2,7 @@ import {
   DEFAULT_ESTATE_ADVANCE_SETTINGS,
   type EstateAdvanceSettingsService,
 } from './estate-advance-settings.service';
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import { ConflictException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import type { CollectionRecordEntity } from '../collections/collection-record.entity';
 import type { SettlementAdjustmentEntity } from '../collections/settlement-adjustment.entity';
@@ -114,7 +114,6 @@ describe('EstatesService', () => {
 
   const admin: Actor = { name: 'A. Bandara', role: 'Administrator' };
   const officer: Actor = { name: 'S. Fernando', role: 'Officer' };
-  const manager: Actor = { name: 'R. Jayasuriya', role: 'Manager' };
   // one monthly transport charge covering every month unless a test changes it
   const monthly = (o: Partial<TransportVersion> = {}): TransportVersion => ({
     id: 1,
@@ -169,20 +168,6 @@ describe('EstatesService', () => {
   });
 
   describe('register/deactivate — Administrator only', () => {
-    it('rejects Officer on deactivate', async () => {
-      estateRepo.seed(makeEstate());
-      await expect(service.deactivate('EST-0001', officer)).rejects.toThrow(
-        ForbiddenException,
-      );
-    });
-
-    it('rejects Manager on deactivate', async () => {
-      estateRepo.seed(makeEstate());
-      await expect(service.deactivate('EST-0001', manager)).rejects.toThrow(
-        ForbiddenException,
-      );
-    });
-
     it('allows Administrator to deactivate', async () => {
       estateRepo.seed(makeEstate());
       const result = await service.deactivate('EST-0001', admin);
@@ -192,28 +177,6 @@ describe('EstatesService', () => {
   });
 
   describe('update — Manager read-only', () => {
-    it('rejects Manager on update', async () => {
-      estateRepo.seed(makeEstate());
-      await expect(
-        service.update(
-          'EST-0001',
-          {
-            ownerName: 'K. Perera',
-            nic: '197845678123',
-            contact: '0772345678',
-            estateName: 'Green Valley Estate',
-            address: 'New address',
-            location: 'Nuwara Eliya',
-            selfDelivery: false,
-            bank: 'Bank of Ceylon',
-            branch: 'Nuwara Eliya',
-            account: '8802345671',
-          },
-          manager,
-        ),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
     it('allows Officer to edit, and route stays untouched', async () => {
       estateRepo.seed(makeEstate());
       const result = await service.update(
@@ -240,18 +203,6 @@ describe('EstatesService', () => {
   });
 
   describe('issueAdvance — Manager read-only', () => {
-    it('rejects Manager', async () => {
-      estateRepo.seed(makeEstate());
-      const dto: IssueAdvanceDto = {
-        estateId: 'EST-0001',
-        amount: 25000,
-        reason: 'Fertilizer application labour',
-      };
-      await expect(service.issueAdvance(dto, manager)).rejects.toThrow(
-        ForbiddenException,
-      );
-    });
-
     it('allows Officer and stamps issuedBy', async () => {
       estateRepo.seed(makeEstate());
       const dto: IssueAdvanceDto = {

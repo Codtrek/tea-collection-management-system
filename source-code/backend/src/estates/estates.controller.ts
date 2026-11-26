@@ -73,6 +73,7 @@ import {
   SettlementViewService,
   type UnsettledOwner,
 } from './settlement-view.service';
+import { RequirePermission, RequirePermissionLevel } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -111,6 +112,7 @@ export class EstatesController {
    * EST-05 (Estate-Owner-Advances-Addendum §3) — filtered + paged; `from`/`to` are the date
    * issued, but advances still pending deduction always show. `summary` covers the range only.
    */
+  @RequirePermission('estateAdvances')
   @Get('advances')
   listAdvances(
     @Query('search') search?: string,
@@ -141,12 +143,14 @@ export class EstatesController {
   }
 
   /** One advance: its deduction schedule and which settlement recovered each part. */
+  @RequirePermission('estateAdvances')
   @Get('advances/:aid')
   advanceDetail(@Param('aid') aid: string): Promise<EstateAdvanceDetail> {
     return this.advanceView.detail(aid);
   }
 
   /** §4 — ask to change the plan; someone else approves. Processed periods never change. */
+  @RequirePermissionLevel('edit', 'estateAdvances')
   @Post('advances/:aid/reschedules')
   async requestReschedule(
     @Param('aid') aid: string,
@@ -160,6 +164,7 @@ export class EstatesController {
     );
   }
 
+  @RequirePermissionLevel('approve', 'estateAdvances')
   @Patch('advances/:aid/reschedules/:rid')
   async decideReschedule(
     @Param('aid') aid: string,
@@ -176,6 +181,7 @@ export class EstatesController {
   }
 
   /** §4 — an early repayment in cash or by bank transfer. */
+  @RequirePermissionLevel('edit', 'estateAdvances')
   @Post('advances/:aid/repayments')
   async recordRepayment(
     @Param('aid') aid: string,
@@ -189,6 +195,7 @@ export class EstatesController {
     );
   }
 
+  @RequirePermissionLevel('edit', 'estateAdvances')
   @Post('advances')
   async issueAdvance(
     @Body() dto: IssueAdvanceDto,
@@ -202,6 +209,7 @@ export class EstatesController {
    * (default: all). Filtered, sorted and paged here; `summary` is always the whole period.
    * `limit=0` returns every filtered row (the CSV export).
    */
+  @RequirePermission('estateOwners')
   @Get('settlements')
   listSettlements(
     @Query('month') month?: string,
@@ -238,12 +246,14 @@ export class EstatesController {
   }
 
   /** "Owners not yet settled" — active owners who delivered in `month` with no settlement row. */
+  @RequirePermission('estateOwners')
   @Get('settlements/unsettled')
   unsettledOwners(@Query('month') month: string): Promise<UnsettledOwner[]> {
     return this.settlementView.unsettled(month);
   }
 
   /** Whether transport can be charged for a settlement period (Administration-Addendum §4). */
+  @RequirePermission('estateOwners')
   @Get('settlements/transport-status')
   transportStatus(
     @Query('period') period: string | undefined,
@@ -256,12 +266,14 @@ export class EstatesController {
    * (drafts recalculate until processed), what blocks or excludes it, and the totals a Process
    * run would take. Read-only.
    */
+  @RequirePermission('estateOwners')
   @Get('settlements/run')
   settlementRun(@Query('month') month: string): Promise<SettlementRun> {
     return this.generator.run(month);
   }
 
   /** "Prepare settlements for <month>": create or recalculate the drafts. */
+  @RequirePermissionLevel('edit', 'estateOwners')
   @Post('settlements/prepare')
   async prepareSettlements(
     @Body() dto: PrepareSettlementsDto,
@@ -271,6 +283,7 @@ export class EstatesController {
   }
 
   /** A Manager leaves an ungraded delivery out of a month, with a reason (it rolls on). */
+  @RequirePermissionLevel('approve', 'gradingApproval')
   @Post('settlements/deliveries/:deliveryId/exclude')
   async excludeDelivery(
     @Param('deliveryId') deliveryId: string,
@@ -286,6 +299,7 @@ export class EstatesController {
   }
 
   /** One settlement: deliveries + grade lines, each deduction line, net. */
+  @RequirePermission('estateOwners')
   @Get('settlements/:sid')
   settlementDetail(@Param('sid') sid: string): Promise<SettlementDetail> {
     return this.settlementView.detail(sid);
@@ -297,12 +311,20 @@ export class EstatesController {
    * from `GET /estates` below: that one stays a lightweight id+name lookup
    * for the four other screens that use it; this one does real aggregation.
    */
+  @RequirePermission(
+    'estateOwners',
+    'estateAdvances',
+    'collection',
+    'dispatch',
+    'fertilizer',
+  )
   @Get('directory')
   directory(): Promise<EstateDirectoryRow[]> {
     return this.lifetimeService.directory();
   }
 
   /** Processes the month's ready drafts in one run — freezing each calculation. */
+  @RequirePermissionLevel('approve', 'estateOwners')
   @Post('settlements/process')
   async processSettlements(
     @Body() dto: ProcessSettlementsDto,
@@ -315,11 +337,19 @@ export class EstatesController {
     );
   }
 
+  @RequirePermission(
+    'estateOwners',
+    'estateAdvances',
+    'collection',
+    'dispatch',
+    'fertilizer',
+  )
   @Get()
   findAll(): Promise<PublicEstate[]> {
     return this.estatesService.findAll();
   }
 
+  @RequirePermissionLevel('approve', 'estateOwners')
   @Post()
   async create(
     @Body() dto: CreateEstateDto,
@@ -328,11 +358,13 @@ export class EstatesController {
     return this.estatesService.create(dto, await this.resolveActor(req));
   }
 
+  @RequirePermission('estateOwners')
   @Get(':id')
   findOne(@Param('id') id: string): Promise<PublicEstate> {
     return this.estatesService.findById(id);
   }
 
+  @RequirePermissionLevel('edit', 'estateOwners')
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -342,6 +374,7 @@ export class EstatesController {
     return this.estatesService.update(id, dto, await this.resolveActor(req));
   }
 
+  @RequirePermissionLevel('approve', 'estateOwners')
   @Patch(':id/deactivate')
   async deactivate(
     @Param('id') id: string,
@@ -353,18 +386,21 @@ export class EstatesController {
   // ── Estate Owner Lifetime History (EST-03 amended + EST-10) ──────
 
   /** Issue form helper (§4–5): open advance balance, 3-period average net, plan limits. */
+  @RequirePermission('estateAdvances')
   @Get(':id/advance-context')
   advanceContext(@Param('id') id: string): Promise<EstateAdvanceContext> {
     return this.advanceView.context(id);
   }
 
   /** §3 — the shared selector every Lifetime Summary figure comes from. */
+  @RequirePermission('estateOwners', 'fertilizer')
   @Get(':id/lifetime')
   lifetimeMetrics(@Param('id') id: string): Promise<EstateLifetimeMetrics> {
     return this.lifetimeService.lifetime(id);
   }
 
   /** §5 — the merged Delivery/Fertilizer/Settlement/Advance/Account feed. */
+  @RequirePermission('estateOwners')
   @Get(':id/timeline')
   timeline(
     @Param('id') id: string,
@@ -384,12 +420,14 @@ export class EstatesController {
   }
 
   /** §9 — EST-09 pre-scoped to this owner. */
+  @RequirePermission('estateOwners')
   @Get(':id/analytics')
   analytics(@Param('id') id: string): Promise<EstateAnalytics> {
     return this.lifetimeService.analytics(id);
   }
 
   /** §7 — paginated Deliveries tab, default window last 90 days. */
+  @RequirePermission('estateOwners')
   @Get(':id/deliveries')
   deliveries(
     @Param('id') id: string,
@@ -407,6 +445,7 @@ export class EstatesController {
   }
 
   /** §7 — paginated Payments tab, default window last 90 days. */
+  @RequirePermission('estateOwners')
   @Get(':id/payments')
   payments(
     @Param('id') id: string,
@@ -428,6 +467,7 @@ export class EstatesController {
    * shape from the global `GET /estates/advances` above (an extra `:id`
    * segment), so there's no ordering conflict between the two.
    */
+  @RequirePermission('estateAdvances')
   @Get(':id/advances')
   advancesForEstate(
     @Param('id') id: string,
@@ -448,6 +488,7 @@ export class EstatesController {
    * EST-03 amended — paginated Fertilizer tab, default window last 90 days.
    * The Timeline's Fertilizer entries' `recordHref` deep-links here.
    */
+  @RequirePermission('estateOwners')
   @Get(':id/fertilizer')
   fertilizerForEstate(
     @Param('id') id: string,

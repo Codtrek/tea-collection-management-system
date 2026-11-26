@@ -17,6 +17,10 @@ export interface JwtPayload {
 export interface AgentJwtPayload {
   sub: string;
   role: 'CollectionAgent';
+  /** `users.token_version` at issue; missing on tokens from before it existed (= 0). See agent-session.ts. */
+  tv?: number;
+  /** Issued-at (seconds), set by jsonwebtoken; drives the sliding refresh. */
+  iat?: number;
 }
 
 export const AGENT_ROLE = 'CollectionAgent' as const;

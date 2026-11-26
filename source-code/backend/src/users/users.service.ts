@@ -60,6 +60,11 @@ export class UsersService {
     return tv;
   }
 
+  /** Ends every existing session of this user (portal and agent tokens carry the version). */
+  async bumpTokenVersion(userId: number): Promise<void> {
+    await this.usersRepository.increment({ id: userId }, 'token_version', 1);
+  }
+
   /** Lockout bookkeeping (AuthService.verifyPassword). */
   async setLoginFailures(
     userId: number,

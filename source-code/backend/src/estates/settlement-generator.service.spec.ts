@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import { ConflictException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import { GradeRateEntity } from '../admin/grade-rate.entity';
 import type { TransportVersion } from '../admin/transport-rules';
@@ -264,14 +264,11 @@ describe('SettlementGeneratorService — prepare', () => {
     });
   });
 
-  it('recalculates drafts instead of duplicating them, and the Manager cannot prepare', async () => {
+  it('recalculates drafts instead of duplicating them', async () => {
     const { service, r } = build();
     await service.prepare(officer, '2026-07', NOW);
     await service.prepare(officer, '2026-07', NOW);
     expect(r.settlements.rows).toHaveLength(5);
-    await expect(service.prepare(manager, '2026-07', NOW)).rejects.toThrow(
-      ForbiddenException,
-    );
   });
 
   it('reports why each estate can or cannot be processed', async () => {
@@ -400,23 +397,18 @@ describe('SettlementGeneratorService — process', () => {
     );
   });
 
-  it('nothing prepared = nothing to process; the Manager cannot process', async () => {
+  // who may prepare / process / exclude is the route's permission (write-permissions.spec.ts)
+  it('nothing prepared = nothing to process', async () => {
     const { service } = build();
     await expect(
       service.process(officer, '2026-07', undefined, NOW),
     ).rejects.toThrow(ConflictException);
-    await expect(
-      service.process(manager, '2026-07', undefined, NOW),
-    ).rejects.toThrow(ForbiddenException);
   });
 });
 
 describe('SettlementGeneratorService — ungraded, excluded and OPEN deliveries roll on', () => {
-  it('only a Manager (or Administrator) excludes, and only with a reason', async () => {
+  it('excluding a delivery needs a reason', async () => {
     const { service } = build();
-    await expect(
-      service.exclude(officer, 'GV-0718', '2026-07', 'Scale fault'),
-    ).rejects.toThrow(ForbiddenException);
     await expect(
       service.exclude(manager, 'GV-0718', '2026-07', ' '),
     ).rejects.toThrow(/reason/);

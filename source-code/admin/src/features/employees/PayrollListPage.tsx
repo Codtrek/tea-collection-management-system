@@ -40,7 +40,9 @@ export function PayrollListPage() {
   const { toast } = useToast()
   const { can } = useAuth()
   const queryClient = useQueryClient()
-  const canProcess = can('payroll', 'edit')
+  // Edit generates the month; Approve processes it (the server checks the same keys)
+  const canEdit = can('payroll', 'edit')
+  const canApprove = can('payroll', 'approve')
 
   const today = factoryToday()
   const thisMonth = currentMonth(today)
@@ -82,8 +84,8 @@ export function PayrollListPage() {
   const { readiness, summary } = data
   const options = monthOptions(thisMonth, data.periods)
   // a Processed month is read-only; the current month can't be processed until it ends
-  const canGenerate = canProcess && readiness.status !== 'Processed'
-  const canRunProcess = canProcess && canProcessMonth(readiness)
+  const canGenerate = canEdit && readiness.status !== 'Processed'
+  const canRunProcess = canApprove && canProcessMonth(readiness)
   const filtered = hasPayrollFilters(filters)
 
   const sortable = (key: string) => ({ sortable: true, sortValue: () => key })

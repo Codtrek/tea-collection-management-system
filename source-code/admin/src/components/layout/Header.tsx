@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Bell, LogOut, User as UserIcon, ChevronDown } from 'lucide-react'
+import { Search, Bell, BellOff, LogOut, User as UserIcon, ChevronDown } from 'lucide-react'
 import { Popover } from '@/components/ui/Popover'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Avatar } from '@/components/ui/Avatar'
-import { NotificationCard } from './NotificationCard'
 import { useAuth } from '@/context/AuthContext'
-import { NOTIFICATIONS } from '@/data/notifications'
 import type { Role } from '@/types'
 
 const roleTone: Record<Role, Parameters<typeof StatusBadge>[0]['tone']> = {
@@ -19,7 +17,6 @@ export function Header() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const unread = NOTIFICATIONS.filter((n) => !n.read).length
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,33 +43,24 @@ export function Header() {
         <Popover
           panelClassName="w-96"
           trigger={() => (
-            <span className="relative flex size-10 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-surface-hover hover:text-text">
+            <span
+              aria-label="Notifications"
+              className="relative flex size-10 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-surface-hover hover:text-text"
+            >
               <Bell className="size-5" strokeWidth={1.5} />
-              {unread > 0 && (
-                <span className="absolute right-1.5 top-1.5 flex min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
-                  {unread}
-                </span>
-              )}
             </span>
           )}
         >
           {(close) => (
             <div>
-              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <div className="border-b border-border px-4 py-3">
                 <p className="text-sm font-semibold text-text-heading">Notifications</p>
-                <span className="text-xs text-text-muted">{unread} unread</span>
               </div>
-              <div className="max-h-96 divide-y divide-border overflow-y-auto">
-                {NOTIFICATIONS.slice(0, 6).map((n) => (
-                  <NotificationCard
-                    key={n.id}
-                    n={n}
-                    onClick={() => {
-                      close()
-                      navigate(n.href ?? '/notifications')
-                    }}
-                  />
-                ))}
+              {/* Until the portal inbox exists (System Settings Part 2) the bell shows nothing made-up. */}
+              <div className="flex flex-col items-center px-6 py-8 text-center">
+                <BellOff className="mb-2 size-5 text-text-muted" strokeWidth={1.5} />
+                <p className="text-sm font-medium text-text">No notifications yet</p>
+                <p className="mt-1 text-xs text-text-muted">Approvals and updates for you will appear here.</p>
               </div>
               <button
                 onClick={() => {

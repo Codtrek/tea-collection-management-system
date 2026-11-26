@@ -11,6 +11,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt-payload.interface';
 import { AuditService } from './audit.service';
 import type { PublicAuditEntry } from './audit-map';
+import { RequirePermission } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -24,6 +25,7 @@ type AuthedRequest = Request & { user: JwtPayload };
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
+  @RequirePermission('administration')
   @Get()
   list(
     @Req() req: AuthedRequest,

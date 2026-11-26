@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import type { Repository } from 'typeorm';
@@ -124,7 +123,6 @@ describe('CollectionsService', () => {
   let service: CollectionsService;
 
   const officer: Actor = { name: 'S. Fernando', role: 'Officer', sub: 7 };
-  const manager: Actor = { name: 'R. Jayasuriya', role: 'Manager', sub: 8 };
 
   beforeEach(() => {
     repo = new FakeRepository<CollectionRecordEntity>();
@@ -179,28 +177,6 @@ describe('CollectionsService', () => {
       );
       expect(result.estateWeightKg).toBe(160);
       expect(result.gradeLines).toEqual([{ grade: 'Super', weightKg: 150 }]);
-    });
-  });
-
-  describe('Manager write access — read-only', () => {
-    it('rejects Manager on update', async () => {
-      repo.seed(makeRecord({ status: 'collected' }));
-      const dto: UpdateCollectionDto = { weightKg: 100, date: '2026-07-21' };
-      await expect(
-        service.update('GV-2026-0001', dto, manager),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('rejects Manager on createException', async () => {
-      const dto: CreateExceptionDto = {
-        estateId: 1,
-        reportedWeight: 175,
-        date: '2026-07-21',
-        reason: 'Phone-arranged pickup',
-      };
-      await expect(service.createException(dto, manager)).rejects.toThrow(
-        ForbiddenException,
-      );
     });
   });
 

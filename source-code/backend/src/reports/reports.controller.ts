@@ -33,6 +33,7 @@ import type { ExpenseReport } from './finance-rules';
 import { FinanceService, type ExpenseReportQuery } from './finance.service';
 import type { PublicExpenseCategory, PublicExpenseEntry } from './reports-map';
 import { type Actor, ReportsService } from './reports.service';
+import { RequirePermission, ServiceChecked } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -52,6 +53,7 @@ export class ReportsController {
    * `thisMonth=1`; omitted → the last complete month. Filters: routeId, agentId, estateId, grade
    * (super|normal), demo=0 to hide demo rows; groupBy estate|route|agent|day.
    */
+  @RequirePermission('reports')
   @Get('collection')
   collectionReport(
     @Query() q: Record<string, string | undefined>,
@@ -76,6 +78,7 @@ export class ReportsController {
    * for green leaf, valued at the grade rates in force on each delivery date. Same period and
    * filter params as RPT-01; groupBy estate|route|month.
    */
+  @RequirePermission('reports')
   @Get('leaf-purchases')
   leafPurchaseReport(
     @Query() q: Record<string, string | undefined>,
@@ -98,6 +101,7 @@ export class ReportsController {
    * RPT-03 Expense report (Finance-Reports-Addendum). Same period params as RPT-01 (omitted → the
    * last complete month); groupBy category|month|entry; category= filters to one category.
    */
+  @RequirePermission('expenses', 'reports')
   @Get('expenses')
   expenseReport(
     @Query() q: Record<string, string | undefined>,
@@ -115,12 +119,14 @@ export class ReportsController {
   /* ── RPT-04 daily expense entries (Finance-Reports-Addendum §6–7) ── */
 
   /** The category list (inactive ones included, for old entries and ADM-01). */
+  @RequirePermission('expenses', 'reports')
   @Get('expense-categories')
   listCategories(): Promise<PublicExpenseCategory[]> {
     return this.reportsService.listCategories();
   }
 
   /** ADM-01 — add a category. `administration: edit`. */
+  @ServiceChecked('expenses key + edit window (ReportsService)')
   @Post('expense-categories')
   async createCategory(
     @Body() dto: ExpenseCategoryDto,
@@ -133,6 +139,7 @@ export class ReportsController {
   }
 
   /** ADM-01 — rename / reorder / deactivate a category. `administration: edit`. */
+  @ServiceChecked('expenses key + edit window (ReportsService)')
   @Patch('expense-categories/:id')
   async updateCategory(
     @Param('id', ParseIntPipe) id: number,
@@ -147,6 +154,7 @@ export class ReportsController {
   }
 
   /** Log a daily expense. `expenses: edit`. */
+  @ServiceChecked('expenses key + edit window (ReportsService)')
   @Post('expenses')
   async createExpense(
     @Body() dto: CreateExpenseDto,
@@ -156,6 +164,7 @@ export class ReportsController {
   }
 
   /** One entry, with what the viewer may do with it. `expenses: view`. */
+  @RequirePermission('expenses', 'reports')
   @Get('expenses/:id')
   async getExpense(
     @Param('id') id: string,
@@ -165,6 +174,7 @@ export class ReportsController {
   }
 
   /** Change an entry: the creator within the window, else `expenses: approve` with a reason. */
+  @ServiceChecked('expenses key + edit window (ReportsService)')
   @Patch('expenses/:id')
   async updateExpense(
     @Param('id') id: string,

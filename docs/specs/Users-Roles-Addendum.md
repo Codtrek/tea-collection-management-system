@@ -1,7 +1,7 @@
 # Users & Roles — Addendum
 
 **Decided:** 2026-11-18
-**Status:** built on `feat/users-roles` (from `dev`), local only. Migration `1794400026000-UsersRoles`.
+**Status:** merged to dev as PR #100 (2026-11-25); migration `1794400026000-UsersRoles` applied on Azure dev. §10 break-glass: `feat/admin-recover`.
 **Amends:** ADM-02 Users & Roles (both tabs), portal sign-in, the audit log (ADM-04), and how every portal request is authenticated.
 
 ## 1. Why
@@ -42,7 +42,7 @@ ADM-02 was a thin editor, and the access model behind it had real holes:
 
 **Levels:** None < View < Edit < Approve, each including the one before. They are always shown by full name, never blank.
 
-**Keys in the code with no row yet** (not added, pending a decision): `dashboard`, `payroll`, `advances` (salary advances), `attendance` (incl. leave), `performance`.
+**Added as rows (2026-11-25, §4a):** Dashboard (`dashboard`, Operations), Payroll (`payroll`) and Salary advances (employees) (`advances`) under Finance, Attendance and leave (`attendance`) and Performance (`performance`) under People. Every key in the code is now a matrix row.
 
 **Modules with no key of their own:** settlements (borrow `estateOwners`), pay changes (`payRates`), Users & Roles / Audit Logs / System Settings / Factory Setup (`administration`), holiday import (`holidayStatutory`), agent mobile logins (none; handled in Employees). Leave doesn't exist as a module.
 
@@ -83,7 +83,84 @@ Every portal request re-reads the user (`JwtStrategy.validate`, then `auth/sessi
 | Portal UI | Re-reads `/auth/me` when the window regains focus (at most every 30 s) and after any 403, so menus catch up without a sign-out |
 
 - Tokens issued before this release carry no `tv`. They match `token_version = 0` until it is first bumped.
-- **Caveat:** keys the server never checks (`payroll`, `advances`, `estateOwners`, `estateAdvances`, `reports`, most of `employees`) still change only the UI. See §9.
+- **Reads:** every portal GET checks its key (§4a), so a matrix change applies to reads on the next request.
+- **Writes** check the matrix too (§4a, "Write permissions"), except the Administrator-only matrix, settings and Users & Roles actions.
+
+## 4a. Server checks on reads, rate limits and agent sessions (2026-11-25, `feat/read-permissions`)
+
+### Read permissions
+- Every portal GET carries `@RequirePermission(...keys)` or `@PortalOnly()` (`backend/src/auth/permissions.ts`). After authentication, `JwtAuthGuard` reads `role_permissions` for the caller's role (from the DB) on every request, with no cache. Too low a level gives 403: "Your role can't view Payroll. Ask your Factory Administrator if you need access."
+- Several keys mean **any of them** is enough. This is for lookups that several pages share.
+- `permissions.coverage.spec.ts` fails if a portal GET has neither decorator.
+- The portal mirrors it: `AccessGuard` (`admin/src/components/layout/AccessGuard.tsx`) wraps every route in `App.tsx` with the same keys, so a typed URL shows "You don't have access to this page".
+
+| Endpoints | Key(s), View or higher |
+|---|---|
+| `admin/*`, `audit` | administration |
+| `collections/*` | collection |
+| `dispatch/*` (portal) | dispatch; `estates/:id/route-agent`: + estateOwners, collection |
+| `employees`, `employees/:id`, `employees/roles` | employees, attendance, payroll, advances, payRates, performance |
+| `employees/:id/collections`, `/fertilizer-deliveries` | employees |
+| `employees/attendance*` | attendance |
+| `employees/advances*`, `employees/:id/advances` | advances |
+| `employees/payroll*` | payroll |
+| `employees/pay-rates`, `pay-adjustments` | payRates; `employees/:id/pay`: payRates, payroll |
+| `estates`, `estates/directory` | estateOwners, estateAdvances, collection, dispatch, fertilizer |
+| `estates/:id/*`, `estates/settlements*` | estateOwners; `:id/lifetime`: + fertilizer |
+| `estates/advances*`, `estates/:id/advances`, `:id/advance-context` | estateAdvances |
+| `fertilizer/*` | fertilizer; `prices`: itemPrices, fertilizer; `prices/costs`: itemPrices |
+| `holidays/*` | holidayCalendar, holidayStatutory, attendance; `holidays/import/*`: holidayStatutory |
+| `performance/*` | performance |
+| `reports/collection`, `reports/leaf-purchases` | reports |
+| `reports/expenses*`, `reports/expense-categories` | expenses, reports |
+| `dashboard/summary` | dashboard |
+| `auth/me`, `auth/mobile/me`, `auth/change-password` | any signed-in portal user |
+
+With the default matrix only the Officer has None on any key (`administration`, `payRates`, `performance`), so default roles lose nothing they used.
+
+### Write permissions (2026-11-25, `feat/write-permissions`)
+- Every portal write carries one of:
+  - `@RequirePermissionLevel(level, key)`, checked by `JwtAuthGuard` like reads;
+  - `@PortalOnly()` for own-account actions;
+  - `@ServiceChecked(reason)` when the service checks the matrix itself, because the rule depends on more than a key and level (a time window, the record's state, separated duties, Users & Roles rules).
+- `permissions.coverage.spec.ts` fails on a portal write with none of these.
+- **Moved from hard-coded rules to the matrix** (27 endpoints; `write-permissions.spec.ts` pins them):
+
+| Endpoint | Key: level | Default roles |
+|---|---|---|
+| `PUT /collections/:id`, `POST /collections` | collection: Edit | Administrator, Officer |
+| `POST /estates`, `PATCH /estates/:id/deactivate` | estateOwners: Approve | Administrator |
+| `PUT /estates/:id`, `POST /estates/settlements/prepare` | estateOwners: Edit | Administrator, Officer |
+| `POST /estates/settlements/process` | estateOwners: **Approve** | Administrator (**changed**: the Officer could before) |
+| `POST /estates/settlements/deliveries/:id/exclude` | gradingApproval: **Approve** | Manager (**changed**: the Administrator could before; that key is a separated duty) |
+| `POST /estates/advances`, `…/repayments`, `…/reschedules` | estateAdvances: Edit | Administrator, Officer |
+| `PATCH /estates/advances/:aid/reschedules/:rid` | estateAdvances: **Approve** | Administrator (**changed**: the Officer could, server-side) |
+| `POST /employees`, `PUT /employees/:id`, `PATCH /employees/:id/deactivate` | employees: Approve | Administrator |
+| `POST /employees/advances`, `…/repayments`, `…/reschedules` | advances: Edit | Administrator, Officer |
+| `PATCH /employees/advances/:id/decide`, `…/reschedules/:rid/decide` | advances: Approve | Administrator, Officer |
+| `POST /employees/payroll/generate` | payroll: Edit | Administrator, Officer |
+| `POST /employees/payroll/process` | payroll: **Approve** | Administrator (**changed**: the Officer could before) |
+| Grade rates and transport rates (create, cancel), `PUT /admin/factory-profile` | administration: Edit | Administrator |
+
+- **Still hard-coded:** saving the permission matrix and system settings (`PUT /admin/permissions`, `PUT /admin/settings`) and Users & Roles stay Administrator-only by design (`user-rules.ts`). System Settings Part 2 moves settings to its own key.
+
+### Rate limits (`app.module.ts`, `auth/identity-throttler.guard.ts`)
+| Limit | Value | Counted per |
+|---|---|---|
+| short | 60 / 10 s (was 15) | signed-in user; before sign-in IP + account, or IP |
+| medium | 120 / min | signed-in user (was IP); IP before sign-in |
+| long | 600 / 10 min | signed-in user (was IP); IP before sign-in |
+| auth | 5 / min | IP + account, on the sign-in and register routes |
+
+### Agent sessions (`auth/agent-session.ts`)
+- Agent tokens carry `tv` (`users.token_version`) and **expire in 30 days**.
+- `AgentJwtStrategy` re-reads the user on every request:
+  - missing, not an agent or suspended → 401;
+  - a `tv` mismatch → 401 "Your session has ended. Please sign in again.";
+  - a temporary password → 403 everywhere except `/auth/agent/change-password` and `/auth/agent/logout`.
+- **Sliding:** once a token is over a day old, every **successful** agent response carries a fresh 30-day token in `X-Session-Token` (`AgentSessionInterceptor`, exposed via CORS). Refused, revoked or failed calls never get one.
+- **Revocation:** `token_version` is bumped by the password change (`POST /auth/agent/change-password` returns `{ ok, accessToken }` for this device), by the new `POST /auth/agent/logout`, and by deactivation.
+- Tokens from before this release have no `tv` (it counts as 0) and expire after 7 days as before. Nobody is signed out by the deploy, and the first successful call after a day upgrades the token.
 
 ## 5. System users
 
@@ -146,13 +223,55 @@ Every portal request re-reads the user (`JwtStrategy.validate`, then `auth/sessi
 
 ## 9. Open items
 
-1. **Read endpoints with no permission check (report C2).** Any portal token can read `GET /employees` (with NICs), `/employees/payroll*`, estate and settlement GETs, report GETs, collection GETs, and fertilizer requests and batches.
-   - In the portal, about 13 pages have no `can()` call and no route guard; they are only hidden from the sidebar.
-   - This branch gates `/admin/users`, `/admin/permissions` and `/admin/settings` only. A follow-up PR should gate the rest by their keys.
-2. **Keys the server never checks:** `payroll`, `advances`, `estateOwners`, `estateAdvances`, `reports`, and most of `employees` and `administration`. Many writes still use hard-coded "Administrator only" / "Manager denied" rules.
-3. The 5 row-less keys (§3), and whether `advances` / `attendance` become separated keys.
+1. ~~Read endpoints with no permission check~~: done in §4a (2026-11-25).
+2. ~~Writes on hard-coded role rules~~: done in §4a, "Write permissions" (2026-11-25). The earlier count of ~32 included the 6 grading writes, which were already matrix-driven; 27 moved.
+3. Whether `advances` / `attendance` become separated keys.
 4. The "Mobile (agents)" tab (§5).
 5. Login error messages still say whether a phone number is registered. `/auth/mobile/register` is public: please confirm that's intended.
-6. **E2E note:** the API's per-user throttle (15 requests / 10 s) is shared by every Playwright worker using the one admin token.
-   - Parallel runs hit 429s, and before this branch a 429 on `/auth/me` signed the page out. This is the likely cause of the known "~8 flaky 30-second timeouts per run".
-   - Session hydration now retries transient errors and signs out only on a 401. Running e2e with `--workers=1`, or one account per worker, avoids the rest.
+6. **E2E note:** every Playwright worker shares the one admin token. The short limit is now 60 / 10 s (§4a), and session hydration signs out only on a 401.
+   - On 2026-11-25, two of three full `users-roles` + `layout` runs (2 workers) still had 4 timeouts each, on different pages each time (holidays, then payroll). In each case the page had been signed out.
+   - In a monitored green run, the admin's `token_version` and status never changed. The source of that 401 isn't found yet; it's tracked in issue #101.
+7. `GET /auth/mobile/me` sits behind the portal guard, which refuses estate owner/manager tokens (since #100). Check whether the mobile app relies on it.
+
+## 10. Break-glass recovery (`npm run admin:recover`)
+
+**Added:** 2026-11-25, `feat/admin-recover`. Code: `source-code/backend/src/scripts/admin-recover.ts`.
+
+**When to use it:** only when no Administrator can sign in, for example when every Administrator is suspended, locked or has lost their password. If any Administrator can sign in, use Users & Roles in the portal instead.
+
+**Command.** Run it on the server, in an interactive shell, against the database the backend uses (`DATABASE_URL`):
+
+```sh
+# in the backend container
+docker exec -it -e BREAK_GLASS=1 <backend-container> npm run admin:recover -- --phone 07XXXXXXXX [--promote]
+# or from a checkout, after `npm run build`
+BREAK_GLASS=1 npm run admin:recover -- --phone 07XXXXXXXX [--promote]
+```
+
+It runs the compiled `dist/scripts/admin-recover.js`. The production image has no ts-node.
+
+**Refusals.** Each one happens before anything is written:
+- `BREAK_GLASS=1` is not set. In that case it doesn't even connect to the database.
+- The shell is not a terminal (a pipe, cron or CI).
+- No user has that phone number.
+- The user doesn't have a factory-portal role (Administrator, Manager or Officer).
+- The user has no factory staff profile. Portal sign-in needs one, so the new password would be useless.
+- The re-typed phone number doesn't match, or the operator cancels (Ctrl+D).
+- `--promote` is given while an active (not suspended) Administrator exists.
+
+**What it changes.** All in one transaction: if any step fails, including the audit row, nothing changes.
+- `status = 'active'`, `failed_login_count = 0`, `locked_until = NULL`.
+- A new temporary password (12 characters, the same generator as Reset password, bcrypt cost 10) with `must_change_password = true`.
+- `token_version + 1`, so every existing session ends.
+- `--promote` also sets `role = 'factory_admin'`.
+
+**Audit.** One row:
+- user "System (break-glass)", role "System", module "Administration", action "Break-glass recovery";
+- record `USR-nnnn`;
+- `before`/`after` cover status, locked and role, plus a reason.
+
+The password is never in the audit row, a log or a file. It is printed once, after the commit.
+
+**Handling the password.** Give it to the person face to face or by phone. Never put it in chat, email or a ticket. They must change it at sign-in (§6).
+
+**Tests:** `admin-recover.spec.ts` covers every refusal, rollback when the audit row fails, the audit id retry, and that the password appears only in the output. A manual run on a scratch PostgreSQL checked the real SQL end to end, finishing with a sign-in that returned `mustChangePassword: true`.
