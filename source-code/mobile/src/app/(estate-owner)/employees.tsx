@@ -1,10 +1,14 @@
 import { useCallback, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { AppButton, AppInput, AppText, Dropdown, PasswordInput, Screen } from "@/components/ui";
+import Toast, { type ToastMessage } from "@/components/ui/Toast";
 import { colors } from "@/theme/colors";
 import { changeManagerAssignment, getOwnerEmployees, registerEstateManager, type EmployeeDirectory, type OwnerEmployee } from "../services/api/estate-owner.api";
 import { getErrorMessages } from "../services/api/client";
+
+import ManagerCard from "@/components/estate-owner/ManagerCard";
+import { employeeStyles as styles } from "@/theme/employees";
 
 const emptyForm = { name: "", phone: "", nic: "", dateOfBirth: "", password: "", confirmPassword: "" };
 
@@ -21,8 +25,7 @@ export default function Employees() {
   const [attempt, setAttempt] = useState(0);
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -36,7 +39,7 @@ export default function Employees() {
       if (requestedEstate && items.some(item => String(item.id) === requestedEstate)) {
         setEstateId(requestedEstate);
         setRegistering(true);
-      } else setEstateId(items.length === 1 ? String(items[0].id) : "");
+      } else setEstateId("");
     }).catch((cause) => {
       if (active) setLoadError(getErrorMessages(cause, "Could not load employees.").join("\n"));
     }).finally(() => { if (active) setLoading(false); });
@@ -48,13 +51,12 @@ export default function Employees() {
     const target = employee.estateId ?? Number(destination);
     if (!target || saving) return;
     setSaving(true);
-    setError("");
-    setSuccess("");
     try {
       await changeManagerAssignment(employee.id, target, assign);
-      setSuccess(assign ? `Assigned ${employee.name} to ${estates.find(item => item.id === target)?.name}.` : `Ended ${employee.name}'s assignment to ${employee.estateName}.`);
+      const estateName = estates.find(item => item.id === target)?.name ?? employee.estateName ?? "the estate";
+      setToast({ id: Date.now(), variant: "success", title: assign ? "Manager assigned" : "Assignment ended", detail: assign ? `${employee.name} now manages ${estateName}.` : `${employee.name} no longer manages ${estateName}.` });
     } catch (cause) {
-      setError(getErrorMessages(cause, "Could not change this assignment.").join("\n"));
+      setToast({ id: Date.now(), variant: "error", title: assign ? "Couldn't assign the manager" : "Couldn't end the assignment", detail: "Check your connection and try again." });
     } finally {
       setSaving(false);
       setAttempt(value => value + 1);
@@ -66,8 +68,6 @@ export default function Employees() {
       value: form[key],
       editable: !saving,
       onChangeText: (value: string) => {
-        setSuccess("");
-        setError("");
         setForm(previous => ({ ...previous, [key]: value }));
       },
     };
@@ -75,37 +75,33 @@ export default function Employees() {
 
   async function submit() {
     if (saving) return;
-    setSuccess("");
-    setError("");
-    if (!estateId || Object.values(form).some(value => !value.trim())) {
-      setError("Select an estate and complete all fields.");
+    if (Object.values(form).some(value => !value.trim())) {
+      setToast({ id: Date.now(), variant: "error", title: "Complete the manager details", detail: "Fill in every field before registering the manager." });
       return;
     }
     if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match.");
+      setToast({ id: Date.now(), variant: "error", title: "Passwords do not match", detail: "Enter the same password in both password fields." });
       return;
     }
     setSaving(true);
     try {
       const manager = await registerEstateManager({
-        ...form, estateId: Number(estateId), name: form.name.trim(),
+        ...form, estateId: estateId ? Number(estateId) : undefined, name: form.name.trim(),
         phone: form.phone.trim(), nic: form.nic.trim().toUpperCase(), dateOfBirth: form.dateOfBirth.trim(),
       });
       setForm(emptyForm);
       setRegistering(false);
       setAttempt(value => value + 1);
-      setSuccess(`${manager.name} is now registered as manager of ${manager.estateName}.`);
+      setToast({ id: Date.now(), variant: "success", title: "Manager registered", detail: manager.estateName ? `${manager.name} now manages ${manager.estateName}.` : `${manager.name} is ready for assignment.` });
     } catch (cause) {
-      setError(getErrorMessages(cause, "Could not register the manager.").join("\n"));
+      setToast({ id: Date.now(), variant: "error", title: "Couldn't register the manager", detail: "Check your connection and try again." });
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Screen pageTitle="Employees" scroll keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={{ paddingBottom: 24 }}>
-      {error ? <AppText accessibilityLiveRegion="polite" style={{ color: colors.error }}>{error}</AppText> : null}
-      {success ? <AppText accessibilityLiveRegion="polite" style={{ color: colors.brandDark }}>{success}</AppText> : null}
+    <View style={styles.page}><Screen header={<View style={styles.header}><AppText role="heading" aria-level={1} variant="heading">Employees</AppText></View>} scroll keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets style={styles.content}>
       {loading ? <ActivityIndicator color={colors.brandDark} /> : loadError ? (
         <>
           <AppText>{loadError}</AppText>
@@ -113,39 +109,24 @@ export default function Employees() {
         </>
       ) : (
         <>
-          <AppText variant="subHeading">Estate managers</AppText>
-          {directory.employees.length === 0 && <AppText>No estate managers registered yet.</AppText>}
+          <AppText role="heading" aria-level={2} variant="subHeading">Estate managers ({directory.employees.length})</AppText>
+          {directory.employees.length === 0 && <AppText>No estate managers yet</AppText>}
+          <View role="list" accessibilityLabel="Estate managers" style={styles.list}>
           {directory.employees.map(employee => (
-            <View key={employee.id} style={{ gap: 8, paddingVertical: 16, borderBottomWidth: 1, borderColor: colors.border.light }}>
-              <AppText variant="sectionHeading">{employee.name}</AppText>
-              <AppText>{employee.estateName ?? "Unassigned"}</AppText>
-              {selectedEmployee === employee.id ? (
-                <>
-                  {employee.estateId === null ? (
-                    <Dropdown accessibilityLabel="Assign to estate" value={destination} onChange={setDestination}
-                      options={estates.map(estate => ({ value: String(estate.id), label: estate.name }))} />
-                  ) : <AppText>End this manager’s assignment to {employee.estateName}?</AppText>}
-                  <AppButton title={employee.estateId === null ? "Confirm assignment" : "Confirm end of assignment"}
-                    loading={saving} disabled={employee.estateId === null && !destination} onPress={() => updateAssignment(employee)} />
-                  <AppButton title="Cancel" variant="secondary" disabled={saving} onPress={() => setSelectedEmployee(null)} />
-                </>
-              ) : <AppButton title={employee.estateId === null ? "Assign to estate" : "End assignment"} variant="secondary"
-                disabled={saving || (employee.estateId === null && !estates.length)} onPress={() => {
-                  setSelectedEmployee(employee.id);
-                  setDestination(estates.length === 1 ? String(estates[0].id) : "");
-                  setError("");
-                  setSuccess("");
-                  setRegistering(false);
-                }} />}
-            </View>
+            <ManagerCard key={employee.id} employee={employee} saving={saving} canAssign={estates.length > 0}
+              onEnd={() => updateAssignment(employee)} onAssign={() => { setSelectedEmployee(employee.id); setDestination(""); }}>
+              {selectedEmployee === employee.id && employee.estateId === null && <>
+                <Dropdown accessibilityLabel="Assign to estate" value={destination} onChange={setDestination} options={estates.map(estate => ({ value: String(estate.id), label: estate.name }))} />
+                <AppButton title="Confirm assignment" disabled={!destination || saving} loading={saving} onPress={() => updateAssignment(employee)} />
+                <AppButton title="Cancel" variant="secondary" disabled={saving} onPress={() => setSelectedEmployee(null)} />
+              </>}
+            </ManagerCard>
           ))}
-          {!estates.length ? <AppText style={{ marginVertical: 12 }}>No estates are available for a manager assignment.</AppText> :
-            <AppButton title={registering ? "Close registration" : "Register an estate manager"} disabled={saving}
-              onPress={() => { setRegistering(!registering); setSelectedEmployee(null); setError(""); }} />}
-          {registering && estates.length > 0 && <>
-          <AppText>Estate</AppText>
-          <Dropdown accessibilityLabel="Estate" value={estateId} onChange={setEstateId} placeholder="Select an estate"
-            options={estates.map(estate => ({ value: String(estate.id), label: estate.name }))} />
+          </View>
+          {registering && <>
+          <AppText>Estate (optional)</AppText>
+          <Dropdown accessibilityLabel="Estate" value={estateId} onChange={setEstateId} placeholder="Assign later"
+            options={[{ value: "", label: "Assign later" }, ...estates.map(estate => ({ value: String(estate.id), label: estate.name }))]} />
           <AppInput label="Manager name" maxLength={32} containerStyle={{ marginTop: 18 }} {...field("name")} />
           <AppInput label="Phone number" keyboardType="phone-pad" {...field("phone")} />
           <AppInput label="NIC" autoCapitalize="characters" maxLength={12} {...field("nic")} />
@@ -157,5 +138,9 @@ export default function Employees() {
         </>
       )}
     </Screen>
+    <View style={styles.footer}>
+      <AppButton title={registering ? "Close registration" : "Register an estate manager"} disabled={saving} style={styles.primary} labelStyle={styles.primaryText}
+        onPress={() => { setRegistering(!registering); setSelectedEmployee(null); setError(""); }} />
+    </View><Toast message={toast} onDismiss={() => setToast(null)} /></View>
   );
 }

@@ -1,0 +1,37 @@
+import { StyleSheet } from "react-native";
+import { colors } from "./colors";
+import { spacing } from "./spacing";
+
+export const employeeStyles = StyleSheet.create({
+  page: { flex: 1, backgroundColor: "#F5FBF7" },
+  background: { ...StyleSheet.absoluteFillObject, backgroundColor: "#F7FBF8" },
+  content: { maxWidth: 480, paddingHorizontal: spacing.md, paddingBottom: 24, gap: spacing.md },
+  header: { width: "100%", maxWidth: 480, alignSelf: "center", padding: spacing.md },
+  footer: { width: "100%", maxWidth: 480, alignSelf: "center", padding: spacing.md, gap: spacing.sm },
+  list: { gap: 12 },
+  card: { borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.85)", padding: spacing.md, backgroundColor: "rgba(255,255,255,0.92)", gap: spacing.sm, shadowColor: colors.charcoal, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 24, elevation: 2 },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  details: { flex: 1, minWidth: 0 },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.9)" },
+  avatarText: { color: colors.charcoal, fontWeight: "600" },
+  secondary: { color: colors.charcoalSecondary },
+  action: { minWidth: 44, minHeight: 44, padding: spacing.sm, justifyContent: "center", alignItems: "center", borderRadius: 16, borderWidth: 2, borderColor: "transparent" },
+  focus: { borderColor: colors.charcoal, borderWidth: 2, backgroundColor: colors.focusOffset },
+  pressed: { backgroundColor: "#F3F4F6", opacity: 0.9 },
+  info: { padding: spacing.md, borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.85)", backgroundColor: "rgba(251,191,36,0.20)" },
+  link: { textDecorationLine: "underline", color: colors.charcoal },
+  primary: { height: 48, minHeight: 48, aspectRatio: undefined, borderRadius: 16, backgroundColor: colors.primary, borderTopWidth: 1, borderColor: "rgba(255,255,255,0.8)", shadowColor: colors.charcoal, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 8 },
+  primaryText: { color: colors.charcoal, fontWeight: "600" },
+  assignedBadge: { backgroundColor: "rgba(255,255,255,0.72)", color: colors.charcoal, overflow: "hidden", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
+  unassignedBadge: { backgroundColor: "rgba(251,191,36,0.22)", color: colors.charcoal, overflow: "hidden", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
+  banner: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, borderWidth: 1, borderColor: "rgba(255,255,255,0.85)", borderRadius: 20, backgroundColor: "rgba(255,255,255,0.92)", shadowColor: colors.charcoal, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 24 },
+  successIcon: { color: colors.charcoal },
+  errorBanner: { backgroundColor: "rgba(254,242,242,0.94)" },
+  bannerText: { flex: 1, color: colors.charcoal },
+  hint: { color: colors.charcoalSecondary, marginTop: spacing.md },
+  danger: { color: "#B91C1C", fontWeight: "600" },
+  overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: "center", padding: spacing.md },
+  dialog: { width: "100%", maxWidth: 448, alignSelf: "center", borderRadius: 20, padding: spacing.lg, gap: spacing.md, backgroundColor: "rgba(255,255,255,0.96)" },
+  menu: { position: "absolute", top: 56, right: 8, zIndex: 10, padding: 4, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.85)", backgroundColor: "rgba(255,255,255,0.96)", shadowColor: colors.charcoal, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 20 },
+  toastClose: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+});
