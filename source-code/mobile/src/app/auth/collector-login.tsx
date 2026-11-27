@@ -6,25 +6,23 @@ import MobileLoginForm from "@/components/auth/MobileLoginForm";
 import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoGreen.png";
 import { spacing } from "@/theme/spacing";
 import { loginAgent } from "../services/api/auth.api";
-import {
-  completeCollectorSession,
-  storePendingCollectorSession,
-} from "@/utils/collectorSession";
+import { useCollectorAuth } from "@/context/CollectorAuthContext";
 
 export default function CollectorLoginScreen() {
   const router = useRouter();
+  const { authenticate, beginPasswordChange } = useCollectorAuth();
 
   async function handleLogin(phoneNumber: string, password: string) {
     const result = await loginAgent(phoneNumber, password);
     const session = { accessToken: result.accessToken, agent: result.agent };
 
     if (result.mustChangePassword) {
-      await storePendingCollectorSession(session);
-      router.replace("./collector-change-password");
+      await beginPasswordChange(session);
+      router.replace("/auth/collector-change-password");
       return;
     }
 
-    await completeCollectorSession(session);
+    await authenticate(session);
     router.replace("/teacollector/teacollectorMobile");
   }
 
@@ -42,8 +40,8 @@ export default function CollectorLoginScreen() {
 
         <MobileLoginForm
           onSubmit={handleLogin}
-          showForgotPassword={false}
           showRegistration={false}
+          forgotPasswordUserType="collection-agent"
         />
       </View>
     </Screen>

@@ -1,19 +1,26 @@
-import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert,  Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { fonts } from '@/theme/fonts';
+import ConfirmationWarning from '@/components/ui/demo-teacollector-confirmationWarning';
 import type { CollectorProfile } from '@/utils/collectorSession';
+
+
+
+
 
 interface DemoTeaCollectorProfileProps {
   profile?: CollectorProfile;
-  profileUnavailable?: boolean;
+  onLogout: () => Promise<void>;
 }
 
 export default function DemoTeaCollectorProfile({
   profile,
-  profileUnavailable = false,
+  onLogout,
 }: DemoTeaCollectorProfileProps) {
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   return (
     <ScrollView
       style={styles.screen}
@@ -28,7 +35,7 @@ export default function DemoTeaCollectorProfile({
           </View>
         </View>
         <Text style={styles.name}>
-          {profile?.name || (profileUnavailable ? "Profile unavailable" : "Collector")}
+          {profile?.name || "Collector"}
         </Text>
         <Text style={styles.role}>{profile?.role || "Role unavailable"}</Text>
         <Text style={styles.employeeId}>EMP-2291 · Kotmale MPT Factory</Text>
@@ -77,20 +84,45 @@ export default function DemoTeaCollectorProfile({
         <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
       </Pressable>
 
+
+
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Log out"
-        onPress={() =>
-          Alert.alert('Log out', 'Are you sure you want to log out?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Log out', style: 'destructive' },
-          ])
-        }
-        style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}
+        onPress={() => setShowLogoutDialog(true)}
+        style={({ pressed }) => [
+          styles.logoutButton,
+          pressed && styles.pressed,
+        ]}
       >
         <Ionicons name="log-out-outline" size={20} color={colors.error} />
         <Text style={styles.logoutText}>Log out</Text>
       </Pressable>
+
+      <ConfirmationWarning
+        visible={showLogoutDialog}
+        title="Log out?"
+        message="Are you sure you want to log out of your account?"
+        confirmLabel={isLoggingOut ? "Logging out..." : "Log out"}
+        onCancel={() => {
+          if (!isLoggingOut) setShowLogoutDialog(false);
+        }}
+        onConfirm={async () => {
+          if (isLoggingOut) return;
+          try {
+            setIsLoggingOut(true);
+            await onLogout();
+            setShowLogoutDialog(false);
+          } catch {
+            Alert.alert("Logout failed", "Please try again.");
+          } finally {
+            setIsLoggingOut(false);
+          }
+        }}
+      />
+
+
+
     </ScrollView>
   );
 }
@@ -253,4 +285,7 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.75,
   },
+
+
+
 });

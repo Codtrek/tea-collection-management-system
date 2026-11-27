@@ -70,6 +70,11 @@ export interface AgentLoginResult {
   mustChangePassword: boolean;
 }
 
+export interface AgentSessionResult {
+  agent: { id: number; name: string; phone: string; role: string };
+  mustChangePassword: boolean;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -241,9 +246,8 @@ export class AuthService {
   }
 
   /**
-   * Mobile sign-in for collection agents (phone + password). Issues an AGENT-role
-   * token that the portal API refuses; only `/dispatch/me/*` accepts it.
-   * This is needed only if you want to retain the separate /auth/agent/login endpoint for collector-login.tsx.
+   * Direct agent sign-in endpoint for clients that authenticate agents separately.
+   * The mobile app uses mobileLogin() to choose the correct session by account role.
    */
   
   
@@ -268,6 +272,42 @@ export class AuthService {
     }
 
     return this.agentLoginWithUser(user, password);
+  }
+
+  async agentSession(userId: number): Promise<AgentSessionResult> {
+    const user = await this.usersService.findById(userId);
+    if (!user || user.role !== 'collection_agent') {
+      throw new UnauthorizedException(
+        'This account is not a collection agent.',
+      );
+    }
+    if (user.status === 'suspended') {
+      throw new ForbiddenException({
+        code: 'AGENT_SESSION_INVALID',
+        message: 'This login has been suspended. Contact your factory.',
+      });
+    }
+
+    const [agent, role] = await Promise.all([
+      this.agentDirectory.byUserId(userId),
+      this.agentDirectory.roleByUserId(userId),
+    ]);
+    if (!agent || !role) {
+      throw new ForbiddenException({
+        code: 'AGENT_SESSION_INVALID',
+        message: 'This account is not an active collection agent.',
+      });
+    }
+
+    return {
+      agent: {
+        id: agent.agentId,
+        name: agent.name,
+        phone: user.phone,
+        role,
+      },
+      mustChangePassword: user.must_change_password,
+    };
   }
 
 

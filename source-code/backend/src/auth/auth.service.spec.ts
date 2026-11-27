@@ -1,4 +1,8 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import type { Repository } from 'typeorm';
@@ -58,6 +62,48 @@ describe('AuthService — agent sign-in & first password change', () => {
         role: 'Tea Collecting Agent',
       },
     });
+  });
+
+  it('validates the JWT subject against the current active Agent and returns a safe profile', async () => {
+    const { svc, usersService, directory } = await setup({
+      must_change_password: false,
+    });
+    directory.byUserId.mockResolvedValue({
+      agentId: 6,
+      name: 'P. Fernando',
+    });
+    directory.roleByUserId.mockResolvedValue('Tea Collecting Agent');
+
+    await expect(svc.agentSession(11)).resolves.toEqual({
+      agent: {
+        id: 6,
+        name: 'P. Fernando',
+        phone: '0777000016',
+        role: 'Tea Collecting Agent',
+      },
+      mustChangePassword: false,
+    });
+    expect(usersService.findById).toHaveBeenCalledWith(11);
+    expect(directory.byUserId).toHaveBeenCalledWith(11);
+    expect(directory.roleByUserId).toHaveBeenCalledWith(11);
+  });
+
+  it('rejects sessions whose user role or active Agent link has changed', async () => {
+    const wrongRole = await setup({ role: 'estate_owner' });
+    await expect(wrongRole.svc.agentSession(11)).rejects.toThrow(
+      UnauthorizedException,
+    );
+
+    const inactive = await setup();
+    inactive.directory.byUserId.mockResolvedValue(null);
+    await expect(inactive.svc.agentSession(11)).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('rejects suspended Agent accounts', async () => {
+    const { svc } = await setup({ status: 'suspended' });
+    await expect(svc.agentSession(11)).rejects.toThrow(ForbiddenException);
   });
 
   it('refuses a deactivated agent (no active employee behind the login)', async () => {

@@ -14,6 +14,7 @@ import {
   getPhoneNumberResponseError,
 } from "@/utils/phoneValidation";
 import { getErrorMessages } from "@/app/services/api/client";
+import type { PasswordRecoveryUserType } from "@/utils/passwordRecovery";
 
 type LoginFieldErrors = {
   phoneNumber?: string;
@@ -22,18 +23,18 @@ type LoginFieldErrors = {
 
 interface MobileLoginFormProps {
   onSubmit: (phoneNumber: string, password: string) => Promise<void>;
-  portalStyle?: boolean;
   submitTitle?: string;
   showForgotPassword?: boolean;
   showRegistration?: boolean;
+  forgotPasswordUserType?: PasswordRecoveryUserType;
 }
 
 export default function MobileLoginForm({
   onSubmit,
-  portalStyle = false,
   submitTitle = "Sign in",
   showForgotPassword = true,
   showRegistration = true,
+  forgotPasswordUserType,
 }: MobileLoginFormProps) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
@@ -93,13 +94,8 @@ export default function MobileLoginForm({
   return (
     <View style={styles.form}>
       <AppInput
-        floatingLabel={portalStyle}
-        compact={portalStyle}
-        containerStyle={portalStyle && styles.phoneSpacing}
-        autoComplete="username"
         label="Phone number"
-        placeholder="077 123 4567"
-        placeholderTextColor={colors.text.tertiary}
+        placeholder="Enter your phone number"
         keyboardType="phone-pad"
         value={phoneNumber}
         error={fieldErrors.phoneNumber}
@@ -110,16 +106,9 @@ export default function MobileLoginForm({
       />
 
       <PasswordInput
-        floatingLabel={portalStyle}
-        compact={portalStyle}
-        autoComplete="current-password"
         label="Password"
         placeholder="Enter your password"
-        placeholderTextColor={colors.text.tertiary}
-        showLockIcon={false}
         value={password}
-        visibilityButtonStyle={styles.visibilityButton}
-        containerStyle={showForgotPassword ? styles.passwordWithRecovery : undefined}
         error={fieldErrors.password}
         onChangeText={(value) => {
           setPassword(value);
@@ -128,8 +117,18 @@ export default function MobileLoginForm({
       />
 
       {showForgotPassword ? (
-        <Link href="/auth/change-password" asChild>
-          <Pressable style={StyleSheet.flatten([styles.linkTarget, styles.forgotPassword])}>
+        <Link
+          href={
+            forgotPasswordUserType
+              ? {
+                  pathname: "/auth/forgot-password",
+                  params: { userType: forgotPasswordUserType },
+                }
+              : "/auth/forgot-password"
+          }
+          asChild
+        >
+          <Pressable style={styles.forgotPassword}>
             <AppText variant="bodySmall" style={styles.link}>
               Forgot password?
             </AppText>
@@ -149,18 +148,21 @@ export default function MobileLoginForm({
         title={submitTitle}
         onPress={handleSubmit}
         loading={loading}
-        style={portalStyle ? styles.portalButton : undefined}
-        labelStyle={portalStyle ? styles.portalButtonLabel : styles.submitLabel}
       />
 
       {showRegistration ? (
-        <Link href="/auth/register" asChild>
-          <Pressable style={StyleSheet.flatten([styles.linkTarget, styles.register])}>
-            <AppText variant="bodySmall" style={styles.link}>
-              Register as an estate owner
-            </AppText>
-          </Pressable>
-        </Link>
+        <View style={styles.registerContainer}>
+          <AppText variant="bodySmall" style={styles.mutedText}>
+            Estate Owner Registration?
+          </AppText>
+          <Link href="/auth/register" asChild>
+            <Pressable>
+              <AppText variant="bodySmall" style={styles.link}>
+                Create an account
+              </AppText>
+            </Pressable>
+          </Link>
+        </View>
       ) : null}
     </View>
   );
@@ -171,38 +173,10 @@ const styles = StyleSheet.create({
     width: "100%",
   },
 
-  passwordWithRecovery: {
-    marginBottom: 0,
-  },
-
-  phoneSpacing: {
-    marginBottom: 12,
-  },
-
   forgotPassword: {
     alignSelf: "flex-end",
-    marginBottom: 8,
-  },
-
-  visibilityButton: {
-    width: 44,
-    height: 44,
-  },
-
-  portalButton: {
-    backgroundColor: "#1D6839",
-    borderRadius: 9,
-  },
-
-  portalButtonLabel: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-
-  submitLabel: {
-    fontSize: 16,
-    fontWeight: "600",
+    marginTop: -4,
+    marginBottom: 20,
   },
 
   errorBox: {
@@ -217,20 +191,21 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
 
-  linkTarget: {
-    minWidth: 44,
-    minHeight: 44,
+  registerContainer: {
+    flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-  },
-
-  register: {
-    alignSelf: "center",
-    marginTop: 16,
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 22,
   },
 
   link: {
-    color: "#1D6839",
+    color: colors.primary,
     fontWeight: "700",
+  },
+
+  mutedText: {
+    color: colors.text.secondary,
   },
 });

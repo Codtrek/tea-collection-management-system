@@ -1,5 +1,5 @@
 // app/teacollector/teacollectorMobile.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ScrollView,
   View,
@@ -28,10 +28,7 @@ import DemoTeaCollectorCollect from '@/app/teacollector/demo-teacollector-collec
 import DemoTeaCollectorFertilizer from '@/app/teacollector/demo-teacollector-fertilizer';
 import DemoTeaCollectorAlerts from '@/app/teacollector/demo-teacollector-alerts';
 import DemoTeaCollectorProfile from '@/app/teacollector/demo-teacollector-profile';
-import {
-  getCollectorProfile,
-  type CollectorProfile,
-} from '@/utils/collectorSession';
+import { useCollectorAuth } from '@/context/CollectorAuthContext';
 import {
   FertilizerRequestFilter,
   RequestFilter,
@@ -228,9 +225,8 @@ const NOTIFICATIONS: React.ComponentProps<typeof DemoTeaCollectorAlerts>['notifi
 // ---------- Main App ----------
 export default function TeaCollectorMobile() {
   const router = useRouter();
+  const { profile: collectorProfile, logout } = useCollectorAuth();
   const [tab, setTab] = useState("home");
-  const [collectorProfile, setCollectorProfile] = useState<CollectorProfile>();
-  const [profileUnavailable, setProfileUnavailable] = useState(false);
   const [filter, setFilter] = useState<RequestFilter>("all");
   const [fertilizerFilter, setFertilizerFilter] =
     useState<FertilizerRequestFilter>("all");
@@ -251,25 +247,6 @@ export default function TeaCollectorMobile() {
   const [collectedWeight, setCollectedWeight] = useState(0);
   const [officer, setOfficer] = useState("");
   const [sheet, setSheet] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    void getCollectorProfile().then(
-      (profile) => {
-        if (active) {
-          setCollectorProfile(profile);
-        }
-      },
-      () => {
-        if (active) {
-          setProfileUnavailable(true);
-        }
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const nameParts = collectorProfile?.name?.trim().split(/\s+/).filter(Boolean);
   const lastName = nameParts?.[nameParts.length - 1];
@@ -818,7 +795,7 @@ export default function TeaCollectorMobile() {
         return (
           <DemoTeaCollectorProfile
             profile={collectorProfile}
-            profileUnavailable={profileUnavailable}
+            onLogout={logout}
           />
         );
       default:

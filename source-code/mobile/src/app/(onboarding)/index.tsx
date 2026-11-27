@@ -80,7 +80,7 @@ export default function OnboardingScreen() {
             title={currentIndex === slides.length - 1 ? "Get Started" : "Next"}
             onPress={() => {
               if (currentIndex === slides.length - 1) {
-                router.push("/(onboarding)/select-role");
+                router.push("/auth/login");
               } else {
                 flatListRef.current?.scrollToOffset({
                   offset: slideWidth * (currentIndex + 1),

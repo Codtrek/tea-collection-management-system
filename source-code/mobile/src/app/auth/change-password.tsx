@@ -18,12 +18,6 @@ export default function ChangePasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   function handleChangePassword() {
-    console.log({
-      currentPassword,
-      newPassword,
-      confirmPassword,
-    });
-
     // TODO:
     // Call change password API
   }

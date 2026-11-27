@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import {
   AuthService,
   type AgentLoginResult,
+  type AgentSessionResult,
   type LoginResult,
   type PublicUser,
 } from './auth.service';
@@ -28,6 +29,14 @@ export class AuthController {
   @Post('agent/login')
   agentLogin(@Body() dto: LoginDto): Promise<AgentLoginResult> {
     return this.authService.agentLogin(dto.phone, dto.password);
+  }
+
+  @UseGuards(AgentJwtGuard)
+  @Get('agent/session')
+  agentSession(
+    @Req() req: Request & { user: AgentJwtPayload },
+  ): Promise<AgentSessionResult> {
+    return this.authService.agentSession(Number(req.user.sub));
   }
 
 

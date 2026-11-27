@@ -1,14 +1,21 @@
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import { jwtDecode } from "jwt-decode";
 
 export interface CollectorAgent {
   id: number;
   name: string;
   phone: string;
-  role?: string;
+  role: string;
 }
 
 export interface CollectorSession {
+  accessToken: string;
+  role: "CollectionAgent";
+  agent: CollectorAgent;
+}
+
+export interface CollectorSessionInput {
   accessToken: string;
   agent: CollectorAgent;
 }
@@ -20,7 +27,30 @@ export interface CollectorProfile {
   email?: string;
 }
 
+export type ActiveMobileRole =
+  | "CollectionAgent"
+  | "CollectionAgentPending"
+  | "Estate Owner"
+  | "Estate Manager";
+
+const COLLECTOR_SESSION_KEY = "collectorSession";
 const PENDING_SESSION_KEY = "collectorPendingSession";
+const ACTIVE_ROLE_KEY = "mobileActiveRole";
+const LEGACY_TOKEN_KEY = "accessToken";
+const LEGACY_USER_KEY = "user";
+
+interface AgentTokenClaims {
+  role?: unknown;
+  exp?: unknown;
+}
+
+interface LegacyCollectorUser {
+  id?: unknown;
+  name?: unknown;
+  role?: unknown;
+  jobRole?: unknown;
+  phone?: unknown;
+}
 
 async function setStoredValue(key: string, value: string): Promise<void> {
   if (Platform.OS === "web") {
@@ -48,25 +78,157 @@ async function removeStoredValue(key: string): Promise<void> {
   await SecureStore.deleteItemAsync(key);
 }
 
-function isCollectorSession(value: unknown): value is CollectorSession {
+function isActiveRole(value: string | null): value is ActiveMobileRole {
+  return (
+    value === "CollectionAgent" ||
+    value === "CollectionAgentPending" ||
+    value === "Estate Owner" ||
+    value === "Estate Manager"
+  );
+}
+
+function isAgent(value: unknown): value is CollectorAgent {
   if (typeof value !== "object" || value === null) {
     return false;
   }
 
-  const session = value as Partial<CollectorSession>;
+  const agent = value as Partial<CollectorAgent>;
   return (
-    typeof session.accessToken === "string" &&
-    typeof session.agent?.id === "number" &&
-    typeof session.agent.name === "string" &&
-    typeof session.agent.phone === "string" &&
-    (session.agent.role === undefined ||
-      typeof session.agent.role === "string")
+    typeof agent.id === "number" &&
+    Number.isInteger(agent.id) &&
+    agent.id > 0 &&
+    typeof agent.name === "string" &&
+    agent.name.trim().length > 0 &&
+    typeof agent.phone === "string" &&
+    agent.phone.trim().length > 0 &&
+    typeof agent.role === "string" &&
+    agent.role.trim().length > 0
   );
 }
 
-export async function storePendingCollectorSession(
-  session: CollectorSession,
+export function isCollectorTokenLocallyValid(accessToken: string): boolean {
+  try {
+    const claims = jwtDecode<AgentTokenClaims>(accessToken);
+    return (
+      claims.role === "CollectionAgent" &&
+      typeof claims.exp === "number" &&
+      claims.exp * 1000 > Date.now()
+    );
+  } catch {
+    return false;
+  }
+}
+
+function normalizeSession(value: unknown): CollectorSession | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+
+  const session = value as {
+    accessToken?: unknown;
+    role?: unknown;
+    agent?: unknown;
+  };
+  if (
+    typeof session.accessToken !== "string" ||
+    !isAgent(session.agent) ||
+    (session.role !== undefined && session.role !== "CollectionAgent") ||
+    !isCollectorTokenLocallyValid(session.accessToken)
+  ) {
+    return undefined;
+  }
+
+  return {
+    accessToken: session.accessToken,
+    role: "CollectionAgent",
+    agent: {
+      id: session.agent.id,
+      name: session.agent.name.trim(),
+      phone: session.agent.phone.trim(),
+      role: session.agent.role.trim(),
+    },
+  };
+}
+
+function parseLegacyCollectorUser(serializedUser: string): LegacyCollectorUser | undefined {
+  try {
+    const value: unknown = JSON.parse(serializedUser);
+    if (typeof value === "object" && value !== null) {
+      return value as LegacyCollectorUser;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+async function restoreNonCollectorRole(): Promise<void> {
+  const serializedUser = await getStoredValue(LEGACY_USER_KEY);
+  const user = serializedUser
+    ? parseLegacyCollectorUser(serializedUser)
+    : undefined;
+  const role =
+    user?.role === "Estate Owner" || user?.role === "Estate Manager"
+      ? user.role
+      : undefined;
+
+  if (role) {
+    await setStoredValue(ACTIVE_ROLE_KEY, role);
+  } else {
+    await removeStoredValue(ACTIVE_ROLE_KEY);
+  }
+}
+
+export async function setActiveMobileRole(
+  role: "Estate Owner" | "Estate Manager",
 ): Promise<void> {
+  await setStoredValue(ACTIVE_ROLE_KEY, role);
+}
+
+export async function getActiveMobileRole(): Promise<
+  ActiveMobileRole | undefined
+> {
+  const savedRole = await getStoredValue(ACTIVE_ROLE_KEY);
+  if (isActiveRole(savedRole)) {
+    return savedRole;
+  }
+
+  const serializedUser = await getStoredValue(LEGACY_USER_KEY);
+  const user = serializedUser
+    ? parseLegacyCollectorUser(serializedUser)
+    : undefined;
+  if (
+    user?.role === "Estate Owner" ||
+    user?.role === "Estate Manager" ||
+    user?.role === "CollectionAgent"
+  ) {
+    const role = user.role;
+    await setStoredValue(ACTIVE_ROLE_KEY, role);
+    return role;
+  }
+
+  if (await getStoredValue(PENDING_SESSION_KEY)) {
+    await setStoredValue(ACTIVE_ROLE_KEY, "CollectionAgentPending");
+    return "CollectionAgentPending";
+  }
+  if (await getStoredValue(COLLECTOR_SESSION_KEY)) {
+    await setStoredValue(ACTIVE_ROLE_KEY, "CollectionAgent");
+    return "CollectionAgent";
+  }
+
+  return undefined;
+}
+
+export async function storePendingCollectorSession(
+  input: CollectorSessionInput,
+): Promise<void> {
+  const session = normalizeSession({ ...input, role: "CollectionAgent" });
+  if (!session) {
+    throw new Error("The collector sign-in session is invalid or expired.");
+  }
+
+  await setStoredValue(ACTIVE_ROLE_KEY, "CollectionAgentPending");
   await setStoredValue(PENDING_SESSION_KEY, JSON.stringify(session));
 }
 
@@ -78,75 +240,147 @@ export async function getPendingCollectorSession(): Promise<
     return undefined;
   }
 
-  const parsedSession: unknown = JSON.parse(serializedSession);
-  if (!isCollectorSession(parsedSession)) {
-    throw new Error("The saved collector sign-in session is invalid.");
+  let parsedSession: unknown;
+  try {
+    parsedSession = JSON.parse(serializedSession);
+  } catch {
+    await clearPendingCollectorSession();
+    return undefined;
   }
 
-  return parsedSession;
+  const session = normalizeSession(parsedSession);
+  if (!session) {
+    await clearPendingCollectorSession();
+    return undefined;
+  }
+
+  return session;
+}
+
+export async function clearPendingCollectorSession(): Promise<void> {
+  await removeStoredValue(PENDING_SESSION_KEY);
+  if ((await getStoredValue(ACTIVE_ROLE_KEY)) === "CollectionAgentPending") {
+    await restoreNonCollectorRole();
+  }
+}
+
+export async function clearCompletedCollectorSession(): Promise<void> {
+  await removeStoredValue(COLLECTOR_SESSION_KEY);
 }
 
 export async function completeCollectorSession(
-  session: CollectorSession,
+  input: CollectorSessionInput,
 ): Promise<void> {
-  const user = {
-    ...session.agent,
-    id: String(session.agent.id),
-    role: "CollectionAgent",
-    ...(session.agent.role?.trim()
-      ? { jobRole: session.agent.role.trim() }
-      : {}),
-  };
-  await setStoredValue("accessToken", session.accessToken);
-  await setStoredValue("user", JSON.stringify(user));
+  const session = normalizeSession({ ...input, role: "CollectionAgent" });
+  if (!session) {
+    throw new Error("The collector sign-in session is invalid or expired.");
+  }
+
+  await setStoredValue(ACTIVE_ROLE_KEY, "CollectionAgent");
+  await setStoredValue(COLLECTOR_SESSION_KEY, JSON.stringify(session));
   await removeStoredValue(PENDING_SESSION_KEY);
+}
+
+export async function getCollectorSession(): Promise<
+  CollectorSession | undefined
+> {
+  const serializedSession = await getStoredValue(COLLECTOR_SESSION_KEY);
+  if (serializedSession) {
+    let parsedSession: unknown;
+    try {
+      parsedSession = JSON.parse(serializedSession);
+    } catch {
+      await clearCompletedCollectorSession();
+      return undefined;
+    }
+
+    const session = normalizeSession(parsedSession);
+    if (!session) {
+      await clearCompletedCollectorSession();
+      return undefined;
+    }
+    return session;
+  }
+
+  const [accessToken, serializedUser] = await Promise.all([
+    getStoredValue(LEGACY_TOKEN_KEY),
+    getStoredValue(LEGACY_USER_KEY),
+  ]);
+  if (!serializedUser) {
+    return undefined;
+  }
+
+  const user = parseLegacyCollectorUser(serializedUser);
+  if (user?.role !== "CollectionAgent") {
+    return undefined;
+  }
+  if (!accessToken) {
+    await removeStoredValue(LEGACY_USER_KEY);
+    return undefined;
+  }
+
+  const id =
+    typeof user.id === "number"
+      ? user.id
+      : typeof user.id === "string"
+        ? Number(user.id)
+        : NaN;
+  const legacySession = normalizeSession({
+    accessToken,
+    role: "CollectionAgent",
+    agent: {
+      id,
+      name: user.name,
+      phone: user.phone,
+      role: user.jobRole ?? "Tea Collecting Agent",
+    },
+  });
+  if (!legacySession) {
+    await removeStoredValue(LEGACY_TOKEN_KEY);
+    await removeStoredValue(LEGACY_USER_KEY);
+    return undefined;
+  }
+
+  await setStoredValue(COLLECTOR_SESSION_KEY, JSON.stringify(legacySession));
+  await removeStoredValue(LEGACY_TOKEN_KEY);
+  await removeStoredValue(LEGACY_USER_KEY);
+  await setStoredValue(ACTIVE_ROLE_KEY, "CollectionAgent");
+  return legacySession;
+}
+
+export async function clearCollectorSession(): Promise<void> {
+  await removeStoredValue(COLLECTOR_SESSION_KEY);
+  await removeStoredValue(PENDING_SESSION_KEY);
+
+  const serializedUser = await getStoredValue(LEGACY_USER_KEY);
+  const legacyUser = serializedUser
+    ? parseLegacyCollectorUser(serializedUser)
+    : undefined;
+  if (legacyUser?.role === "CollectionAgent") {
+    await removeStoredValue(LEGACY_TOKEN_KEY);
+    await removeStoredValue(LEGACY_USER_KEY);
+  }
+
+  const activeRole = await getStoredValue(ACTIVE_ROLE_KEY);
+  if (
+    activeRole === "CollectionAgent" ||
+    activeRole === "CollectionAgentPending"
+  ) {
+    await restoreNonCollectorRole();
+  }
 }
 
 export async function getCollectorProfile(): Promise<
   CollectorProfile | undefined
 > {
-  const [accessToken, serializedUser] = await Promise.all([
-    getStoredValue("accessToken"),
-    getStoredValue("user"),
-  ]);
-  if (!accessToken || !serializedUser) {
-    return undefined;
-  }
-
-  let parsedUser: unknown;
-  try {
-    parsedUser = JSON.parse(serializedUser);
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      return undefined;
-    }
-    throw error;
-  }
-  if (typeof parsedUser !== "object" || parsedUser === null) {
-    return undefined;
-  }
-
-  const user = parsedUser as {
-    role?: unknown;
-    name?: unknown;
-    jobRole?: unknown;
-    phone?: unknown;
-    email?: unknown;
-  };
-  if (user.role !== "CollectionAgent") {
+  const session = await getCollectorSession();
+  if (!session) {
     return undefined;
   }
 
   return {
-    name:
-      typeof user.name === "string" ? user.name.trim() || undefined : undefined,
-    role:
-      typeof user.jobRole === "string"
-        ? user.jobRole.trim() || undefined
-        : undefined,
-    phone:
-      typeof user.phone === "string" ? user.phone.trim() || undefined : undefined,
-    email:
-      typeof user.email === "string" ? user.email.trim() || undefined : undefined,
+    name: session.agent.name,
+    role: session.agent.role,
+    phone: session.agent.phone,
   };
 }

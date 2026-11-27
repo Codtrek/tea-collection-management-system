@@ -618,3 +618,180 @@ MISSING FUNCTIONALITY / REQUIRED CHANGES
 6. Enforce active/suspended checks consistently on password change; choose token rotation/revocation behavior after password changes and consider issuer/audience separation for portal vs Agent JWTs.
 7. Apply a deliberate dedicated login throttling policy to both exposed login routes and decide whether login errors should avoid disclosing account/role state.
 8. Add end-to-end coverage: admin create -> real DB provisioning -> temporary sign-in -> must-change blocking -> successful password change -> live own-agent endpoint -> subsequent new-password login and disabled/suspended rejection.
+
+## SESSION RESTORATION & PROTECTED NAVIGATION – CURRENT IMPLEMENTATION ANALYSIS
+
+Review date: 2026-11-20
+Scope: trace of the current mobile Collector login/session/navigation code and the corresponding backend Agent JWT flow. No application source code was changed. Findings below describe the checked-in implementation; deployment environment values and runtime device behavior were not independently inspected.
+
+### Summary
+
+| Requirement | Status | Evidence-based summary |
+|---|---|---|
+| Save the Collector session after login | Partially Implemented | `completeCollectorSession()` writes the Agent token and profile to SecureStore on native platforms, but uses shared `accessToken`/`user` keys and web `localStorage`. |
+| Retrieve a saved session at app startup | Not Implemented | The root route always advances to onboarding; no startup code calls a Collector session loader. |
+| Restore authenticated state for a valid saved session | Not Implemented | There is no auth state/provider, token validation, or session hydration. The dashboard reads profile text only. |
+| Resume at the dashboard without another login | Not Implemented | Startup navigates to onboarding; only the login and password-change handlers navigate to the Collector dashboard. |
+| Handle missing, corrupted, or expired sessions | Partially Implemented | Missing or malformed profile data is treated as unavailable in the dashboard, and corrupt pending JSON is surfaced by the password screen. Neither path reliably invalidates stored state; expiry is not checked in the UI. |
+| Clear invalid or expired session data | Not Implemented | No Collector clear/logout helper or 401-triggered storage cleanup was found. |
+| Block unauthenticated access to Collector screens | Not Implemented | No Collector route guard or protected layout exists. |
+| Redirect unauthenticated users to Collector login | Not Implemented | The dashboard does not redirect when its profile is absent; the root always routes to onboarding. |
+| Block expired/invalid tokens from Collector screens | Partially Implemented | The backend rejects invalid/expired JWTs on Agent endpoints, but UI routes are not gated and the app does not centrally handle those responses. |
+| Keep Estate Owner/Manager sessions from becoming Collector sessions | Partially Implemented | The profile helper checks the exact `CollectionAgent` role and backend Agent routes enforce the role. However, the routes themselves are open and all roles share the same storage keys. |
+| Protect every Collector route | Not Implemented | Neither the Collector dashboard nor the other file-based `teacollector` routes has a shared auth boundary. |
+| Handle direct URL/deep-link navigation to Collector screens | Not Implemented | No route-level check runs before a screen renders. |
+| Generate Collector JWTs | Implemented | Agent login signs a `CollectionAgent` claim with the user id as `sub`. |
+| Configure and enforce JWT expiration | Partially Implemented | A configured expiry is added by `JwtModule`; the default is seven days and the Agent strategy rejects expired tokens. The deployed environment value was not inspected. |
+| Validate tokens on protected Collector API endpoints | Implemented | Dispatch and fertilizer Agent controllers use `AgentJwtGuard`; Agent services also recheck current Agent/account state. |
+| Use the Agent JWT strategy and guard correctly | Implemented | `/dispatch/me/*`, `/dispatch/me/fertilizer/*`, and Agent password change use `AgentJwtGuard`, selecting the `jwt-agent` strategy. |
+| Distinguish Collector JWTs from Estate/Manager and portal JWTs | Implemented (role boundary) | The Agent strategy accepts only `CollectionAgent`; the portal strategy rejects Agent and non-portal roles. The separation is claim-based, not a separate signing key or explicit JWT audience. |
+| Handle API 401/403 responses in the mobile session | Not Implemented | `apiRequest()` throws an `ApiError` without status-aware session cleanup, redirect, or retry behavior. |
+
+### 1. Session persistence and restoration
+
+**Session persistence — Partially Implemented.** `source-code/mobile/src/utils/collectorSession.ts` (`completeCollectorSession`, `setStoredValue`, `storePendingCollectorSession`) serializes a Collector profile and token after ordinary Agent login and after successful temporary-password change. Native platforms use `expo-secure-store`; the web branch uses `localStorage`, which does not provide equivalent protection against script access. During forced password change, `collectorPendingSession` is stored separately and later promoted to the completed session.
+
+The completed Collector session uses the generic keys `accessToken` and `user`, not Collector-specific keys. `source-code/mobile/src/app/auth/login.tsx` (`persistSession`) writes Estate Owner/Manager sessions to those same keys. `source-code/mobile/src/app/auth/register.tsx` also defines the same persistence scheme, although its current submit handler discards the registration response rather than calling that helper. This means the app has persistence primitives, but not a role-aware, independently managed session store.
+
+Why the gap matters: restoring the wrong role from shared storage can expose the wrong UI, and clearing a Collector session must not accidentally destroy an Estate Owner/Manager session. The current exact-role check mitigates profile confusion but does not protect the routes.
+
+Recommended approach: evolve the existing `collectorSession.ts` rather than introduce another authentication utility. Define a typed Collector session read/write/clear contract, handle storage writes as one logical operation, and ensure invalidation only removes the Collector session. Preserve the Estate Owner/Manager flows by either using role-specific keys or a shared, explicitly role-tagged session abstraction with role-aware ownership. Keep native credentials in SecureStore; do not describe the web `localStorage` branch as secure storage.
+
+**Startup retrieval — Not Implemented.** `source-code/mobile/src/app/_layout.tsx` (`RootLayout`) configures an Expo Router `Stack` but has no loading/auth state or guard. `source-code/mobile/src/app/index.tsx` (`SplashScreen`) waits 500 ms and unconditionally calls `router.replace("./(onboarding)")`. No startup call to `getCollectorProfile()` or a session-restoration function was found.
+
+Why the gap matters: the token written by login is never consulted at app launch, so closing/restarting the app loses the authenticated navigation state even if storage still contains the token.
+
+Recommended approach: add a single bootstrap decision at the existing root/router boundary, reusing the session utility. Hold rendering/navigation behind a loading state while the saved Collector session is read and checked; route valid sessions to the Collector home and absent/invalid sessions to the appropriate role/login flow. Do not treat a locally present token as server-validated.
+
+**Automatic restoration and dashboard navigation — Not Implemented.** `source-code/mobile/src/app/teacollector/teacollectorMobile.tsx` (`TeaCollectorMobile`) calls `getCollectorProfile()` in a `useEffect` only to populate profile display text. A missing profile sets `profileUnavailable`; it does not stop rendering, establish auth state, or navigate to login. Successful navigation to `/teacollector/teacollectorMobile` occurs only in the login handlers and after password change.
+
+Why the gap matters: there is no distinction between a restored, authenticated session and a demo screen rendered without any session.
+
+Recommended approach: make restoration produce an explicit boot/auth state (loading, authenticated Collector, unauthenticated, or temporarily unverifiable). Render the Collector app only for the authenticated state and navigate only after restoration is complete. Keep the existing login/password-change route behavior, but use the same session state after successful completion.
+
+**Missing, corrupted, expired session behavior — Partially Implemented; cleanup is Not Implemented.** `getCollectorProfile()` returns `undefined` if the token/profile is missing, if parsed profile JSON is not an object, or if its role is not `CollectionAgent`. It catches malformed profile JSON and returns `undefined`, but does not remove either storage key. `getPendingCollectorSession()` calls `JSON.parse()` without a syntax-error recovery or cleanup; `collector-change-password.tsx` (`loadSession`) displays the resulting error, but leaves the bad pending value stored. An expired JWT is not decoded or checked by the client. The backend rejects expiration when an API request is made, but the mobile client does not respond by clearing storage.
+
+Why the gap matters: stale or malformed state can cause repeated broken boots, and a locally expired token can still leave Collector screens visible. Client-side expiry checks alone cannot detect suspension or Agent deactivation.
+
+Recommended approach: validate the saved object shape and token expiry for early rejection, and remove invalid Collector data through the same clear helper. For authoritative validation, use a small Agent-session endpoint guarded by the existing `AgentJwtGuard` and backed by the same active-Agent/account checks as `AgentSelfService.me()`. Treat 401/403 as definitive invalidation; treat network failure separately from invalid credentials so an outage does not silently erase a potentially valid session. If offline restoration is supported, explicitly limit it to the app's documented offline capabilities.
+
+### 2. Protected navigation and role separation
+
+**Route protection, redirects, and direct navigation — Not Implemented.** `RootLayout` has no authentication check, and there is no Collector-specific `_layout.tsx` or route guard under `source-code/mobile/src/app/teacollector/`. `teacollectorMobile.tsx` is an Expo Router route, and the `demo-teacollector-*.tsx` files are also under the `app` route tree; they contain no authentication checks. The demo profile's logout button in `demo-teacollector-profile.tsx` only opens a confirmation alert and does not clear credentials or navigate away. The dedicated `collector-login.tsx` screen is present, but having a login screen is not a redirect/guard.
+
+Why the gap matters: an unauthenticated user can navigate directly to the dashboard route (or another route in the Collector route tree) without passing through login. Protecting only the first dashboard screen would still leave sibling routes accessible through a deep link.
+
+Recommended approach: add a common Collector-only layout/guard for every protected Agent route, including any future nested screens, and check route state before rendering content. Keep Collector login and the temporary-password screen outside the protected group; the latter should require a valid pending Agent session. When unauthenticated or invalid, replace the current route with Collector login to avoid returning to the protected screen via Back. Test both in-app navigation and direct URL/deep-link entry.
+
+**Expired/invalid token screen access — Partially Implemented at API boundary only.** `AgentJwtStrategy` rejects bad signatures, invalid claims, and expired JWTs; however, no UI route checks a token, and `apiRequest()` does not attach the saved token automatically. Presently the Collector UI is demo-backed, so opening the dashboard does not even force a protected request. Thus the backend protects operations, not the mobile screen.
+
+Why the gap matters: a user can continue viewing and interacting with a stale/demo screen, and once live requests are added, individual request handlers could each mishandle 401/403 differently without a shared boundary.
+
+Recommended approach: combine local route gating with a single authenticated API client. Local `exp` checking is a usability optimization only; backend validation remains authoritative. On a server-confirmed 401/403, clear the Collector session and redirect once to login; avoid redirect loops on login/password-change endpoints.
+
+**Estate Owner/Manager conflict — Partially Implemented.** `getCollectorProfile()` only returns a profile when stored `user.role === "CollectionAgent"`, so a normally stored Estate Owner/Manager profile is not displayed as a Collector profile. On the backend, `AgentJwtStrategy.validate()` requires the exact Agent role. However, generic Estate sessions and Collector sessions share `accessToken` and `user`; a role switch overwrites the previous account's values. Also, because the Collector UI has no guard, an Estate Owner/Manager can still open the Collector route and see its hard-coded demo content even though their token cannot authorize Agent APIs.
+
+Why the gap matters: role-specific navigation must not rely on a profile display check, and a Collector logout/session expiry must not clear or misroute an Estate Owner/Manager session.
+
+Recommended approach: have the route guard require an explicitly validated `CollectionAgent` session, not merely a non-empty token or profile. Keep Estate Owner/Manager login and navigation unchanged, and make storage ownership/clearing role-safe. Do not treat either estate role's JWT as an Agent JWT.
+
+### 3. Backend authentication, token validation, and unauthorized responses
+
+**Collector JWT issuance — Implemented.** `source-code/backend/src/auth/auth.controller.ts` exposes `POST /auth/agent/login` and the unified `POST /auth/mobile/login`. `AuthService.mobileLogin()` dispatches `collection_agent` accounts to `agentLoginWithUser()`; the dedicated endpoint calls the same method through `agentLogin()`. `agentLoginWithUser()` checks the password hash and suspension state, requires an active Agent identity through `AgentDirectoryService`, stamps login time, and signs `{ sub: String(user.id), role: AGENT_ROLE }`. It returns `{ accessToken, agent, mustChangePassword }`. The mobile clients use these Agent endpoints (`auth.api.ts` `loginAgent`; `login.tsx` uses unified mobile login and discriminates the Agent result).
+
+**JWT expiration — Partially Implemented.** `source-code/backend/src/auth/auth.module.ts` registers `JwtModule` with `JWT_EXPIRES_IN`, defaulting to `7d`. Both portal and Agent tokens use this same module configuration. `AgentJwtStrategy` sets `ignoreExpiration: false`, so Passport JWT verifies standard expiry claims and rejects expired tokens. The configured runtime environment value was not inspected; therefore the effective deployed duration cannot be confirmed from this review.
+
+Why the gap matters: local restoration needs an expiry-aware experience, but the deployed lifetime also determines how long a stolen token could remain usable. A mobile client must not assume the default if the environment overrides it.
+
+Recommended approach: retain backend expiry enforcement, document/configure the deployment value deliberately, and have restoration handle expired-token 401 responses by clearing the Collector session. Do not add a separate client-side lifetime that can diverge from the backend.
+
+**Protected Agent endpoints and guard usage — Implemented.** `AgentJwtStrategy` (`auth/agent-jwt.strategy.ts`) extracts Bearer JWTs, verifies using `JWT_SECRET`, rejects expired tokens, and accepts only `CollectionAgent`. `AgentJwtGuard` selects the named `jwt-agent` strategy. It is applied at controller level to `DispatchAgentController` (`/dispatch/me/*`), `FertilizerAgentController` (`/dispatch/me/fertilizer/*`), and to `AuthController.changeAgentPassword()` (`/auth/agent/change-password`). `AgentSelfService.me()` additionally resolves the subject to the active HR Agent/dispatch identity and checks current account suspension and `must_change_password` state for dispatch operations. Consequently a valid signature alone does not let a non-Agent use these guarded APIs.
+
+Boundary note: `AgentJwtStrategy` performs JWT/role validation, while active HR status and temporary-password checks occur in Agent service calls, not in the strategy itself. The password-change handler is also Agent-guarded, but the previously documented `AuthService.changeAgentPassword()` does not recheck suspension or active HR membership. That does not negate JWT expiry validation, but it is a separate account-state consistency limitation.
+
+**Role/audience isolation — Implemented for roles; no separate cryptographic audience.** The Agent strategy accepts the exact `CollectionAgent` claim. `JwtStrategy` for the portal rejects `CollectionAgent` and any role outside `PORTAL_ROLES`. `AuthService.agentLoginWithUser()` also requires the database role `collection_agent` and an active directory record at login. Agent services resolve ownership from JWT `sub`, rather than trusting a client-supplied Agent id. Both strategies use `JWT_SECRET`; no distinct `aud`/issuer or Agent-specific secret was found. Estate Owner/Manager tokens therefore fail the Agent strategy's role check, and Agent tokens fail the portal strategy's role check, but isolation is claim-based.
+
+Why the gap matters: keeping distinct audiences prevents cross-role tokens from being accepted as the mobile app adds more endpoints. The existing role boundary is working; a separate audience/secret is a defense-in-depth design choice rather than a prerequisite for the current guard behavior.
+
+Recommended approach: preserve the existing Agent login, `AgentJwtStrategy`, and `AgentJwtGuard`; do not create a second Collector authentication system. Consider explicit issuer/audience restrictions only as a deliberate backend token-boundary hardening change, updating all issuers and validators together.
+
+**Mobile 401/403 handling — Not Implemented.** `source-code/mobile/src/app/services/api/client.ts` (`apiRequest`) sends JSON requests and throws `ApiError` when `response.ok` is false. `ApiError` retains messages but not HTTP status; there is no global interceptor, saved-token attachment, expiry cleanup, role-aware redirect, or shared 401/403 handling. `changeAgentPassword()` in `auth.api.ts` is the only inspected mobile call that explicitly supplies `Authorization: Bearer ...`; the general `apiRequest()` does not add a token. The Collector dashboard currently makes no Agent API calls, so unauthorized responses cannot currently drive session state.
+
+Why the gap matters: when the demo UI is replaced with protected dispatch/fertilizer data, errors could be shown as ordinary form failures while stale credentials and protected navigation remain active.
+
+Recommended approach: extend the existing API client to accept/use the current Collector token for Agent calls and preserve HTTP status in `ApiError`. Centralize 401/403 handling in the session/auth boundary: clear and redirect for authentication/authorization failures according to the chosen role policy, while preserving ordinary validation errors and distinguishing network/offline failures. Avoid independently implementing token/error handling in each screen.
+
+### 4. Recommended implementation sequence
+
+1. **Define the role-safe session contract** by extending `collectorSession.ts`: typed read, write, and clear behavior; shape validation; safe handling of corrupt pending/completed data; and no accidental deletion of Estate Owner/Manager credentials. Keep SecureStore for native storage.
+2. **Add authoritative Agent session validation** using the existing Agent JWT path (`AgentJwtGuard` and Agent identity/account checks). Ensure it returns enough verified profile data for restoration without exposing a generic estate/portal token as an Agent session.
+3. **Implement app bootstrap/restoration** at the existing root/splash boundary. Show a loading state, read saved Collector state, reject locally expired/corrupt state, validate it with the backend when online, and navigate to the Collector dashboard only when accepted. Specify offline behavior separately from server-confirmed authentication.
+4. **Protect the complete Collector route tree** with a shared Expo Router layout/guard. Include the dashboard and all Collector-only routes; leave login and pending-password-change routes accessible under their respective conditions. Verify direct URLs, back navigation, and deep links.
+5. **Integrate the API client and invalidation flow**: attach the Collector bearer token to Agent API calls, retain status codes, clear the Collector session and redirect on confirmed 401/403, and leave session state intact on transient connectivity failures where appropriate.
+6. **Replace placeholder logout/profile behavior** with real Collector session clearing and role-safe navigation. Do not let logout affect an Estate Owner/Manager session.
+7. **Add focused tests** for native/web session serialization and malformed data, role crossover, startup routing, direct protected-route access, expired-token cleanup, 401/403 handling, and backend Agent guard/account-state behavior. Include Estate Owner/Manager regression coverage for shared navigation and storage.
+
+This analysis is based on the source paths and methods named above. The backend's configured signing secret and actual `JWT_EXPIRES_IN` value were not read, and no live device/backend session was exercised.
+
+## SESSION RESTORATION & PROTECTED NAVIGATION - IMPLEMENTATION REPORT
+
+This implementation report supersedes the earlier "not implemented" findings above for the files changed in this work. It records the current code and verification evidence; it does not claim that a real device/backend session was exercised.
+
+### Status summary
+
+| Requirement | Status | Current behavior |
+|---|---|---|
+| Secure Collector session persistence | Implemented | Native uses Expo SecureStore. Web retains the project's localStorage behavior. Collector records use dedicated keys, separate from the generic Estate Owner/Manager token keys. |
+| Startup session restoration | Implemented | The root provider reads the active role and saved Collector session, performs local shape/expiry checks, then validates with the Agent session endpoint. |
+| Dashboard restoration | Implemented | A server-accepted Collector session routes from the splash/index entry to the Collector dashboard without another login. |
+| Missing, corrupt, or locally expired session handling | Implemented | Invalid JSON, invalid session shape, wrong token role, and expired JWTs are rejected and Collector data is cleared. |
+| Server-side validity and account status | Implemented | `GET /auth/agent/session` uses `AgentJwtGuard`, then checks database role, suspension, and active Agent linkage. |
+| Offline restoration behavior | Partially implemented | A network/server failure retains the stored session and shows a retry/sign-in notice; protected Collector screens remain hidden until verification succeeds. There is no offline authenticated mode. |
+| Protected Collector navigation | Implemented | A shared nested layout guards every route under `/teacollector`, including direct route navigation. It waits during verification and redirects unauthenticated sessions to the shared login route. |
+| Pending password-change navigation | Implemented | Temporary-password sessions are stored separately and routed to the existing Collector password-change screen; they are not promoted to full authenticated sessions until completion. |
+| Estate Owner/Manager role isolation | Implemented | The active mobile role is tracked separately. Estate role activation deactivates the Collector UI state without deleting its dedicated saved session or changing generic estate credentials. Legacy generic storage is migrated only when the stored user explicitly has the `CollectionAgent` role. |
+| Agent API unauthorized responses | Implemented for Agent requests | `ApiError` preserves HTTP status and backend error code. `agentApiRequest` attaches the Agent token, invalidates on 401, and handles only the explicit Agent-session/password-change 403 codes. Generic estate API requests are not intercepted. |
+
+### Execution flow and implementation details
+
+1. `src/app/auth/login.tsx` keeps the shared mobile login and role-based routing. A successful Collector login is persisted through `src/utils/collectorSession.ts`; a temporary-password result is persisted as a pending session instead. Estate Owner/Manager login marks its role as active without removing the separately stored Collector session.
+2. `src/context/CollectorAuthContext.tsx`, mounted by `src/app/_layout.tsx`, starts in `checking`. It reads the active role and the relevant saved Collector session. Local JWT decoding is only a fast check for the expected `CollectionAgent` role and a future `exp`; it does not verify the JWT signature.
+3. Before marking a saved session authenticated, the provider calls `validateAgentSession()` in `src/app/services/api/auth.api.ts`, which requests `GET /auth/agent/session`. The backend validates the signature, expiration and Agent role through the existing `AgentJwtGuard` / `AgentJwtStrategy`, and `AuthService.agentSession()` checks the persisted account and active Agent relationship. The server-provided Agent profile is used for the restored session.
+4. `src/app/index.tsx` routes a confirmed Agent to `/teacollector/teacollectorMobile`; a session requiring a password change goes to `/auth/collector-change-password`. During checking, Collector content is not rendered. A transient connectivity failure shows a retry notice and retains the saved session rather than treating an unverified token as authenticated.
+5. `src/app/teacollector/_layout.tsx` is the route-tree boundary. It renders child routes only for `authenticated`, routes unauthenticated users to `/auth/login`, and sends pending-password sessions to the existing password-change flow. This protects deep links as well as navigation from the splash screen.
+6. `src/app/services/api/client.ts` adds status/code-aware `ApiError` handling and the Agent-only `agentApiRequest()` helper. Ordinary Estate Owner/Manager `apiRequest()` calls retain their prior behavior. The Agent helper clears a Collector session on 401 and on the explicit `AGENT_SESSION_INVALID` / `AGENT_PASSWORD_CHANGE_REQUIRED` 403 codes; unrelated permission 403s are not interpreted as expired credentials. The password-change-required case transitions the saved session into the pending-password flow.
+7. `src/app/teacollector/teacollectorMobile.tsx` and `demo-teacollector-profile.tsx` use the shared Collector auth/logout path rather than treating local demo state as authentication. `collector-login.tsx` and `collector-change-password.tsx` integrate with the same session context and storage utility; no parallel authentication store was added.
+
+### Changed files
+
+- Mobile session and state: `src/utils/collectorSession.ts`, `src/context/CollectorAuthContext.tsx`.
+- Mobile routing: `src/app/_layout.tsx`, `src/app/index.tsx`, `src/app/teacollector/_layout.tsx`.
+- Mobile login, logout, and API: `src/app/auth/login.tsx`, `src/app/auth/collector-login.tsx`, `src/app/auth/collector-change-password.tsx`, `src/app/services/api/auth.api.ts`, `src/app/services/api/client.ts`, `src/app/teacollector/teacollectorMobile.tsx`, `src/app/teacollector/demo-teacollector-profile.tsx`.
+- Backend validation: `src/auth/auth.controller.ts`, `src/auth/auth.service.ts`, `src/auth/auth.service.spec.ts`, `src/dispatch/agent-self.service.ts`.
+
+The backend reuses the Agent JWT implementation rather than introducing a new strategy: the new session route is guarded by `AgentJwtGuard`. The Agent token still uses the existing JWT configuration and role claim; this change does not add a separate issuer, audience, or signing key. The exact deployed expiration value was not verified.
+
+### Verification
+
+- Backend targeted tests: `npm test -- --runInBand src/auth/auth.service.spec.ts src/dispatch/agent-self.service.spec.ts` - 2 suites, 24 tests passed.
+- Backend build: `npm run build` - passed.
+- Targeted mobile ESLint on changed session/navigation files - 0 errors; 16 existing unused/import warnings remain in `teacollectorMobile.tsx`.
+- Targeted backend ESLint - passed with the Prettier rule disabled because its worker previously failed with `EINVAL` on Windows.
+- Mobile Android Expo export - passed; the route tree bundled successfully.
+- Mobile `npx tsc --noEmit` still fails on existing diagnostics in onboarding, Estate Owner components, and `AppButton`; none point to the changed authentication/session files.
+- Full mobile lint still fails on existing errors in onboarding, demo Collector screens/sheets, and the web color-scheme hook. The changed Collector dashboard file has warnings only; targeted lint of changed session/navigation files has no errors.
+
+### Remaining limitations and manual verification
+
+- A restored token is not considered authenticated while the backend is unreachable. The UI offers retry or sign-in and keeps the token; no offline Collector dashboard access is allowed.
+- The default mobile API port is 3001 while the backend commonly runs on 3000 in local development. Set `EXPO_PUBLIC_API_URL` to the reachable backend address; the backend URL and deployed CORS/network configuration were not exercised here.
+- The portal-style Estate Owner/Manager session remains in its existing generic storage path. On web, SecureStore is unavailable and the existing localStorage behavior is retained; this implementation does not claim secure-at-rest web storage.
+- `agentApiRequest()` is the shared boundary for future protected Agent data calls. Existing Collector screens are still largely demo-backed, so no additional live Agent data screens were wired as part of this session-restoration change.
+- Device-level restart, direct-link navigation, token expiry, account suspension, network loss/recovery, Collector logout, temporary-password completion, and Owner/Manager crossover still require manual testing against a reachable backend.
+
+### Recommended follow-up sequence
+
+1. Configure and verify the mobile API URL against the development backend, then exercise login, restart restoration, and direct Collector deep links on a device.
+2. Test expired/signature-invalid tokens, suspended/deactivated Agents, 401 responses, the two coded Agent 403 responses, offline retry, and temporary-password completion.
+3. Regression-test Estate Owner and Estate Manager login/navigation before and after Collector login/logout to confirm generic sessions remain unchanged.
+4. Add focused automated mobile tests for session serialization/corruption, active-role crossover, route guard states, and API failure handling when a mobile test harness is available.

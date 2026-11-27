@@ -1,18 +1,32 @@
 import { Image, StyleSheet, View, Platform } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Screen } from "@/components/ui";
 import MobileLoginForm from "@/components/auth/MobileLoginForm";
-import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoWhite.png";
+import BrandLogo from "@/assets/brand/logo&wordmark/png/FullLogoGreen.png";
 import { spacing } from "@/theme/spacing";
 import { login } from "../services/api/auth.api";
-import { completeCollectorSession, storePendingCollectorSession, } from "@/utils/collectorSession";
+import { useCollectorAuth } from "@/context/CollectorAuthContext";
+import {
+  isPasswordRecoveryUserType,
+  type PasswordRecoveryUserType,
+} from "@/utils/passwordRecovery";
 
 export default function LogInScreen() {
   const router = useRouter();
-  const { top } = useSafeAreaInsets();
+  const { userType: userTypeParam } = useLocalSearchParams<{
+    userType?: string;
+  }>();
+  const forgotPasswordUserType: PasswordRecoveryUserType =
+    isPasswordRecoveryUserType(userTypeParam)
+      ? userTypeParam
+      : "estate-owner";
+  const {
+    authenticate,
+    beginPasswordChange,
+    activateEstateRole,
+  } = useCollectorAuth();
 
   async function persistSession(accessToken: string, user: object) {
     const serializedUser = JSON.stringify(user);
@@ -38,12 +52,12 @@ export default function LogInScreen() {
       };
 
       if (result.mustChangePassword) {
-        await storePendingCollectorSession(session);
-        router.replace("./collector-change-password");
+        await beginPasswordChange(session);
+        router.replace("/auth/collector-change-password");
         return;
       }
 
-      await completeCollectorSession(session);
+      await authenticate(session);
       router.replace("/teacollector/teacollectorMobile");
       return;
     }
@@ -53,10 +67,12 @@ export default function LogInScreen() {
 
     switch (result.user.role) {
       case "Estate Owner":
+        await activateEstateRole("Estate Owner");
         router.replace("/(estate-owner)/home");
         return;
 
       case "Estate Manager":
+        await activateEstateRole("Estate Manager");
         router.replace("/estate-manager");
         return;
 
@@ -70,13 +86,22 @@ export default function LogInScreen() {
       scroll
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
-      style={[styles.screen, { paddingTop: top + spacing.xl }]}
+      style={styles.screen}
     >
       <View style={styles.page}>
-        <Image source={BrandLogo} accessibilityLabel="Harboost" style={styles.logo} resizeMode="contain" />
-        <View style={styles.card}>
-          <MobileLoginForm portalStyle onSubmit={handleLogIn} />
+        <View style={styles.header}>
+          <Image
+            source={BrandLogo}
+            accessibilityLabel="Harboost"
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
+
+        <MobileLoginForm
+          onSubmit={handleLogIn}
+          forgotPasswordUserType={forgotPasswordUserType}
+        />
       </View>
     </Screen>
   );
@@ -87,10 +112,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     width: "100%",
     maxWidth: "100%",
-    backgroundColor: "#103D26",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingBottom: spacing.xl,
+    backgroundColor: "transparent",
+    paddingTop: spacing.xl,
+    paddingBottom: 40,
   },
 
   page: {
@@ -99,17 +123,15 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 
-  card: {
-    backgroundColor: "white",
-    borderRadius: 22,
-    padding: spacing.lg,
-    paddingTop: 30,
+  header: {
+    alignItems: "center",
+    marginBottom: 28,
+    width: "100%",
   },
 
   logo: {
-    width: 198,
-    height: 44,
-    alignSelf: "center",
-    marginBottom: spacing.xl,
+    width: 178,
+    height: 38,
+    marginBottom: 20,
   },
 });
