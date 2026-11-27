@@ -27,7 +27,14 @@ async function setup(userPatch: Partial<User> = {}) {
     findByPhone: jest.fn().mockResolvedValue(user),
     findById: jest.fn().mockResolvedValue(user),
     markLogin: jest.fn().mockResolvedValue(undefined),
-    setPassword: jest.fn().mockResolvedValue(undefined),
+    setPassword: jest.fn().mockResolvedValue(1),
+    setLoginFailures: jest.fn(
+      (id: number, count: number, until: Date | null) => {
+        user.failed_login_count = count;
+        user.locked_until = until;
+        return Promise.resolve();
+      },
+    ),
   };
   const directory = {
     byUserId: jest.fn().mockResolvedValue({ agentId: 6, name: 'P. Fernando' }),
@@ -39,7 +46,7 @@ async function setup(userPatch: Partial<User> = {}) {
     {} as Repository<RolePermissionEntity>,
     directory as unknown as AgentDirectoryService,
   );
-  return { svc, usersService, directory };
+  return { svc, usersService, directory, user };
 }
 
 describe('AuthService — agent sign-in & first password change', () => {
@@ -154,5 +161,115 @@ describe('AuthService — agent sign-in & first password change', () => {
     await expect(
       svc.changeAgentPassword(11, 'Temp-pass-1', 'My-own-password-9'),
     ).rejects.toThrow(UnauthorizedException);
+  });
+});
+
+describe('AuthService — lockout after 5 wrong passwords (Users-Roles-Addendum §7)', () => {
+  async function portal(patch: Partial<User> = {}) {
+    const user = {
+      id: 2,
+      name: 'S. Fernando',
+      phone: '0771234568',
+      role: 'factory_officer',
+      status: 'active',
+      must_change_password: false,
+      token_version: 3,
+      failed_login_count: 0,
+      locked_until: null,
+      password_hash: await bcrypt.hash('Right-pass-1', 4),
+      ...patch,
+    } as User;
+    const usersService = {
+      findByPhone: jest.fn().mockResolvedValue(user),
+      findById: jest.fn().mockResolvedValue(user),
+      markLogin: jest.fn().mockResolvedValue(undefined),
+      setPassword: jest.fn().mockResolvedValue(4),
+      getProfile: jest
+        .fn()
+        .mockResolvedValue({ name: 'S. Fernando', factory: 'F' }),
+      setLoginFailures: jest.fn(
+        (id: number, count: number, until: Date | null) => {
+          user.failed_login_count = count;
+          user.locked_until = until;
+          return Promise.resolve();
+        },
+      ),
+    };
+    const sign = jest.fn().mockReturnValue('jwt');
+    const audit = { record: jest.fn().mockResolvedValue(undefined) };
+    const svc = new AuthService(
+      usersService as unknown as UsersService,
+      { sign } as unknown as JwtService,
+      {
+        find: jest.fn().mockResolvedValue([]),
+      } as unknown as Repository<RolePermissionEntity>,
+      {} as AgentDirectoryService,
+      audit as never,
+    );
+    return { svc, user, usersService, sign, audit };
+  }
+
+  it('the 5th wrong password locks for 15 minutes; then even the right password is refused', async () => {
+    const { svc, user, audit } = await portal();
+    for (let i = 0; i < 4; i++) {
+      await expect(svc.login('0771234568', 'wrong')).rejects.toThrow(
+        /incorrect/,
+      );
+    }
+    expect(user.failed_login_count).toBe(4);
+    await expect(svc.login('0771234568', 'wrong')).rejects.toThrow(
+      /Try again in 15 minutes/,
+    );
+    expect(user.locked_until).not.toBeNull();
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'System', role: 'System' }),
+      expect.objectContaining({ action: 'Locked user after failed sign-ins' }),
+    );
+    await expect(svc.login('0771234568', 'Right-pass-1')).rejects.toThrow(
+      /Too many wrong passwords/,
+    );
+  });
+
+  it('unlocks by itself once the 15 minutes are over, and a success resets the count', async () => {
+    const { svc, user } = await portal({
+      failed_login_count: 3,
+      locked_until: new Date(Date.now() - 1000),
+    });
+    const res = await svc.login('0771234568', 'Right-pass-1');
+    expect(res.accessToken).toBe('jwt');
+    expect(user.failed_login_count).toBe(0);
+    expect(user.locked_until).toBeNull();
+  });
+
+  it('the portal token carries the token version; the response flags a temporary password', async () => {
+    const { svc, sign } = await portal({ must_change_password: true });
+    const res = await svc.login('0771234568', 'Right-pass-1');
+    expect(sign).toHaveBeenCalledWith({ sub: '2', role: 'Officer', tv: 3 });
+    expect(res.mustChangePassword).toBe(true);
+  });
+
+  it('changing the portal password bumps the token version and returns a fresh token', async () => {
+    const { svc, sign, usersService } = await portal({
+      must_change_password: true,
+    });
+    const res = await svc.changePortalPassword(
+      2,
+      'Right-pass-1',
+      'Brand-new-pass-2',
+    );
+    expect(usersService.setPassword).toHaveBeenCalledWith(
+      2,
+      expect.any(String),
+      { bumpTokenVersion: true },
+    );
+    const hash = (
+      usersService.setPassword.mock.calls[0] as [number, string]
+    )[1];
+    expect(hash).not.toContain('Brand-new-pass-2');
+    expect(sign).toHaveBeenLastCalledWith({ sub: '2', role: 'Officer', tv: 4 });
+    expect(res.mustChangePassword).toBe(false);
+    await expect(
+      svc.changePortalPassword(2, 'nope', 'Another-pass-3'),
+    ).rejects.toThrow(/incorrect/);
   });
 });

@@ -10,23 +10,19 @@ import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { localDate } from '../dispatch/dispatch-map';
 import type { AppRole } from '../auth/role-map';
-import { toPortalRole } from '../auth/role-map';
-import { FactoryEmployee } from '../users/factory-employee.entity';
-import { User } from '../users/user.entity';
 import {
-  ADMIN_EDITABLE_MODULES,
+  cellLock,
+  needsReason,
+  SEPARATED_ADMIN_LEVELS,
+  type PermissionChange,
+  type PermissionLevel,
   formatGradeRateId,
   maskAccount,
   type FactoryProfile,
   type PublicFactoryProfile,
-  formatUserId,
-  parseUserId,
   rowsToMatrix,
-  type ModuleKey,
   type PermissionMatrix,
-  type PortalRole,
   type PublicGradeRate,
-  type PublicSystemUser,
 } from './admin-map';
 import {
   CreateGradeRateDto,
@@ -52,13 +48,6 @@ export interface Actor {
   sub: number;
 }
 
-/** DB roles that own a factory-portal login, in display order. */
-const FACTORY_DB_ROLES = [
-  'factory_admin',
-  'factory_officer',
-  'factory_manager',
-];
-
 @Injectable()
 export class AdminService {
   constructor(
@@ -68,10 +57,6 @@ export class AdminService {
     private readonly permissionRepo: Repository<RolePermissionEntity>,
     @InjectRepository(SystemSettingEntity)
     private readonly settingRepo: Repository<SystemSettingEntity>,
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
-    @InjectRepository(FactoryEmployee)
-    private readonly factoryEmployeeRepo: Repository<FactoryEmployee>,
     private readonly audit: AuditService,
   ) {}
 
@@ -113,7 +98,6 @@ export class AdminService {
     actor: Actor,
     now: Date = new Date(),
   ): Promise<PublicGradeRate> {
-    this.assertIsAdmin(actor);
     const rows = await this.gradeRateRepo.find();
     const before = versionBefore(rows, dto.effectiveDate);
     refuse(
@@ -168,7 +152,6 @@ export class AdminService {
     actor: Actor,
     now: Date = new Date(),
   ): Promise<PublicGradeRate[]> {
-    this.assertIsAdmin(actor);
     const row = await this.gradeRateRepo.findOne({ where: { id } });
     if (!row)
       throw new NotFoundException(`Grade-rate version ${id} not found.`);
@@ -202,7 +185,6 @@ export class AdminService {
     dto: UpdateFactoryProfileDto,
     actor: Actor,
   ): Promise<PublicFactoryProfile> {
-    this.assertIsAdmin(actor);
     const before = await this.readProfile();
     const accountNumber =
       dto.accountNumber === undefined
@@ -295,6 +277,12 @@ export class AdminService {
     return rowsToMatrix(rows);
   }
 
+  /**
+   * Saves the cells that changed (Users-Roles-Addendum §4). Locked cells are refused even
+   * unchanged (the portal never sends them): the Administrator is pinned to `approve`, except on
+   * the separated keys where it is capped at None/View. A reason is required when a change
+   * touches `approve` or a finance key. One transaction, one audit row with before → after.
+   */
   async updatePermissions(
     dto: UpdatePermissionsDto,
     actor: Actor,
@@ -302,45 +290,83 @@ export class AdminService {
     this.assertIsAdmin(actor);
 
     for (const entry of dto.entries) {
-      // The Administrator role is immutable — the factory always keeps one
-      // unrestricted account. Reject a real downgrade; allow the no-op.
-      if (
-        entry.role === 'Administrator' &&
-        entry.level !== 'approve' &&
-        !ADMIN_EDITABLE_MODULES.includes(entry.module as ModuleKey)
-      ) {
+      const lock = cellLock(entry.role, entry.module);
+      if (lock === 'pinned') {
         throw new ForbiddenException(
-          'The Administrator role always keeps full access and cannot be changed.',
+          'The Administrator keeps full access on this key; it can’t be changed.',
+        );
+      }
+      if (lock === 'capped' && !SEPARATED_ADMIN_LEVELS.includes(entry.level)) {
+        throw new ForbiddenException(
+          'The Administrator audits this duty: its access here can only be None or View.',
         );
       }
     }
 
-    for (const entry of dto.entries) {
-      // Never persist Administrator rows — except the separation-of-duties modules.
-      if (
-        entry.role === 'Administrator' &&
-        !ADMIN_EDITABLE_MODULES.includes(entry.module as ModuleKey)
-      ) {
-        continue;
+    const current = await this.permissionRepo.find();
+    const levelOf = (role: string, module: string): PermissionLevel =>
+      (current.find((r) => r.role === role && r.module === module)?.level as
+        | PermissionLevel
+        | undefined) ?? 'none';
+    const changes: PermissionChange[] = [];
+    const seen = new Set<string>();
+    for (const e of dto.entries) {
+      const k = `${e.role}:${e.module}`;
+      if (seen.has(k)) {
+        throw new BadRequestException(
+          `${e.role} · ${e.module} was sent twice.`,
+        );
       }
-      await this.permissionRepo.save(
-        this.permissionRepo.create({
-          role: entry.role,
-          module: entry.module,
-          level: entry.level,
-        }),
+      seen.add(k);
+      const from = levelOf(e.role, e.module);
+      // a missing row reads as `none`; still write it so the matrix is complete
+      const missing = !current.some(
+        (r) => r.role === e.role && r.module === e.module,
+      );
+      if (from !== e.level || missing) {
+        changes.push({ role: e.role, module: e.module, from, to: e.level });
+      }
+    }
+    const real = changes.filter((c) => c.from !== c.to);
+    const reason = dto.reason?.trim() || undefined;
+    if (needsReason(real) && !reason) {
+      throw new BadRequestException(
+        'A reason is required when a change touches an approval level or a finance key.',
       );
     }
+    if (changes.length === 0) return this.getPermissionMatrix();
 
-    await this.audit.record(
-      { name: actor.name, role: actor.role, sub: actor.sub },
-      {
-        action: 'Updated role permissions',
-        module: 'Administration',
-        record: 'Permission matrix',
-        details: `${dto.entries.filter((e) => e.role !== 'Administrator' || ADMIN_EDITABLE_MODULES.includes(e.module as ModuleKey)).length} cell(s) saved`,
-      },
-    );
+    await this.permissionRepo.manager.transaction(async (m) => {
+      for (const c of changes) {
+        await m.save(
+          RolePermissionEntity,
+          this.permissionRepo.create({
+            role: c.role,
+            module: c.module,
+            level: c.to,
+          }),
+        );
+      }
+    });
+
+    if (real.length > 0) {
+      const cell = (c: PermissionChange) => `${c.role} · ${c.module}`;
+      await this.audit.record(
+        { name: actor.name, role: actor.role, sub: actor.sub },
+        {
+          action: 'Updated role permissions',
+          module: 'Administration',
+          record: 'Permission matrix',
+          details: real
+            .map((c) => `${cell(c)}: ${c.from} → ${c.to}`)
+            .join('; ')
+            .slice(0, 2000),
+          before: Object.fromEntries(real.map((c) => [cell(c), c.from])),
+          after: Object.fromEntries(real.map((c) => [cell(c), c.to])),
+          reason,
+        },
+      );
+    }
 
     return this.getPermissionMatrix();
   }
@@ -392,102 +418,7 @@ export class AdminService {
     return this.getSettings();
   }
 
-  // ── ADM-02 — system users ───────────────────────────────────────
-
-  async listUsers(): Promise<PublicSystemUser[]> {
-    const users = await this.userRepo.find();
-    const factoryUsers = users.filter((u) => FACTORY_DB_ROLES.includes(u.role));
-    const profiles = await this.factoryEmployeeRepo.find();
-    const nameByUserId = new Map(profiles.map((p) => [p.user_id, p.name]));
-
-    return factoryUsers
-      .map((u) => ({
-        id: formatUserId(u.id),
-        name: nameByUserId.get(u.id) ?? 'Unknown',
-        role: toPortalRole(u.role),
-        phone: u.phone,
-        status: (u.status === 'suspended' ? 'Suspended' : 'Active') as
-          | 'Active'
-          | 'Suspended',
-        lastLogin: u.last_login_at ? u.last_login_at.toISOString() : null,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  async suspendUser(
-    formattedId: string,
-    actor: Actor,
-  ): Promise<PublicSystemUser> {
-    this.assertIsAdmin(actor);
-    const id = parseUserId(formattedId);
-    if (id === actor.sub) {
-      throw new ForbiddenException('You cannot suspend your own account.');
-    }
-    const user = await this.findFactoryUser(id);
-    user.status = 'suspended';
-    await this.userRepo.save(user);
-
-    await this.audit.record(
-      { name: actor.name, role: actor.role, sub: actor.sub },
-      {
-        action: 'Suspended user',
-        module: 'Administration',
-        record: formattedId,
-        details: 'Portal access revoked',
-      },
-    );
-
-    return this.toPublicUser(user);
-  }
-
-  async resetPassword(
-    formattedId: string,
-    actor: Actor,
-  ): Promise<{ ok: true }> {
-    this.assertIsAdmin(actor);
-    const id = parseUserId(formattedId);
-    const user = await this.findFactoryUser(id);
-
-    // No email infra until Phase 3 — this records the intent (the portal frames
-    // it as "a reset link is emailed"; the admin never sees/sets the password).
-    await this.audit.record(
-      { name: actor.name, role: actor.role, sub: actor.sub },
-      {
-        action: 'Sent password reset link',
-        module: 'Administration',
-        record: formattedId,
-        details: `Reset link issued to ${user.phone}`,
-      },
-    );
-
-    return { ok: true };
-  }
-
   // ── helpers ─────────────────────────────────────────────────────
-
-  private async findFactoryUser(id: number): Promise<User> {
-    const user = Number.isNaN(id)
-      ? null
-      : await this.userRepo.findOne({ where: { id } });
-    if (!user || !FACTORY_DB_ROLES.includes(user.role)) {
-      throw new NotFoundException('No such portal user.');
-    }
-    return user;
-  }
-
-  private async toPublicUser(user: User): Promise<PublicSystemUser> {
-    const profile = await this.factoryEmployeeRepo.findOne({
-      where: { user_id: user.id },
-    });
-    return {
-      id: formatUserId(user.id),
-      name: profile?.name ?? 'Unknown',
-      role: toPortalRole(user.role),
-      phone: user.phone,
-      status: user.status === 'suspended' ? 'Suspended' : 'Active',
-      lastLogin: user.last_login_at ? user.last_login_at.toISOString() : null,
-    };
-  }
 
   /** Every Administration write is Administrator-only (`administration: 'approve'`). */
   private assertIsAdmin(actor: Actor): void {

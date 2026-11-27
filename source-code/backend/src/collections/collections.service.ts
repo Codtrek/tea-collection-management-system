@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -102,7 +101,6 @@ export class CollectionsService {
     dto: UpdateCollectionDto,
     actor: Actor,
   ): Promise<PublicCollection> {
-    this.assertCanWrite(actor);
     const record = await this.findEntity(id);
 
     if (record.status === 'confirmed') {
@@ -136,8 +134,6 @@ export class CollectionsService {
     dto: CreateExceptionDto,
     actor: Actor,
   ): Promise<PublicCollection> {
-    this.assertCanWrite(actor);
-
     const estate = await this.estateRepo.findOne({
       where: { id: dto.estateId },
     });
@@ -222,15 +218,6 @@ export class CollectionsService {
       throw new NotFoundException(`No collection record "${id}".`);
     }
     return record;
-  }
-
-  /** Manager has read-only access to Collections (Administrator/Officer can write). */
-  private assertCanWrite(actor: Actor): void {
-    if (actor.role === 'Manager') {
-      throw new ForbiddenException(
-        'Managers have read-only access to collections.',
-      );
-    }
   }
 
   private toPublic(

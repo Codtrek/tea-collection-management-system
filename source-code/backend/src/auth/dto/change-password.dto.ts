@@ -1,6 +1,6 @@
 import { IsString, MaxLength, MinLength } from 'class-validator';
 
-/** First-sign-in password change for a collection agent. */
+/** Password change: an agent's first sign-in, or any portal user (incl. a temporary password). */
 export class ChangePasswordDto {
   @IsString()
   @MinLength(1)

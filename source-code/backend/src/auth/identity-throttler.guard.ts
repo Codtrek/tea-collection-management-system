@@ -72,8 +72,6 @@ export class IdentityThrottlerGuard extends ThrottlerGuard {
         typeof value === 'string' && value.trim().length > 0,
     );
 
-    console.log(`account value ${accountValue}`);
-
     const accountHash =
       typeof accountValue === 'string'
         ? createHash('sha256')
@@ -87,7 +85,6 @@ export class IdentityThrottlerGuard extends ThrottlerGuard {
       accountHash,
     };
 
-    console.log(`tracker :`, tracker);
     return JSON.stringify(tracker);
   }
 
@@ -100,7 +97,6 @@ export class IdentityThrottlerGuard extends ThrottlerGuard {
       trackerString,
     ) as RequestTracker;
 
-    console.log(throttlerName);
     // Strict account/user bucket; shared across endpoints.
     if (throttlerName === 'short') {
       if (tracker.userId) {
@@ -114,8 +110,12 @@ export class IdentityThrottlerGuard extends ThrottlerGuard {
       return `identity:short:ip:${tracker.ip}`;
     }
 
-    // Broader network-level safety limits.
+    // Broader limits: per signed-in user (a whole factory can sit behind one NAT address),
+    // per IP before sign-in.
     if (throttlerName === 'medium' || throttlerName === 'long') {
+      if (tracker.userId) {
+        return `identity:${throttlerName}:user:${tracker.userId}`;
+      }
       return `identity:${throttlerName}:ip:${tracker.ip}`;
     }
 

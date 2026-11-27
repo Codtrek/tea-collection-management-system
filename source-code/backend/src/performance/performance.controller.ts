@@ -17,6 +17,7 @@ import { parseEmployeeId } from '../employees/employee-map';
 import { UsersService } from '../users/users.service';
 import type { MeasureKey } from './performance-rules';
 import { lastCompleteMonth, PerformanceService } from './performance.service';
+import { RequirePermission, ServiceChecked } from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -51,6 +52,7 @@ export class PerformanceController {
   ) {}
 
   /** The team overview: `?month=YYYY-MM` (default the last complete month), `span=1|3`, `group=agents|staff`. */
+  @RequirePermission('performance')
   @Get('team')
   team(
     @Query('month') month: string | undefined,
@@ -67,12 +69,14 @@ export class PerformanceController {
   }
 
   /** Tolerance, minimum data and coming-soon measures — the "How performance is measured" page. */
+  @RequirePermission('performance')
   @Get('definitions')
   definitions(@Req() req: AuthedRequest) {
     return this.performance.definitions({ role: req.user.role });
   }
 
   /** One employee, month by month (`months`, default 6) — the Performance tab. */
+  @RequirePermission('performance')
   @Get('employees/:id')
   employee(
     @Param('id') id: string,
@@ -88,6 +92,7 @@ export class PerformanceController {
   }
 
   /** The records behind one measure in one month. */
+  @RequirePermission('performance')
   @Get('employees/:id/drill/:measure')
   drill(
     @Param('id') id: string,
@@ -106,6 +111,7 @@ export class PerformanceController {
   }
 
   /** A note from a conversation — performance: edit; audited. */
+  @ServiceChecked('performance: Edit (PerformanceService.addNote)')
   @Post('employees/:id/notes')
   async addNote(
     @Param('id') id: string,

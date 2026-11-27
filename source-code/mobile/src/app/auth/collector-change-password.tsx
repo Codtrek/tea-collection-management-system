@@ -248,7 +248,8 @@ const styles = StyleSheet.create({
   title: {
     color: colors.text.primaryGreen,
     marginBottom: spacing.xs,
-    textAlign: "center",
+    alignSelf: "stretch",
+    textAlign: "left",
   },
 
   subtitle: {

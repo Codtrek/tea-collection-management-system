@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -170,7 +169,6 @@ export class SettlementGeneratorService {
     month: string,
     now = new Date(),
   ): Promise<SettlementRun> {
-    this.assertCanWrite(actor);
     this.checkMonth(month);
     const summary = await this.settlementRepo.manager.transaction(
       async (em) => {
@@ -233,11 +231,6 @@ export class SettlementGeneratorService {
     month: string,
     reason: string,
   ): Promise<SettlementRun> {
-    if (actor.role !== 'Manager' && actor.role !== 'Administrator') {
-      throw new ForbiddenException(
-        'Only a Manager can exclude a delivery from a settlement.',
-      );
-    }
     this.checkMonth(month);
     const why = reason?.trim() ?? '';
     if (why.length < 5) {
@@ -292,7 +285,6 @@ export class SettlementGeneratorService {
     expectedNet?: number,
     now = new Date(),
   ): Promise<{ processed: string[]; totals: RunTotals }> {
-    this.assertCanWrite(actor);
     this.checkMonth(month);
     const result = await this.settlementRepo.manager.transaction(async (em) => {
       const f = await this.facts(month, now, em);
@@ -760,13 +752,5 @@ export class SettlementGeneratorService {
       throw new BadRequestException('month must be YYYY-MM.');
     }
     return month;
-  }
-
-  private assertCanWrite(actor: Actor): void {
-    if (actor.role === 'Manager') {
-      throw new ForbiddenException(
-        'Managers have read-only access to estates and payments.',
-      );
-    }
   }
 }

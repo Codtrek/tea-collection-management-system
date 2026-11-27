@@ -16,6 +16,11 @@ const tabs: BottomTabItem[] = [
     icon: "leaf-outline",
   },
   {
+    key: "employees",
+    label: "Employees",
+    icon: "people-outline",
+  },
+  {
     key: "requests",
     label: "Requests",
     icon: "document-text-outline",

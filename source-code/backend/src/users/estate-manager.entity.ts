@@ -25,8 +25,8 @@ export class EstateManager {
   @Column({ type: 'integer', unique: true })
   employee_id: number;
 
-  @Column({ type: 'integer' })
-  estate_id: number;
+  @Column({ type: 'integer', nullable: true })
+  estate_id: number | null;
 
   @Column({ type: 'timestamp', nullable: true, default: () => 'now()' })
   assigned_at: Date | null;
@@ -43,5 +43,5 @@ export class EstateManager {
     name: 'estate_id',
     foreignKeyConstraintName: 'tea_estate_managers_estate_id_fkey',
   })
-  estate: EstateEntity;
+  estate: EstateEntity | null;
 }

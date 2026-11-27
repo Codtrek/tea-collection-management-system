@@ -1,13 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
+import type { RegisterOwnedEstateDto } from './dto/register-owned-estate.dto';
 import { TransportStatusService } from './transport-status.service';
 import type { AppRole } from '../auth/role-map';
 import { UsersService } from '../users/users.service';
@@ -111,8 +111,6 @@ export class EstatesService {
 
   /** EST-02 — Administrator only. Route is system-assigned, never submitted by the caller. */
   async create(dto: CreateEstateDto, actor: Actor): Promise<PublicEstate> {
-    this.assertIsAdmin(actor);
-
     const ownerUser = await this.usersService.createUser(
       dto.contact,
       'estate_owner',
@@ -175,7 +173,6 @@ export class EstatesService {
     dto: UpdateEstateDto,
     actor: Actor,
   ): Promise<PublicEstate> {
-    this.assertCanWrite(actor);
     const estate = await this.findEntity(id);
 
     const owner = await this.ownerRepo.findOne({
@@ -212,7 +209,6 @@ export class EstatesService {
 
   /** Administrator only (portal: `estateOwners: 'approve'`). */
   async deactivate(id: string, actor: Actor): Promise<PublicEstate> {
-    this.assertIsAdmin(actor);
     const estate = await this.findEntity(id);
     estate.status = 'inactive';
     estate.lastUpdatedBy = actor.name;
@@ -236,7 +232,6 @@ export class EstatesService {
     dto: IssueAdvanceDto,
     actor: Actor,
   ): Promise<PublicAdvance> {
-    this.assertCanWrite(actor);
     const estate = await this.findEntity(dto.estateId);
     if (estate.status !== 'active') {
       throw new ConflictException(
@@ -385,28 +380,29 @@ export class EstatesService {
     return estate;
   }
 
-  /** Register/deactivate are Administrator-only (portal: `estateOwners: 'approve'`). */
-  private assertIsAdmin(actor: Actor): void {
-    if (actor.role !== 'Administrator') {
-      throw new ForbiddenException(
-        'Only an Administrator can register or deactivate an estate.',
-      );
-    }
-  }
-
-  /** Manager has read-only access to Estates + Payments (Administrator/Officer can write). */
-  assertCanWrite(actor: Actor): void {
-    if (actor.role === 'Manager') {
-      throw new ForbiddenException(
-        'Managers have read-only access to estates and payments.',
-      );
-    }
+  async registerForOwner(userId: number, dto: RegisterOwnedEstateDto) {
+    const owner = await this.ownerRepo.findOneBy({ userId });
+    if (!owner) throw new NotFoundException('Estate owner profile not found.');
+    const route = await this.assignRoute();
+    const saved = await this.estateRepo.save(this.estateRepo.create({
+      ownerId: owner.id,
+      name: dto.name.trim(),
+      address: dto.address.trim(),
+      location: dto.address.trim(),
+      areaAcres: String(dto.areaAcres),
+      routeId: route.id,
+      routeName: route.name,
+      paymentMethod: 'cash',
+      lastUpdatedBy: owner.name,
+      lastUpdatedOn: new Date(),
+    }));
+    return { id: saved.id, name: saved.name, location: saved.location };
   }
 
   /**
    * System route assignment (EST-02: "auto-assigned by the system", never
    * manually picked). No geo data exists to route by location yet, so this
-   * picks the least-loaded route — deterministic and keeps routes balanced.
+   * picks the least-loaded route - deterministic and keeps routes balanced.
    */
   private async assignRoute(): Promise<RouteEntity> {
     const routes = await this.routeRepo.find();

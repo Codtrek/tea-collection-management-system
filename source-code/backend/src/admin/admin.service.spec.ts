@@ -5,8 +5,6 @@ import {
 } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import type { AuditService } from '../audit/audit.service';
-import type { FactoryEmployee } from '../users/factory-employee.entity';
-import type { User } from '../users/user.entity';
 import { AdminService, type Actor } from './admin.service';
 import type { GradeRateEntity } from './grade-rate.entity';
 import type { RolePermissionEntity } from './role-permission.entity';
@@ -14,9 +12,16 @@ import type { SystemSettingEntity } from './system-setting.entity';
 
 /** Flexible in-memory Repository stand-in, keyed by a caller-supplied function. */
 class FakeRepository<T extends object> {
-  private readonly store = new Map<unknown, T>();
+  readonly store = new Map<unknown, T>();
 
   constructor(private readonly keyOf: (row: T) => unknown) {}
+
+  /** `manager.transaction(fn)` hands fn an EntityManager-like whose save writes here. */
+  readonly manager = {
+    transaction: <R>(
+      fn: (m: { save: (_e: unknown, row: T) => Promise<T> }) => Promise<R>,
+    ): Promise<R> => fn({ save: (_e, row) => this.save(row) }),
+  };
 
   seed(row: T): void {
     this.store.set(this.keyOf(row), row);
@@ -63,19 +68,6 @@ class FakeRepository<T extends object> {
   }
 }
 
-function makeUser(overrides: Partial<User> = {}): User {
-  return {
-    id: 2,
-    phone: '0771234568',
-    password_hash: 'x',
-    role: 'factory_officer',
-    status: 'active',
-    last_login_at: null,
-    created_at: new Date('2026-01-01T00:00:00.000Z'),
-    ...overrides,
-  } as User;
-}
-
 const admin: Actor = { name: 'A. Bandara', role: 'Administrator', sub: 1 };
 const officer: Actor = { name: 'S. Fernando', role: 'Officer', sub: 2 };
 
@@ -85,16 +77,12 @@ function build() {
     (r) => `${r.role}:${r.module}`,
   );
   const settingRepo = new FakeRepository<SystemSettingEntity>((r) => r.key);
-  const userRepo = new FakeRepository<User>((r) => r.id);
-  const feRepo = new FakeRepository<FactoryEmployee>((r) => r.user_id);
   const audit = { record: jest.fn().mockResolvedValue(undefined) };
 
   const service = new AdminService(
     gradeRepo as unknown as Repository<GradeRateEntity>,
     permRepo as unknown as Repository<RolePermissionEntity>,
     settingRepo as unknown as Repository<SystemSettingEntity>,
-    userRepo as unknown as Repository<User>,
-    feRepo as unknown as Repository<FactoryEmployee>,
     audit as unknown as AuditService,
   );
 
@@ -103,8 +91,6 @@ function build() {
     gradeRepo,
     permRepo,
     settingRepo,
-    userRepo,
-    feRepo,
     audit,
   };
 }
@@ -117,13 +103,6 @@ describe('AdminService — grade rates (ADM-01)', () => {
     normalRate: number,
     effectiveDate: string,
   ) => ({ superRate, normalRate, effectiveDate, reason: 'Board decision' });
-
-  it('rejects a non-Administrator', async () => {
-    const { service } = build();
-    await expect(
-      service.createGradeRate(rate(190, 98, '2026-08-01'), officer, MARCH),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
 
   it('refuses a version that would start in the past — it would reprice leaf already delivered', async () => {
     const { service, gradeRepo } = build();
@@ -335,77 +314,164 @@ describe('AdminService — factory profile (Administration-Addendum §2)', () =>
   });
 });
 
-describe('AdminService — permission matrix (ADM-02)', () => {
+describe('AdminService — permission matrix (ADM-02, Users-Roles-Addendum §4)', () => {
+  const cell = (
+    role: string,
+    module: string,
+    level: string,
+  ): RolePermissionEntity => ({ role, module, level });
+
   it('round-trips rows into the nested matrix', async () => {
     const { service, permRepo } = build();
-    permRepo.seed({
-      role: 'Officer',
-      module: 'reports',
-      level: 'edit',
-    } as RolePermissionEntity);
-    permRepo.seed({
-      role: 'Manager',
-      module: 'reports',
-      level: 'view',
-    } as RolePermissionEntity);
+    permRepo.seed(cell('Officer', 'reports', 'edit'));
+    permRepo.seed(cell('Manager', 'reports', 'view'));
 
     const matrix = await service.getPermissionMatrix();
     expect(matrix.Officer.reports).toBe('edit');
     expect(matrix.Manager.reports).toBe('view');
   });
 
-  it('updates an Officer cell and records an audit entry', async () => {
-    const { service, audit } = build();
+  it('saves a changed Officer cell and audits before → after with the reason', async () => {
+    const { service, permRepo, audit } = build();
+    permRepo.seed(cell('Officer', 'dispatch', 'view'));
     const matrix = await service.updatePermissions(
-      { entries: [{ role: 'Officer', module: 'reports', level: 'view' }] },
+      { entries: [{ role: 'Officer', module: 'dispatch', level: 'edit' }] },
       admin,
     );
-    expect(matrix.Officer.reports).toBe('view');
+    expect(matrix.Officer.dispatch).toBe('edit');
     expect(audit.record).toHaveBeenCalledTimes(1);
+    const [, entry] = audit.record.mock.calls[0] as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(entry).toMatchObject({
+      action: 'Updated role permissions',
+      before: { 'Officer · dispatch': 'view' },
+      after: { 'Officer · dispatch': 'edit' },
+      details: 'Officer · dispatch: view → edit',
+    });
   });
 
-  it('rejects downgrading the immutable Administrator role', async () => {
+  it('an unchanged cell is not written or audited', async () => {
+    const { service, permRepo, audit } = build();
+    permRepo.seed(cell('Officer', 'dispatch', 'edit'));
+    await service.updatePermissions(
+      { entries: [{ role: 'Officer', module: 'dispatch', level: 'edit' }] },
+      admin,
+    );
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it('requires a reason when a change touches an approval level or a finance key', async () => {
+    const { service, permRepo, audit } = build();
+    permRepo.seed(cell('Officer', 'expenses', 'edit'));
+    permRepo.seed(cell('Manager', 'dispatch', 'approve'));
+    // finance key
+    await expect(
+      service.updatePermissions(
+        { entries: [{ role: 'Officer', module: 'expenses', level: 'view' }] },
+        admin,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    // approval level (from approve)
+    await expect(
+      service.updatePermissions(
+        {
+          entries: [{ role: 'Manager', module: 'dispatch', level: 'edit' }],
+          reason: '  ',
+        },
+        admin,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(permRepo.store.get('Officer:expenses')?.level).toBe('edit');
+    // with a reason it goes through and the reason is audited
+    await service.updatePermissions(
+      {
+        entries: [{ role: 'Manager', module: 'dispatch', level: 'edit' }],
+        reason: 'Dispatch moves to the Officer',
+      },
+      admin,
+    );
+    expect(permRepo.store.get('Manager:dispatch')?.level).toBe('edit');
+    const [, entry] = audit.record.mock.calls[0] as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(entry.reason).toBe('Dispatch moves to the Officer');
+  });
+
+  it('a locked Administrator cell is refused even when unchanged (pinned to full access)', async () => {
+    const { service } = build();
+    for (const level of ['approve', 'view'] as const) {
+      for (const module of [
+        'collection',
+        'dispatch',
+        'administration',
+      ] as const) {
+        await expect(
+          service.updatePermissions(
+            {
+              entries: [{ role: 'Administrator', module, level }],
+              reason: 'x',
+            },
+            admin,
+          ),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      }
+    }
+  });
+
+  it('caps the Administrator at None / View on the separated keys: it can never grant itself the duty it audits', async () => {
+    const { service, permRepo } = build();
+    for (const module of [
+      'grading',
+      'gradingApproval',
+      'fertilizerApproval',
+      'fertilizerManagerApproval',
+      'expenses',
+    ] as const) {
+      for (const level of ['edit', 'approve'] as const) {
+        await expect(
+          service.updatePermissions(
+            {
+              entries: [{ role: 'Administrator', module, level }],
+              reason: 'x',
+            },
+            admin,
+          ),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      }
+    }
+    const matrix = await service.updatePermissions(
+      {
+        entries: [
+          { role: 'Administrator', module: 'grading', level: 'none' },
+          { role: 'Administrator', module: 'gradingApproval', level: 'view' },
+          { role: 'Manager', module: 'gradingApproval', level: 'approve' },
+        ],
+        reason: 'Corrections move to the Manager',
+      },
+      admin,
+    );
+    expect(matrix.Administrator.grading).toBe('none');
+    expect(matrix.Administrator.gradingApproval).toBe('view');
+    expect(matrix.Manager.gradingApproval).toBe('approve');
+    expect(permRepo.store.size).toBe(3);
+  });
+
+  it('refuses the same cell twice in one save', async () => {
     const { service } = build();
     await expect(
       service.updatePermissions(
         {
           entries: [
-            { role: 'Administrator', module: 'reports', level: 'view' },
+            { role: 'Officer', module: 'dispatch', level: 'edit' },
+            { role: 'Officer', module: 'dispatch', level: 'view' },
           ],
         },
         admin,
       ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('still pins the Administrator to full access on every module except grading / gradingApproval', async () => {
-    const { service } = build();
-    for (const module of ['collection', 'dispatch', 'administration']) {
-      await expect(
-        service.updatePermissions(
-          { entries: [{ role: 'Administrator', module, level: 'view' }] },
-          admin,
-        ),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    }
-  });
-
-  it('lets the Administrator be set view-only on grading and gradingApproval (separation of duties) and persists it', async () => {
-    const { service, permRepo } = build();
-    const matrix = await service.updatePermissions(
-      {
-        entries: [
-          { role: 'Administrator', module: 'grading', level: 'view' },
-          { role: 'Administrator', module: 'gradingApproval', level: 'view' },
-          { role: 'Manager', module: 'gradingApproval', level: 'approve' },
-        ],
-      },
-      admin,
-    );
-    expect(matrix.Administrator.grading).toBe('view');
-    expect(matrix.Administrator.gradingApproval).toBe('view');
-    expect(matrix.Manager.gradingApproval).toBe('approve');
-    expect(permRepo.store.size).toBe(3);
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects a non-Administrator', async () => {
@@ -416,42 +482,6 @@ describe('AdminService — permission matrix (ADM-02)', () => {
         officer,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-});
-
-describe('AdminService — system users (ADM-02)', () => {
-  it('lists only factory-role users with mapped status', async () => {
-    const { service, userRepo, feRepo } = build();
-    userRepo.seed(makeUser({ id: 1, role: 'factory_admin', status: 'active' }));
-    userRepo.seed(
-      makeUser({ id: 2, role: 'factory_officer', status: 'suspended' }),
-    );
-    userRepo.seed(makeUser({ id: 9, role: 'estate_owner' })); // must be excluded
-    feRepo.seed({ user_id: 1, name: 'A. Bandara' } as FactoryEmployee);
-    feRepo.seed({ user_id: 2, name: 'S. Fernando' } as FactoryEmployee);
-
-    const users = await service.listUsers();
-    expect(users).toHaveLength(2);
-    expect(users.find((u) => u.id === 'USR-0002')?.status).toBe('Suspended');
-    expect(users.find((u) => u.id === 'USR-0001')?.role).toBe('Administrator');
-  });
-
-  it('suspends a user and records an audit entry', async () => {
-    const { service, userRepo, feRepo, audit } = build();
-    userRepo.seed(makeUser({ id: 2, role: 'factory_officer' }));
-    feRepo.seed({ user_id: 2, name: 'S. Fernando' } as FactoryEmployee);
-
-    const result = await service.suspendUser('USR-0002', admin);
-    expect(result.status).toBe('Suspended');
-    expect(audit.record).toHaveBeenCalledTimes(1);
-  });
-
-  it('blocks suspending your own account', async () => {
-    const { service, userRepo } = build();
-    userRepo.seed(makeUser({ id: 1, role: 'factory_admin' }));
-    await expect(service.suspendUser('USR-0001', admin)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
   });
 });
 

@@ -122,6 +122,8 @@ const styles = StyleSheet.create({
   },
 
   title: {
+    alignSelf: "stretch",
+    textAlign: "left",
     color: colors.text.primaryGreen,
     marginBottom: spacing.xs,
   },

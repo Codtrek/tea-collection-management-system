@@ -47,7 +47,8 @@ export default function MobileLoginForm({
     setFieldErrors({});
 
     const validationErrors: LoginFieldErrors = {};
-    const phoneError = getPhoneNumberError(phoneNumber);
+    const normalizedPhoneNumber = phoneNumber.replace(/\s/g, "");
+    const phoneError = getPhoneNumberError(normalizedPhoneNumber);
     if (phoneError) {
       validationErrors.phoneNumber = phoneError;
     }
@@ -61,7 +62,7 @@ export default function MobileLoginForm({
 
     try {
       setLoading(true);
-      await onSubmit(phoneNumber.trim(), password);
+      await onSubmit(normalizedPhoneNumber, password);
     } catch (error) {
       const messages = getErrorMessages(error, "Unable to log in.");
       const nextFieldErrors: LoginFieldErrors = {};

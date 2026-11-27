@@ -11,6 +11,8 @@ async function bootstrap() {
     origin: process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN
       : [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/],
+    // the agent app's renewed session token (auth/agent-session.ts), readable from Expo web too
+    exposedHeaders: ['X-Session-Token'],
   });
   await app.listen(process.env.PORT ?? 3000);
 }

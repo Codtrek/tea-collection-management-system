@@ -85,6 +85,11 @@ import {
   AdvanceViewService,
   type EmployeeAdvances,
 } from './advance-view.service';
+import {
+  RequirePermission,
+  RequirePermissionLevel,
+  ServiceChecked,
+} from '../auth/permissions';
 
 type AuthedRequest = Request & { user: JwtPayload };
 
@@ -128,6 +133,7 @@ export class EmployeesController {
   // Static segments (attendance/advances/payroll) are registered before the
   // `:id` catch-all so they don't get swallowed by it.
 
+  @RequirePermission('attendance')
   @Get('attendance')
   listAttendance(
     @Query('employeeId') employeeId?: string,
@@ -140,6 +146,7 @@ export class EmployeesController {
    * Attendance-Leave-Addendum Phase 1 — the month grid (`month=YYYY-MM`; filters run here) and the
    * one-date view used by the Day tab and the daily entry page.
    */
+  @RequirePermission('attendance')
   @Get('attendance/month')
   attendanceMonth(
     @Query('month') month: string,
@@ -158,12 +165,14 @@ export class EmployeesController {
     });
   }
 
+  @RequirePermission('attendance')
   @Get('attendance/day')
   attendanceDay(@Query('date') date: string): Promise<AttendanceDay> {
     return this.attendance.day(date, null);
   }
 
   /** Roll-call for one date — no future dates, the edit window, payroll lock, holiday rules. */
+  @ServiceChecked('attendance key + past-day edit window (AttendanceService)')
   @Post('attendance')
   async markAttendance(
     @Body() dto: MarkAttendanceDto,
@@ -176,6 +185,7 @@ export class EmployeesController {
    * EMP-10 (Salary-Advances-Addendum) — tab + request-date range + filters, server-side.
    * "Needs decision" (tab=decide) ignores the range so an old pending request is never hidden.
    */
+  @RequirePermission('advances')
   @Get('advances')
   listAdvances(
     @Query('tab') tab?: string,
@@ -215,11 +225,13 @@ export class EmployeesController {
   }
 
   /** The repayment rules the request form validates against (the server checks again). */
+  @RequirePermission('advances')
   @Get('advances/settings')
   advanceSettings(): Promise<PayrollSettings> {
     return this.payrollSettings.get();
   }
 
+  @RequirePermission('advances')
   @Get('advances/:id')
   async advanceDetail(
     @Param('id') id: string,
@@ -229,6 +241,7 @@ export class EmployeesController {
   }
 
   /** Ask to change an approved plan — someone else approves (Salary-Advances-Addendum §10). */
+  @RequirePermissionLevel('edit', 'advances')
   @Post('advances/:id/reschedules')
   async requestReschedule(
     @Param('id') id: string,
@@ -242,6 +255,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermissionLevel('approve', 'advances')
   @Patch('advances/:id/reschedules/:rid/decide')
   async decideReschedule(
     @Param('id') id: string,
@@ -258,6 +272,7 @@ export class EmployeesController {
   }
 
   /** An early repayment in cash, recorded by an officer. */
+  @RequirePermissionLevel('edit', 'advances')
   @Post('advances/:id/repayments')
   async recordRepayment(
     @Param('id') id: string,
@@ -271,6 +286,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermissionLevel('edit', 'advances')
   @Post('advances')
   async requestAdvance(
     @Body() dto: RequestAdvanceDto,
@@ -282,6 +298,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermissionLevel('approve', 'advances')
   @Patch('advances/:id/decide')
   async decideAdvance(
     @Param('id') id: string,
@@ -295,6 +312,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermission('payroll')
   @Get('payroll')
   listPayroll(
     @Query('period') period?: string,
@@ -307,6 +325,7 @@ export class EmployeesController {
    * Payroll by month, Part C — one month (`YYYY-MM`, default: the current month) with live data
    * problems, server-side filters and sort, a whole-month summary and the readiness badge.
    */
+  @RequirePermission('payroll')
   @Get('payroll/month')
   payrollMonth(
     @Query('month') month?: string,
@@ -350,6 +369,7 @@ export class EmployeesController {
     });
   }
 
+  @RequirePermissionLevel('edit', 'payroll')
   @Post('payroll/generate')
   async generatePayroll(
     @Body() dto: GeneratePayrollDto,
@@ -361,6 +381,7 @@ export class EmployeesController {
     );
   }
 
+  @RequirePermissionLevel('approve', 'payroll')
   @Post('payroll/process')
   async processPayroll(
     @Body() dto: ProcessPayrollDto,
@@ -373,6 +394,7 @@ export class EmployeesController {
   }
 
   /** Pay Rates (Administration-Addendum §6): every role's rate, next change and people — `payRates: view`. */
+  @RequirePermission('payRates')
   @Get('pay-rates')
   async payRateRoles(@Req() req: AuthedRequest): Promise<PublicRolePay[]> {
     const actor = await this.resolveActor(req);
@@ -382,6 +404,7 @@ export class EmployeesController {
 
   /* ── Pay adjustments (Administration-Addendum §8): Manager prepares, Administrator approves ── */
 
+  @RequirePermission('payRates')
   @Get('pay-adjustments')
   async payAdjustments(
     @Req() req: AuthedRequest,
@@ -390,6 +413,7 @@ export class EmployeesController {
   }
 
   /** What a change would do, per employee, before it is prepared — nothing is saved. */
+  @ServiceChecked('payRates key (PayRatesService); preview, nothing saved')
   @Post('pay-adjustments/preview')
   async previewPayAdjustment(
     @Body() dto: PayAdjustmentDto,
@@ -398,6 +422,7 @@ export class EmployeesController {
     return this.payAdjustments_.preview(dto, await this.resolveActor(req));
   }
 
+  @ServiceChecked('payRates key (PayRatesService)')
   @Post('pay-adjustments')
   async preparePayAdjustment(
     @Body() dto: PayAdjustmentDto,
@@ -406,6 +431,7 @@ export class EmployeesController {
     return this.payAdjustments_.prepare(dto, await this.resolveActor(req));
   }
 
+  @ServiceChecked('payRates key; Administrator approves (PayRatesService)')
   @Patch('pay-adjustments/:aid/decide')
   async decidePayAdjustment(
     @Param('aid', ParseIntPipe) aid: number,
@@ -421,16 +447,33 @@ export class EmployeesController {
   }
 
   /** Single source for the role dropdown — and which title makes someone a collection agent. */
+  @RequirePermission(
+    'employees',
+    'attendance',
+    'payroll',
+    'advances',
+    'payRates',
+    'performance',
+  )
   @Get('roles')
   roles(): { roles: string[]; agentRole: string } {
     return { roles: [...EMPLOYEE_ROLES], agentRole: AGENT_JOB_ROLE };
   }
 
+  @RequirePermission(
+    'employees',
+    'attendance',
+    'payroll',
+    'advances',
+    'payRates',
+    'performance',
+  )
   @Get()
   findAll(): Promise<PublicEmployee[]> {
     return this.employeesService.findAll();
   }
 
+  @RequirePermissionLevel('approve', 'employees')
   @Post()
   async create(
     @Body() dto: CreateEmployeeDto,
@@ -439,6 +482,14 @@ export class EmployeesController {
     return this.employeesService.create(dto, await this.resolveActor(req));
   }
 
+  @RequirePermission(
+    'employees',
+    'attendance',
+    'payroll',
+    'advances',
+    'payRates',
+    'performance',
+  )
   @Get(':id')
   findOne(@Param('id') id: string): Promise<PublicEmployee> {
     return this.employeesService.findById(id);
@@ -450,6 +501,7 @@ export class EmployeesController {
    * Needs BOTH employee and collection access.
    */
   /** An employee's pay: in force today, next change, history (Administration-Addendum §6). */
+  @RequirePermission('payRates', 'payroll')
   @Get(':id/pay')
   async employeePay(
     @Param('id') id: string,
@@ -459,11 +511,13 @@ export class EmployeesController {
   }
 
   /** An employee's advances and outstanding balance (advance-balance.ts — same as payroll). */
+  @RequirePermission('advances')
   @Get(':id/advances')
   employeeAdvances(@Param('id') id: string): Promise<EmployeeAdvances> {
     return this.advanceView.forEmployee(id);
   }
 
+  @RequirePermission('employees')
   @Get(':id/collections')
   async collections(
     @Param('id') id: string,
@@ -502,6 +556,7 @@ export class EmployeesController {
    * finished attempts he was handed — delivered, part delivered or failed. Same paging as
    * Collections. Needs BOTH employee and fertilizer access.
    */
+  @RequirePermission('employees')
   @Get(':id/fertilizer-deliveries')
   async fertilizerDeliveries(
     @Param('id') id: string,
@@ -535,6 +590,7 @@ export class EmployeesController {
     });
   }
 
+  @RequirePermissionLevel('approve', 'employees')
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -544,6 +600,7 @@ export class EmployeesController {
     return this.employeesService.update(id, dto, await this.resolveActor(req));
   }
 
+  @RequirePermissionLevel('approve', 'employees')
   @Patch(':id/deactivate')
   async deactivate(
     @Param('id') id: string,

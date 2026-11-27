@@ -19,8 +19,7 @@ export default function LogInScreen() {
     userType?: string;
   }>();
   const forgotPasswordUserType: PasswordRecoveryUserType =
-    isPasswordRecoveryUserType(userTypeParam) &&
-    userTypeParam !== "collection-agent"
+    isPasswordRecoveryUserType(userTypeParam)
       ? userTypeParam
       : "estate-owner";
   const {
@@ -83,10 +82,20 @@ export default function LogInScreen() {
   }
 
   return (
-    <Screen scroll style={styles.screen}>
+    <Screen
+      scroll
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+      style={styles.screen}
+    >
       <View style={styles.page}>
         <View style={styles.header}>
-          <Image source={BrandLogo} style={styles.logo} resizeMode="contain" />
+          <Image
+            source={BrandLogo}
+            accessibilityLabel="Harboost"
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
 
         <MobileLoginForm

@@ -8,9 +8,9 @@ interface EstateCardProps {
   imageSrc: string;
   name: string;
   location: string;
-  managerName: string;
-  areaAcres: number;
-  grade: string;
+  managerName?: string;
+  areaAcres?: number;
+  grade?: string;
   onPress?: () => void;
 }
 
@@ -32,12 +32,12 @@ export default function EstateCard({
     >
       <View style={styles.imageContainer}>
         <Image source={{ uri: imageSrc }} style={styles.image} />
-        <View style={styles.gradeBadge}>
+        {grade && <View style={styles.gradeBadge}>
           <Ionicons name="leaf" size={14} color={colors.primary} />
           <AppText variant="caption" style={styles.gradeText} numberOfLines={1}>
             {grade}
           </AppText>
-        </View>
+        </View>}
       </View>
 
       <View style={styles.content}>
@@ -56,8 +56,8 @@ export default function EstateCard({
           </AppText>
         </View>
 
-        <View style={styles.managerRow}>
-          <View style={styles.managerInfo}>
+        {(managerName || onPress) && <View style={styles.managerRow}>
+          {managerName && <View style={styles.managerInfo}>
             <Ionicons
               name="person-outline"
               size={16}
@@ -70,7 +70,7 @@ export default function EstateCard({
             >
               {managerName}
             </AppText>
-          </View>
+          </View>}
 
           {onPress ? (
             <Ionicons
@@ -79,8 +79,9 @@ export default function EstateCard({
               color={colors.text.tertiary}
             />
           ) : null}
-        </View>
+        </View>}
 
+        {areaAcres != null && <>
         <View style={styles.divider} />
 
         <View style={styles.areaRow}>
@@ -89,6 +90,7 @@ export default function EstateCard({
             {areaAcres} acres
           </AppText>
         </View>
+        </>}
       </View>
     </Pressable>
   );

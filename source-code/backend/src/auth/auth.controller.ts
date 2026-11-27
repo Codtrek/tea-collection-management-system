@@ -13,6 +13,7 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { AgentJwtPayload, JwtPayload } from './jwt-payload.interface';
 import { SkipThrottle } from '@nestjs/throttler';
+import { PortalOnly } from './permissions';
 
 @Controller('auth')
 export class AuthController {
@@ -55,15 +56,45 @@ export class AuthController {
   async changeAgentPassword(
     @Body() dto: ChangePasswordDto,
     @Req() req: Request & { user: AgentJwtPayload },
-  ): Promise<{ ok: true }> {
-    await this.authService.changeAgentPassword(
+  ): Promise<{ ok: true; accessToken: string }> {
+    const { accessToken } = await this.authService.changeAgentPassword(
       Number(req.user.sub),
       dto.currentPassword,
       dto.newPassword,
     );
+    // The change ends every other session; this device continues with the new token.
+    return { ok: true, accessToken };
+  }
+
+  /** Agent sign-out: the current token (and any other for this login) stops working. */
+  @UseGuards(AgentJwtGuard)
+  @Post('agent/logout')
+  async agentLogout(
+    @Req() req: Request & { user: AgentJwtPayload },
+  ): Promise<{ ok: true }> {
+    await this.authService.agentLogout(Number(req.user.sub));
     return { ok: true };
   }
 
+  /**
+   * Portal password change (and the forced change after a temporary password). Returns a fresh
+   * token: the change bumps the token version, which ends every other session.
+   */
+  @PortalOnly()
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(
+    @Body() dto: ChangePasswordDto,
+    @Req() req: Request & { user: JwtPayload },
+  ): Promise<LoginResult> {
+    return this.authService.changePortalPassword(
+      Number(req.user.sub),
+      dto.currentPassword,
+      dto.newPassword,
+    );
+  }
+
+  @PortalOnly()
   @UseGuards(JwtAuthGuard)
   @Get('me')
   me(@Req() req: Request & { user: JwtPayload }): Promise<PublicUser > {

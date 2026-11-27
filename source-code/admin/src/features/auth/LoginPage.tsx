@@ -35,8 +35,8 @@ export function LoginPage() {
     setError(undefined)
     setLoading(true)
     try {
-      await login(phone, password)
-      navigate('/dashboard', { replace: true })
+      const u = await login(phone, password)
+      navigate(u.mustChangePassword ? '/change-password' : '/dashboard', { replace: true })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
     } finally {

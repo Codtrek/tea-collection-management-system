@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
+import type { RegisterEstateManagerDto } from '../auth/dto/register-estate-manager.dto';
+import { EstateEmployee } from './estate-employee.entity';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { FactoryEmployee } from './factory-employee.entity';
@@ -38,11 +40,42 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { id } });
   }
 
-  /** Sets a new password and clears the temporary-password flag. */
-  async setPassword(userId: number, passwordHash: string): Promise<void> {
+  /**
+   * Sets a new password and clears the temporary-password flag. With `bumpTokenVersion`, every
+   * existing portal token is refused from the next request; returns the new token version.
+   */
+  async setPassword(
+    userId: number,
+    passwordHash: string,
+    opts: { bumpTokenVersion?: boolean } = {},
+  ): Promise<number> {
+    const user = await this.findById(userId);
+    const tv = (user?.token_version ?? 0) + (opts.bumpTokenVersion ? 1 : 0);
     await this.usersRepository.update(
       { id: userId },
-      { password_hash: passwordHash, must_change_password: false },
+      {
+        password_hash: passwordHash,
+        must_change_password: false,
+        ...(opts.bumpTokenVersion ? { token_version: tv } : {}),
+      },
+    );
+    return tv;
+  }
+
+  /** Ends every existing session of this user (portal and agent tokens carry the version). */
+  async bumpTokenVersion(userId: number): Promise<void> {
+    await this.usersRepository.increment({ id: userId }, 'token_version', 1);
+  }
+
+  /** Lockout bookkeeping (AuthService.verifyPassword). */
+  async setLoginFailures(
+    userId: number,
+    count: number,
+    lockedUntil: Date | null,
+  ): Promise<void> {
+    await this.usersRepository.update(
+      { id: userId },
+      { failed_login_count: count, locked_until: lockedUntil },
     );
   }
 
@@ -80,6 +113,38 @@ export class UsersService {
 
   findByNic(nic: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { nic } });
+  }
+
+  async createEstateManager(ownerUserId: number, dto: RegisterEstateManagerDto, passwordHash: string) {
+    try {
+      return await this.usersRepository.manager.transaction(async (tx) => {
+        const owner = await tx.findOneBy(EstateOwnerEntity, { userId: ownerUserId });
+        const estate = owner && await tx.findOne(EstateEntity, {
+          where: { id: dto.estateId, ownerId: owner.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!estate) throw new NotFoundException('Estate not found.');
+        if (estate.managerId != null || await tx.existsBy(EstateManager, { estate_id: estate.id })) {
+          throw new ConflictException('This estate already has a manager.');
+        }
+        const name = dto.name.trim();
+        const user = await tx.save(User, {
+          name, phone: dto.phone, nic: dto.nic, password_hash: passwordHash, role: 'estate_manager',
+        });
+        const employee = await tx.save(EstateEmployee, {
+          user_id: user.id, estate_id: estate.id, name, nic: dto.nic,
+          date_of_birth: dto.dateOfBirth, role: 'manager',
+        });
+        const manager = await tx.save(EstateManager, { employee_id: employee.id, estate_id: estate.id });
+        await tx.update(EstateEntity, estate.id, { managerId: manager.id });
+        return { id: manager.id, name, estateName: estate.name };
+      });
+    } catch (error) {
+      if (error instanceof QueryFailedError && error.driverError.code === '23505') {
+        throw new ConflictException('This phone number or NIC is already registered.');
+      }
+      throw error;
+    }
   }
 
   async createEstateOwner(
@@ -145,10 +210,10 @@ export class UsersService {
       .where('employee.user_id = :userId', { userId })
       .getOne();
     if (!estateManager) return null;
-    if (!estateManager.employee || !estateManager.estate) return null;
+    if (!estateManager.employee) return null;
     return {
       name: estateManager.employee.name,
-      estate: estateManager.estate.name,
+      estate: estateManager.estate?.name,
     };
   }
 }

@@ -1,4 +1,4 @@
-import { Image, StyleSheet, View } from "react-native";
+import { Image, Platform, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { Screen } from "@/components/ui";
@@ -27,7 +27,12 @@ export default function CollectorLoginScreen() {
   }
 
   return (
-    <Screen scroll style={styles.screen}>
+    <Screen
+      scroll
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+      style={styles.screen}
+    >
       <View style={styles.page}>
         <View style={styles.header}>
           <Image source={BrandLogo} style={styles.logo} resizeMode="contain" />
